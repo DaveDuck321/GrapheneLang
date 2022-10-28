@@ -7,7 +7,7 @@ _value_type: type_name
            | struct_type
            | function_type
 value_type: _value_type
-ref_type: "&" _value_type
+ref_type: _value_type "&" | (_value_type) "&"
 type: _value_type | ref_type
 
 variable_name: CNAME
