@@ -29,13 +29,14 @@ typedef: "typedef" type_name ":" type
 
 function_name: CNAME
 function_arguments: "(" (variable_name ":" type ("," variable_name ":" type)*)? ")"
-_function_definition: ":" function_arguments "->" type "=" "{" (_line_of_code)* "}"
+_function_definition: ":" function_arguments "->" type "=" scope
 named_function: "function" function_name _function_definition
 operator_function: "@operator" operator _function_definition
 constructor_function: "@constructor" _function_definition
 destructor_function: "@destructor" _function_definition
 
 // Local scope
+scope: "{" (scope | _line_of_code)* "}"
 _line_of_code: _line_of_code_without_semi ";"
 _line_of_code_without_semi: expression
                           | variable_declaration
@@ -60,7 +61,7 @@ struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}
 
 operator_use: expression operator expression
 operator: /[.<>%*$@|&\/=?!+-]+/
- 
+
 %ignore C_COMMENT
 %ignore CPP_COMMENT
 %ignore WS
