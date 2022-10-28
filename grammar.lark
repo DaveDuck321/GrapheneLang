@@ -47,8 +47,7 @@ expression: function_call
           | operator_use
           | "(" expression ")"
           | struct_initialization
-          | SIGNED_INT
-          | SIGNED_FLOAT
+          | SIGNED_NUMBER
 
 variable_declaration: "let" variable_name ":" type ("=" expression)?
 const_declaration: "const" variable_name ":" type "=" expression
@@ -68,6 +67,5 @@ operator: /[.<>%*$@|&\/=?!+-]+/
 %import common.C_COMMENT
 %import common.CNAME
 %import common.CPP_COMMENT
-%import common.SIGNED_FLOAT
-%import common.SIGNED_INT
+%import common.SIGNED_NUMBER
 %import common.WS
