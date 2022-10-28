@@ -22,6 +22,8 @@ _top_level_program_feature: typedef
                           | operator_function
                           | constructor_function
                           | destructor_function
+                          | variable_declaration
+                          | const_declaration
 
 typedef: "typedef" type_name ":" type
 
