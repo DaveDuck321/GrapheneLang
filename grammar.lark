@@ -12,8 +12,13 @@ type: _value_type | ref_type
 
 variable_name: CNAME
 type_name: CNAME
-struct_type: "(" (variable_name ":" value_type ("," variable_name ":" value_type)*)? ")"
-function_type: type "->" type
+
+_inner_list_of_named_members: variable_name ":" type ("," variable_name ":" type)*
+_inner_list_of_types: (type ("," type)*)?
+struct_type: "(" _inner_list_of_named_members ")"
+
+_function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_types) ")") | type
+function_type: _function_type_component "->" _function_type_component
 
 // Top level
 _top_level_program_line: _top_level_program_feature ";"
