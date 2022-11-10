@@ -1,0 +1,19 @@
+{
+    "compile": {
+        "command": ["c++", "main.c", "-o", "out/a.out"],
+        "output": {
+            "status": 0,
+            "stdout": [],
+            "stderr": []
+        }
+    },
+
+    "runtime": {
+        "command": ["./out/a.out"],
+        "output": {
+            "status": 1,
+            "stdout": [],
+            "stderr": []
+        }
+    }
+}

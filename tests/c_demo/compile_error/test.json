@@ -1,0 +1,8 @@
+{
+    "compile": {
+        "command": ["cc", "main.c", "-o", "out/a.out"],
+        "output": {
+            "status": 1
+        }
+    }
+}
