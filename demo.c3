@@ -1,1 +1,3 @@
-typedef foo : (i32, i32) -> i32;
+function main: () -> int = {
+    return 0;
+};
