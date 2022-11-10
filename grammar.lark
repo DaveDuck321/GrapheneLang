@@ -1,5 +1,4 @@
 // Overall program
-start: program
 program: (_top_level_program_line)*
 
 // Types
