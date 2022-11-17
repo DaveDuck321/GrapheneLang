@@ -1,13 +1,7 @@
-from dataclasses import dataclass
+import codegen
 
 from lark import Lark, Tree, Token
 from lark.visitors import Interpreter
-
-
-@dataclass
-class FunctionDefinition:
-    args: list
-    return_type_name: str
 
 
 def extract_leaf_value(tree: Tree) -> str:
@@ -28,29 +22,37 @@ def get_unique_child(tree: Tree, name: str) -> Tree:
     return matches[0]
 
 
+def extract_named_leaf_value(tree: Tree, name: str) -> str:
+    return extract_leaf_value(get_unique_child(tree, name))
+
+
 class SymbolTableGenerator(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.functions: dict[FunctionDefinition] = {}
+        self._program = codegen.Program()
 
     def named_function(self, tree: Tree):
-        fn_name_tree = get_unique_child(tree, "function_name")
-        fn_name = extract_leaf_value(fn_name_tree)
+        fn_name = extract_named_leaf_value(tree, "function_name")
 
-        # TODO parse this.
-        fn_args = get_unique_child(tree, "function_arguments").children
+        fn_args = []
+        fn_arg_trees = get_unique_child(tree, "function_arguments").children
+        for arg_name, arg_type in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
+            # TODO parse adhoc/ generic types.
+            name = extract_leaf_value(arg_name)
+            type_name = extract_named_leaf_value(arg_type, "type_name")
 
-        # TODO parse more complex types.
-        fn_type_tree = get_unique_child(tree, "type")
-        type_name_tree = get_unique_child(fn_type_tree, "type_name")
-        fn_type = extract_leaf_value(type_name_tree)
+            type = self._program.lookup_type(type_name)
+            fn_args.append(codegen.Variable(name, type))
 
-        # TODO add support for overloading.
-        if fn_name in self.functions:
-            raise RuntimeError(f"Duplicate function name {fn_name}")
+        # TODO parse adhoc/ generic types.
+        fn_return_type_tree = get_unique_child(tree, "return_type")
+        fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
+        fn_return_type = self._program.lookup_type(fn_return_type_name)
 
-        self.functions[fn_name] = FunctionDefinition(fn_args, fn_type)
+        # Build the function
+        function_obj = codegen.Function(fn_name, fn_args, fn_return_type)
+        self._program.add_function(function_obj)
 
 
 l = Lark.open("grammar.lark", parser="lalr", start="program")
@@ -64,5 +66,7 @@ with open("demo.c3") as source:
     symbol_table_gen.visit(tree)
 
     function_table = symbol_table_gen.functions
+
+    # TODO: now codegen function subexpressions
 
     print(function_table)
