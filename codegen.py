@@ -62,6 +62,8 @@ class Program:
         self._functions: dict[str, Function] = {}
         self._types: dict[str, Type] = {}
 
+        self._has_main: bool = False
+
         # TODO: where to add these magic defaults?
         self.add_type(IntType())
 
@@ -72,6 +74,11 @@ class Program:
 
     def add_function(self, function: Function) -> None:
         # TODO: how to do validation?
+        is_main = function._signature.is_main()
+        if self._has_main and is_main:
+            raise RuntimeError("overloading 'main' is not allowed")
+        self._has_main = is_main
+
         mangled_name = function.get_mangled_name()
         assert mangled_name not in self._functions
         self._functions[mangled_name] = function
