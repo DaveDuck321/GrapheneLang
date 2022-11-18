@@ -27,10 +27,15 @@ def extract_named_leaf_value(tree: Tree, name: str) -> str:
 
 
 class SymbolTableGenerator(Interpreter):
-    def __init__(self) -> None:
+    # TODO: also parse typedefs
+    def __init__(self, program) -> None:
         super().__init__()
 
-        self._program = codegen.Program()
+        self._program = program
+        self._function_body_trees: list[tuple[codegen.Function, Tree]] = []
+
+    def get_function_body_trees(self):
+        return self._function_body_trees
 
     def named_function(self, tree: Tree):
         fn_name = extract_named_leaf_value(tree, "function_name")
@@ -47,12 +52,17 @@ class SymbolTableGenerator(Interpreter):
 
         # TODO parse adhoc/ generic types.
         fn_return_type_tree = get_unique_child(tree, "function_return_type")
-        fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
+        fn_return_type_name = extract_named_leaf_value(
+            fn_return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
         function_obj = codegen.Function(fn_name, fn_args, fn_return_type)
         self._program.add_function(function_obj)
+
+        # Save the body to parse later (TODO: maybe forward declarations should be possible?)
+        fn_body_tree = get_unique_child(tree, "scope")
+        self._function_body_trees.append((function_obj, fn_body_tree))
 
 
 l = Lark.open("grammar.lark", parser="lalr", start="program")
@@ -62,11 +72,9 @@ with open("demo.c3") as source:
 
     print(tree.pretty())
 
-    symbol_table_gen = SymbolTableGenerator()
+    program = codegen.Program()
+    symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
 
-    function_table = symbol_table_gen.functions
-
-    # TODO: now codegen function subexpressions
-
-    print(function_table)
+    unparsed_function_bodies = symbol_table_gen.get_function_body_trees()
+    print(unparsed_function_bodies)
