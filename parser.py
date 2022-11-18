@@ -1,7 +1,7 @@
-import codegen
-
-from lark import Lark, Tree, Token
+from lark import Lark, Token, Tree
 from lark.visitors import Interpreter
+
+import codegen
 
 
 def extract_leaf_value(tree: Tree) -> str:
@@ -28,7 +28,7 @@ def extract_named_leaf_value(tree: Tree, name: str) -> str:
 
 class SymbolTableGenerator(Interpreter):
     # TODO: also parse typedefs
-    def __init__(self, program) -> None:
+    def __init__(self, program: codegen.Program) -> None:
         super().__init__()
 
         self._program = program
@@ -54,8 +54,7 @@ class SymbolTableGenerator(Interpreter):
 
         # TODO parse adhoc/ generic types.
         fn_return_type_tree = get_unique_child(tree, "function_return_type")
-        fn_return_type_name = extract_named_leaf_value(
-            fn_return_type_tree, "type_name")
+        fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
