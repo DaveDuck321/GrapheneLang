@@ -46,7 +46,7 @@ class SymbolTableGenerator(Interpreter):
             fn_args.append(codegen.Variable(name, type))
 
         # TODO parse adhoc/ generic types.
-        fn_return_type_tree = get_unique_child(tree, "return_type")
+        fn_return_type_tree = get_unique_child(tree, "function_return_type")
         fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 

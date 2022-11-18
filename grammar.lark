@@ -7,7 +7,8 @@ _value_type: type_name
            | function_type
 value_type: _value_type
 ref_type: _value_type "&" | "(" _value_type ")" "&"
-type: _value_type | ref_type
+_type: _value_type | ref_type
+type: _type
 generic_annotation: "[" _inner_list_of_type_names "]"
 
 variable_name: CNAME
@@ -34,8 +35,9 @@ _top_level_program_feature: typedef
 typedef: "typedef" type_name ":" type
 
 function_name: CNAME ( generic_annotation )?
+function_return_type: _type
 function_arguments: "(" (variable_name ":" type ("," variable_name ":" type)*)? ")"
-_function_definition: ":" function_arguments "->" type "=" scope
+_function_definition: ":" function_arguments "->" function_return_type "=" scope
 named_function: "function" function_name _function_definition
 operator_function: "@operator" operator _function_definition
 constructor_function: "@constructor" _function_definition
