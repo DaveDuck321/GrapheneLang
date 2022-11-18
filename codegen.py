@@ -18,16 +18,10 @@ class Variable:
         self.type = type
 
 
-class Function:
-    def __init__(self, name: str, arguments: list[Variable], return_type: Type) -> None:
-        super().__init__()
-
+class FunctionSignature:
+    def __init__(self, name: str, arguments: list[Variable]) -> None:
         self._name = name
-        self._return_type = return_type
         self._arguments = arguments
-        self._variables: Variable = []
-
-        self.expressions = []
 
     def get_mangled_name(self):
         arguments_mangle = []
@@ -36,6 +30,18 @@ class Function:
 
         arguments_mangle = "".join(arguments_mangle)
         return f"__{self._name}__ARGS__{arguments_mangle}"
+
+
+class Function:
+    def __init__(self, signature: FunctionSignature, return_type: Type) -> None:
+        self._signature = signature
+        self._return_type = return_type
+        self._variables: Variable = []
+
+        self.expressions = []
+
+    def get_mangled_name(self):
+        return self._signature.get_mangled_name()
 
     def add_call_subexpression(self, name_mangle: str, argument_registers: int) -> int:
         # Returns the register of the return value

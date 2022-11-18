@@ -50,6 +50,8 @@ class SymbolTableGenerator(Interpreter):
             type = self._program.lookup_type(type_name)
             fn_args.append(codegen.Variable(name, type))
 
+        fn_signature = codegen.FunctionSignature(fn_name, fn_args)
+
         # TODO parse adhoc/ generic types.
         fn_return_type_tree = get_unique_child(tree, "function_return_type")
         fn_return_type_name = extract_named_leaf_value(
@@ -57,7 +59,7 @@ class SymbolTableGenerator(Interpreter):
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
-        function_obj = codegen.Function(fn_name, fn_args, fn_return_type)
+        function_obj = codegen.Function(fn_signature, fn_return_type)
         self._program.add_function(function_obj)
 
         # Save the body to parse later (TODO: maybe forward declarations should be possible?)
