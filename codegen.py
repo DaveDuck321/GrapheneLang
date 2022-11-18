@@ -23,7 +23,14 @@ class FunctionSignature:
         self._name = name
         self._arguments = arguments
 
-    def get_mangled_name(self):
+    def is_main(self) -> bool:
+        return self._name == "main"
+
+    def get_mangled_name(self) -> str:
+        # main() is immune to name mangling (irrespective of arguments)
+        if self.is_main():
+            return self._name
+
         arguments_mangle = []
         for arg in self._arguments:
             arguments_mangle.append(arg.type.name)
