@@ -3,5 +3,6 @@ function f: () -> int = {
 };
 
 function main: () -> int = {
+    puts("Hello, world!");
     return f();
 };

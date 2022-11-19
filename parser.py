@@ -98,11 +98,19 @@ class ScopeTransformer(Transformer_InPlace):
 
     def function_call(self, children: list[Tree]) -> codegen.FunctionCallExpression:
         fn_name = extract_leaf_value(children[0])
-        # TODO function call arguments
-        fn_sig = codegen.FunctionSignature(fn_name, [])
+        args = children[1].children
+
+        args_for_sig = []
+        for arg in args:
+            assert isinstance(arg, codegen.TypedExpression)
+            # FIXME name?
+            var = codegen.Variable("", arg.type)
+            args_for_sig.append(var)
+
+        fn_sig = codegen.FunctionSignature(fn_name, args_for_sig)
         fn = self.program.lookup_function(fn_sig)
 
-        call_expr = codegen.FunctionCallExpression(next(self.expr_id_iter), fn)
+        call_expr = codegen.FunctionCallExpression(next(self.expr_id_iter), fn, args)
         self.expressions.append(call_expr)
 
         return call_expr
@@ -127,6 +135,15 @@ with open("demo.c3") as source:
     program = codegen.Program()
     symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
+
+    program.add_function(
+        codegen.Function(
+            codegen.FunctionSignature(
+                "puts", [codegen.Variable("string", program.lookup_type("string"))]
+            ),
+            program.lookup_type("int"),
+        )
+    )
 
     for function, body in symbol_table_gen.get_function_body_trees():
         et = ScopeTransformer(program)

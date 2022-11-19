@@ -40,10 +40,26 @@ class IntType(Type):
         # TODO check if value fits inside an i32
         return isinstance(value, int)
 
-    def cast_constant(self, value: int) -> bool:
+    def cast_constant(self, value: int) -> int:
         assert self.compatible_with(value)
 
         return int(value)
+
+
+class StringType(Type):
+    align = 1
+    ir_type = "ptr"
+
+    def __init__(self) -> None:
+        super().__init__("string", "__builtin_str")
+
+    def compatible_with(self, value: Any) -> bool:
+        return isinstance(value, str)
+
+    def cast_constant(self, value: str) -> str:
+        assert self.compatible_with(value)
+
+        return str(value)
 
 
 class Variable:
@@ -55,11 +71,9 @@ class Variable:
 class Expression(ABC):
     def __init__(self, id: int) -> None:
         self.id = id
-        self.result_reg: Optional[int] = None
 
-    @abstractclassmethod
-    def generate_ir(self) -> list[str]:
-        pass
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        return []
 
     @abstractclassmethod
     def __repr__(self) -> str:
@@ -71,6 +85,12 @@ class TypedExpression(Expression):
         super().__init__(id)
 
         self.type = type
+        self.result_reg: Optional[int] = None
+
+    @abstractclassmethod
+    @cached_property
+    def ir_ref(self) -> str:
+        pass
 
 
 class ConstantExpression(TypedExpression):
@@ -79,31 +99,26 @@ class ConstantExpression(TypedExpression):
 
         self.value = type.cast_constant(value)
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        self.result_reg = next(reg_gen)
-        align = self.type.align
-        ir_type = self.type.ir_type
-
-        return [
-            f"%{self.result_reg} = alloca {ir_type}, align {align}\n",
-            f"store {ir_type} {self.value}, {ir_type}* %{self.result_reg}, align {align}\n",
-        ]
-
     def __repr__(self) -> str:
         return f"ConstantExpression({self.type}, {self.value})"
+
+    @cached_property
+    def ir_ref(self) -> str:
+        return f"{self.type.ir_type} %{self.value}"
 
 
 class StringConstant(TypedExpression):
     def __init__(self, id: int, identifier: str) -> None:
-        super().__init__(id, "ptr")
+        super().__init__(id, StringType())
 
         self.identifier = identifier
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        return []
-
     def __repr__(self) -> str:
         return f"StringConstant({self.identifier})"
+
+    @cached_property
+    def ir_ref(self) -> str:
+        return f"{self.type.ir_type} @{self.identifier}"
 
 
 class ReturnExpression(Expression):
@@ -148,6 +163,10 @@ class FunctionSignature:
         if self.is_main():
             return self._name
 
+        # FIXME hack to get puts to work
+        if self._name == "puts":
+            return "puts"
+
         arguments_mangle = []
         for arg in self._arguments:
             arguments_mangle.append(arg.type.name)
@@ -179,6 +198,8 @@ class Function:
         lines: list[str] = []
         reg_gen = count(1)  # First register is %1
 
+        # FIXME generate argument list
+        # FIXME #0 referes to attribute group 0, which we don't generate
         lines.append(f"define dso_local i32 @{self}() #0 {{\n")
 
         for expr in self.expressions:
@@ -188,12 +209,19 @@ class Function:
 
         return lines
 
+    @cached_property
+    def ir_ref(self) -> str:
+        return f"{self._return_type} @{self}"
+
 
 class FunctionCallExpression(TypedExpression):
-    def __init__(self, id: int, function: Function) -> None:
+    def __init__(
+        self, id: int, function: Function, args: list[TypedExpression]
+    ) -> None:
         super().__init__(id, function._return_type)
 
         self.function = function
+        self.args = args
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#call-instruction
@@ -201,11 +229,21 @@ class FunctionCallExpression(TypedExpression):
         fn = self.function
         self.result_reg = next(reg_gen)
 
-        # TODO add support for arguments and function pointers
-        return [f"%{self.result_reg} = call {fn._return_type.ir_type} @{fn}()\n"]
+        ir = f"%{self.result_reg} = call {fn.ir_ref}("
+
+        args_ir = map(lambda arg: arg.ir_ref, self.args)
+        ir += str.join(", ", args_ir)
+
+        ir += ")\n"
+
+        return ir
 
     def __repr__(self) -> str:
         return f"FunctionCallExpression({self.function})"
+
+    @cached_property
+    def ir_ref(self) -> str:
+        return f"{self.type.ir_type} %{self.result_reg}"
 
 
 class Program:
@@ -220,6 +258,7 @@ class Program:
 
         # TODO: where to add these magic defaults?
         self.add_type(IntType())
+        self.add_type(StringType())
 
     def lookup_type(self, name: str) -> Type:
         # TODO: how to do validation?
@@ -265,10 +304,15 @@ class Program:
         for string_id, string in self._strings.items():
             # TODO encode string correctly
             lines.append(
-                f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"'
+                f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"\n'
             )
 
+        # FIXME need a proper way of declaring functions
+        lines.append("declare i32 @puts(ptr nocapture) nounwind\n")
+
         for _, fn in self._functions.items():
-            lines += fn.generate_ir()
+            # FIXME hack to get printing to work
+            if fn.mangled_name != "puts":
+                lines += fn.generate_ir()
 
         return lines

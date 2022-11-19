@@ -70,7 +70,7 @@ _expression: function_call
 variable_declaration: "let" variable_name ":" type ("=" _expression)?
 const_declaration: "const" variable_name ":" type "=" _expression
 return_statement: "return" (_expression)?
-function_call: function_name "(" (inner_list_with_names | inner_list_without_names) ")"
+function_call: function_name "(" inner_list_without_names ")"
 
 inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
 inner_list_without_names: (_expression ("," _expression)*)?
