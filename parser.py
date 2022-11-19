@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from lark import Lark, Token, Tree
-from lark.visitors import Interpreter, Transformer_InPlace
+from lark.visitors import Interpreter, Transformer_InPlace, v_args
 
 import codegen as cg
 
@@ -39,11 +39,18 @@ class SymbolTableGenerator(Interpreter):
     def get_function_body_trees(self):
         return self._function_body_trees
 
-    def named_function(self, tree: Tree):
-        fn_name = extract_named_leaf_value(tree, "function_name")
+    @v_args(inline=True)
+    def named_function(
+        self,
+        name_tree: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ) -> None:
+        fn_name = extract_leaf_value(name_tree)
 
         fn_args = []
-        fn_arg_trees = get_unique_child(tree, "function_arguments").children
+        fn_arg_trees = args_tree.children
         for arg_name, arg_type in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
             # TODO parse adhoc/ generic types.
             name = extract_leaf_value(arg_name)
@@ -55,8 +62,7 @@ class SymbolTableGenerator(Interpreter):
         fn_signature = cg.FunctionSignature(fn_name, fn_args)
 
         # TODO parse adhoc/ generic types.
-        fn_return_type_tree = get_unique_child(tree, "function_return_type")
-        fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
+        fn_return_type_name = extract_named_leaf_value(return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
@@ -64,8 +70,7 @@ class SymbolTableGenerator(Interpreter):
         self._program.add_function(function_obj)
 
         # Save the body to parse later (TODO: maybe forward declarations should be possible?)
-        fn_body_tree = get_unique_child(tree, "scope")
-        self._function_body_trees.append((function_obj, fn_body_tree))
+        self._function_body_trees.append((function_obj, body_tree))
 
 
 @dataclass
