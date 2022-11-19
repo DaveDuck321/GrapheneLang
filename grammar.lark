@@ -49,7 +49,7 @@ _optional_scope: scope | _line_of_code
 _control_flow: if_statement
 _line_of_code: _line_of_code_without_semi ";"
              | _control_flow
-_line_of_code_without_semi: expression
+_line_of_code_without_semi: _expression
                           | variable_declaration
                           | const_declaration
                           | return_statement
@@ -58,24 +58,24 @@ condition: _expression
 branch: _optional_scope
 if_statement: "if" "(" condition ")" branch
 
-expression: _expression
 _expression: function_call
           | variable_name
           | operator_use
-          | "(" expression ")"
+          | "(" _expression ")"
           | struct_initialization
-          | SIGNED_NUMBER
+          | SIGNED_INT
+          | SIGNED_FLOAT
 
-variable_declaration: "let" variable_name ":" type ("=" expression)?
-const_declaration: "const" variable_name ":" type "=" expression
-return_statement: "return" (expression)?
+variable_declaration: "let" variable_name ":" type ("=" _expression)?
+const_declaration: "const" variable_name ":" type "=" _expression
+return_statement: "return" (_expression)?
 function_call: function_name "(" (inner_list_with_names | inner_list_without_names) ")"
 
-inner_list_with_names: variable_name ":" expression ("," variable_name ":" expression)*
-inner_list_without_names: (expression ("," expression)*)?
+inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
+inner_list_without_names: (_expression ("," _expression)*)?
 struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
 
-operator_use: expression operator expression
+operator_use: _expression operator _expression
 operator: /[.<>%*$@|&\/=?!+-]+/
 
 %ignore C_COMMENT
@@ -84,5 +84,6 @@ operator: /[.<>%*$@|&\/=?!+-]+/
 %import common.C_COMMENT
 %import common.CNAME
 %import common.CPP_COMMENT
-%import common.SIGNED_NUMBER
+%import common.SIGNED_INT
+%import common.SIGNED_FLOAT
 %import common.WS
