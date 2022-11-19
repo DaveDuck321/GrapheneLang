@@ -63,6 +63,7 @@ _expression: function_call
           | operator_use
           | "(" _expression ")"
           | struct_initialization
+          | ESCAPED_STRING
           | SIGNED_INT
           | SIGNED_FLOAT
 
@@ -86,4 +87,5 @@ operator: /[.<>%*$@|&\/=?!+-]+/
 %import common.CPP_COMMENT
 %import common.SIGNED_INT
 %import common.SIGNED_FLOAT
+%import common.ESCAPED_STRING
 %import common.WS
