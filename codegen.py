@@ -122,7 +122,7 @@ class StringConstant(TypedExpression):
 
 
 class ReturnExpression(Expression):
-    def __init__(self, id: int, returned_expr: Optional[Expression]) -> None:
+    def __init__(self, id: int, returned_expr: Optional[Expression] = None) -> None:
         super().__init__(id)
 
         self.returned_expr = returned_expr
@@ -181,6 +181,7 @@ class Function:
         self._return_type = return_type
         self._variables: Variable = []
 
+        self.expr_id_iter = count()
         self.expressions: list[Expression] = []
 
     def __repr__(self) -> str:
@@ -189,6 +190,9 @@ class Function:
     @cached_property
     def mangled_name(self):
         return self._signature.mangled_name
+
+    def get_next_expr_id(self) -> int:
+        return next(self.expr_id_iter)
 
     def add_call_subexpression(self, name_mangle: str, argument_registers: int) -> int:
         # Returns the register of the return value
