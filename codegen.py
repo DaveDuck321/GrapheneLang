@@ -219,7 +219,7 @@ class Function:
         reg_gen = count(1)  # First register is %1
 
         # FIXME generate argument list
-        # FIXME #0 referes to attribute group 0, which we don't generate
+        # FIXME #0 refers to attribute group 0, which we don't generate
         lines.append(f"define dso_local i32 @{self}() #0 {{\n")
 
         for expr in self.expressions:
@@ -328,8 +328,10 @@ class Program:
 
         return id
 
-    def generate_ir(self) -> list[str]:
+    def generate_ir(self, target="x86_64-pc-linux-gnu") -> list[str]:
         lines: list[str] = []
+
+        lines.append(f'target triple = "{target}"\n')
 
         for string_id, string in self._strings.items():
             # TODO encode string correctly
