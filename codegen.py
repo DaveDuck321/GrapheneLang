@@ -1,4 +1,5 @@
 from abc import ABC, abstractclassmethod
+from functools import cached_property
 from itertools import count
 from typing import Any, Iterator, Optional
 
@@ -15,7 +16,8 @@ class Type(ABC):
     def __repr__(cls) -> str:
         return cls.ir_type
 
-    def get_mangled_name(self) -> str:
+    @cached_property
+    def mangled_name(self) -> str:
         return "__T_TODO_NAME_MANGLE_TYPE"
 
     @abstractclassmethod
@@ -127,7 +129,8 @@ class FunctionSignature:
     def is_main(self) -> bool:
         return self._name == "main"
 
-    def get_mangled_name(self) -> str:
+    @cached_property
+    def mangled_name(self) -> str:
         # main() is immune to name mangling (irrespective of arguments)
         if self.is_main():
             return self._name
@@ -149,10 +152,11 @@ class Function:
         self.expressions: list[Expression] = []
 
     def __repr__(self) -> str:
-        return self.get_mangled_name()
+        return self.mangled_name
 
-    def get_mangled_name(self):
-        return self._signature.get_mangled_name()
+    @cached_property
+    def mangled_name(self):
+        return self._signature.mangled_name
 
     def add_call_subexpression(self, name_mangle: str, argument_registers: int) -> int:
         # Returns the register of the return value
@@ -162,7 +166,7 @@ class Function:
         lines: list[str] = []
         reg_gen = count(1)  # First register is %1
 
-        lines.append(f"define dso_local i32 @{self.get_mangled_name()}() #0 {{\n")
+        lines.append(f"define dso_local i32 @{self}() #0 {{\n")
 
         for expr in self.expressions:
             lines += expr.generate_ir(reg_gen)
@@ -209,7 +213,7 @@ class Program:
         return self._types[name]
 
     def lookup_function(self, fn_sig: FunctionSignature) -> Function:
-        name = fn_sig.get_mangled_name()
+        name = fn_sig.mangled_name
 
         assert name in self._functions
         return self._functions[name]
@@ -221,7 +225,7 @@ class Program:
             raise RuntimeError("overloading 'main' is not allowed")
         self._has_main = is_main
 
-        mangled_name = function.get_mangled_name()
+        mangled_name = function.mangled_name
         assert mangled_name not in self._functions
         self._functions[mangled_name] = function
 
