@@ -135,16 +135,16 @@ class ReturnExpression(Expression):
 
         if not ret_expr:
             # ret void; Return from void function
-            return ["ret void\n"]
+            return ["ret void"]
 
         if isinstance(ret_expr, ConstantExpression):
             # ret <type> <value>; Return a value from a non-void function
-            return [f"ret {ret_expr.type.ir_type} {ret_expr.value}\n"]
+            return [f"ret {ret_expr.type.ir_type} {ret_expr.value}"]
 
         assert isinstance(ret_expr, TypedExpression)
 
         # ret <type> <value>; Return a value from a non-void function
-        return [f"ret {ret_expr.type} %{ret_expr.result_reg}\n"]
+        return [f"ret {ret_expr.type} %{ret_expr.result_reg}"]
 
     def __repr__(self) -> str:
         return f"ReturnExpression({self.returned_expr})"
@@ -210,9 +210,9 @@ class Function:
         ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
-        ir += ") nounwind\n"
+        ir += ") nounwind"
 
-        return ir
+        return [ir]
 
     def generate_definition(self) -> list[str]:
         lines: list[str] = []
@@ -220,12 +220,12 @@ class Function:
 
         # FIXME generate argument list
         # FIXME #0 refers to attribute group 0, which we don't generate
-        lines.append(f"define dso_local i32 @{self}() #0 {{\n")
+        lines.append(f"define dso_local i32 @{self}() #0 {{")
 
         for expr in self.expressions:
-            lines += expr.generate_ir(reg_gen)
+            lines.extend(expr.generate_ir(reg_gen))
 
-        lines.append("}\n")
+        lines.append("}")
 
         return lines
 
@@ -262,9 +262,9 @@ class FunctionCallExpression(TypedExpression):
         args_ir = map(lambda arg: arg.ir_ref, self.args)
         ir += str.join(", ", args_ir)
 
-        ir += ")\n"
+        ir += ")"
 
-        return ir
+        return [ir]
 
     def __repr__(self) -> str:
         return f"FunctionCallExpression({self.function})"
@@ -331,18 +331,18 @@ class Program:
     def generate_ir(self, target="x86_64-pc-linux-gnu") -> list[str]:
         lines: list[str] = []
 
-        lines.append(f'target triple = "{target}"\n')
+        lines.append(f'target triple = "{target}"')
 
         for string_id, string in self._strings.items():
             # TODO encode string correctly
             lines.append(
-                f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"\n'
+                f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"'
             )
 
         for _, fn in self._foreign_functions.items():
-            lines += fn.generate_ir()
+            lines.extend(fn.generate_ir())
 
         for _, fn in self._functions.items():
-            lines += fn.generate_ir()
+            lines.extend(fn.generate_ir())
 
         return lines

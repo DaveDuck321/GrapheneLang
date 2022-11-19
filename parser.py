@@ -214,4 +214,4 @@ with open("demo.c3") as source:
         generate_function_body(program, function, body)
 
     with open("demo.ll", "w") as file:
-        file.writelines(program.generate_ir())
+        file.write("\n".join(program.generate_ir()))
