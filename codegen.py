@@ -1,4 +1,5 @@
 from abc import ABC, abstractclassmethod
+from dataclasses import dataclass
 from functools import cached_property
 from itertools import count
 from typing import Any, Iterator, Optional
@@ -62,11 +63,10 @@ class StringType(Type):
         return str(value)
 
 
-# FIXME this should be a dataclass
+@dataclass
 class Variable:
-    def __init__(self, name, type) -> None:
-        self.name = name
-        self.type = type
+    name: str
+    type: Type
 
 
 class Expression(ABC):
@@ -206,7 +206,7 @@ class Function:
     def generate_declaration(self) -> list[str]:
         ir = f"declare dso_local {self._return_type.ir_type} @{self}("
 
-        args_ir = map(lambda arg: arg.type.ir_type, self._signature._arguments)
+        args_ir = [arg.type.ir_type for arg in self._signature._arguments]
         ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
