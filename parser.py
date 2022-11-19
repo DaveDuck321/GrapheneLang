@@ -1,5 +1,7 @@
+from itertools import count
+
 from lark import Lark, Token, Tree
-from lark.visitors import Interpreter
+from lark.visitors import Interpreter, Transformer_InPlace
 
 import codegen
 
@@ -66,6 +68,31 @@ class SymbolTableGenerator(Interpreter):
         self._function_body_trees.append((function_obj, fn_body_tree))
 
 
+class ScopeTransformer(Transformer_InPlace):
+    def __init__(self) -> None:
+        super().__init__(True)
+
+        self.expr_id_iter = count()
+        self.expressions: list[codegen.Expression] = []
+
+    def SIGNED_INT(self, value: str) -> codegen.ConstantExpression:
+        const_expr = codegen.ConstantExpression(
+            next(self.expr_id_iter), codegen.IntType(), int(value)
+        )
+        self.expressions.append(const_expr)
+
+        return const_expr
+
+    def return_statement(self, sub_expressions: list[codegen.Expression]):
+        assert len(sub_expressions) <= 1
+        returned_expr = sub_expressions[0] if sub_expressions else None
+
+        ret_expr = codegen.ReturnExpression(next(self.expr_id_iter), returned_expr)
+        self.expressions.append(ret_expr)
+
+        return ret_expr
+
+
 l = Lark.open("grammar.lark", parser="lalr", start="program")
 
 with open("demo.c3") as source:
@@ -77,5 +104,12 @@ with open("demo.c3") as source:
     symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
 
-    unparsed_function_bodies = symbol_table_gen.get_function_body_trees()
-    print(unparsed_function_bodies)
+    with open("demo.ll", "w") as file:
+        for function, body in symbol_table_gen.get_function_body_trees():
+            et = ScopeTransformer()
+            et.transform(body)
+
+            print(body.pretty())
+
+            function.expressions = et.expressions
+            file.writelines(function.generate_ir())
