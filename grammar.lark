@@ -49,7 +49,7 @@ _optional_scope: scope | _line_of_code
 _control_flow: if_statement
 _line_of_code: _line_of_code_without_semi ";"
              | _control_flow
-_line_of_code_without_semi: _expression
+_line_of_code_without_semi: expression
                           | variable_declaration
                           | const_declaration
                           | return_statement
@@ -58,6 +58,7 @@ condition: _expression
 branch: _optional_scope
 if_statement: "if" "(" condition ")" branch
 
+expression: _expression
 _expression: function_call
           | variable_name
           | operator_use
