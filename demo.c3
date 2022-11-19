@@ -1,3 +1,5 @@
+foreign puts : (str: string) -> int;
+
 function a : () -> int = {
     puts("hello world a");
     return 1;

@@ -62,6 +62,7 @@ class StringType(Type):
         return str(value)
 
 
+# FIXME this should be a dataclass
 class Variable:
     def __init__(self, name, type) -> None:
         self.name = name
@@ -150,27 +151,28 @@ class ReturnExpression(Expression):
 
 
 class FunctionSignature:
-    def __init__(self, name: str, arguments: list[Variable]) -> None:
+    def __init__(
+        self, name: str, arguments: list[Variable], foreign: bool = False
+    ) -> None:
         self._name = name
         self._arguments = arguments
+        self._foreign = foreign
 
     def is_main(self) -> bool:
         return self._name == "main"
 
+    def is_foreign(self) -> bool:
+        return self._foreign
+
     @cached_property
     def mangled_name(self) -> str:
         # main() is immune to name mangling (irrespective of arguments)
-        if self.is_main():
+        if self.is_main() or self.is_foreign():
             return self._name
 
-        # FIXME hack to get puts to work
-        if self._name == "puts":
-            return "puts"
+        arguments_mangle = [arg.type.name for arg in self._arguments]
 
-        arguments_mangle = []
-        for arg in self._arguments:
-            arguments_mangle.append(arg.type.name)
-
+        # FIXME separator
         arguments_mangle = "".join(arguments_mangle)
         return f"__{self._name}__ARGS__{arguments_mangle}"
 
@@ -191,6 +193,9 @@ class Function:
     def mangled_name(self):
         return self._signature.mangled_name
 
+    def is_foreign(self):
+        return self._signature.is_foreign()
+
     def get_next_expr_id(self) -> int:
         return next(self.expr_id_iter)
 
@@ -198,7 +203,18 @@ class Function:
         # Returns the register of the return value
         pass
 
-    def generate_ir(self) -> list[str]:
+    def generate_declaration(self) -> list[str]:
+        ir = f"declare dso_local {self._return_type.ir_type} @{self}("
+
+        args_ir = map(lambda arg: arg.type.ir_type, self._signature._arguments)
+        ir += str.join(", ", args_ir)
+
+        # XXX nounwind indicates that the function never raises an exception.
+        ir += ") nounwind\n"
+
+        return ir
+
+    def generate_definition(self) -> list[str]:
         lines: list[str] = []
         reg_gen = count(1)  # First register is %1
 
@@ -212,6 +228,14 @@ class Function:
         lines.append("}\n")
 
         return lines
+
+    def generate_ir(self) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#functions
+        if self.is_foreign():
+            assert not self.expressions
+            return self.generate_declaration()
+
+        return self.generate_definition()
 
     @cached_property
     def ir_ref(self) -> str:
@@ -255,6 +279,7 @@ class Program:
         super().__init__()
 
         self._functions: dict[str, Function] = {}
+        self._foreign_functions: dict[str, Function] = {}
         self._types: dict[str, Type] = {}
         self._strings: dict[str, str] = {}
 
@@ -270,21 +295,22 @@ class Program:
         return self._types[name]
 
     def lookup_function(self, fn_sig: FunctionSignature) -> Function:
-        name = fn_sig.mangled_name
-
-        assert name in self._functions
-        return self._functions[name]
+        # TODO validation
+        if fn_sig._name in self._foreign_functions:
+            return self._foreign_functions[fn_sig._name]
+        else:
+            return self._functions[fn_sig.mangled_name]
 
     def add_function(self, function: Function) -> None:
         # TODO: how to do validation?
-        is_main = function._signature.is_main()
-        if self._has_main and is_main:
-            raise RuntimeError("overloading 'main' is not allowed")
-        self._has_main = is_main
+        name = function.mangled_name
 
-        mangled_name = function.mangled_name
-        assert mangled_name not in self._functions
-        self._functions[mangled_name] = function
+        if function.is_foreign():
+            assert name not in self._foreign_functions
+            self._foreign_functions[name] = function
+        else:
+            assert name not in self._functions
+            self._functions[name] = function
 
     def add_type(self, type: Type) -> None:
         # TODO: how to do validation?
@@ -311,12 +337,10 @@ class Program:
                 f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"\n'
             )
 
-        # FIXME need a proper way of declaring functions
-        lines.append("declare i32 @puts(ptr nocapture) nounwind\n")
+        for _, fn in self._foreign_functions.items():
+            lines += fn.generate_ir()
 
         for _, fn in self._functions.items():
-            # FIXME hack to get printing to work
-            if fn.mangled_name != "puts":
-                lines += fn.generate_ir()
+            lines += fn.generate_ir()
 
         return lines

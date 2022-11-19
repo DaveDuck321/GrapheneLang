@@ -47,6 +47,29 @@ class SymbolTableGenerator(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
+        fn = self._build_function(name_tree, args_tree, return_type_tree, False)
+        self._program.add_function(fn)
+
+        # Save the body to parse later (TODO: maybe forward declarations should be possible?)
+        self._function_body_trees.append((fn, body_tree))
+
+    @v_args(inline=True)
+    def foreign_function(
+        self,
+        name_tree: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+    ) -> None:
+        fn = self._build_function(name_tree, args_tree, return_type_tree, True)
+        self._program.add_function(fn)
+
+    def _build_function(
+        self,
+        name_tree: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        foreign: bool,
+    ) -> None:
         fn_name = extract_leaf_value(name_tree)
 
         fn_args = []
@@ -59,18 +82,14 @@ class SymbolTableGenerator(Interpreter):
             type = self._program.lookup_type(type_name)
             fn_args.append(cg.Variable(name, type))
 
-        fn_signature = cg.FunctionSignature(fn_name, fn_args)
+        fn_signature = cg.FunctionSignature(fn_name, fn_args, foreign)
 
         # TODO parse adhoc/ generic types.
         fn_return_type_name = extract_named_leaf_value(return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
-        function_obj = cg.Function(fn_signature, fn_return_type)
-        self._program.add_function(function_obj)
-
-        # Save the body to parse later (TODO: maybe forward declarations should be possible?)
-        self._function_body_trees.append((function_obj, body_tree))
+        return cg.Function(fn_signature, fn_return_type)
 
 
 @dataclass
@@ -84,7 +103,7 @@ class FlattenedExpression:
     def expression(self) -> cg.TypedExpression:
         return self.subexpressions[-1]
 
-    def type(self) -> cg.TypedExpression:
+    def type(self) -> cg.Type:
         return self.expression().type
 
 
@@ -190,15 +209,6 @@ with open("demo.c3") as source:
     program = cg.Program()
     symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
-
-    program.add_function(
-        cg.Function(
-            cg.FunctionSignature(
-                "puts", [cg.Variable("string", program.lookup_type("string"))]
-            ),
-            program.lookup_type("int"),
-        )
-    )
 
     for function, body in symbol_table_gen.get_function_body_trees():
         generate_function_body(program, function, body)

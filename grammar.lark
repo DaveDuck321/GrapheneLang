@@ -25,6 +25,7 @@ function_type: _function_type_component "->" _function_type_component
 // Top level
 _top_level_program_line: _top_level_program_feature ";"
 _top_level_program_feature: typedef
+                          | foreign_function
                           | named_function
                           | operator_function
                           | constructor_function
@@ -37,7 +38,9 @@ typedef: "typedef" type_name ":" type
 function_name: CNAME ( generic_annotation )?
 function_return_type: _type
 function_arguments: "(" (variable_name ":" type ("," variable_name ":" type)*)? ")"
-_function_definition: ":" function_arguments "->" function_return_type "=" scope
+_function_declaration: ":" function_arguments "->" function_return_type
+_function_definition: _function_declaration "=" scope
+foreign_function: "foreign" function_name _function_declaration
 named_function: "function" function_name _function_definition
 operator_function: "@operator" operator _function_definition
 constructor_function: "@constructor" _function_definition
