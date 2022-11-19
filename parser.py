@@ -138,8 +138,7 @@ def generate_standalone_expression(
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
 
-    for subexpression in flattened_expr.subexpressions:
-        function.expressions.append(subexpression)
+    function.expressions.extend(flattened_expr.subexpressions)
 
 
 def generate_return_statement(
@@ -156,8 +155,7 @@ def generate_return_statement(
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
 
-    for subexpression in flattened_expr.subexpressions:
-        function.expressions.append(subexpression)
+    function.expressions.extend(flattened_expr.subexpressions)
 
     expr = cg.ReturnExpression(function.get_next_expr_id(), flattened_expr.expression())
 
@@ -171,6 +169,7 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
         "return_statement": generate_return_statement,
         "expression": generate_standalone_expression,
     }
+
     for line in body.children:
         generators[line.data](program, function, line)
 
