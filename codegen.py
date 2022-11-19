@@ -53,6 +53,7 @@ class Variable:
 class Expression(ABC):
     def __init__(self, id: int) -> None:
         self.id = id
+        self.result_reg: Optional[int] = None
 
     @abstractclassmethod
     def generate_ir(self) -> list[str]:
@@ -63,21 +64,27 @@ class Expression(ABC):
         pass
 
 
-class ConstantExpression(Expression):
-    def __init__(self, id: int, type: Type, value: Any) -> None:
+class TypedExpression(Expression):
+    def __init__(self, id: int, type: Type) -> None:
         super().__init__(id)
 
         self.type = type
+
+
+class ConstantExpression(TypedExpression):
+    def __init__(self, id: int, type: Type, value: Any) -> None:
+        super().__init__(id, type)
+
         self.value = type.cast_constant(value)
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        reg = next(reg_gen)
+        self.result_reg = next(reg_gen)
         align = self.type.align
         ir_type = self.type.ir_type
 
         return [
-            f"%{reg} = alloca {ir_type}, align {align}\n",
-            f"store {ir_type} {self.value}, {ir_type}* %{reg}, align {align}\n",
+            f"%{self.result_reg} = alloca {ir_type}, align {align}\n",
+            f"store {ir_type} {self.value}, {ir_type}* %{self.result_reg}, align {align}\n",
         ]
 
     def __repr__(self) -> str:
@@ -93,16 +100,20 @@ class ReturnExpression(Expression):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#i-ret
 
-        # TODO generate IR for fancier return values
-        if self.returned_expr:
-            assert isinstance(self.returned_expr, ConstantExpression)
+        ret_expr = self.returned_expr
 
-        # ret void; Return from void function
-        if not self.returned_expr:
+        if not ret_expr:
+            # ret void; Return from void function
             return ["ret void\n"]
 
+        if isinstance(ret_expr, ConstantExpression):
+            # ret <type> <value>; Return a value from a non-void function
+            return [f"ret {ret_expr.type.ir_type} {ret_expr.value}\n"]
+
+        assert isinstance(ret_expr, TypedExpression)
+
         # ret <type> <value>; Return a value from a non-void function
-        return [f"ret {self.returned_expr.type.ir_type} {self.returned_expr.value}\n"]
+        return [f"ret {ret_expr.type} %{ret_expr.result_reg}\n"]
 
     def __repr__(self) -> str:
         return f"ReturnExpression({self.returned_expr})"
@@ -137,6 +148,9 @@ class Function:
 
         self.expressions: list[Expression] = []
 
+    def __repr__(self) -> str:
+        return self.get_mangled_name()
+
     def get_mangled_name(self):
         return self._signature.get_mangled_name()
 
@@ -158,6 +172,25 @@ class Function:
         return lines
 
 
+class FunctionCallExpression(TypedExpression):
+    def __init__(self, id: int, function: Function) -> None:
+        super().__init__(id, function._return_type)
+
+        self.function = function
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#call-instruction
+
+        fn = self.function
+        self.result_reg = next(reg_gen)
+
+        # TODO add support for arguments and function pointers
+        return [f"%{self.result_reg} = call {fn._return_type.ir_type} @{fn}()\n"]
+
+    def __repr__(self) -> str:
+        return f"FunctionCallExpression({self.function})"
+
+
 class Program:
     def __init__(self) -> None:
         super().__init__()
@@ -174,6 +207,12 @@ class Program:
         # TODO: how to do validation?
         assert name in self._types
         return self._types[name]
+
+    def lookup_function(self, fn_sig: FunctionSignature) -> Function:
+        name = fn_sig.get_mangled_name()
+
+        assert name in self._functions
+        return self._functions[name]
 
     def add_function(self, function: Function) -> None:
         # TODO: how to do validation?

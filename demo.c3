@@ -1,3 +1,7 @@
+function f: () -> int = {
+    return 16;
+};
+
 function main: () -> int = {
-    return 0;
+    return f();
 };

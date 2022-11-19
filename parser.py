@@ -69,8 +69,10 @@ class SymbolTableGenerator(Interpreter):
 
 
 class ScopeTransformer(Transformer_InPlace):
-    def __init__(self) -> None:
+    def __init__(self, program: codegen.Program) -> None:
         super().__init__(True)
+
+        self.program = program
 
         self.expr_id_iter = count()
         self.expressions: list[codegen.Expression] = []
@@ -92,6 +94,17 @@ class ScopeTransformer(Transformer_InPlace):
 
         return ret_expr
 
+    def function_call(self, children: list[Tree]):
+        fn_name = extract_leaf_value(children[0])
+        # TODO function call arguments
+        fn_sig = codegen.FunctionSignature(fn_name, [])
+        fn = self.program.lookup_function(fn_sig)
+
+        call_expr = codegen.FunctionCallExpression(next(self.expr_id_iter), fn)
+        self.expressions.append(call_expr)
+
+        return call_expr
+
 
 l = Lark.open("grammar.lark", parser="lalr", start="program")
 
@@ -106,7 +119,7 @@ with open("demo.c3") as source:
 
     with open("demo.ll", "w") as file:
         for function, body in symbol_table_gen.get_function_body_trees():
-            et = ScopeTransformer()
+            et = ScopeTransformer(program)
             et.transform(body)
 
             print(body.pretty())
