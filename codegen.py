@@ -91,9 +91,17 @@ class ReturnExpression(Expression):
         self.returned_expr = returned_expr
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        # TODO generate IR for fancier return values
-        assert self.returned_expr and isinstance(self.returned_expr, ConstantExpression)
+        # https://llvm.org/docs/LangRef.html#i-ret
 
+        # TODO generate IR for fancier return values
+        if self.returned_expr:
+            assert isinstance(self.returned_expr, ConstantExpression)
+
+        # ret void; Return from void function
+        if not self.returned_expr:
+            return ["ret void\n"]
+
+        # ret <type> <value>; Return a value from a non-void function
         return [f"ret {self.returned_expr.type.ir_type} {self.returned_expr.value}\n"]
 
     def __repr__(self) -> str:
