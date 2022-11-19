@@ -101,13 +101,14 @@ class ExpressionTransformer(Transformer_InPlace):
         )
         return FlattenedExpression([const_expr])
 
-    def function_call(self, children: list[Tree]) -> FlattenedExpression:
-        fn_name = extract_leaf_value(children[0])
+    @v_args(inline=True)
+    def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
+        fn_name = extract_leaf_value(name_tree)
 
         flattened_expr = FlattenedExpression([])
         fn_args = []
         args_for_signature = []
-        for arg in children[1].children:
+        for arg in args_tree.children:
             assert isinstance(arg, FlattenedExpression)
             # FIXME name?
             var = cg.Variable("", arg.type())
