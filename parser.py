@@ -1,4 +1,4 @@
-from itertools import count
+from dataclasses import dataclass
 
 from lark import Lark, Token, Tree
 from lark.visitors import Interpreter, Transformer_InPlace
@@ -56,7 +56,8 @@ class SymbolTableGenerator(Interpreter):
 
         # TODO parse adhoc/ generic types.
         fn_return_type_tree = get_unique_child(tree, "function_return_type")
-        fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
+        fn_return_type_name = extract_named_leaf_value(
+            fn_return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
@@ -68,61 +69,106 @@ class SymbolTableGenerator(Interpreter):
         self._function_body_trees.append((function_obj, fn_body_tree))
 
 
-class ScopeTransformer(Transformer_InPlace):
-    def __init__(self, program: codegen.Program) -> None:
-        super().__init__(True)
+@dataclass
+class FlattenedExpression:
+    subexpressions: list[codegen.TypedExpression]
 
-        self.program = program
+    def add_parent(self, expression: codegen.TypedExpression) -> "FlattenedExpression":
+        self.subexpressions.append(expression)
+        return self
 
-        self.expr_id_iter = count()
-        self.expressions: list[codegen.Expression] = []
+    def expression(self) -> codegen.TypedExpression:
+        return self.subexpressions[-1]
 
-    def SIGNED_INT(self, value: str) -> codegen.ConstantExpression:
+    def type(self) -> codegen.TypedExpression:
+        return self.expression().type
+
+
+class ExpressionTransformer(Transformer_InPlace):
+    def __init__(self, program: codegen.Program, function: codegen.Function) -> None:
+        super().__init__(visit_tokens=True)
+
+        self._program = program
+        self._function = function
+
+    def SIGNED_INT(self, value: str) -> FlattenedExpression:
         const_expr = codegen.ConstantExpression(
-            next(self.expr_id_iter), codegen.IntType(), int(value)
+            self._function.get_next_expr_id(), codegen.IntType(), int(value)
         )
-        self.expressions.append(const_expr)
+        return FlattenedExpression([const_expr])
 
-        return const_expr
-
-    def return_statement(
-        self, sub_expressions: list[codegen.Expression]
-    ) -> codegen.ReturnExpression:
-        assert len(sub_expressions) <= 1
-        returned_expr = sub_expressions[0] if sub_expressions else None
-
-        ret_expr = codegen.ReturnExpression(next(self.expr_id_iter), returned_expr)
-        self.expressions.append(ret_expr)
-
-        return ret_expr
-
-    def function_call(self, children: list[Tree]) -> codegen.FunctionCallExpression:
+    def function_call(self, children: list[Tree]) -> FlattenedExpression:
         fn_name = extract_leaf_value(children[0])
-        args = children[1].children
 
-        args_for_sig = []
-        for arg in args:
-            assert isinstance(arg, codegen.TypedExpression)
+        flattened_expr = FlattenedExpression([])
+        fn_args = []
+        args_for_signature = []
+        for arg in children[1].children:
+            assert isinstance(arg, FlattenedExpression)
             # FIXME name?
-            var = codegen.Variable("", arg.type)
-            args_for_sig.append(var)
+            var = codegen.Variable("", arg.type())
+            args_for_signature.append(var)
+            fn_args.append(arg.expression())
 
-        fn_sig = codegen.FunctionSignature(fn_name, args_for_sig)
-        fn = self.program.lookup_function(fn_sig)
+            flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        call_expr = codegen.FunctionCallExpression(next(self.expr_id_iter), fn, args)
-        self.expressions.append(call_expr)
+        fn_signature = codegen.FunctionSignature(fn_name, args_for_signature)
+        fn = self._program.lookup_function(fn_signature)
 
-        return call_expr
+        call_expr = codegen.FunctionCallExpression(
+            self._function.get_next_expr_id(), fn, fn_args)
 
-    def ESCAPED_STRING(self, string: str) -> codegen.StringConstant:
+        return flattened_expr.add_parent(call_expr)
+
+    def ESCAPED_STRING(self, string: str) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
-        identifier = self.program.add_string(string[1:-1])
+        identifier = self._program.add_string(string[1:-1])
 
-        str_const = codegen.StringConstant(next(self.expr_id_iter), identifier)
-        self.expressions.append(str_const)
+        str_const = codegen.StringConstant(
+            self._function.get_next_expr_id(), identifier)
 
-        return str_const
+        return FlattenedExpression([str_const])
+
+
+def generate_standalone_expression(program: codegen.Program, function: codegen.Function, body: Tree) -> None:
+    assert len(body.children) == 1
+    ExpressionTransformer(program, function).transform(body)
+
+    flattened_expr = body.children[0]
+    assert isinstance(flattened_expr, FlattenedExpression)
+
+    for subexpression in flattened_expr.subexpressions:
+        function.expressions.append(subexpression)
+
+
+def generate_return_statement(program: codegen.Program, function: codegen.Function, body: Tree) -> None:
+    if not body.children:
+        expr = codegen.ReturnExpression(function.get_next_expr_id())
+        function.expressions.append(expr)
+        return
+
+    assert len(body.children) == 1
+    ExpressionTransformer(program, function).transform(body)
+
+    flattened_expr = body.children[0]
+    assert isinstance(flattened_expr, FlattenedExpression)
+
+    for subexpression in flattened_expr.subexpressions:
+        function.expressions.append(subexpression)
+
+    expr = codegen.ReturnExpression(
+        function.get_next_expr_id(), flattened_expr.expression())
+
+    function.expressions.append(expr)
+
+
+def generate_function_body(program: codegen.Program, function: codegen.Function, body: Tree):
+    assert body.data == "scope"
+
+    generators = {"return_statement": generate_return_statement,
+                  "expression": generate_standalone_expression}
+    for line in body.children:
+        generators[line.data](program, function, line)
 
 
 l = Lark.open("grammar.lark", parser="lalr", start="program")
@@ -139,19 +185,15 @@ with open("demo.c3") as source:
     program.add_function(
         codegen.Function(
             codegen.FunctionSignature(
-                "puts", [codegen.Variable("string", program.lookup_type("string"))]
+                "puts", [codegen.Variable(
+                    "string", program.lookup_type("string"))]
             ),
             program.lookup_type("int"),
         )
     )
 
     for function, body in symbol_table_gen.get_function_body_trees():
-        et = ScopeTransformer(program)
-        et.transform(body)
-
-        print(body.pretty())
-
-        function.expressions = et.expressions
+        generate_function_body(program, function, body)
 
     with open("demo.ll", "w") as file:
         file.writelines(program.generate_ir())
