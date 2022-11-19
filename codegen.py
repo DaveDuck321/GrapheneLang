@@ -93,6 +93,19 @@ class ConstantExpression(TypedExpression):
         return f"ConstantExpression({self.type}, {self.value})"
 
 
+class StringConstant(TypedExpression):
+    def __init__(self, id: int, identifier: str) -> None:
+        super().__init__(id, "ptr")
+
+        self.identifier = identifier
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        return []
+
+    def __repr__(self) -> str:
+        return f"StringConstant({self.identifier})"
+
+
 class ReturnExpression(Expression):
     def __init__(self, id: int, returned_expr: Optional[Expression]) -> None:
         super().__init__(id)
@@ -201,6 +214,7 @@ class Program:
 
         self._functions: dict[str, Function] = {}
         self._types: dict[str, Type] = {}
+        self._strings: dict[str, str] = {}
 
         self._has_main: bool = False
 
@@ -233,3 +247,28 @@ class Program:
         # TODO: how to do validation?
         assert type.name not in self._types
         self._types[type.name] = type
+
+    @staticmethod
+    def _get_string_identifier(index: int) -> str:
+        assert index >= 0
+        return f".str.{index}"
+
+    def add_string(self, string: str) -> str:
+        id = self._get_string_identifier(len(self._strings))
+        self._strings[id] = string
+
+        return id
+
+    def generate_ir(self) -> list[str]:
+        lines: list[str] = []
+
+        for string_id, string in self._strings.items():
+            # TODO encode string correctly
+            lines.append(
+                f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"'
+            )
+
+        for _, fn in self._functions.items():
+            lines += fn.generate_ir()
+
+        return lines

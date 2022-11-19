@@ -85,7 +85,9 @@ class ScopeTransformer(Transformer_InPlace):
 
         return const_expr
 
-    def return_statement(self, sub_expressions: list[codegen.Expression]):
+    def return_statement(
+        self, sub_expressions: list[codegen.Expression]
+    ) -> codegen.ReturnExpression:
         assert len(sub_expressions) <= 1
         returned_expr = sub_expressions[0] if sub_expressions else None
 
@@ -94,7 +96,7 @@ class ScopeTransformer(Transformer_InPlace):
 
         return ret_expr
 
-    def function_call(self, children: list[Tree]):
+    def function_call(self, children: list[Tree]) -> codegen.FunctionCallExpression:
         fn_name = extract_leaf_value(children[0])
         # TODO function call arguments
         fn_sig = codegen.FunctionSignature(fn_name, [])
@@ -104,6 +106,15 @@ class ScopeTransformer(Transformer_InPlace):
         self.expressions.append(call_expr)
 
         return call_expr
+
+    def ESCAPED_STRING(self, string: str) -> codegen.StringConstant:
+        assert string[0] == '"' and string[-1] == '"'
+        identifier = self.program.add_string(string[1:-1])
+
+        str_const = codegen.StringConstant(next(self.expr_id_iter), identifier)
+        self.expressions.append(str_const)
+
+        return str_const
 
 
 l = Lark.open("grammar.lark", parser="lalr", start="program")
@@ -117,12 +128,13 @@ with open("demo.c3") as source:
     symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
 
+    for function, body in symbol_table_gen.get_function_body_trees():
+        et = ScopeTransformer(program)
+        et.transform(body)
+
+        print(body.pretty())
+
+        function.expressions = et.expressions
+
     with open("demo.ll", "w") as file:
-        for function, body in symbol_table_gen.get_function_body_trees():
-            et = ScopeTransformer(program)
-            et.transform(body)
-
-            print(body.pretty())
-
-            function.expressions = et.expressions
-            file.writelines(function.generate_ir())
+        file.writelines(program.generate_ir())
