@@ -56,8 +56,7 @@ class SymbolTableGenerator(Interpreter):
 
         # TODO parse adhoc/ generic types.
         fn_return_type_tree = get_unique_child(tree, "function_return_type")
-        fn_return_type_name = extract_named_leaf_value(
-            fn_return_type_tree, "type_name")
+        fn_return_type_name = extract_named_leaf_value(fn_return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
@@ -116,7 +115,8 @@ class ExpressionTransformer(Transformer_InPlace):
         fn = self._program.lookup_function(fn_signature)
 
         call_expr = cg.FunctionCallExpression(
-            self._function.get_next_expr_id(), fn, fn_args)
+            self._function.get_next_expr_id(), fn, fn_args
+        )
 
         return flattened_expr.add_parent(call_expr)
 
@@ -124,13 +124,14 @@ class ExpressionTransformer(Transformer_InPlace):
         assert string[0] == '"' and string[-1] == '"'
         identifier = self._program.add_string(string[1:-1])
 
-        str_const = cg.StringConstant(
-            self._function.get_next_expr_id(), identifier)
+        str_const = cg.StringConstant(self._function.get_next_expr_id(), identifier)
 
         return FlattenedExpression([str_const])
 
 
-def generate_standalone_expression(program: cg.Program, function: cg.Function, body: Tree) -> None:
+def generate_standalone_expression(
+    program: cg.Program, function: cg.Function, body: Tree
+) -> None:
     assert len(body.children) == 1
     ExpressionTransformer(program, function).transform(body)
 
@@ -141,7 +142,9 @@ def generate_standalone_expression(program: cg.Program, function: cg.Function, b
         function.expressions.append(subexpression)
 
 
-def generate_return_statement(program: cg.Program, function: cg.Function, body: Tree) -> None:
+def generate_return_statement(
+    program: cg.Program, function: cg.Function, body: Tree
+) -> None:
     if not body.children:
         expr = cg.ReturnExpression(function.get_next_expr_id())
         function.expressions.append(expr)
@@ -156,8 +159,7 @@ def generate_return_statement(program: cg.Program, function: cg.Function, body: 
     for subexpression in flattened_expr.subexpressions:
         function.expressions.append(subexpression)
 
-    expr = cg.ReturnExpression(
-        function.get_next_expr_id(), flattened_expr.expression())
+    expr = cg.ReturnExpression(function.get_next_expr_id(), flattened_expr.expression())
 
     function.expressions.append(expr)
 
@@ -165,8 +167,10 @@ def generate_return_statement(program: cg.Program, function: cg.Function, body: 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
     assert body.data == "scope"
 
-    generators = {"return_statement": generate_return_statement,
-                  "expression": generate_standalone_expression}
+    generators = {
+        "return_statement": generate_return_statement,
+        "expression": generate_standalone_expression,
+    }
     for line in body.children:
         generators[line.data](program, function, line)
 
@@ -185,8 +189,7 @@ with open("demo.c3") as source:
     program.add_function(
         cg.Function(
             cg.FunctionSignature(
-                "puts", [cg.Variable(
-                    "string", program.lookup_type("string"))]
+                "puts", [cg.Variable("string", program.lookup_type("string"))]
             ),
             program.lookup_type("int"),
         )
