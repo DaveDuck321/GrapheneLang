@@ -105,7 +105,7 @@ class ConstantExpression(TypedExpression):
 
     @cached_property
     def ir_ref(self) -> str:
-        return f"{self.type.ir_type} %{self.value}"
+        return f"{self.type.ir_type} {self.value}"
 
 
 class StringConstant(TypedExpression):

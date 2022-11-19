@@ -1,4 +1,5 @@
 foreign puts : (str: string) -> int;
+foreign raise : (sig: int) -> int;
 
 function a : () -> int = {
     puts("hello world a");
@@ -18,6 +19,8 @@ function c : () -> int = {
 function main: () -> int = {
     a();
     b(c());
+
+    raise(11);
 
     return a();
 };
