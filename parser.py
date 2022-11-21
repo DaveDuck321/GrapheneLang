@@ -255,10 +255,9 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
     generate_body(program, function, function.top_level_scope, body)
 
 
-l = Lark.open("grammar.lark", parser="lalr", start="program")
-
-with open("demo.c3") as source:
-    tree = l.parse(source.read())
+def generate_ir_from_source(source_code: str):
+    l = Lark.open("grammar.lark", parser="lalr", start="program")
+    tree = l.parse(source_code)
 
     print(tree.pretty())
 
@@ -269,5 +268,10 @@ with open("demo.c3") as source:
     for function, body in symbol_table_gen.get_function_body_trees():
         generate_function_body(program, function, body)
 
-    with open("demo.ll", "w") as file:
-        file.write("\n".join(program.generate_ir()))
+    return "\n".join(program.generate_ir())
+
+
+if __name__ == "__main__":
+    with open("demo.c3") as source:
+        ir = generate_ir_from_source(source.read())
+        open("demo.ll", "w").write(ir)
