@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from lark import Lark, Token, Tree
@@ -256,7 +257,7 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
 
 
 def generate_ir_from_source(source_code: str):
-    l = Lark.open("grammar.lark", parser="lalr", start="program")
+    l = Lark.open(Path(__file__).parent / "grammar.lark", parser="lalr", start="program")
     tree = l.parse(source_code)
 
     print(tree.pretty())
