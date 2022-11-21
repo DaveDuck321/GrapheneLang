@@ -16,7 +16,7 @@ if __name__ == "__main__":
     will_emit_llvm = args.emit_llvm or args.emit_everything
     will_emit_binary = not args.emit_llvm or args.emit_everything
 
-    llvm_output = Path(f"{args.input[0].name.removesuffix('.c3')}.ll")
+    llvm_output = args.input[0].with_suffix(".ll")
     binary_output = Path("a.out")
 
     # -o defaults to binary output path
