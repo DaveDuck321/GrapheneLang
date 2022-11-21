@@ -259,7 +259,7 @@ class Function:
     def generate_ir(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#functions
         if self.is_foreign():
-            assert not self.expressions
+            assert not self.top_level_scope._expressions
             return self.generate_declaration()
 
         return self.generate_definition()
