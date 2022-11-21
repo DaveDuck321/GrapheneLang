@@ -210,7 +210,9 @@ class Scope(Expression):
 
 
 class ReturnExpression(Expression):
-    def __init__(self, id: int, returned_expr: Optional[Expression] = None) -> None:
+    def __init__(
+        self, id: int, returned_expr: Optional[TypedExpression] = None
+    ) -> None:
         super().__init__(id)
 
         self.returned_expr = returned_expr
@@ -218,22 +220,12 @@ class ReturnExpression(Expression):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#i-ret
 
-        ret_expr = self.returned_expr
-
-        if not ret_expr:
+        if self.returned_expr is None:
             # ret void; Return from void function
             return ["ret void"]
 
-        # FIXME clean-up logic below with ir_ref.
-
-        if isinstance(ret_expr, ConstantExpression):
-            # ret <type> <value>; Return a value from a non-void function
-            return [f"ret {ret_expr.type.ir_type} {ret_expr.value}"]
-
-        assert isinstance(ret_expr, TypedExpression)
-
         # ret <type> <value>; Return a value from a non-void function
-        return [f"ret {ret_expr.type} %{ret_expr.result_reg}"]
+        return [f"ret {self.returned_expr.ir_ref}"]
 
     def __repr__(self) -> str:
         return f"ReturnExpression({self.returned_expr})"
