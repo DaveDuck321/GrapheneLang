@@ -29,6 +29,12 @@ class Type(ABC):
     def cast_constant(self, value: int) -> bool:
         pass
 
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Type):
+            return self.name == other.name and self.definition == other.definition
+
+        return False
+
 
 class IntType(Type):
     align = 4
@@ -67,6 +73,32 @@ class StringType(Type):
 class Variable:
     name: str
     type: Type
+
+    @cached_property
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        return []
+
+
+@dataclass
+class StackVariable(Variable):
+    constant: bool
+    initialized: bool
+    ir_reg: Optional[str] = None
+
+    @cached_property
+    def ir_ref(self) -> str:
+        assert self.ir_reg is not None
+
+        # alloca returns a pointer.
+        return f"ptr %{self.ir_reg}"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        assert self.ir_reg is None
+        self.ir_reg = next(reg_gen)
+
+        # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
+        #            [, align <alignment>] [, addrspace(<num>)]
+        return [f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.align}"]
 
 
 class Expression(ABC):
@@ -144,6 +176,10 @@ class Scope(Expression):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         subexpression_ir = []
+
+        for variable in self._variables:
+            subexpression_ir.extend(variable.generate_ir(reg_gen))
+
         for expression in self._expressions:
             subexpression_ir.extend(expression.generate_ir(reg_gen))
 
@@ -181,6 +217,30 @@ class ReturnExpression(Expression):
 
     def __repr__(self) -> str:
         return f"ReturnExpression({self.returned_expr})"
+
+
+class VariableAssignment(Expression):
+    def __init__(
+        self, id: int, variable: StackVariable, value: TypedExpression
+    ) -> None:
+        super().__init__(id)
+
+        assert variable.type == value.type
+
+        self.variable = variable
+        self.value = value
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#store-instruction
+
+        # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
+        return [
+            f"store {self.value.ir_ref}, {self.variable.ir_ref}, "
+            f"align {self.variable.type.align}"
+        ]
+
+    def __repr__(self) -> str:
+        return f"VariableAssignment({self.variable.name}: {self.variable.type})"
 
 
 class FunctionSignature:

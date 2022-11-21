@@ -20,6 +20,9 @@ function main: () -> int = {
     a();
     b(c());
 
+    let x: int = 12;
+    let s: string = "Hello!";
+
     raise(11);
 
     return a();

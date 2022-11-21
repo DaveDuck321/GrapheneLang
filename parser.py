@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from lark import Lark, Token, Tree
 from lark.visitors import Interpreter, Transformer_InPlace, v_args
@@ -185,6 +186,37 @@ def generate_return_statement(
     scope.add_expression(expr)
 
 
+def generate_variable_declaration(
+    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+) -> None:
+    def parse_variable_declaration(
+        name_tree: Tree, type_tree: Tree, value: Optional[FlattenedExpression]
+    ) -> FlattenedExpression:
+        # Extract variable name.
+        var_name = extract_leaf_value(name_tree)
+        type_name = extract_named_leaf_value(type_tree, "type_name")
+
+        # Extract variable type. TODO add support for non-type_name types.
+        var_type = program.lookup_type(type_name)
+
+        var = cg.StackVariable(var_name, var_type, False, False)
+        scope._variables.append(var)
+
+        flattened_expr = value if value else FlattenedExpression([])
+
+        assignment_expr = cg.VariableAssignment(
+            function.get_next_expr_id(), var, flattened_expr.expression()
+        )
+
+        return flattened_expr.add_parent(assignment_expr)
+
+    # Need to parse value first.
+    ExpressionTransformer(program, function).transform(body)
+
+    flattened_expr = parse_variable_declaration(*body.children)
+    scope.add_expression(flattened_expr.subexpressions)
+
+
 def generate_scope_body(
     program: cg.Program, function: cg.Function, outer_scope: cg.Scope, body: Tree
 ) -> None:
@@ -201,6 +233,7 @@ def generate_body(
         "return_statement": generate_return_statement,
         "expression": generate_standalone_expression,
         "scope": generate_scope_body,
+        "variable_declaration": generate_variable_declaration,
     }
 
     for line in body.children:
