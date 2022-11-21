@@ -109,11 +109,14 @@ class FlattenedExpression:
 
 
 class ExpressionTransformer(Transformer_InPlace):
-    def __init__(self, program: cg.Program, function: cg.Function) -> None:
+    def __init__(
+        self, program: cg.Program, function: cg.Function, scope: cg.Scope
+    ) -> None:
         super().__init__(visit_tokens=True)
 
         self._program = program
         self._function = function
+        self._scope = scope
 
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(
@@ -154,12 +157,20 @@ class ExpressionTransformer(Transformer_InPlace):
 
         return FlattenedExpression([str_const])
 
+    @v_args(inline=True)
+    def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
+        var = self._scope.search_for_variable(var_name)
+
+        var_access = cg.VariableAccess(self._function.get_next_expr_id(), var)
+
+        return FlattenedExpression([var_access])
+
 
 def generate_standalone_expression(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     assert len(body.children) == 1
-    ExpressionTransformer(program, function).transform(body)
+    ExpressionTransformer(program, function, scope).transform(body)
 
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
@@ -176,7 +187,7 @@ def generate_return_statement(
         return
 
     assert len(body.children) == 1
-    ExpressionTransformer(program, function).transform(body)
+    ExpressionTransformer(program, function, scope).transform(body)
 
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
@@ -200,7 +211,7 @@ def generate_variable_declaration(
         var_type = program.lookup_type(type_name)
 
         var = cg.StackVariable(var_name, var_type, False, False)
-        scope._variables.append(var)
+        scope.add_variable(var)
 
         flattened_expr = value if value else FlattenedExpression([])
 
@@ -211,7 +222,7 @@ def generate_variable_declaration(
         return flattened_expr.add_parent(assignment_expr)
 
     # Need to parse value first.
-    ExpressionTransformer(program, function).transform(body)
+    ExpressionTransformer(program, function, scope).transform(body)
 
     flattened_expr = parse_variable_declaration(*body.children)
     scope.add_expression(flattened_expr.subexpressions)

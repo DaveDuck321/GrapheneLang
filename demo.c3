@@ -20,10 +20,13 @@ function main: () -> int = {
     a();
     b(c());
 
-    let x: int = 12;
-    let s: string = "Hello!";
+    let x: int = 10;
+    {
+        let s: string = "Hello!";
+    }
 
-    raise(11);
+    raise(x);
 
+    // FIXME return 0;
     return a();
 };

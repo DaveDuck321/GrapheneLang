@@ -159,7 +159,7 @@ class Scope(Expression):
         super().__init__(id)
 
         self._outer_scope: Optional[Scope] = outer_scope
-        self._variables: list[Variable] = []
+        self._variables: dict[Variable] = {}
         self._expressions: list[Expression] = []
 
     def add_expression(self, expr: Expression | Iterator[Exception]) -> None:
@@ -167,6 +167,24 @@ class Scope(Expression):
             self._expressions.append(expr)
         else:
             self._expressions.extend(expr)
+
+    def add_variable(self, var: Variable) -> None:
+        # Variables can be redeclared in different (nested) scopes, but they
+        # must be unique in a single scope.
+        assert var.name not in self._variables
+
+        self._variables[var.name] = var
+
+    def search_for_variable(self, var_name: str) -> Optional[Variable]:
+        # Search this scope first.
+        if var_name in self._variables:
+            return self._variables[var_name]
+
+        # Then move up the stack.
+        if self._outer_scope:
+            return self._outer_scope.search_for_variable(var_name)
+
+        return None
 
     def get_start_label(self) -> str:
         return f"SCOPE_{self.id}_BEGIN"
@@ -177,7 +195,7 @@ class Scope(Expression):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         subexpression_ir = []
 
-        for variable in self._variables:
+        for variable in self._variables.values():
             subexpression_ir.extend(variable.generate_ir(reg_gen))
 
         for expression in self._expressions:
@@ -205,6 +223,8 @@ class ReturnExpression(Expression):
         if not ret_expr:
             # ret void; Return from void function
             return ["ret void"]
+
+        # FIXME clean-up logic below with ir_ref.
 
         if isinstance(ret_expr, ConstantExpression):
             # ret <type> <value>; Return a value from a non-void function
@@ -241,6 +261,36 @@ class VariableAssignment(Expression):
 
     def __repr__(self) -> str:
         return f"VariableAssignment({self.variable.name}: {self.variable.type})"
+
+
+class VariableAccess(TypedExpression):
+    def __init__(self, id: int, variable: Variable) -> None:
+        super().__init__(id, variable.type)
+
+        self.variable = variable
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#load-instruction
+
+        # TODO need to load other kinds of variables.
+        assert isinstance(self.variable, StackVariable)
+
+        self.result_reg = next(reg_gen)
+
+        # Need to load this variable from the stack to a register.
+        # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
+        return [
+            f"%{self.result_reg} = load {self.type.ir_type}, "
+            f"{self.variable.ir_ref}, align {self.type.align}"
+        ]
+
+    @cached_property
+    def ir_ref(self) -> str:
+        assert isinstance(self.variable, StackVariable)
+        return f"{self.type.ir_type} %{self.result_reg}"
+
+    def __repr__(self) -> str:
+        return f"VariableAccess({self.variable.name}: {self.variable.type})"
 
 
 class FunctionSignature:

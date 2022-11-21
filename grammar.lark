@@ -11,6 +11,7 @@ _type: _value_type | ref_type
 type: _type
 generic_annotation: "[" _inner_list_of_type_names "]"
 
+accessed_variable_name: CNAME
 variable_name: CNAME
 type_name: CNAME ( generic_annotation )?
 
@@ -63,7 +64,7 @@ if_statement: "if" "(" condition ")" branch
 
 expression: _expression
 _expression: function_call
-          | variable_name
+          | accessed_variable_name
           | operator_use
           | "(" _expression ")"
           | struct_initialization
