@@ -114,7 +114,7 @@ class ExpressionTransformer(Transformer_InPlace):
         self._program = program
         self._function = function
 
-    def SIGNED_INT(self, value: str) -> FlattenedExpression:
+    def SIGNED_INT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(
             self._function.get_next_expr_id(), cg.IntType(), int(value)
         )
@@ -145,7 +145,7 @@ class ExpressionTransformer(Transformer_InPlace):
 
         return flattened_expr.add_parent(call_expr)
 
-    def ESCAPED_STRING(self, string: str) -> FlattenedExpression:
+    def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
         identifier = self._program.add_string(string[1:-1])
 
