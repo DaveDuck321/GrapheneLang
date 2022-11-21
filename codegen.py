@@ -122,6 +122,39 @@ class StringConstant(TypedExpression):
         return f"{self.type.ir_type} @{self.identifier}"
 
 
+class Scope(Expression):
+    def __init__(self, id: int, outer_scope: Optional["Scope"] = None) -> None:
+        super().__init__(id)
+
+        self._outer_scope: Optional[Scope] = outer_scope
+        self._variables: Variable = []
+        self._expressions: Expression = []
+
+    def add_expression(self, expr: Expression | Iterator[Exception]) -> None:
+        if isinstance(expr, Expression):
+            self._expressions.append(expr)
+        else:
+            self._expressions.extend(expr)
+
+    def get_start_label(self) -> str:
+        return f"SCOPE_{self.id}_BEGIN"
+
+    def get_end_label(self) -> str:
+        return f"SCOPE_{self.id}_END"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        subexpression_ir = []
+        for expression in self._expressions:
+            subexpression_ir.extend(expression.generate_ir(reg_gen))
+
+        # TODO: generate the 'start' and 'end' labels when required
+        #       We need to ensure each basic block has a terminating instruction
+        return subexpression_ir
+
+    def __repr__(self) -> str:
+        return f"{{{','.join(map(repr, self._expressions))}}}"
+
+
 class ReturnExpression(Expression):
     def __init__(self, id: int, returned_expr: Optional[Expression] = None) -> None:
         super().__init__(id)
@@ -181,10 +214,9 @@ class Function:
     def __init__(self, signature: FunctionSignature, return_type: Type) -> None:
         self._signature = signature
         self._return_type = return_type
-        self._variables: Variable = []
 
         self.expr_id_iter = count()
-        self.expressions: list[Expression] = []
+        self.top_level_scope = Scope(self.get_next_expr_id())
 
     def __repr__(self) -> str:
         return self.mangled_name
@@ -198,10 +230,6 @@ class Function:
 
     def get_next_expr_id(self) -> int:
         return next(self.expr_id_iter)
-
-    def add_call_subexpression(self, name_mangle: str, argument_registers: int) -> int:
-        # Returns the register of the return value
-        pass
 
     def generate_declaration(self) -> list[str]:
         ir = f"declare dso_local {self._return_type.ir_type} @{self}("
@@ -222,8 +250,7 @@ class Function:
         # FIXME #0 refers to attribute group 0, which we don't generate
         lines.append(f"define dso_local i32 @{self}() #0 {{")
 
-        for expr in self.expressions:
-            lines.extend(expr.generate_ir(reg_gen))
+        lines.extend(self.top_level_scope.generate_ir(reg_gen))
 
         lines.append("}")
 

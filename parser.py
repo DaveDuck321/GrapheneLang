@@ -155,7 +155,7 @@ class ExpressionTransformer(Transformer_InPlace):
 
 
 def generate_standalone_expression(
-    program: cg.Program, function: cg.Function, body: Tree
+    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     assert len(body.children) == 1
     ExpressionTransformer(program, function).transform(body)
@@ -163,15 +163,15 @@ def generate_standalone_expression(
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
 
-    function.expressions.extend(flattened_expr.subexpressions)
+    scope.add_expression(flattened_expr.subexpressions)
 
 
 def generate_return_statement(
-    program: cg.Program, function: cg.Function, body: Tree
+    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     if not body.children:
         expr = cg.ReturnExpression(function.get_next_expr_id())
-        function.expressions.append(expr)
+        scope.add_expression(expr)
         return
 
     assert len(body.children) == 1
@@ -179,24 +179,36 @@ def generate_return_statement(
 
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
-
-    function.expressions.extend(flattened_expr.subexpressions)
+    scope.add_expression(flattened_expr.subexpressions)
 
     expr = cg.ReturnExpression(function.get_next_expr_id(), flattened_expr.expression())
+    scope.add_expression(expr)
 
-    function.expressions.append(expr)
+
+def generate_scope_body(
+    program: cg.Program, function: cg.Function, outer_scope: cg.Scope, body: Tree
+) -> None:
+    inner_scope = cg.Scope(function.get_next_expr_id(), outer_scope)
+    generate_body(program, function, inner_scope, body)
+    outer_scope.add_expression(inner_scope)
 
 
-def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
-    assert body.data == "scope"
+def generate_body(
+    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+) -> None:
 
     generators = {
         "return_statement": generate_return_statement,
         "expression": generate_standalone_expression,
+        "scope": generate_scope_body,
     }
 
     for line in body.children:
-        generators[line.data](program, function, line)
+        generators[line.data](program, function, scope, line)
+
+
+def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
+    generate_body(program, function, function.top_level_scope, body)
 
 
 l = Lark.open("grammar.lark", parser="lalr", start="program")
