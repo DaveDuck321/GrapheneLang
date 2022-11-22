@@ -125,6 +125,12 @@ class ExpressionTransformer(Transformer_InPlace):
         )
         return FlattenedExpression([const_expr])
 
+    def bool_constant(self, value: Token) -> FlattenedExpression:
+        const_expr = cg.ConstantExpression(
+            self._function.get_next_expr_id(), cg.BoolType(), value=="true"
+        )
+        return FlattenedExpression([const_expr])
+
     @v_args(inline=True)
     def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
         fn_name = extract_leaf_value(name_tree)

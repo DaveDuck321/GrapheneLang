@@ -25,6 +25,8 @@ function main: () -> int = {
         let s: string = "Hello!";
     }
 
+    let x2: bool = true;
+
     let y: int;
 
     raise(x);
