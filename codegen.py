@@ -158,7 +158,7 @@ class Scope(Expression):
         super().__init__(id)
 
         self._outer_scope: Optional[Scope] = outer_scope
-        self._variables: dict[Variable] = {}
+        self._variables: dict[str, Variable] = {}
         self._expressions: list[Expression] = []
 
     def add_expression(self, expr: Expression | Iterator[Exception]) -> None:
