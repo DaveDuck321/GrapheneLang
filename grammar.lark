@@ -49,7 +49,6 @@ destructor_function: "@destructor" _function_definition
 
 // Local scope
 scope: "{" (scope | _line_of_code)* "}"
-_optional_scope: scope | _line_of_code
 _control_flow: if_statement
 _line_of_code: _line_of_code_without_semi ";"
              | _control_flow
@@ -59,8 +58,7 @@ _line_of_code_without_semi: expression
                           | return_statement
 
 condition: _expression
-branch: _optional_scope
-if_statement: "if" "(" condition ")" branch
+if_statement: "if" "(" condition ")" scope
 
 expression: _expression
 _expression: function_call
