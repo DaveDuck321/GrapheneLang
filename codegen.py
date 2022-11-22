@@ -53,6 +53,21 @@ class IntType(Type):
         return int(value)
 
 
+class BoolType(Type):
+    align = 1
+    ir_type = "i1"
+
+    def __init__(self) -> None:
+        super().__init__("bool", "__builtin_bool")
+
+    def compatible_with(self, value: Any) -> bool:
+        return isinstance(value, bool)
+
+    def cast_constant(self, value: bool) -> int:
+        assert self.compatible_with(value)
+        return int(value)
+
+
 class StringType(Type):
     align = 1
     ir_type = "ptr"
@@ -415,6 +430,7 @@ class Program:
 
         # TODO: where to add these magic defaults?
         self.add_type(IntType())
+        self.add_type(BoolType())
         self.add_type(StringType())
 
     def lookup_type(self, name: str) -> Type:
