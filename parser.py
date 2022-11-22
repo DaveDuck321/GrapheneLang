@@ -202,7 +202,9 @@ def generate_variable_declaration(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     def parse_variable_declaration(
-        name_tree: Tree, type_tree: Tree, value: Optional[FlattenedExpression]
+        name_tree: Tree,
+        type_tree: Tree,
+        value: Optional[FlattenedExpression] = None,  # FIXME lark placeholders.
     ) -> FlattenedExpression:
         # Extract variable name.
         var_name = extract_leaf_value(name_tree)
@@ -211,16 +213,18 @@ def generate_variable_declaration(
         # Extract variable type. TODO add support for non-type_name types.
         var_type = program.lookup_type(type_name)
 
-        var = cg.StackVariable(var_name, var_type, False, False)
+        var = cg.StackVariable(var_name, var_type, False, value is not None)
         scope.add_variable(var)
 
-        flattened_expr = value if value else FlattenedExpression([])
+        if value is None:
+            return FlattenedExpression([])
 
+        # Initialize variable.
         assignment_expr = cg.VariableAssignment(
-            function.get_next_expr_id(), var, flattened_expr.expression()
+            function.get_next_expr_id(), var, value.expression()
         )
 
-        return flattened_expr.add_parent(assignment_expr)
+        return value.add_parent(assignment_expr)
 
     # Need to parse value first.
     ExpressionTransformer(program, function, scope).transform(body)

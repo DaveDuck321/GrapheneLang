@@ -25,6 +25,8 @@ function main: () -> int = {
         let s: string = "Hello!";
     }
 
+    let y: int;
+
     raise(x);
 
     // FIXME return 0;
