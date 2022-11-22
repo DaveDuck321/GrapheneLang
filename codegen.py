@@ -201,10 +201,10 @@ class Scope(Generatable):
         return None
 
     def get_start_label(self) -> str:
-        return f"SCOPE_{self.id}_BEGIN"
+        return f"scope_{self.id}_begin"
 
     def get_end_label(self) -> str:
-        return f"SCOPE_{self.id}_END"
+        return f"scope_{self.id}_end"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         contained_ir = []
@@ -221,6 +221,32 @@ class Scope(Generatable):
 
     def __repr__(self) -> str:
         return f"{{{','.join(map(repr, self._lines))}}}"
+
+
+class IfStatement(Generatable):
+    def __init__(self, id: int, condition: TypedExpression, scope: Scope) -> None:
+        super().__init__(id)
+
+        self.condition = condition
+        self.scope = scope
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#br-instruction
+
+        # TODO: should the if statement also generate condition code?
+        #       atm its added to the parent scope by parser.generate_if_statement
+        # TODO: it also seems kind of strange that we generate the scope here
+        # br i1 <cond>, label <iftrue>, label <iffalse>
+        return [
+            f"br {self.condition.ir_ref}, label %{self.scope.get_start_label()}, label %{self.scope.get_end_label()}",
+            f"{self.scope.get_start_label()}:",
+            *self.scope.generate_ir(reg_gen),
+            f"br label %{self.scope.get_end_label()}",  # TODO: support `else` jump
+            f"{self.scope.get_end_label()}:",
+        ]
+
+    def __repr__(self) -> str:
+        return f"IfStatement({self.condition} {self.scope})"
 
 
 class ReturnStatement(Generatable):

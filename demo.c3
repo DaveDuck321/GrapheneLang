@@ -25,7 +25,17 @@ function main: () -> int = {
         let s: string = "Hello!";
     }
 
+
     let x2: bool = true;
+    if (x2) {
+        puts("x2 is true");
+    }
+
+    let x3: bool = false;
+    if (x3) {
+        puts("ERROR, x3 is true");
+    }
+
 
     let y: int;
 

@@ -125,9 +125,10 @@ class ExpressionTransformer(Transformer_InPlace):
         )
         return FlattenedExpression([const_expr])
 
-    def bool_constant(self, value: Token) -> FlattenedExpression:
+    @v_args(inline=True)
+    def bool_constant(self, value: str) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(
-            self._function.get_next_expr_id(), cg.BoolType(), value=="true"
+            self._function.get_next_expr_id(), cg.BoolType(), value == "true"
         )
         return FlattenedExpression([const_expr])
 
@@ -239,6 +240,27 @@ def generate_variable_declaration(
     scope.add_generatable(flattened_expr.subexpressions)
 
 
+def generate_if_statement(
+    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+) -> None:
+
+    condition_tree, scope_tree = body.children
+    ExpressionTransformer(program, function, scope).transform(condition_tree)
+
+    assert len(condition_tree.children) == 1
+    condition_expr = condition_tree.children[0]
+
+    scope.add_generatable(condition_expr.subexpressions)
+
+    inner_scope = cg.Scope(function.get_next_expr_id(), scope)
+    generate_body(program, function, inner_scope, scope_tree)
+
+    if_statement = cg.IfStatement(
+        function.get_next_expr_id(), condition_expr.expression(), inner_scope
+    )
+    scope.add_generatable(if_statement)
+
+
 def generate_scope_body(
     program: cg.Program, function: cg.Function, outer_scope: cg.Scope, body: Tree
 ) -> None:
@@ -256,6 +278,7 @@ def generate_body(
         "expression": generate_standalone_expression,
         "scope": generate_scope_body,
         "variable_declaration": generate_variable_declaration,
+        "if_statement": generate_if_statement,
     }
 
     for line in body.children:
