@@ -182,15 +182,15 @@ def generate_standalone_expression(
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
 
-    scope.add_expression(flattened_expr.subexpressions)
+    scope.add_generatable(flattened_expr.subexpressions)
 
 
 def generate_return_statement(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     if not body.children:
-        expr = cg.ReturnExpression(function.get_next_expr_id())
-        scope.add_expression(expr)
+        expr = cg.ReturnStatement(function.get_next_expr_id())
+        scope.add_generatable(expr)
         return
 
     assert len(body.children) == 1
@@ -198,10 +198,10 @@ def generate_return_statement(
 
     flattened_expr = body.children[0]
     assert isinstance(flattened_expr, FlattenedExpression)
-    scope.add_expression(flattened_expr.subexpressions)
+    scope.add_generatable(flattened_expr.subexpressions)
 
-    expr = cg.ReturnExpression(function.get_next_expr_id(), flattened_expr.expression())
-    scope.add_expression(expr)
+    expr = cg.ReturnStatement(function.get_next_expr_id(), flattened_expr.expression())
+    scope.add_generatable(expr)
 
 
 def generate_variable_declaration(
@@ -229,14 +229,14 @@ def generate_variable_declaration(
         assignment_expr = cg.VariableAssignment(
             function.get_next_expr_id(), var, value.expression()
         )
-
+        # TODO: FlattenedExpression no-longer represents an expression here
         return value.add_parent(assignment_expr)
 
     # Need to parse value first.
     ExpressionTransformer(program, function, scope).transform(body)
 
     flattened_expr = parse_variable_declaration(*body.children)
-    scope.add_expression(flattened_expr.subexpressions)
+    scope.add_generatable(flattened_expr.subexpressions)
 
 
 def generate_scope_body(
@@ -244,7 +244,7 @@ def generate_scope_body(
 ) -> None:
     inner_scope = cg.Scope(function.get_next_expr_id(), outer_scope)
     generate_body(program, function, inner_scope, body)
-    outer_scope.add_expression(inner_scope)
+    outer_scope.add_generatable(inner_scope)
 
 
 def generate_body(

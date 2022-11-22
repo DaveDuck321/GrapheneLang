@@ -115,7 +115,7 @@ class StackVariable(Variable):
         return [f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.align}"]
 
 
-class Expression(ABC):
+class Generatable(ABC):
     def __init__(self, id: int) -> None:
         self.id = id
 
@@ -127,7 +127,7 @@ class Expression(ABC):
         pass
 
 
-class TypedExpression(Expression):
+class TypedExpression(Generatable):
     def __init__(self, id: int, type: Type) -> None:
         super().__init__(id)
 
@@ -168,19 +168,19 @@ class StringConstant(TypedExpression):
         return f"{self.type.ir_type} @{self.identifier}"
 
 
-class Scope(Expression):
+class Scope(Generatable):
     def __init__(self, id: int, outer_scope: Optional["Scope"] = None) -> None:
         super().__init__(id)
 
         self._outer_scope: Optional[Scope] = outer_scope
         self._variables: dict[str, Variable] = {}
-        self._expressions: list[Expression] = []
+        self._lines: list[Generatable] = []
 
-    def add_expression(self, expr: Expression | Iterator[Exception]) -> None:
-        if isinstance(expr, Expression):
-            self._expressions.append(expr)
+    def add_generatable(self, line: Generatable | Iterator[Generatable]) -> None:
+        if isinstance(line, Generatable):
+            self._lines.append(line)
         else:
-            self._expressions.extend(expr)
+            self._lines.extend(line)
 
     def add_variable(self, var: Variable) -> None:
         # Variables can be redeclared in different (nested) scopes, but they
@@ -207,23 +207,23 @@ class Scope(Expression):
         return f"SCOPE_{self.id}_END"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        subexpression_ir = []
+        contained_ir = []
 
         for variable in self._variables.values():
-            subexpression_ir.extend(variable.generate_ir(reg_gen))
+            contained_ir.extend(variable.generate_ir(reg_gen))
 
-        for expression in self._expressions:
-            subexpression_ir.extend(expression.generate_ir(reg_gen))
+        for lines in self._lines:
+            contained_ir.extend(lines.generate_ir(reg_gen))
 
         # TODO: generate the 'start' and 'end' labels when required
         #       We need to ensure each basic block has a terminating instruction
-        return subexpression_ir
+        return contained_ir
 
     def __repr__(self) -> str:
-        return f"{{{','.join(map(repr, self._expressions))}}}"
+        return f"{{{','.join(map(repr, self._lines))}}}"
 
 
-class ReturnExpression(Expression):
+class ReturnStatement(Generatable):
     def __init__(
         self, id: int, returned_expr: Optional[TypedExpression] = None
     ) -> None:
@@ -242,10 +242,10 @@ class ReturnExpression(Expression):
         return [f"ret {self.returned_expr.ir_ref}"]
 
     def __repr__(self) -> str:
-        return f"ReturnExpression({self.returned_expr})"
+        return f"ReturnStatement({self.returned_expr})"
 
 
-class VariableAssignment(Expression):
+class VariableAssignment(Generatable):
     def __init__(
         self, id: int, variable: StackVariable, value: TypedExpression
     ) -> None:
@@ -375,7 +375,7 @@ class Function:
     def generate_ir(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#functions
         if self.is_foreign():
-            assert not self.top_level_scope._expressions
+            assert not self.top_level_scope._lines
             return self.generate_declaration()
 
         return self.generate_definition()
