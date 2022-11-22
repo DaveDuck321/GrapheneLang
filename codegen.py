@@ -74,7 +74,6 @@ class Variable:
     name: str
     type: Type
 
-    @cached_property
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         return []
 
