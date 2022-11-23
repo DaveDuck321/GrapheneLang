@@ -4,6 +4,13 @@ from functools import cached_property
 from itertools import count
 from typing import Any, Iterator, Optional
 
+from errors import (
+    assert_else_throw,
+    RedefinitionError,
+    TypeCheckerError,
+    FailedLookupError,
+)
+
 
 class Type(ABC):
     align = 1  # Unaligned
@@ -49,7 +56,6 @@ class IntType(Type):
 
     def cast_constant(self, value: int) -> int:
         assert self.compatible_with(value)
-
         return int(value)
 
 
@@ -80,7 +86,6 @@ class StringType(Type):
 
     def cast_constant(self, value: str) -> str:
         assert self.compatible_with(value)
-
         return str(value)
 
 
@@ -183,10 +188,11 @@ class Scope(Generatable):
             self._lines.extend(line)
 
     def add_variable(self, var: Variable) -> None:
-        # Variables can be redeclared in different (nested) scopes, but they
+        # Variables can be shadowed in different (nested) scopes, but they
         # must be unique in a single scope.
-        assert var.name not in self._variables
-
+        assert_else_throw(
+            var.name not in self._variables, RedefinitionError("variable", var.name)
+        )
         self._variables[var.name] = var
 
     def search_for_variable(self, var_name: str) -> Optional[Variable]:
@@ -277,8 +283,12 @@ class VariableAssignment(Generatable):
     ) -> None:
         super().__init__(id)
 
-        assert variable.type == value.type
-
+        assert_else_throw(
+            variable.type == value.type,
+            TypeCheckerError(
+                "variable assignment", value.type.name, variable.type.name
+            ),
+        )
         self.variable = variable
         self.value = value
 
@@ -460,31 +470,44 @@ class Program:
         self.add_type(StringType())
 
     def lookup_type(self, name: str) -> Type:
-        # TODO: how to do validation?
-        assert name in self._types
+        assert_else_throw(name in self._types, FailedLookupError("type", name))
         return self._types[name]
 
     def lookup_function(self, fn_sig: FunctionSignature) -> Function:
-        # TODO validation
-        if fn_sig._name in self._foreign_functions:
-            return self._foreign_functions[fn_sig._name]
-        else:
-            return self._functions[fn_sig.mangled_name]
+        # TODO don't use private variables
+        function = self._foreign_functions.get(fn_sig._name) or self._functions.get(
+            fn_sig.mangled_name
+        )
+
+        # TODO: give a sensible error if the function name is in self._functions
+        assert_else_throw(
+            function is not None,
+            FailedLookupError("function", fn_sig.mangled_name),
+        )
+        return function
 
     def add_function(self, function: Function) -> None:
-        # TODO: how to do validation?
-        name = function.mangled_name
+        name = function._signature._name  # TODO: this is a hack
+        mangled_name = function.mangled_name
+
+        assert_else_throw(
+            mangled_name not in self._functions,
+            RedefinitionError("function", repr(function)),
+        )
+        assert_else_throw(
+            name not in self._foreign_functions,
+            RedefinitionError("non-overloadable foreign function", repr(function)),
+        )
 
         if function.is_foreign():
-            assert name not in self._foreign_functions
             self._foreign_functions[name] = function
         else:
-            assert name not in self._functions
-            self._functions[name] = function
+            self._functions[mangled_name] = function
 
     def add_type(self, type: Type) -> None:
-        # TODO: how to do validation?
-        assert type.name not in self._types
+        assert_else_throw(
+            type.name not in self._types, RedefinitionError("type", type.name)
+        )
         self._types[type.name] = type
 
     @staticmethod
