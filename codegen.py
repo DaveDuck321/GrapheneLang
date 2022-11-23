@@ -236,6 +236,11 @@ class IfStatement(Generatable):
         self.condition = condition
         self.scope = scope
 
+        assert_else_throw(
+            self.condition.type == BoolType(),
+            TypeCheckerError("if condition", self.condition.type.name, BoolType().name),
+        )
+
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#br-instruction
 
