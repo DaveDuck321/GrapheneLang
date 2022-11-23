@@ -4,8 +4,10 @@ from typing import Optional
 
 from lark import Lark, Token, Tree
 from lark.visitors import Interpreter, Transformer_InPlace, v_args
+from lark.exceptions import VisitError
 
 import codegen as cg
+from errors import GrapheneError
 
 
 def extract_leaf_value(tree: Tree) -> str:
@@ -282,7 +284,15 @@ def generate_body(
     }
 
     for line in body.children:
-        generators[line.data](program, function, scope, line)
+        try:
+            generators[line.data](program, function, scope, line)
+        except VisitError as e:
+            if not isinstance(e.orig_exc, GrapheneError):
+                raise e from e.orig_exc
+            raise GrapheneError(*e.orig_exc.args, line.meta.line) from None
+
+        except GrapheneError as e:
+            raise GrapheneError(*e.args, line.meta.line) from None
 
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
@@ -291,7 +301,9 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
 
 def generate_ir_from_source(source_code: str):
     grammar_path = Path(__file__).parent / "grammar.lark"
-    lark = Lark.open(grammar_path, parser="lalr", start="program")
+    lark = Lark.open(
+        grammar_path, parser="lalr", start="program", propagate_positions=True
+    )
     tree = lark.parse(source_code)
 
     print(tree.pretty())
