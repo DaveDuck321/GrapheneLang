@@ -369,9 +369,9 @@ class FunctionSignature:
     def __repr__(self) -> str:
         readable_arg_names = ", ".join(map(repr, self.arguments))
         if self.is_foreign():
-            return f"foreign name: ({readable_arg_names}) -> {self.return_type.name}"
+            return f"foreign {self.name}: ({readable_arg_names}) -> {self.return_type.name}"
         else:
-            return f"function name: ({readable_arg_names}) -> {self.return_type.name}"
+            return f"function {self.name}: ({readable_arg_names}) -> {self.return_type.name}"
 
 
 class Function:
