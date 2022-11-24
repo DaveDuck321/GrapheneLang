@@ -1,4 +1,5 @@
 from abc import ABC, abstractclassmethod
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
 from itertools import count
@@ -6,9 +7,10 @@ from typing import Any, Iterator, Optional
 
 from errors import (
     assert_else_throw,
+    FailedLookupError,
+    OverloadResolutionError,
     RedefinitionError,
     TypeCheckerError,
-    FailedLookupError,
 )
 
 
@@ -340,37 +342,46 @@ class VariableAccess(TypedExpression):
         return f"VariableAccess({self.variable.name}: {self.variable.type})"
 
 
+@dataclass
 class FunctionSignature:
-    def __init__(
-        self, name: str, arguments: list[Variable], foreign: bool = False
-    ) -> None:
-        self._name = name
-        self._arguments = arguments
-        self._foreign = foreign
+    name: str
+    arguments: list[Type]
+    return_type: Type
+    foreign: bool = False
 
     def is_main(self) -> bool:
-        return self._name == "main"
+        return self.name == "main"
 
     def is_foreign(self) -> bool:
-        return self._foreign
+        return self.foreign
 
     @cached_property
     def mangled_name(self) -> str:
         # main() is immune to name mangling (irrespective of arguments)
         if self.is_main() or self.is_foreign():
-            return self._name
+            return self.name
 
-        arguments_mangle = [arg.type.name for arg in self._arguments]
+        arguments_mangle = [arg.mangled_name for arg in self.arguments]
 
         # FIXME separator
         arguments_mangle = "".join(arguments_mangle)
-        return f"__{self._name}__ARGS__{arguments_mangle}"
+        return f"__{self.name}__ARGS__{arguments_mangle}"
+
+    def __repr__(self) -> str:
+        readable_arg_names = ", ".join(arg.name for arg in self.arguments)
+        if self.is_foreign():
+            return f"foreign name: ({readable_arg_names}) -> {self.return_type.name}"
+        else:
+            return f"function name: ({readable_arg_names}) -> {self.return_type.name}"
 
 
 class Function:
-    def __init__(self, signature: FunctionSignature, return_type: Type) -> None:
-        self._signature = signature
-        self._return_type = return_type
+    def __init__(
+        self, name: str, parameters: list[Variable], return_type: Type, is_foreign: bool
+    ) -> None:
+        self._signature = FunctionSignature(
+            name, [var.type for var in parameters], return_type, is_foreign
+        )
 
         self.expr_id_iter = count()
         self.top_level_scope = Scope(self.get_next_expr_id())
@@ -379,19 +390,22 @@ class Function:
         return self.mangled_name
 
     @cached_property
-    def mangled_name(self):
+    def mangled_name(self) -> str:
         return self._signature.mangled_name
 
-    def is_foreign(self):
+    def get_signature(self) -> FunctionSignature:
+        return self._signature
+
+    def is_foreign(self) -> bool:
         return self._signature.is_foreign()
 
     def get_next_expr_id(self) -> int:
         return next(self.expr_id_iter)
 
     def generate_declaration(self) -> list[str]:
-        ir = f"declare dso_local {self._return_type.ir_type} @{self}("
+        ir = f"declare dso_local {self._signature.return_type.ir_type} @{self}("
 
-        args_ir = [arg.type.ir_type for arg in self._signature._arguments]
+        args_ir = [arg.ir_type for arg in self._signature.arguments]
         ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
@@ -423,14 +437,14 @@ class Function:
 
     @cached_property
     def ir_ref(self) -> str:
-        return f"{self._return_type} @{self}"
+        return f"{self._signature.return_type} @{self}"
 
 
 class FunctionCallExpression(TypedExpression):
     def __init__(
         self, id: int, function: Function, args: list[TypedExpression]
     ) -> None:
-        super().__init__(id, function._return_type)
+        super().__init__(id, function._signature.return_type)
 
         self.function = function
         self.args = args
@@ -458,12 +472,52 @@ class FunctionCallExpression(TypedExpression):
         return f"{self.type.ir_type} %{self.result_reg}"
 
 
+class FunctionSymbolTable:
+    def __init__(self) -> None:
+        self.foreign_functions: list[Function] = []
+        self.graphene_functions: list[Function] = []
+        self._functions: dict[str, list[Function]] = defaultdict(list)
+
+    def add_function(self, fn_to_add: Function) -> None:
+        fn_to_add_signature = fn_to_add.get_signature()
+
+        for target in self._functions[fn_to_add_signature.name]:
+            assert_else_throw(
+                not target.is_foreign() and not fn_to_add.is_foreign(),
+                RedefinitionError("non-overloadable foreign function", repr(function)),
+            )
+            assert_else_throw(
+                target._signature.arguments != fn_to_add_signature.arguments,
+                RedefinitionError("function", repr(function)),
+            )
+
+        self._functions[fn_to_add_signature.name].append(fn_to_add)
+        if fn_to_add.is_foreign():
+            self.foreign_functions.append(fn_to_add)
+        else:
+            self.graphene_functions.append(fn_to_add)
+
+    def lookup_function(self, fn_name: str, fn_args: list[Type]):
+        candidate_functions = self._functions[fn_name]
+
+        readable_arg_names = ", ".join(arg.name for arg in fn_args)
+        assert_else_throw(
+            len(candidate_functions) > 0,
+            FailedLookupError("function", f"{fn_name}: ({readable_arg_names}) -> ?"),
+        )
+
+        for function in candidate_functions:
+            if function.get_signature().arguments == fn_args:
+                return function
+
+        raise OverloadResolutionError(fn_name, readable_arg_names)
+
+
 class Program:
     def __init__(self) -> None:
         super().__init__()
 
-        self._functions: dict[str, Function] = {}
-        self._foreign_functions: dict[str, Function] = {}
+        self._function_table = FunctionSymbolTable()
         self._types: dict[str, Type] = {}
         self._strings: dict[str, str] = {}
 
@@ -478,36 +532,11 @@ class Program:
         assert_else_throw(name in self._types, FailedLookupError("type", name))
         return self._types[name]
 
-    def lookup_function(self, fn_sig: FunctionSignature) -> Function:
-        # TODO don't use private variables
-        function = self._foreign_functions.get(fn_sig._name) or self._functions.get(
-            fn_sig.mangled_name
-        )
-
-        # TODO: give a sensible error if the function name is in self._functions
-        assert_else_throw(
-            function is not None,
-            FailedLookupError("function", fn_sig.mangled_name),
-        )
-        return function
+    def lookup_function(self, fn_name: str, fn_args: Type) -> Function:
+        return self._function_table.lookup_function(fn_name, fn_args)
 
     def add_function(self, function: Function) -> None:
-        name = function._signature._name  # TODO: this is a hack
-        mangled_name = function.mangled_name
-
-        assert_else_throw(
-            mangled_name not in self._functions,
-            RedefinitionError("function", repr(function)),
-        )
-        assert_else_throw(
-            name not in self._foreign_functions,
-            RedefinitionError("non-overloadable foreign function", repr(function)),
-        )
-
-        if function.is_foreign():
-            self._foreign_functions[name] = function
-        else:
-            self._functions[mangled_name] = function
+        self._function_table.add_function(function)
 
     def add_type(self, type: Type) -> None:
         assert_else_throw(
@@ -537,10 +566,10 @@ class Program:
                 f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"'
             )
 
-        for _, fn in self._foreign_functions.items():
+        for fn in self._function_table.foreign_functions:
             lines.extend(fn.generate_ir())
 
-        for _, fn in self._functions.items():
+        for fn in self._function_table.graphene_functions:
             lines.extend(fn.generate_ir())
 
         return lines

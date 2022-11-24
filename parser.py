@@ -86,14 +86,12 @@ class SymbolTableGenerator(Interpreter):
             type = self._program.lookup_type(type_name)
             fn_args.append(cg.Variable(name, type))
 
-        fn_signature = cg.FunctionSignature(fn_name, fn_args, foreign)
-
         # TODO parse adhoc/ generic types.
         fn_return_type_name = extract_named_leaf_value(return_type_tree, "type_name")
         fn_return_type = self._program.lookup_type(fn_return_type_name)
 
         # Build the function
-        return cg.Function(fn_signature, fn_return_type)
+        return cg.Function(fn_name, fn_args, fn_return_type, foreign)
 
 
 @dataclass
@@ -139,22 +137,18 @@ class ExpressionTransformer(Transformer_InPlace):
         fn_name = extract_leaf_value(name_tree)
 
         flattened_expr = FlattenedExpression([])
-        fn_args = []
-        args_for_signature = []
+        arg_types_for_lookup = []
+        fn_call_args = []
         for arg in args_tree.children:
             assert isinstance(arg, FlattenedExpression)
-            # FIXME name?
-            var = cg.Variable("", arg.type())
-            args_for_signature.append(var)
-            fn_args.append(arg.expression())
+            arg_types_for_lookup.append(arg.type())
+            fn_call_args.append(arg.expression())
 
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        fn_signature = cg.FunctionSignature(fn_name, args_for_signature)
-        fn = self._program.lookup_function(fn_signature)
-
+        function = self._program.lookup_function(fn_name, arg_types_for_lookup)
         call_expr = cg.FunctionCallExpression(
-            self._function.get_next_expr_id(), fn, fn_args
+            self._function.get_next_expr_id(), function, fn_call_args
         )
 
         return flattened_expr.add_parent(call_expr)

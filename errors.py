@@ -26,6 +26,14 @@ class FailedLookupError(GrapheneError):
         super().__init__(f"Error: could not find definition of {thing} '{name}'")
 
 
+class OverloadResolutionError(GrapheneError):
+    def __init__(self, fn_name: str, arguments: str) -> None:
+        # TODO: suggest available overloads here
+        super().__init__(
+            f"Error in overload resolution for function '{fn_name}({arguments})'"
+        )
+
+
 def assert_else_throw(verify: bool, error: GrapheneError):
     if not verify:
         raise error
