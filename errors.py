@@ -4,7 +4,7 @@ class GrapheneError(ValueError):
 
     def __str__(self) -> str:
         if len(self.args) > 1:
-            return f"\n\n\nLine: {self.args[1]}\n\t{self.args[0]}"
+            return f"\n\n\nLine: {self.args[1]}\n    {self.args[0]}"
         else:
             return f"\n\n{self.args[0]}"
 
@@ -22,8 +22,10 @@ class RedefinitionError(GrapheneError):
 
 
 class FailedLookupError(GrapheneError):
-    def __init__(self, thing: str, name: str) -> None:
-        super().__init__(f"Error: could not find definition of {thing} '{name}'")
+    def __init__(self, thing: str, required_definition: str) -> None:
+        super().__init__(
+            f"Error: could not find {thing} definition '{required_definition}'"
+        )
 
 
 class OverloadResolutionError(GrapheneError):

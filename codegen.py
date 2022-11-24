@@ -22,9 +22,8 @@ class Type(ABC):
         self.name = name
         self.definition = definition
 
-    @classmethod
-    def __repr__(cls) -> str:
-        return cls.ir_type
+    def __repr__(self) -> str:
+        return self.name
 
     @cached_property
     def mangled_name(self) -> str:
@@ -368,7 +367,7 @@ class FunctionSignature:
         return f"__{self.name}__ARGS__{arguments_mangle}"
 
     def __repr__(self) -> str:
-        readable_arg_names = ", ".join(arg.name for arg in self.arguments)
+        readable_arg_names = ", ".join(map(repr, self.arguments))
         if self.is_foreign():
             return f"foreign name: ({readable_arg_names}) -> {self.return_type.name}"
         else:
@@ -387,7 +386,7 @@ class Function:
         self.top_level_scope = Scope(self.get_next_expr_id())
 
     def __repr__(self) -> str:
-        return self.mangled_name
+        return repr(self._signature)
 
     @cached_property
     def mangled_name(self) -> str:
@@ -403,7 +402,7 @@ class Function:
         return next(self.expr_id_iter)
 
     def generate_declaration(self) -> list[str]:
-        ir = f"declare dso_local {self._signature.return_type.ir_type} @{self}("
+        ir = f"declare dso_local {self._signature.return_type.ir_type} @{self.mangled_name}("
 
         args_ir = [arg.ir_type for arg in self._signature.arguments]
         ir += str.join(", ", args_ir)
@@ -419,7 +418,7 @@ class Function:
 
         # FIXME generate argument list
         # FIXME #0 refers to attribute group 0, which we don't generate
-        lines.append(f"define dso_local i32 @{self}() #0 {{")
+        lines.append(f"define dso_local i32 @{self.mangled_name}() #0 {{")
 
         lines.extend(self.top_level_scope.generate_ir(reg_gen))
 
@@ -437,7 +436,7 @@ class Function:
 
     @cached_property
     def ir_ref(self) -> str:
-        return f"{self._signature.return_type} @{self}"
+        return f"{self._signature.return_type.ir_type} @{self.mangled_name}"
 
 
 class FunctionCallExpression(TypedExpression):
@@ -480,18 +479,31 @@ class FunctionSymbolTable:
 
     def add_function(self, fn_to_add: Function) -> None:
         fn_to_add_signature = fn_to_add.get_signature()
+        matched_functions = self._functions[fn_to_add_signature.name]
 
-        for target in self._functions[fn_to_add_signature.name]:
+        def get_printable_sig(sig: FunctionSignature) -> str:
+            return f"{sig.name}: ({', '.join(map(str, sig.arguments))})"
+
+        if fn_to_add_signature.is_foreign() and len(matched_functions) > 0:
+            RedefinitionError(
+                "non-overloadable foreign function",
+                get_printable_sig(fn_to_add_signature),
+            )
+
+        for target in matched_functions:
             assert_else_throw(
-                not target.is_foreign() and not fn_to_add.is_foreign(),
-                RedefinitionError("non-overloadable foreign function", repr(function)),
+                target.is_foreign(),
+                RedefinitionError(
+                    "non-overloadable foreign function",
+                    get_printable_sig(target.get_signature()),
+                ),
             )
             assert_else_throw(
                 target._signature.arguments != fn_to_add_signature.arguments,
-                RedefinitionError("function", repr(function)),
+                RedefinitionError("function", get_printable_sig(fn_to_add_signature)),
             )
 
-        self._functions[fn_to_add_signature.name].append(fn_to_add)
+        matched_functions.append(fn_to_add)
         if fn_to_add.is_foreign():
             self.foreign_functions.append(fn_to_add)
         else:
@@ -500,10 +512,12 @@ class FunctionSymbolTable:
     def lookup_function(self, fn_name: str, fn_args: list[Type]):
         candidate_functions = self._functions[fn_name]
 
-        readable_arg_names = ", ".join(arg.name for arg in fn_args)
+        readable_arg_names = ", ".join(map(repr, fn_args))
         assert_else_throw(
             len(candidate_functions) > 0,
-            FailedLookupError("function", f"{fn_name}: ({readable_arg_names}) -> ?"),
+            FailedLookupError(
+                "function", f"function {fn_name}: ({readable_arg_names}) -> ..."
+            ),
         )
 
         for function in candidate_functions:
@@ -529,7 +543,9 @@ class Program:
         self.add_type(StringType())
 
     def lookup_type(self, name: str) -> Type:
-        assert_else_throw(name in self._types, FailedLookupError("type", name))
+        assert_else_throw(
+            name in self._types, FailedLookupError("type", f"typedef {name} : ...")
+        )
         return self._types[name]
 
     def lookup_function(self, fn_name: str, fn_args: Type) -> Function:
