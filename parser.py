@@ -1,11 +1,12 @@
+import sys
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Optional
-import sys
 
 from lark import Lark, Token, Tree
-from lark.visitors import Interpreter, Transformer_InPlace, v_args
 from lark.exceptions import VisitError
+from lark.visitors import Interpreter, Transformer_InPlace, v_args
 
 import codegen as cg
 from errors import GrapheneError
@@ -244,7 +245,11 @@ def generate_return_statement(
 
 
 def generate_variable_declaration(
-    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    is_const: bool,
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
 ) -> None:
     def parse_variable_declaration(
         name_tree: Tree,
@@ -258,7 +263,7 @@ def generate_variable_declaration(
         # Extract variable type. TODO add support for non-type_name types.
         var_type = program.lookup_type(type_name)
 
-        var = cg.StackVariable(var_name, var_type, False, value is not None)
+        var = cg.StackVariable(var_name, var_type, is_const, value is not None)
         scope.add_variable(var)
 
         if value is None:
@@ -318,7 +323,8 @@ def generate_body(
         "return_statement": generate_return_statement,
         "expression": generate_standalone_expression,
         "scope": generate_scope_body,
-        "variable_declaration": generate_variable_declaration,
+        "variable_declaration": partial(generate_variable_declaration, False),
+        "const_declaration": partial(generate_variable_declaration, True),
         "if_statement": generate_if_statement,
     }
 
