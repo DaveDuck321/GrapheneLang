@@ -17,7 +17,7 @@ function c : () -> int = {
 };
 
 @operator +: (a: int, b: int) -> int = {
-    return 9;
+    return __builtin_add(1, 3);
 };
 
 function main: () -> int = {
@@ -41,7 +41,7 @@ function main: () -> int = {
     }
 
 
-    let y: int;
+    let y: int = 0;
 
     // FIXME return 0;
     return 6 + 1 + y;

@@ -141,18 +141,22 @@ class TypedExpression(Generatable):
         self.type = type
         self.result_reg: Optional[int] = None
 
-    @abstractclassmethod
     @cached_property
     def ir_ref(self) -> str:
+        return f"{self.type.ir_type} {self.ir_ref_without_type}"
+
+    @abstractclassmethod
+    @cached_property
+    def ir_ref_without_type(self) -> str:
+        return f"{self.result_reg}"
+
+    @abstractclassmethod
+    def assert_can_read_from(self) -> None:
         pass
 
-    def assert_can_read_from(self) -> None:
-        # Fail-safe
-        assert_else_throw(False, OperandError("TODO"))
-
-    def assert_can_write_from(self) -> None:
-        # Fail-safe
-        assert_else_throw(False, OperandError("TODO"))
+    @abstractclassmethod
+    def assert_can_write_to(self) -> None:
+        pass
 
 
 class ConstantExpression(TypedExpression):
@@ -165,14 +169,14 @@ class ConstantExpression(TypedExpression):
         return f"ConstantExpression({self.type}, {self.value})"
 
     @cached_property
-    def ir_ref(self) -> str:
-        return f"{self.type.ir_type} {self.value}"
+    def ir_ref_without_type(self) -> str:
+        return f"{self.value}"
 
     def assert_can_read_from(self) -> None:
         # Can always read the result of a constant expression.
         pass
 
-    def assert_can_write_from(self) -> None:
+    def assert_can_write_to(self) -> None:
         # Can never write to a constant expression (an rvalue).
         assert_else_throw(False, OperandError("TODO"))
 
@@ -187,14 +191,14 @@ class StringConstant(TypedExpression):
         return f"StringConstant({self.identifier})"
 
     @cached_property
-    def ir_ref(self) -> str:
-        return f"{self.type.ir_type} @{self.identifier}"
+    def ir_ref_without_type(self) -> str:
+        return f"@{self.identifier}"
 
     def assert_can_read_from(self) -> None:
         # Can always read a string constant.
         pass
 
-    def assert_can_write_from(self) -> None:
+    def assert_can_write_to(self) -> None:
         # Can never write to a string constant.
         assert_else_throw(False, OperandError("TODO"))
 
@@ -358,9 +362,9 @@ class VariableAccess(TypedExpression):
         ]
 
     @cached_property
-    def ir_ref(self) -> str:
+    def ir_ref_without_type(self) -> str:
         assert isinstance(self.variable, StackVariable)
-        return f"{self.type.ir_type} %{self.result_reg}"
+        return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
         return f"VariableAccess({self.variable.name}: {self.variable.type})"
@@ -373,7 +377,7 @@ class VariableAccess(TypedExpression):
             OperandError(f"Cannot use uninitialized variable '{self.variable.name}'"),
         )
 
-    def assert_can_write_from(self) -> None:
+    def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
         assert isinstance(self.variable, StackVariable)
         assert_else_throw(
@@ -493,7 +497,7 @@ class FunctionCallExpression(TypedExpression):
     def __init__(
         self, id: int, function: Function, args: list[TypedExpression]
     ) -> None:
-        super().__init__(id, function._signature.return_type)
+        super().__init__(id, function.get_signature().return_type)
 
         self.function = function
         self.args = args
@@ -517,19 +521,53 @@ class FunctionCallExpression(TypedExpression):
         return f"FunctionCallExpression({self.function})"
 
     @cached_property
-    def ir_ref(self) -> str:
-        return f"{self.type.ir_type} %{self.result_reg}"
+    def ir_ref_without_type(self) -> str:
+        return f"%{self.result_reg}"
 
     def assert_can_read_from(self) -> None:
         # Can read any return type. Let the caller check if it's compatible.
         pass
 
-    def assert_can_write_from(self) -> None:
+    def assert_can_write_to(self) -> None:
         # Can write to any reference return type. TODO we don't have references
         # yet, so any attempt to write to the return value should fail for now.
         assert_else_throw(
             False,
-            OperandError("TODO"),
+            OperandError(f"TODO: FunctionCallExpression.assert_can_write_to"),
+        )
+
+
+class AddExpression(TypedExpression):
+    def __init__(self, id: int, arguments: list[TypedExpression]) -> None:
+        lhs, rhs = arguments
+        super().__init__(id, lhs.type)
+
+        assert lhs.type == rhs.type
+        self._lhs = lhs
+        self._rhs = rhs
+
+    def __repr__(self) -> str:
+        return f"Add({self.identifier})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#add-instruction
+        self.result_reg = next(reg_gen)
+
+        # <result> = add nuw nsw <ty> <op1>, <op2>  ; yields ty:result
+        return [
+            f"%{self.result_reg} = add nuw nsw {self._lhs.ir_ref}, {self._rhs.ir_ref_without_type}"
+        ]
+
+    @cached_property
+    def ir_ref_without_type(self) -> str:
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        assert_else_throw(
+            False, OperandError("Cannot assign to `__builtin_add(..., ...)`")
         )
 
 
@@ -589,6 +627,11 @@ class FunctionSymbolTable:
         raise OverloadResolutionError(fn_name, readable_arg_names)
 
 
+BUILTIN_METHODS = {
+    "__builtin_add": AddExpression,
+}
+
+
 class Program:
     def __init__(self) -> None:
         super().__init__()
@@ -610,8 +653,15 @@ class Program:
         )
         return self._types[name]
 
-    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
-        return self._function_table.lookup_function(fn_name, fn_args)
+    def lookup_call_expression(
+        self, id: int, fn_name: str, fn_args: list[TypedExpression]
+    ) -> TypedExpression:
+        if fn_name in BUILTIN_METHODS:
+            return BUILTIN_METHODS[fn_name](id, fn_args)
+
+        arg_types = [arg.type for arg in fn_args]
+        function = self._function_table.lookup_function(fn_name, arg_types)
+        return FunctionCallExpression(id, function, fn_args)
 
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)

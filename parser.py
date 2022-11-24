@@ -164,10 +164,9 @@ class ExpressionTransformer(Transformer_InPlace):
         flattened_expr.subexpressions.extend(lhs.subexpressions)
         flattened_expr.subexpressions.extend(rhs.subexpressions)
 
-        function = self._program.lookup_function(operator, [lhs.type(), rhs.type()])
-        call_expr = cg.FunctionCallExpression(
+        call_expr = self._program.lookup_call_expression(
             self._function.get_next_expr_id(),
-            function,
+            operator,
             [lhs.expression(), rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
@@ -188,11 +187,9 @@ class ExpressionTransformer(Transformer_InPlace):
 
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        function = self._program.lookup_function(fn_name, arg_types_for_lookup)
-        call_expr = cg.FunctionCallExpression(
-            self._function.get_next_expr_id(), function, fn_call_args
+        call_expr = self._program.lookup_call_expression(
+            self._function.get_next_expr_id(), fn_name, fn_call_args
         )
-
         return flattened_expr.add_parent(call_expr)
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
