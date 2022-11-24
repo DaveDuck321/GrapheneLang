@@ -329,6 +329,5 @@ def generate_ir_from_source(file_path: Path):
 
 
 if __name__ == "__main__":
-    with open("demo.c3") as source:
-        ir = generate_ir_from_source(source.read())
-        open("demo.ll", "w").write(ir)
+    ir = generate_ir_from_source(Path("demo.c3"))
+    open("demo.ll", "w").write(ir)
