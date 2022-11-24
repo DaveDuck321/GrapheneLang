@@ -319,7 +319,7 @@ def generate_ir_from_source(file_path: Path):
             generate_function_body(program, function, body)
     except ErrorWithLineInfo as e:
         print(
-            f'File "{file_path.absolute()}", line {e.line}, in "{function.get_signature()}"',
+            f'File "{file_path.absolute()}", line {e.line}, in "{function}"',
             file=sys.stderr,
         )
         print(f"   {e.message}", file=sys.stderr)
