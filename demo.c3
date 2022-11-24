@@ -16,6 +16,10 @@ function c : () -> int = {
     return 1;
 };
 
+@operator +: (a: int, b: int) -> int = {
+    return 9;
+};
+
 function main: () -> int = {
     a();
     b(c());
@@ -39,8 +43,6 @@ function main: () -> int = {
 
     let y: int;
 
-    raise(x);
-
     // FIXME return 0;
-    return a();
+    return 6 + 1;
 };

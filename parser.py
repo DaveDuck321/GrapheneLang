@@ -66,6 +66,14 @@ class SymbolTableGenerator(Interpreter):
         self._function_body_trees.append((fn, body_tree))
 
     @v_args(inline=True)
+    def operator_function(
+        self, op_tree: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
+    ):
+        fn = self._build_function(op_tree, args_tree, return_type_tree, False)
+        self._program.add_function(fn)
+        self._function_body_trees.append((fn, body_tree))
+
+    @v_args(inline=True)
     def foreign_function(
         self,
         name_tree: Tree,
@@ -139,6 +147,26 @@ class ExpressionTransformer(Transformer_InPlace):
             self._function.get_next_expr_id(), cg.BoolType(), value == "true"
         )
         return FlattenedExpression([const_expr])
+
+    @v_args(inline=True)
+    def operator_use(
+        self, lhs: FlattenedExpression, operator_tree: Tree, rhs: FlattenedExpression
+    ):
+        assert isinstance(lhs, FlattenedExpression)
+        assert isinstance(rhs, FlattenedExpression)
+        operator = extract_leaf_value(operator_tree)
+
+        flattened_expr = FlattenedExpression([])
+        flattened_expr.subexpressions.extend(lhs.subexpressions)
+        flattened_expr.subexpressions.extend(rhs.subexpressions)
+
+        function = self._program.lookup_function(operator, [lhs.type(), rhs.type()])
+        call_expr = cg.FunctionCallExpression(
+            self._function.get_next_expr_id(),
+            function,
+            [lhs.expression(), rhs.expression()],
+        )
+        return flattened_expr.add_parent(call_expr)
 
     @v_args(inline=True)
     def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:

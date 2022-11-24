@@ -364,7 +364,16 @@ class FunctionSignature:
 
         # FIXME separator
         arguments_mangle = "".join(arguments_mangle)
-        return f"__{self.name}__ARGS__{arguments_mangle}"
+
+        # Name mangle operators into digits
+        legal_name_mangle = []
+        for char in self.name:
+            if char.isdigit():
+                legal_name_mangle.append(char)
+            else:
+                legal_name_mangle.append(f"__O{ord(char)}")
+
+        return f"__{''.join(legal_name_mangle)}__ARGS__{arguments_mangle}"
 
     def __repr__(self) -> str:
         readable_arg_names = ", ".join(map(repr, self.arguments))
@@ -548,7 +557,7 @@ class Program:
         )
         return self._types[name]
 
-    def lookup_function(self, fn_name: str, fn_args: Type) -> Function:
+    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
         return self._function_table.lookup_function(fn_name, fn_args)
 
     def add_function(self, function: Function) -> None:
