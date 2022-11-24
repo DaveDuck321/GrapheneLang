@@ -1,12 +1,7 @@
 class GrapheneError(ValueError):
-    def __init__(self, message: str, *args: list[int]) -> None:
-        super().__init__(message, *args)
-
-    def __str__(self) -> str:
-        if len(self.args) > 1:
-            return f"\n\n\nLine: {self.args[1]}\n    {self.args[0]}"
-        else:
-            return f"\n\n{self.args[0]}"
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class TypeCheckerError(GrapheneError):

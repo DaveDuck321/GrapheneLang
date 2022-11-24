@@ -27,7 +27,7 @@ if __name__ == "__main__":
             llvm_output = args.output
 
     # Compile to ir
-    ir = generate_ir_from_source(args.input[0].open().read())
+    ir = generate_ir_from_source(args.input[0])
 
     if will_emit_llvm:
         llvm_output.open("w").write(ir)

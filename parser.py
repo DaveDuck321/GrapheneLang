@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+import sys
 
 from lark import Lark, Token, Tree
 from lark.visitors import Interpreter, Transformer_InPlace, v_args
@@ -8,6 +9,13 @@ from lark.exceptions import VisitError
 
 import codegen as cg
 from errors import GrapheneError
+
+
+class ErrorWithLineInfo(ValueError):
+    def __init__(self, message: str, line: int) -> None:
+        super().__init__(message)
+        self.message = message
+        self.line = line
 
 
 def extract_leaf_value(tree: Tree) -> str:
@@ -283,22 +291,22 @@ def generate_body(
         except VisitError as e:
             if not isinstance(e.orig_exc, GrapheneError):
                 raise e from e.orig_exc
-            raise GrapheneError(*e.orig_exc.args, line.meta.line) from None
+            raise ErrorWithLineInfo(e.orig_exc.message, line.meta.line) from None
 
         except GrapheneError as e:
-            raise GrapheneError(*e.args, line.meta.line) from None
+            raise ErrorWithLineInfo(e.message, line.meta.line) from None
 
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
     generate_body(program, function, function.top_level_scope, body)
 
 
-def generate_ir_from_source(source_code: str):
+def generate_ir_from_source(file_path: Path):
     grammar_path = Path(__file__).parent / "grammar.lark"
     lark = Lark.open(
         grammar_path, parser="lalr", start="program", propagate_positions=True
     )
-    tree = lark.parse(source_code)
+    tree = lark.parse(file_path.open().read())
 
     print(tree.pretty())
 
@@ -306,8 +314,16 @@ def generate_ir_from_source(source_code: str):
     symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
 
-    for function, body in symbol_table_gen.get_function_body_trees():
-        generate_function_body(program, function, body)
+    try:
+        for function, body in symbol_table_gen.get_function_body_trees():
+            generate_function_body(program, function, body)
+    except ErrorWithLineInfo as e:
+        print(
+            f'File "{file_path.absolute()}", line {e.line}, in "{function.get_signature()}"',
+            file=sys.stderr,
+        )
+        print(f"   {e.message}", file=sys.stderr)
+        exit(1)
 
     return "\n".join(program.generate_ir())
 
