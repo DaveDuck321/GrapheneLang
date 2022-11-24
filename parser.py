@@ -156,6 +156,9 @@ class ExpressionTransformer(Transformer_InPlace):
         assert isinstance(rhs, FlattenedExpression)
         operator = extract_leaf_value(operator_tree)
 
+        lhs.expression().assert_can_read_from()
+        rhs.expression().assert_can_read_from()
+
         flattened_expr = FlattenedExpression([])
         flattened_expr.subexpressions.extend(lhs.subexpressions)
         flattened_expr.subexpressions.extend(rhs.subexpressions)
@@ -178,6 +181,8 @@ class ExpressionTransformer(Transformer_InPlace):
         for arg in args_tree.children:
             assert isinstance(arg, FlattenedExpression)
             arg_types_for_lookup.append(arg.type())
+
+            arg.expression().assert_can_read_from()
             fn_call_args.append(arg.expression())
 
             flattened_expr.subexpressions.extend(arg.subexpressions)
@@ -233,6 +238,7 @@ def generate_return_statement(
     assert isinstance(flattened_expr, FlattenedExpression)
     scope.add_generatable(flattened_expr.subexpressions)
 
+    flattened_expr.expression().assert_can_read_from()
     expr = cg.ReturnStatement(function.get_next_expr_id(), flattened_expr.expression())
     scope.add_generatable(expr)
 
@@ -259,6 +265,7 @@ def generate_variable_declaration(
             return FlattenedExpression([])
 
         # Initialize variable.
+        value.expression().assert_can_read_from()
         assignment_expr = cg.VariableAssignment(
             function.get_next_expr_id(), var, value.expression()
         )
@@ -281,6 +288,8 @@ def generate_if_statement(
 
     assert len(condition_tree.children) == 1
     condition_expr = condition_tree.children[0]
+    assert isinstance(condition_expr, FlattenedExpression)
+    condition_expr.expression().assert_can_read_from()
 
     scope.add_generatable(condition_expr.subexpressions)
 

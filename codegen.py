@@ -6,11 +6,12 @@ from itertools import count
 from typing import Any, Iterator, Optional
 
 from errors import (
-    assert_else_throw,
     FailedLookupError,
+    OperandError,
     OverloadResolutionError,
     RedefinitionError,
     TypeCheckerError,
+    assert_else_throw,
 )
 
 
@@ -145,6 +146,14 @@ class TypedExpression(Generatable):
     def ir_ref(self) -> str:
         pass
 
+    def assert_can_read_from(self) -> None:
+        # Fail-safe
+        assert_else_throw(False, OperandError("TODO"))
+
+    def assert_can_write_from(self) -> None:
+        # Fail-safe
+        assert_else_throw(False, OperandError("TODO"))
+
 
 class ConstantExpression(TypedExpression):
     def __init__(self, id: int, type: Type, value: Any) -> None:
@@ -159,6 +168,14 @@ class ConstantExpression(TypedExpression):
     def ir_ref(self) -> str:
         return f"{self.type.ir_type} {self.value}"
 
+    def assert_can_read_from(self) -> None:
+        # Can always read the result of a constant expression.
+        pass
+
+    def assert_can_write_from(self) -> None:
+        # Can never write to a constant expression (an rvalue).
+        assert_else_throw(False, OperandError("TODO"))
+
 
 class StringConstant(TypedExpression):
     def __init__(self, id: int, identifier: str) -> None:
@@ -172,6 +189,14 @@ class StringConstant(TypedExpression):
     @cached_property
     def ir_ref(self) -> str:
         return f"{self.type.ir_type} @{self.identifier}"
+
+    def assert_can_read_from(self) -> None:
+        # Can always read a string constant.
+        pass
+
+    def assert_can_write_from(self) -> None:
+        # Can never write to a string constant.
+        assert_else_throw(False, OperandError("TODO"))
 
 
 class Scope(Generatable):
@@ -340,6 +365,22 @@ class VariableAccess(TypedExpression):
     def __repr__(self) -> str:
         return f"VariableAccess({self.variable.name}: {self.variable.type})"
 
+    def assert_can_read_from(self) -> None:
+        # Can ready any initialized variable.
+        assert isinstance(self.variable, StackVariable)
+        assert_else_throw(
+            self.variable.initialized,
+            OperandError(f"Cannot use uninitialized variable '{self.variable.name}'"),
+        )
+
+    def assert_can_write_from(self) -> None:
+        # Can write to any non-constant variable.
+        assert isinstance(self.variable, StackVariable)
+        assert_else_throw(
+            not self.variable.constant,
+            OperandError(f"Cannot modify constant variable '{self.variable.name}'"),
+        )
+
 
 @dataclass
 class FunctionSignature:
@@ -478,6 +519,18 @@ class FunctionCallExpression(TypedExpression):
     @cached_property
     def ir_ref(self) -> str:
         return f"{self.type.ir_type} %{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        # Can read any return type. Let the caller check if it's compatible.
+        pass
+
+    def assert_can_write_from(self) -> None:
+        # Can write to any reference return type. TODO we don't have references
+        # yet, so any attempt to write to the return value should fail for now.
+        assert_else_throw(
+            False,
+            OperandError("TODO"),
+        )
 
 
 class FunctionSymbolTable:

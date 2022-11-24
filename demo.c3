@@ -44,5 +44,5 @@ function main: () -> int = {
     let y: int;
 
     // FIXME return 0;
-    return 6 + 1;
+    return 6 + 1 + y;
 };

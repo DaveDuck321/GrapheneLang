@@ -31,6 +31,12 @@ class OverloadResolutionError(GrapheneError):
         )
 
 
+class OperandError(GrapheneError):
+    def __init__(self, message: str) -> None:
+        # TODO error message.
+        super().__init__(message)
+
+
 def assert_else_throw(verify: bool, error: GrapheneError):
     if not verify:
         raise error
