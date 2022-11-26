@@ -37,6 +37,10 @@ class OperandError(GrapheneError):
         super().__init__(message)
 
 
+def throw(error: GrapheneError):
+    raise error
+
+
 def assert_else_throw(verify: bool, error: GrapheneError):
     if not verify:
-        raise error
+        throw(error)
