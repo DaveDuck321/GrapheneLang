@@ -123,9 +123,6 @@ class StackVariable(Variable):
 
 
 class Generatable(ABC):
-    def __init__(self, id: int) -> None:
-        self.id = id
-
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         return []
 
@@ -135,8 +132,8 @@ class Generatable(ABC):
 
 
 class TypedExpression(Generatable):
-    def __init__(self, id: int, type: Type) -> None:
-        super().__init__(id)
+    def __init__(self, type: Type) -> None:
+        super().__init__()
 
         self.type = type
         self.result_reg: Optional[int] = None
@@ -160,8 +157,8 @@ class TypedExpression(Generatable):
 
 
 class ConstantExpression(TypedExpression):
-    def __init__(self, id: int, type: Type, value: Any) -> None:
-        super().__init__(id, type)
+    def __init__(self, type: Type, value: Any) -> None:
+        super().__init__(type)
 
         self.value = type.cast_constant(value)
 
@@ -182,8 +179,8 @@ class ConstantExpression(TypedExpression):
 
 
 class StringConstant(TypedExpression):
-    def __init__(self, id: int, identifier: str) -> None:
-        super().__init__(id, StringType())
+    def __init__(self, identifier: str) -> None:
+        super().__init__(StringType())
 
         self.identifier = identifier
 
@@ -205,7 +202,10 @@ class StringConstant(TypedExpression):
 
 class Scope(Generatable):
     def __init__(self, id: int, outer_scope: Optional["Scope"] = None) -> None:
-        super().__init__(id)
+        super().__init__()
+
+        assert id >= 0
+        self._id = id
 
         self._outer_scope: Optional[Scope] = outer_scope
         self._variables: dict[str, Variable] = {}
@@ -237,10 +237,10 @@ class Scope(Generatable):
         return None
 
     def get_start_label(self) -> str:
-        return f"scope_{self.id}_begin"
+        return f"scope_{self._id}_begin"
 
     def get_end_label(self) -> str:
-        return f"scope_{self.id}_end"
+        return f"scope_{self._id}_end"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         contained_ir = []
@@ -260,8 +260,8 @@ class Scope(Generatable):
 
 
 class IfStatement(Generatable):
-    def __init__(self, id: int, condition: TypedExpression, scope: Scope) -> None:
-        super().__init__(id)
+    def __init__(self, condition: TypedExpression, scope: Scope) -> None:
+        super().__init__()
 
         condition.assert_can_read_from()
 
@@ -293,10 +293,8 @@ class IfStatement(Generatable):
 
 
 class ReturnStatement(Generatable):
-    def __init__(
-        self, id: int, returned_expr: Optional[TypedExpression] = None
-    ) -> None:
-        super().__init__(id)
+    def __init__(self, returned_expr: Optional[TypedExpression] = None) -> None:
+        super().__init__()
 
         if returned_expr is not None:
             returned_expr.assert_can_read_from()
@@ -318,10 +316,8 @@ class ReturnStatement(Generatable):
 
 
 class VariableAssignment(Generatable):
-    def __init__(
-        self, id: int, variable: StackVariable, value: TypedExpression
-    ) -> None:
-        super().__init__(id)
+    def __init__(self, variable: StackVariable, value: TypedExpression) -> None:
+        super().__init__()
 
         value.assert_can_read_from()
 
@@ -348,8 +344,8 @@ class VariableAssignment(Generatable):
 
 
 class VariableAccess(TypedExpression):
-    def __init__(self, id: int, variable: Variable) -> None:
-        super().__init__(id, variable.type)
+    def __init__(self, variable: Variable) -> None:
+        super().__init__(variable.type)
 
         self.variable = variable
 
@@ -443,8 +439,8 @@ class Function:
             name, [var.type for var in parameters], return_type, is_foreign
         )
 
-        self.expr_id_iter = count()
-        self.top_level_scope = Scope(self.get_next_expr_id())
+        self.scope_id_iter = count()
+        self.top_level_scope = Scope(self.get_next_scope_id())
 
     def __repr__(self) -> str:
         return repr(self._signature)
@@ -459,8 +455,8 @@ class Function:
     def is_foreign(self) -> bool:
         return self._signature.is_foreign()
 
-    def get_next_expr_id(self) -> int:
-        return next(self.expr_id_iter)
+    def get_next_scope_id(self) -> int:
+        return next(self.scope_id_iter)
 
     def generate_declaration(self) -> list[str]:
         ir = f"declare dso_local {self._signature.return_type.ir_type} @{self.mangled_name}("
@@ -500,10 +496,8 @@ class Function:
 
 
 class FunctionCallExpression(TypedExpression):
-    def __init__(
-        self, id: int, function: Function, args: list[TypedExpression]
-    ) -> None:
-        super().__init__(id, function.get_signature().return_type)
+    def __init__(self, function: Function, args: list[TypedExpression]) -> None:
+        super().__init__(function.get_signature().return_type)
 
         for arg in args:
             arg.assert_can_read_from()
@@ -547,9 +541,9 @@ class FunctionCallExpression(TypedExpression):
 
 
 class AddExpression(TypedExpression):
-    def __init__(self, id: int, arguments: list[TypedExpression]) -> None:
+    def __init__(self, arguments: list[TypedExpression]) -> None:
         lhs, rhs = arguments
-        super().__init__(id, lhs.type)
+        super().__init__(lhs.type)
 
         assert lhs.type == rhs.type
         self._lhs = lhs
@@ -663,14 +657,14 @@ class Program:
         return self._types[name]
 
     def lookup_call_expression(
-        self, id: int, fn_name: str, fn_args: list[TypedExpression]
+        self, fn_name: str, fn_args: list[TypedExpression]
     ) -> TypedExpression:
         if fn_name in BUILTIN_METHODS:
-            return BUILTIN_METHODS[fn_name](id, fn_args)
+            return BUILTIN_METHODS[fn_name](fn_args)
 
         arg_types = [arg.type for arg in fn_args]
         function = self._function_table.lookup_function(fn_name, arg_types)
-        return FunctionCallExpression(id, function, fn_args)
+        return FunctionCallExpression(function, fn_args)
 
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)

@@ -137,16 +137,12 @@ class ExpressionTransformer(Transformer_InPlace):
         self._scope = scope
 
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(
-            self._function.get_next_expr_id(), cg.IntType(), int(value)
-        )
+        const_expr = cg.ConstantExpression(cg.IntType(), int(value))
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)
     def bool_constant(self, value: str) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(
-            self._function.get_next_expr_id(), cg.BoolType(), value == "true"
-        )
+        const_expr = cg.ConstantExpression(cg.BoolType(), value == "true")
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)
@@ -162,7 +158,6 @@ class ExpressionTransformer(Transformer_InPlace):
         flattened_expr.subexpressions.extend(rhs.subexpressions)
 
         call_expr = self._program.lookup_call_expression(
-            self._function.get_next_expr_id(),
             operator,
             [lhs.expression(), rhs.expression()],
         )
@@ -183,16 +178,14 @@ class ExpressionTransformer(Transformer_InPlace):
 
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        call_expr = self._program.lookup_call_expression(
-            self._function.get_next_expr_id(), fn_name, fn_call_args
-        )
+        call_expr = self._program.lookup_call_expression(fn_name, fn_call_args)
         return flattened_expr.add_parent(call_expr)
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
         identifier = self._program.add_string(string[1:-1])
 
-        str_const = cg.StringConstant(self._function.get_next_expr_id(), identifier)
+        str_const = cg.StringConstant(identifier)
 
         return FlattenedExpression([str_const])
 
@@ -200,7 +193,7 @@ class ExpressionTransformer(Transformer_InPlace):
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
         var = self._scope.search_for_variable(var_name)
 
-        var_access = cg.VariableAccess(self._function.get_next_expr_id(), var)
+        var_access = cg.VariableAccess(var)
 
         return FlattenedExpression([var_access])
 
@@ -221,7 +214,7 @@ def generate_return_statement(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     if not body.children:
-        expr = cg.ReturnStatement(function.get_next_expr_id())
+        expr = cg.ReturnStatement()
         scope.add_generatable(expr)
         return
 
@@ -232,7 +225,7 @@ def generate_return_statement(
     assert isinstance(flattened_expr, FlattenedExpression)
     scope.add_generatable(flattened_expr.subexpressions)
 
-    expr = cg.ReturnStatement(function.get_next_expr_id(), flattened_expr.expression())
+    expr = cg.ReturnStatement(flattened_expr.expression())
     scope.add_generatable(expr)
 
 
@@ -262,9 +255,7 @@ def generate_variable_declaration(
             return FlattenedExpression([])
 
         # Initialize variable.
-        assignment_expr = cg.VariableAssignment(
-            function.get_next_expr_id(), var, value.expression()
-        )
+        assignment_expr = cg.VariableAssignment(var, value.expression())
         # TODO: FlattenedExpression no-longer represents an expression here
         return value.add_parent(assignment_expr)
 
@@ -288,19 +279,17 @@ def generate_if_statement(
 
     scope.add_generatable(condition_expr.subexpressions)
 
-    inner_scope = cg.Scope(function.get_next_expr_id(), scope)
+    inner_scope = cg.Scope(function.get_next_scope_id(), scope)
     generate_body(program, function, inner_scope, scope_tree)
 
-    if_statement = cg.IfStatement(
-        function.get_next_expr_id(), condition_expr.expression(), inner_scope
-    )
+    if_statement = cg.IfStatement(condition_expr.expression(), inner_scope)
     scope.add_generatable(if_statement)
 
 
 def generate_scope_body(
     program: cg.Program, function: cg.Function, outer_scope: cg.Scope, body: Tree
 ) -> None:
-    inner_scope = cg.Scope(function.get_next_expr_id(), outer_scope)
+    inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
     generate_body(program, function, inner_scope, body)
     outer_scope.add_generatable(inner_scope)
 
