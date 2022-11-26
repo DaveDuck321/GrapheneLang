@@ -1,4 +1,4 @@
-from abc import ABC, abstractclassmethod
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
@@ -30,11 +30,11 @@ class Type(ABC):
     def mangled_name(self) -> str:
         return "__T_TODO_NAME_MANGLE_TYPE"
 
-    @abstractclassmethod
+    @abstractmethod
     def compatible_with(self, value: Any) -> bool:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def cast_constant(self, value: int) -> bool:
         pass
 
@@ -126,7 +126,7 @@ class Generatable(ABC):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         return []
 
-    @abstractclassmethod
+    @abstractmethod
     def __repr__(self) -> str:
         pass
 
@@ -142,16 +142,16 @@ class TypedExpression(Generatable):
     def ir_ref(self) -> str:
         return f"{self.type.ir_type} {self.ir_ref_without_type}"
 
-    @abstractclassmethod
     @cached_property
+    @abstractmethod
     def ir_ref_without_type(self) -> str:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def assert_can_read_from(self) -> None:
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def assert_can_write_to(self) -> None:
         pass
 
