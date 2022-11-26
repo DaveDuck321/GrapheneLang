@@ -3,7 +3,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
 from itertools import count
-from typing import Any, Iterator, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 from errors import (
     FailedLookupError,
@@ -214,7 +214,7 @@ class Scope(Generatable):
         self._variables: dict[str, Variable] = {}
         self._lines: list[Generatable] = []
 
-    def add_generatable(self, line: Generatable | Iterator[Generatable]) -> None:
+    def add_generatable(self, line: Generatable | Iterable[Generatable]) -> None:
         if isinstance(line, Generatable):
             self._lines.append(line)
         else:
