@@ -11,6 +11,7 @@ all_tests = [
     "c_demo/compile_error",
     "subexpression_ordering",
     "uninitialized_variable_usage",
+    "undeclared_variable",
 ]
 
 
