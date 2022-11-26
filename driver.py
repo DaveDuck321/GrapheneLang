@@ -1,8 +1,8 @@
-from parser import generate_ir_from_source
-
-from pathlib import Path
 import argparse
 import subprocess
+from os import getenv
+from parser import generate_ir_from_source
+from pathlib import Path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("python driver.py")
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     # Use clang to finish compile
     if will_emit_binary:
         subprocess.run(
-            ["clang", "-xir", "-o", binary_output, "-"],
+            [getenv("GRAPHENE_CLANG_CMD", "clang"), "-xir", "-o", binary_output, "-"],
             input=ir,
             text=True,
             check=True,
