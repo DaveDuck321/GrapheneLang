@@ -556,7 +556,7 @@ class AddExpression(TypedExpression):
         self._rhs = rhs
 
     def __repr__(self) -> str:
-        return f"Add({self.identifier})"
+        return f"Add({self._lhs} + {self._rhs})"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#add-instruction
