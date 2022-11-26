@@ -9,7 +9,7 @@ from lark.exceptions import VisitError
 from lark.visitors import Interpreter, Transformer_InPlace, v_args
 
 import codegen as cg
-from errors import GrapheneError
+from errors import FailedLookupError, GrapheneError, assert_else_throw
 
 
 class ErrorWithLineInfo(ValueError):
@@ -192,6 +192,9 @@ class ExpressionTransformer(Transformer_InPlace):
     @v_args(inline=True)
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
         var = self._scope.search_for_variable(var_name)
+
+        assert_else_throw(var is not None, FailedLookupError("variable", var_name))
+        assert var is not None  # Make the type checker happy.
 
         var_access = cg.VariableAccess(var)
 
