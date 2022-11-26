@@ -6,7 +6,12 @@ from argparse import ArgumentParser
 from pathlib import Path
 from subprocess import PIPE
 
-all_tests = ["c_demo/runtime_status", "c_demo/compile_error", "subexpression_ordering"]
+all_tests = [
+    "c_demo/runtime_status",
+    "c_demo/compile_error",
+    "subexpression_ordering",
+    "uninitialized_variable_usage",
+]
 
 
 class TestFailure(RuntimeError):
