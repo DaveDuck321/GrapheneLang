@@ -338,16 +338,16 @@ def generate_ir_from_source(file_path: Path):
     symbol_table_gen = SymbolTableGenerator(program)
     symbol_table_gen.visit(tree)
 
-    try:
-        for function, body in symbol_table_gen.get_function_body_trees():
+    for function, body in symbol_table_gen.get_function_body_trees():
+        try:
             generate_function_body(program, function, body)
-    except ErrorWithLineInfo as e:
-        print(
-            f'File "{file_path.absolute()}", line {e.line}, in "{function}"',
-            file=sys.stderr,
-        )
-        print(f"   {e.message}", file=sys.stderr)
-        exit(1)
+        except ErrorWithLineInfo as e:
+            print(
+                f'File "{file_path.absolute()}", line {e.line}, in "{function}"',
+                file=sys.stderr,
+            )
+            print(f"   {e.message}", file=sys.stderr)
+            exit(1)
 
     return "\n".join(program.generate_ir())
 
