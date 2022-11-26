@@ -34,9 +34,9 @@ if __name__ == "__main__":
 
     # Use clang to finish compile
     if will_emit_binary:
-        if will_emit_llvm:
-            subprocess.check_call(["clang", llvm_output, "-o", binary_output])
-        else:
-            subprocess.run(
-                ["clang", "-xir", "-o", binary_output, "-"], input=ir, text=True
-            )
+        subprocess.run(
+            ["clang", "-xir", "-o", binary_output, "-"],
+            input=ir,
+            text=True,
+            check=True,
+        )
