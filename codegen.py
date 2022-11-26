@@ -392,6 +392,31 @@ class VariableAccess(TypedExpression):
         )
 
 
+class FunctionParameter(TypedExpression):
+    def __init__(self, source_name: str, type: Type) -> None:
+        super().__init__(type)
+        self.name = source_name
+
+    def __repr__(self) -> str:
+        return f"FunctionParameter({self.name}: {self.type})"
+
+    def set_reg(self, reg: int) -> None:
+        self.result_reg = reg
+
+    @cached_property
+    def ir_ref_without_type(self) -> str:
+        assert self.result_reg is not None
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        # We should only write to the implicit stack variable
+        #   Writing directly to a parameter is a codegen error
+        assert False
+
+
 @dataclass
 class FunctionSignature:
     name: str
@@ -445,6 +470,21 @@ class Function:
         self.scope_id_iter = count()
         self.top_level_scope = Scope(self.get_next_scope_id())
 
+        # Implicit stack variable allocation for parameters
+        #   TODO: constant parameters (when/ if added to grammar)
+        self._parameters: list[FunctionParameter] = []
+        if not self.is_foreign():
+            for var in parameters:
+                fn_param = FunctionParameter(var.name, var.type)
+                self._parameters.append(fn_param)
+                self.top_level_scope.add_generatable(fn_param)
+
+                fn_param_var = StackVariable(var.name, var.type, False, True)
+                self.top_level_scope.add_variable(fn_param_var)
+
+                fn_param_var_assignment = VariableAssignment(fn_param_var, fn_param)
+                self.top_level_scope.add_generatable(fn_param_var_assignment)
+
     def __repr__(self) -> str:
         return repr(self._signature)
 
@@ -474,10 +514,15 @@ class Function:
 
     def generate_definition(self) -> list[str]:
         lines: list[str] = []
-        reg_gen = count(1)  # First register is %1
+        reg_gen = count(0)  # First register is %0
 
-        # FIXME generate argument list
-        lines.append(f"define dso_local i32 @{self.mangled_name}() {{")
+        for param in self._parameters:
+            param.set_reg(next(reg_gen))
+
+        args_ir = ", ".join(map(lambda param: param.ir_ref, self._parameters))
+
+        lines.append(f"define dso_local i32 @{self.mangled_name}({args_ir}) {{")
+        lines.append(f"begin:")  # Name the implicit basic block
 
         lines.extend(self.top_level_scope.generate_ir(reg_gen))
 
