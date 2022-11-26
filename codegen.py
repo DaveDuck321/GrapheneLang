@@ -175,7 +175,10 @@ class ConstantExpression(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can never write to a constant expression (an rvalue).
-        assert_else_throw(False, OperandError("TODO"))
+        assert_else_throw(
+            False,
+            OperandError(f"Cannot modify the constant {self.value}"),
+        )
 
 
 class StringConstant(TypedExpression):
@@ -197,7 +200,7 @@ class StringConstant(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can never write to a string constant.
-        assert_else_throw(False, OperandError("TODO"))
+        assert_else_throw(False, OperandError("Cannot modify a string constant"))
 
 
 class Scope(Generatable):
@@ -538,7 +541,7 @@ class FunctionCallExpression(TypedExpression):
         # yet, so any attempt to write to the return value should fail for now.
         assert_else_throw(
             False,
-            OperandError(f"TODO: FunctionCallExpression.assert_can_write_to"),
+            OperandError(f"Cannot modify the value returned by {self.function}"),
         )
 
 
