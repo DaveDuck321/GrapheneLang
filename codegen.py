@@ -393,12 +393,8 @@ class VariableAccess(TypedExpression):
 
 
 class FunctionParameter(TypedExpression):
-    def __init__(self, source_name: str, type: Type) -> None:
-        super().__init__(type)
-        self.name = source_name
-
     def __repr__(self) -> str:
-        return f"FunctionParameter({self.name}: {self.type})"
+        return f"FunctionParameter({self.type})"
 
     def set_reg(self, reg: int) -> None:
         self.result_reg = reg
@@ -475,7 +471,7 @@ class Function:
         self._parameters: list[FunctionParameter] = []
         if not self.is_foreign():
             for var in parameters:
-                fn_param = FunctionParameter(var.name, var.type)
+                fn_param = FunctionParameter(var.type)
                 self._parameters.append(fn_param)
                 self.top_level_scope.add_generatable(fn_param)
 
