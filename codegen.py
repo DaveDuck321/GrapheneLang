@@ -478,8 +478,7 @@ class Function:
         reg_gen = count(1)  # First register is %1
 
         # FIXME generate argument list
-        # FIXME #0 refers to attribute group 0, which we don't generate
-        lines.append(f"define dso_local i32 @{self.mangled_name}() #0 {{")
+        lines.append(f"define dso_local i32 @{self.mangled_name}() {{")
 
         lines.extend(self.top_level_scope.generate_ir(reg_gen))
 
