@@ -145,7 +145,7 @@ class TypedExpression(Generatable):
     @abstractclassmethod
     @cached_property
     def ir_ref_without_type(self) -> str:
-        return f"{self.result_reg}"
+        pass
 
     @abstractclassmethod
     def assert_can_read_from(self) -> None:
