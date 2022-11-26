@@ -240,7 +240,7 @@ def generate_variable_declaration(
         name_tree: Tree,
         type_tree: Tree,
         value: Optional[FlattenedExpression] = None,  # FIXME lark placeholders.
-    ) -> FlattenedExpression:
+    ) -> None:
         # Extract variable name.
         var_name = extract_leaf_value(name_tree)
         type_name = extract_named_leaf_value(type_tree, "type_name")
@@ -252,18 +252,17 @@ def generate_variable_declaration(
         scope.add_variable(var)
 
         if value is None:
-            return FlattenedExpression([])
+            return
 
         # Initialize variable.
-        assignment_expr = cg.VariableAssignment(var, value.expression())
-        # TODO: FlattenedExpression no-longer represents an expression here
-        return value.add_parent(assignment_expr)
+        scope.add_generatable(value.subexpressions)
+        scope.add_generatable(cg.VariableAssignment(var, value.expression()))
 
     # Need to parse value first.
     ExpressionTransformer(program, function, scope).transform(body)
 
-    flattened_expr = parse_variable_declaration(*body.children)
-    scope.add_generatable(flattened_expr.subexpressions)
+    # Use helper to unpack children.
+    parse_variable_declaration(*body.children)  # type: ignore
 
 
 def generate_if_statement(
