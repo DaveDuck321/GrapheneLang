@@ -419,7 +419,7 @@ class FunctionSignature:
         # Name mangle operators into digits
         legal_name_mangle = []
         for char in self.name:
-            if char.isdigit():
+            if char.isalnum():
                 legal_name_mangle.append(char)
             else:
                 legal_name_mangle.append(f"__O{ord(char)}")
