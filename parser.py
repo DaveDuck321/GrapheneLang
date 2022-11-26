@@ -328,7 +328,7 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
 def generate_ir_from_source(file_path: Path):
     grammar_path = Path(__file__).parent / "grammar.lark"
     lark = Lark.open(
-        grammar_path, parser="lalr", start="program", propagate_positions=True
+        str(grammar_path), parser="lalr", start="program", propagate_positions=True
     )
     tree = lark.parse(file_path.open().read())
 
