@@ -104,7 +104,7 @@ class Variable:
 class StackVariable(Variable):
     constant: bool
     initialized: bool
-    ir_reg: Optional[str] = None
+    ir_reg: Optional[int] = None
 
     @cached_property
     def ir_ref(self) -> str:
