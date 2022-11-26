@@ -263,6 +263,8 @@ class IfStatement(Generatable):
     def __init__(self, id: int, condition: TypedExpression, scope: Scope) -> None:
         super().__init__(id)
 
+        condition.assert_can_read_from()
+
         self.condition = condition
         self.scope = scope
 
@@ -296,6 +298,9 @@ class ReturnStatement(Generatable):
     ) -> None:
         super().__init__(id)
 
+        if returned_expr is not None:
+            returned_expr.assert_can_read_from()
+
         self.returned_expr = returned_expr
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -317,6 +322,8 @@ class VariableAssignment(Generatable):
         self, id: int, variable: StackVariable, value: TypedExpression
     ) -> None:
         super().__init__(id)
+
+        value.assert_can_read_from()
 
         assert_else_throw(
             variable.type == value.type,
@@ -498,6 +505,9 @@ class FunctionCallExpression(TypedExpression):
         self, id: int, function: Function, args: list[TypedExpression]
     ) -> None:
         super().__init__(id, function.get_signature().return_type)
+
+        for arg in args:
+            arg.assert_can_read_from()
 
         self.function = function
         self.args = args
