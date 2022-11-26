@@ -90,7 +90,7 @@ class SymbolTableGenerator(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
         foreign: bool,
-    ) -> None:
+    ) -> cg.Function:
         fn_name = extract_leaf_value(name_tree)
 
         fn_args = []
