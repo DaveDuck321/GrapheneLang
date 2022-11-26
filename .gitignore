@@ -164,3 +164,6 @@ cython_debug/
 *.cpp
 *.s
 *.ll
+
+# Compilation output
+a.out
