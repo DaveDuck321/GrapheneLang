@@ -236,10 +236,12 @@ class Scope(Generatable):
 
         return None
 
-    def get_start_label(self) -> str:
+    @cached_property
+    def start_label(self) -> str:
         return f"scope_{self._id}_begin"
 
-    def get_end_label(self) -> str:
+    @cached_property
+    def end_label(self) -> str:
         return f"scope_{self._id}_end"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -281,11 +283,11 @@ class IfStatement(Generatable):
         # TODO: it also seems kind of strange that we generate the scope here
         # br i1 <cond>, label <iftrue>, label <iffalse>
         return [
-            f"br {self.condition.ir_ref}, label %{self.scope.get_start_label()}, label %{self.scope.get_end_label()}",
-            f"{self.scope.get_start_label()}:",
+            f"br {self.condition.ir_ref}, label %{self.scope.start_label}, label %{self.scope.end_label}",
+            f"{self.scope.start_label}:",
             *self.scope.generate_ir(reg_gen),
-            f"br label %{self.scope.get_end_label()}",  # TODO: support `else` jump
-            f"{self.scope.get_end_label()}:",
+            f"br label %{self.scope.end_label}",  # TODO: support `else` jump
+            f"{self.scope.end_label}:",
         ]
 
     def __repr__(self) -> str:
