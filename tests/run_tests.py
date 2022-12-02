@@ -9,9 +9,10 @@ from subprocess import PIPE
 all_tests = [
     "c_demo/runtime_status",
     "c_demo/compile_error",
+    "order_of_operation",
     "subexpression_ordering",
-    "uninitialized_variable_usage",
     "undeclared_variable",
+    "uninitialized_variable_usage",
 ]
 
 
