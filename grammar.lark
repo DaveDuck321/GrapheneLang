@@ -66,35 +66,35 @@ if_statement: "if" "(" condition ")" scope
 
 // We just match python's order of operation
 // https://docs.python.org/3/reference/expressions.html#operator-precedence
-COMPARISON_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!="
-SHIFT_TOKEN: "<<" | ">>"
-ADD_SUB_TOKEN: "+" | "-"
-MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
+!_compare_token: "<" | ">" | "==" | ">=" | "<=" | "!="
+!_shift_token: "<<" | ">>"
+!_add_sub_token: "+" | "-"
+!_mult_div_token: "*" | "@" | "/" | "//" | "%"
 
 // See below for recursive expression defintion
 expression: _expression
 _expression: logical_or
 
-?logical_or: logical_and
-            | logical_and ("||" logical_or) -> operator_use
-?logical_and: comparison_op
-            | comparison_op ("&&" logical_and) -> operator_use
-?comparison_op: bitwise_or
-              | bitwise_or (COMPARISON_TOKEN comparison_op) -> operator_use
-?bitwise_or: bitwise_xor
-            | bitwise_xor ("|" bitwise_or) -> operator_use
-?bitwise_xor: bitwise_and
-            | bitwise_xor ("^" bitwise_xor) -> operator_use
-?bitwise_and: bit_shift
-            | bit_shift ("&" bitwise_and) -> operator_use
-?bit_shift: add_sub
-            | add_sub (SHIFT_TOKEN bit_shift) -> operator_use
-?add_sub: mult_div
-        | mult_div (ADD_SUB_TOKEN add_sub) -> operator_use
-?mult_div: power
-         | power (MULT_DIV_TOKEN mult_div) -> operator_use
-?power: _non_operator_expression
-        | _non_operator_expression ("**" power) -> operator_use
+!?logical_or: logical_and
+             | logical_and "||" logical_or -> operator_use
+!?logical_and: comparison_op
+             | comparison_op "&&" logical_and -> operator_use
+!?comparison_op: bitwise_or
+               | bitwise_or _compare_token comparison_op -> operator_use
+!?bitwise_or: bitwise_xor
+            | bitwise_xor "|" bitwise_or -> operator_use
+!?bitwise_xor: bitwise_and
+             | bitwise_xor "^" bitwise_xor -> operator_use
+!?bitwise_and: bit_shift
+             | bit_shift "&" bitwise_and -> operator_use
+!?bit_shift: add_sub
+           | add_sub _shift_token bit_shift -> operator_use
+!?add_sub: mult_div
+         | mult_div _add_sub_token add_sub -> operator_use
+!?mult_div: power
+          | power _mult_div_token mult_div -> operator_use
+!?power: _non_operator_expression
+       | _non_operator_expression "**" power -> operator_use
 
 // TODO: add support for arbitrary operators
 //  Alternatively we can prevent user defined operators not in this list
@@ -117,7 +117,6 @@ inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _exp
 inner_list_without_names: (_expression ("," _expression)*)?
 struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
 
-start: program
 
 %ignore C_COMMENT
 %ignore CPP_COMMENT
