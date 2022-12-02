@@ -79,14 +79,12 @@ class Function:
 
         args_ir = ", ".join(map(lambda param: param.ir_ref, self._parameters))
 
-        lines.append(f"define dso_local i32 @{self.mangled_name}({args_ir}) {{")
-        lines.append(f"begin:")  # Name the implicit basic block
-
-        lines.extend(self.top_level_scope.generate_ir(reg_gen))
-
-        lines.append("}")
-
-        return lines
+        return [
+            f"define dso_local {self._signature.return_type.ir_type} @{self.mangled_name}({args_ir}) {{",
+            "begin:",   # Name the implicit basic block
+            *self.top_level_scope.generate_ir(reg_gen),
+            "}"
+        ]
 
     def generate_ir(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#functions
