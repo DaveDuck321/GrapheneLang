@@ -23,6 +23,10 @@ struct_type: "{" _inner_list_of_named_members "}"
 _function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_types) ")") | type
 function_type: _function_type_component "->" _function_type_component
 
+// Symbols
+operator: /[.<>%*$@|&\/=?!+-]+/
+!bool_constant: "true" | "false"
+
 // Top level
 _top_level_program_line: _top_level_program_feature ";"
 _top_level_program_feature: typedef
@@ -60,16 +64,49 @@ _line_of_code_without_semi: expression
 condition: _expression
 if_statement: "if" "(" condition ")" scope
 
+// We just match python's order of operation
+// https://docs.python.org/3/reference/expressions.html#operator-precedence
+COMPARISON_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!="
+SHIFT_TOKEN: "<<" | ">>"
+ADD_SUB_TOKEN: "+" | "-"
+MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
+
+// See below for recursive expression defintion
 expression: _expression
-_expression: function_call
-          | accessed_variable_name
-          | operator_use
-          | "(" _expression ")"
-          | struct_initialization
-          | ESCAPED_STRING
-          | SIGNED_INT
-          | SIGNED_FLOAT
-          | bool_constant
+_expression: logical_or
+
+?logical_or: logical_and
+            | logical_and ("||" logical_or) -> operator_use
+?logical_and: comparison_op
+            | comparison_op ("&&" logical_and) -> operator_use
+?comparison_op: bitwise_or
+              | bitwise_or (COMPARISON_TOKEN comparison_op) -> operator_use
+?bitwise_or: bitwise_xor
+            | bitwise_xor ("|" bitwise_or) -> operator_use
+?bitwise_xor: bitwise_and
+            | bitwise_xor ("^" bitwise_xor) -> operator_use
+?bitwise_and: bit_shift
+            | bit_shift ("&" bitwise_and) -> operator_use
+?bit_shift: add_sub
+            | add_sub (SHIFT_TOKEN bit_shift) -> operator_use
+?add_sub: mult_div
+        | mult_div (ADD_SUB_TOKEN add_sub) -> operator_use
+?mult_div: power
+         | power (MULT_DIV_TOKEN mult_div) -> operator_use
+?power: _non_operator_expression
+        | _non_operator_expression ("**" power) -> operator_use
+
+// TODO: add support for arbitrary operators
+//  Alternatively we can prevent user defined operators not in this list
+
+_non_operator_expression: function_call
+                        | accessed_variable_name
+                        | "(" expression ")"
+                        | struct_initialization
+                        | ESCAPED_STRING
+                        | SIGNED_INT
+                        | SIGNED_FLOAT
+                        | bool_constant
 
 variable_declaration: "let" variable_name ":" type ["=" _expression]
 const_declaration: "const" variable_name ":" type "=" _expression
@@ -80,10 +117,7 @@ inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _exp
 inner_list_without_names: (_expression ("," _expression)*)?
 struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
 
-operator_use: _expression operator _expression
-operator: /[.<>%*$@|&\/=?!+-]+/
-
-!bool_constant: "true" | "false"
+start: program
 
 %ignore C_COMMENT
 %ignore CPP_COMMENT

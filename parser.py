@@ -151,18 +151,17 @@ class ExpressionTransformer(Transformer_InPlace):
 
     @v_args(inline=True)
     def operator_use(
-        self, lhs: FlattenedExpression, operator_tree: Tree, rhs: FlattenedExpression
+        self, lhs: FlattenedExpression, operator: Token, rhs: FlattenedExpression
     ):
         assert isinstance(lhs, FlattenedExpression)
         assert isinstance(rhs, FlattenedExpression)
-        operator = extract_leaf_value(operator_tree)
 
         flattened_expr = FlattenedExpression([])
         flattened_expr.subexpressions.extend(lhs.subexpressions)
         flattened_expr.subexpressions.extend(rhs.subexpressions)
 
         call_expr = self._program.lookup_call_expression(
-            operator,
+            operator.value,
             [lhs.expression(), rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
