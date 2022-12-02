@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterator, Optional
-from dataclasses import dataclass
 
 
 class Type(ABC):

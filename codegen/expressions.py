@@ -2,14 +2,14 @@ from functools import cached_property
 from typing import Any, Iterator
 
 from .user_facing_errors import (
-    assert_else_throw,
     OperandError,
+    assert_else_throw,
     throw,
 )
 
 from .builtin_types import StringType, FunctionSignature
-from .interfaces import Type, TypedExpression, Variable
 from .generatable import StackVariable
+from .interfaces import Type, TypedExpression, Variable
 
 
 class ConstantExpression(TypedExpression):

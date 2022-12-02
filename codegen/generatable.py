@@ -8,8 +8,8 @@ from .user_facing_errors import (
     assert_else_throw,
 )
 
-from .interfaces import Generatable, TypedExpression, Variable
 from .builtin_types import BoolType
+from .interfaces import Generatable, TypedExpression, Variable
 
 
 @dataclass
