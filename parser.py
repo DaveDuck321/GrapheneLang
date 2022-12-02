@@ -9,7 +9,11 @@ from lark.exceptions import VisitError
 from lark.visitors import Interpreter, Transformer_InPlace, v_args
 
 import codegen as cg
-from errors import FailedLookupError, GrapheneError, assert_else_throw
+from codegen.user_facing_errors import (
+    assert_else_throw,
+    FailedLookupError,
+    GrapheneError,
+)
 
 
 class ErrorWithLineInfo(ValueError):
