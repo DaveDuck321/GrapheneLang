@@ -13,10 +13,10 @@ if __name__ == "__main__":
     parser.add_argument("--emit-everything", action="store_true")
     args = parser.parse_args()
 
-    will_emit_llvm = args.emit_llvm or args.emit_everything
-    will_emit_binary = not args.emit_llvm or args.emit_everything
+    will_emit_llvm: bool = args.emit_llvm or args.emit_everything
+    will_emit_binary: bool = not args.emit_llvm or args.emit_everything
 
-    llvm_output = args.input[0].with_suffix(".ll")
+    llvm_output: Path = args.input[0].with_suffix(".ll")
     binary_output = Path("a.out")
 
     # -o defaults to binary output path
