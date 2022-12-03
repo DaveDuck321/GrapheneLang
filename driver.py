@@ -30,7 +30,8 @@ if __name__ == "__main__":
     ir = generate_ir_from_source(args.input[0])
 
     if will_emit_llvm:
-        llvm_output.open("w").write(ir)
+        with llvm_output.open("w") as file:
+            file.write(ir)
 
     # Use clang to finish compile
     if will_emit_binary:
