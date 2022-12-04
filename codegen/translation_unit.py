@@ -81,9 +81,9 @@ class Function:
 
         return [
             f"define dso_local {self._signature.return_type.ir_type} @{self.mangled_name}({args_ir}) {{",
-            "begin:",   # Name the implicit basic block
+            "begin:",  # Name the implicit basic block
             *self.top_level_scope.generate_ir(reg_gen),
-            "}"
+            "}",
         ]
 
     def generate_ir(self) -> list[str]:
@@ -201,15 +201,72 @@ class Program:
 
         return id
 
+    @staticmethod
+    def encode_string(string: str) -> tuple[str, int]:
+        # LLVM is a bit vague on what is acceptable, but we definitely need to
+        # escape non-printable characters and double quotes with "\xx", where
+        # xx is the hexadecimal representation of each byte.
+        # XXX we're using utf-8 for everything.
+
+        first: int = 0
+        byte_len: int = 0
+        buffer: list[str] = []
+
+        def encode_char(char: str) -> None:
+            nonlocal byte_len
+
+            utf8_bytes = char.encode("utf-8")
+
+            for byte in utf8_bytes:
+                # We can't store zeros in a null-terminated string.
+                assert byte != 0
+
+                buffer.append(f"\\{byte:0>2x}")
+
+            byte_len += len(utf8_bytes)
+
+        def consume_substr(last: int) -> None:
+            nonlocal byte_len
+
+            # Append the substr as-is instead of the utf-8 representation, as
+            # python will encode it anyway when we write to the output stream.
+            substr = string[first:last]
+            buffer.append(substr)
+            # FIXME there must be a better way.
+            byte_len += len(substr.encode("utf-8"))
+
+        for idx, char in enumerate(string):
+            if char != '"' and char.isprintable():
+                continue
+
+            # Consume up to the previous character.
+            consume_substr(idx)
+
+            # Escape current character.
+            encode_char(char)
+
+            # Start from the next character.
+            first = idx + 1
+
+        # Consume any remaining characters.
+        consume_substr(len(string))
+
+        # Append the null terminator.
+        buffer.append("\\00")
+        byte_len += 1
+
+        # Appending to a str in a loop is O(n^2).
+        return str.join("", buffer), byte_len
+
     def generate_ir(self, target="x86_64-pc-linux-gnu") -> list[str]:
         lines: list[str] = []
 
         lines.append(f'target triple = "{target}"')
 
         for string_id, string in self._strings.items():
-            # TODO encode string correctly
+            encoded, str_len = self.encode_string(string)
             lines.append(
-                f'@{string_id} = private unnamed_addr constant [{len(string) + 1} x i8] c"{string}\\00"'
+                f'@{string_id} = private unnamed_addr constant [{str_len} x i8] c"{encoded}"'
             )
 
         for fn in self._function_table.foreign_functions:

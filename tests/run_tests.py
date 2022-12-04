@@ -7,12 +7,14 @@ from pathlib import Path
 from subprocess import PIPE
 
 all_tests = [
-    "c_demo/runtime_status",
     "c_demo/compile_error",
+    "c_demo/runtime_status",
     "order_of_operation",
     "subexpression_ordering",
     "undeclared_variable",
     "uninitialized_variable_usage",
+    "string_constants",
+    "string_constants_ir",
 ]
 
 
