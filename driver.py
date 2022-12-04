@@ -30,7 +30,7 @@ if __name__ == "__main__":
     ir = generate_ir_from_source(args.input[0])
 
     if will_emit_llvm:
-        with llvm_output.open("w") as file:
+        with llvm_output.open("w", encoding="utf-8") as file:
             file.write(ir)
 
     # Use clang to finish compile
@@ -39,5 +39,6 @@ if __name__ == "__main__":
             [getenv("GRAPHENE_CLANG_CMD", "clang"), "-xir", "-o", binary_output, "-"],
             input=ir,
             text=True,
+            encoding="utf-8",
             check=True,
         )
