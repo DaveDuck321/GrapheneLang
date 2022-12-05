@@ -367,8 +367,3 @@ def generate_ir_from_source(file_path: Path):
             exit(1)
 
     return "\n".join(program.generate_ir())
-
-
-if __name__ == "__main__":
-    ir = generate_ir_from_source(Path("demo.c3"))
-    open("demo.ll", "w").write(ir)
