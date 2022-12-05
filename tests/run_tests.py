@@ -124,26 +124,26 @@ def run_test(path: Path, io_harness=True) -> None:
 
 
 def run_tests(tests: list[str]) -> int:
-    passed: list[str] = []
-    failed: list[str] = []
+    passed: int = 0
+    failed: int = 0
 
-    for i, test in enumerate(tests):
-        print(f"TEST {i+1}: '{test}'")
+    for i, test in enumerate(tests, 1):
+        print(f"TEST {i}: '{test}'")
         try:
             run_test(Path(__file__).parent / test)
-            passed.append(test)
+            passed += 1
             print("   PASSED")
         except TestFailure as error:
-            failed.append(test)
+            failed += 1
             print(error)
             print()
 
-    if len(failed) == 0:
-        print(f"PASSED {len(passed)} TESTS")
-        return 0
+    if failed:
+        print(f"FAILED {failed}/{len(tests)} TESTS!")
+    else:
+        print(f"PASSED {passed} TESTS")
 
-    print(f"FAILED {len(failed)}/{len(tests)} TESTS!!")
-    return len(failed)
+    return failed
 
 
 if __name__ == "__main__":
