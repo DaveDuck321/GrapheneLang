@@ -152,7 +152,7 @@ class ExpressionTransformer(Transformer_InPlace):
     @v_args(inline=True)
     def operator_use(
         self, lhs: FlattenedExpression, operator: Token, rhs: FlattenedExpression
-    ):
+    ) -> FlattenedExpression:
         assert isinstance(lhs, FlattenedExpression)
         assert isinstance(rhs, FlattenedExpression)
 
@@ -163,6 +163,20 @@ class ExpressionTransformer(Transformer_InPlace):
         call_expr = self._program.lookup_call_expression(
             operator.value,
             [lhs.expression(), rhs.expression()],
+        )
+        return flattened_expr.add_parent(call_expr)
+
+    @v_args(inline=True)
+    def unary_operator_use(
+        self, operator: Token, rhs: FlattenedExpression
+    ) -> FlattenedExpression:
+        assert isinstance(rhs, FlattenedExpression)
+
+        flattened_expr = FlattenedExpression(rhs.subexpressions)
+
+        call_expr = self._program.lookup_call_expression(
+            operator.value,
+            [rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
 

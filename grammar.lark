@@ -70,6 +70,7 @@ if_statement: "if" "(" condition ")" scope
 !_shift_token: "<<" | ">>"
 !_add_sub_token: "+" | "-"
 !_mult_div_token: "*" | "@" | "/" | "//" | "%"
+!_unary_operator_token: "!" | "-" | "+"
 
 // See below for recursive expression defintion
 expression: _expression
@@ -93,8 +94,10 @@ _expression: logical_or
          | mult_div _add_sub_token add_sub -> operator_use
 !?mult_div: power
           | power _mult_div_token mult_div -> operator_use
-!?power: _non_operator_expression
-       | _non_operator_expression "**" power -> operator_use
+!?power: unary_operator
+       | unary_operator "**" power -> operator_use
+!?unary_operator: _non_operator_expression
+                | _unary_operator_token unary_operator -> unary_operator_use
 
 // TODO: add support for arbitrary operators
 //  Alternatively we can prevent user defined operators not in this list
