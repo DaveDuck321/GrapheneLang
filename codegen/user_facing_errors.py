@@ -37,6 +37,12 @@ class OperandError(GrapheneError):
         super().__init__(message)
 
 
+class InvalidEscapeSequence(GrapheneError):
+    def __init__(self, escaped_char: str) -> None:
+        assert len(escaped_char) == 1
+        super().__init__(f"Error: \\{escaped_char} is not a valid escape sequence")
+
+
 def throw(error: GrapheneError):
     raise error
 

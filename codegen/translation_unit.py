@@ -6,6 +6,7 @@ from .user_facing_errors import (
     FailedLookupError,
     OverloadResolutionError,
     RedefinitionError,
+    InvalidEscapeSequence,
     assert_else_throw,
     throw,
 )
@@ -152,6 +153,21 @@ class FunctionSymbolTable:
 
 
 class Program:
+    # Based on https://en.cppreference.com/w/cpp/language/escape.
+    # We omit \' because we don't have single-quoted strings, and \? because
+    # we don't have trigraphs.
+    ESCAPE_SEQUENCES_TABLE = {
+        '"': chr(0x22),
+        "\\": chr(0x5C),
+        "a": chr(0x07),
+        "b": chr(0x08),
+        "f": chr(0x0C),
+        "n": chr(0x0A),
+        "r": chr(0x0D),
+        "t": chr(0x09),
+        "v": chr(0x0B),
+    }
+
     def __init__(self) -> None:
         super().__init__()
         self._builtin_callables = get_builtin_callables()
@@ -201,11 +217,12 @@ class Program:
 
         return id
 
-    @staticmethod
-    def encode_string(string: str) -> tuple[str, int]:
+    @classmethod
+    def encode_string(cls, string: str) -> tuple[str, int]:
         # LLVM is a bit vague on what is acceptable, but we definitely need to
         # escape non-printable characters and double quotes with "\xx", where
-        # xx is the hexadecimal representation of each byte.
+        # xx is the hexadecimal representation of each byte. We also parse
+        # escape sequences here.
         # XXX we're using utf-8 for everything.
 
         first: int = 0
@@ -235,18 +252,36 @@ class Program:
             # FIXME there must be a better way.
             byte_len += len(substr.encode("utf-8"))
 
-        for idx, char in enumerate(string):
-            if char != '"' and char.isprintable():
-                continue
+        chars = iter(enumerate(string))
+        for idx, char in chars:
+            if char == "\\":
+                # Consume up to the previous character.
+                consume_substr(idx)
 
-            # Consume up to the previous character.
-            consume_substr(idx)
+                # Should never raise StopIteration, as the grammar guarantees
+                # that we don't end a screen with a \.
+                _, escaped_char = next(chars)
 
-            # Escape current character.
-            encode_char(char)
+                assert_else_throw(
+                    escaped_char in cls.ESCAPE_SEQUENCES_TABLE,
+                    InvalidEscapeSequence(escaped_char),
+                )
 
-            # Start from the next character.
-            first = idx + 1
+                # Easier if we always encode the representation of the escape
+                # sequence.
+                encode_char(cls.ESCAPE_SEQUENCES_TABLE[escaped_char])
+
+                # Start from the character after the next one.
+                first = idx + 2
+            elif not char.isprintable():
+                # Consume up to the previous character.
+                consume_substr(idx)
+
+                # Escape current character.
+                encode_char(char)
+
+                # Start from the next character.
+                first = idx + 1
 
         # Consume any remaining characters.
         consume_substr(len(string))
