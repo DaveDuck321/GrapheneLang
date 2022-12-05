@@ -10,11 +10,12 @@ all_tests = [
     "c_demo/compile_error",
     "c_demo/runtime_status",
     "order_of_operation",
+    "string_constants_ir",
+    "string_constants",
     "subexpression_ordering",
+    "unary_operators",
     "undeclared_variable",
     "uninitialized_variable_usage",
-    "string_constants",
-    "string_constants_ir",
 ]
 
 
