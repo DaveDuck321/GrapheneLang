@@ -1,4 +1,5 @@
 import json
+from typing import Optional
 import schema
 import subprocess
 
@@ -20,7 +21,14 @@ all_tests = [
 
 
 class TestFailure(RuntimeError):
-    def __init__(self, name, status, stdout, stderr, stage=None):
+    def __init__(
+        self,
+        name: str,
+        status: int,
+        stdout: list[str],
+        stderr: list[str],
+        stage: Optional[str] = None,
+    ) -> None:
         super().__init__(f"Actual '{name}' does not match expected")
 
         self.name = name
@@ -30,6 +38,8 @@ class TestFailure(RuntimeError):
         self.stage = stage
 
     def __str__(self) -> str:
+        assert self.stage is not None
+
         return "\n".join(
             [
                 f"***{self.stage.upper()} ERROR: Actual '{self.name}' does not match expected",
@@ -43,7 +53,9 @@ class TestFailure(RuntimeError):
         )
 
 
-def validate_command_status(directory: Path, command: list[str], expected_output):
+def validate_command_status(
+    directory: Path, command: list[str], expected_output
+) -> None:
     status = subprocess.call(command, cwd=str(directory))
 
     if expected_output.get("status", 0) != status:
@@ -74,14 +86,14 @@ def validate_command_output_with_harness(
     return True
 
 
-def run_test(path: Path, io_harness=True):
+def run_test(path: Path, io_harness=True) -> None:
     # Load/ validate the test
     config_path = path / "test.json"
     assert config_path.exists()
 
     (path / "out").mkdir(exist_ok=True)
 
-    config = json.load(config_path.open())
+    config: dict[str, dict] = json.load(config_path.open())
     schema.validate_config_follows_schema(config)
 
     fn_validate = (
@@ -111,9 +123,9 @@ def run_test(path: Path, io_harness=True):
         raise TestFailure(e.name, e.status, e.stdout, e.stderr, stage="runtime")
 
 
-def run_tests(tests):
-    passed = []
-    failed = []
+def run_tests(tests: list[str]) -> int:
+    passed: list[str] = []
+    failed: list[str] = []
 
     for i, test in enumerate(tests):
         print(f"TEST {i+1}: '{test}'")
