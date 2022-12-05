@@ -174,7 +174,7 @@ class Program:
 
         self._function_table = FunctionSymbolTable()
         self._types: dict[str, Type] = {}
-        self._strings: dict[str, str] = {}
+        self._strings: dict[str, tuple[str, int]] = {}
 
         self._has_main: bool = False
 
@@ -213,7 +213,10 @@ class Program:
 
     def add_string(self, string: str) -> str:
         id = self._get_string_identifier(len(self._strings))
-        self._strings[id] = string
+
+        # Encoding the string now means that we can provide line information in
+        # case of an error.
+        self._strings[id] = self.encode_string(string)
 
         return id
 
@@ -298,10 +301,9 @@ class Program:
 
         lines.append(f'target triple = "{target}"')
 
-        for string_id, string in self._strings.items():
-            encoded, str_len = self.encode_string(string)
+        for string_id, (string, length) in self._strings.items():
             lines.append(
-                f'@{string_id} = private unnamed_addr constant [{str_len} x i8] c"{encoded}"'
+                f'@{string_id} = private unnamed_addr constant [{length} x i8] c"{string}"'
             )
 
         for fn in self._function_table.foreign_functions:
