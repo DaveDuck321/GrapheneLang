@@ -45,11 +45,25 @@ def extract_named_leaf_value(tree: Tree, name: str) -> str:
     return extract_leaf_value(get_unique_child(tree, name))
 
 
-def parse_type_tree(program: cg.Program, tree: Tree) -> cg.Type:
+class TypeTransformer(Transformer_InPlace):
     # TODO parse references, ad-hoc, and generic types.
-    type_name = extract_named_leaf_value(tree, "type_name")
+    def __init__(self, program: cg.Program) -> None:
+        super().__init__(visit_tokens=False)
 
-    return program.lookup_type(type_name)
+        self._program = program
+
+    @v_args(inline=True)
+    def type_name(self, name: Token) -> cg.Type:
+        return self._program.lookup_type(name)
+
+    @classmethod
+    def parse(cls, program: cg.Program, tree: Tree) -> cg.Type:
+        cls(program).transform(tree)
+
+        type_instance = tree.children[0]
+        assert isinstance(type_instance, cg.Type)
+
+        return type_instance
 
 
 class SymbolTableGenerator(Interpreter):
@@ -108,11 +122,11 @@ class SymbolTableGenerator(Interpreter):
         fn_arg_trees = args_tree.children
         for arg_name_tree, arg_type_tree in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
             arg_name = extract_leaf_value(arg_name_tree)
-            arg_type = parse_type_tree(self._program, arg_type_tree)
+            arg_type = TypeTransformer.parse(self._program, arg_type_tree)
 
             fn_args.append(cg.Variable(arg_name, arg_type))
 
-        fn_return_type = parse_type_tree(self._program, return_type_tree)
+        fn_return_type = TypeTransformer.parse(self._program, return_type_tree)
 
         # Build the function
         return cg.Function(fn_name, fn_args, fn_return_type, foreign)
@@ -266,7 +280,7 @@ def generate_variable_declaration(
     ) -> None:
         # Extract variable name and type.
         var_name = extract_leaf_value(name_tree)
-        var_type = parse_type_tree(program, type_tree)
+        var_type = TypeTransformer.parse(program, type_tree)
 
         var = cg.StackVariable(var_name, var_type, is_const, value is not None)
         scope.add_variable(var)
