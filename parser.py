@@ -45,6 +45,13 @@ def extract_named_leaf_value(tree: Tree, name: str) -> str:
     return extract_leaf_value(get_unique_child(tree, name))
 
 
+def parse_type_tree(program: cg.Program, tree: Tree) -> cg.Type:
+    # TODO parse references, ad-hoc, and generic types.
+    type_name = extract_named_leaf_value(tree, "type_name")
+
+    return program.lookup_type(type_name)
+
+
 class SymbolTableGenerator(Interpreter):
     # TODO: also parse typedefs
     def __init__(self, program: cg.Program) -> None:
@@ -99,17 +106,13 @@ class SymbolTableGenerator(Interpreter):
 
         fn_args = []
         fn_arg_trees = args_tree.children
-        for arg_name, arg_type in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
-            # TODO parse adhoc/ generic types.
-            name = extract_leaf_value(arg_name)
-            type_name = extract_named_leaf_value(arg_type, "type_name")
+        for arg_name_tree, arg_type_tree in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
+            arg_name = extract_leaf_value(arg_name_tree)
+            arg_type = parse_type_tree(self._program, arg_type_tree)
 
-            type = self._program.lookup_type(type_name)
-            fn_args.append(cg.Variable(name, type))
+            fn_args.append(cg.Variable(arg_name, arg_type))
 
-        # TODO parse adhoc/ generic types.
-        fn_return_type_name = extract_named_leaf_value(return_type_tree, "type_name")
-        fn_return_type = self._program.lookup_type(fn_return_type_name)
+        fn_return_type = parse_type_tree(self._program, return_type_tree)
 
         # Build the function
         return cg.Function(fn_name, fn_args, fn_return_type, foreign)
@@ -261,12 +264,9 @@ def generate_variable_declaration(
         type_tree: Tree,
         value: Optional[FlattenedExpression] = None,  # FIXME lark placeholders.
     ) -> None:
-        # Extract variable name.
+        # Extract variable name and type.
         var_name = extract_leaf_value(name_tree)
-        type_name = extract_named_leaf_value(type_tree, "type_name")
-
-        # Extract variable type. TODO add support for non-type_name types.
-        var_type = program.lookup_type(type_name)
+        var_type = parse_type_tree(program, type_tree)
 
         var = cg.StackVariable(var_name, var_type, is_const, value is not None)
         scope.add_variable(var)
