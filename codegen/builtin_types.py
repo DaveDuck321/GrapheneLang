@@ -51,6 +51,23 @@ class StringType(Type):
         return str(value)
 
 
+class ReferenceType(Type):
+    align = 8  # FIXME maybe we shouldn't hardcode pointer alignment.
+    ir_type = "ptr"
+    is_reference = True
+
+    def __init__(self, value_type: Type) -> None:
+        super().__init__(f"{value_type}&", "__builtin_ref")
+
+        self.value_type = value_type
+
+    def compatible_with(self, value: Any) -> bool:
+        raise NotImplementedError("ReferenceType.compatible_with")
+
+    def cast_constant(self, value: int) -> bool:
+        raise NotImplementedError("ReferenceType.cast_constant")
+
+
 @dataclass
 class FunctionSignature:
     name: str

@@ -7,4 +7,4 @@ from .expressions import (
     StringConstant,
     VariableAccess,
 )
-from .builtin_types import BoolType, IntType, StringType
+from .builtin_types import BoolType, IntType, StringType, ReferenceType

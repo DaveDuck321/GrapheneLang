@@ -7,6 +7,7 @@ from typing import Any, Iterator, Optional
 class Type(ABC):
     align = 1  # Unaligned
     ir_type = ""
+    is_reference = False
 
     def __init__(self, name, definition) -> None:
         self.name = name
@@ -28,6 +29,7 @@ class Type(ABC):
         pass
 
     def __eq__(self, other: Any) -> bool:
+        # TODO how do we do comparisons with reference types?
         assert isinstance(other, Type)
         return self.name == other.name and self.definition == other.definition
 

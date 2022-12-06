@@ -54,7 +54,15 @@ class TypeTransformer(Transformer_InPlace):
 
     @v_args(inline=True)
     def type_name(self, name: Token) -> cg.Type:
+        assert isinstance(name, Token)
+
         return self._program.lookup_type(name)
+
+    @v_args(inline=True)
+    def ref_type(self, value_type: cg.Type) -> cg.Type:
+        assert isinstance(value_type, cg.Type)
+
+        return cg.ReferenceType(value_type)
 
     @classmethod
     def parse(cls, program: cg.Program, tree: Tree) -> cg.Type:
