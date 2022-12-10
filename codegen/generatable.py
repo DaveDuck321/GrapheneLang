@@ -108,7 +108,7 @@ class IfStatement(Generatable):
         self.scope = scope
 
         assert_else_throw(
-            self.condition.type == BoolType(),
+            self.condition.type.is_implicitly_convertible_to(BoolType()),
             TypeCheckerError("if condition", self.condition.type.name, BoolType().name),
         )
 
@@ -161,7 +161,7 @@ class VariableAssignment(Generatable):
         value.assert_can_read_from()
 
         assert_else_throw(
-            variable.type == value.type,
+            variable.type.is_implicitly_convertible_to(value.type),
             TypeCheckerError(
                 "variable assignment", value.type.name, variable.type.name
             ),

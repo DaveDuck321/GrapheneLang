@@ -74,8 +74,22 @@ class TypeTransformer(Transformer_InPlace):
         return type_instance
 
 
-class SymbolTableGenerator(Interpreter):
-    # TODO: also parse typedefs
+class ParseTypeDefinitions(Interpreter):
+    def __init__(self, program: cg.Program) -> None:
+        super().__init__()
+
+        self._program = program
+
+    @v_args(inline=True)
+    def typedef(self, type_name_tree: Tree, rhs_tree: Tree):
+        type_name = extract_leaf_value(type_name_tree)
+        rhs_type = TypeTransformer.parse(self._program, rhs_tree)
+
+        new_type = cg.Type(rhs_type.definition, type_name)
+        self._program.add_type(new_type)
+
+
+class ParseFunctionSignatures(Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
@@ -375,10 +389,14 @@ def generate_ir_from_source(file_path: Path):
     print(tree.pretty())
 
     program = cg.Program()
-    symbol_table_gen = SymbolTableGenerator(program)
-    symbol_table_gen.visit(tree)
 
-    for function, body in symbol_table_gen.get_function_body_trees():
+    # TODO: these stages can be combined if we require forward declaration
+    # FIXME: allow recursive types
+    ParseTypeDefinitions(program).visit(tree)
+    fn_pass = ParseFunctionSignatures(program)
+    fn_pass.visit(tree)
+
+    for function, body in fn_pass.get_function_body_trees():
         try:
             generate_function_body(program, function, body)
         except ErrorWithLineInfo as e:

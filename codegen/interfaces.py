@@ -38,6 +38,10 @@ class Type(ABC):
             return repr(self.definition)
         return self.name
 
+    def is_implicitly_convertible_to(self, other: "Type") -> bool:
+        assert isinstance(other, Type)
+        return self.definition == other.definition
+
     @cached_property
     def align(self) -> int:
         return self.definition.get_alignment()
@@ -51,9 +55,7 @@ class Type(ABC):
         return "__T_TODO_NAME_MANGLE_TYPE"
 
     def __eq__(self, other: Any) -> bool:
-        # TODO how do we do comparisons with reference types?
-        assert isinstance(other, Type)
-        return self.name == other.name and self.definition == other.definition
+        assert False  # We can only compare TypeDefinitions
 
 
 @dataclass

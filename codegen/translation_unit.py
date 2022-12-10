@@ -150,7 +150,10 @@ class FunctionSymbolTable:
         )
 
         for function in candidate_functions:
-            if function.get_signature().arguments == fn_args:
+            if all(
+                arg.is_implicitly_convertible_to(other_arg)
+                for arg, other_arg in zip(fn_args, function.get_signature().arguments)
+            ):
                 return function
 
         throw(OverloadResolutionError(fn_name, readable_arg_names))

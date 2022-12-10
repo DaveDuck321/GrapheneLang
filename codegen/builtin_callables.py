@@ -14,7 +14,7 @@ class AddExpression(TypedExpression):
         lhs, rhs = arguments
         super().__init__(lhs.type)
 
-        assert lhs.type == rhs.type
+        assert lhs.type.is_implicitly_convertible_to(rhs.type)
         self._lhs = lhs
         self._rhs = rhs
 
