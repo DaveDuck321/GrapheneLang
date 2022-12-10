@@ -5,6 +5,7 @@ from .expressions import (
     ConstantExpression,
     StackVariable,
     StringConstant,
+    StructMemberAccess,
     VariableAccess,
 )
 from .builtin_types import (

@@ -3,6 +3,7 @@ from functools import cached_property
 from typing import Any
 
 from .interfaces import Type, TypeDefinition, Variable
+from .user_facing_errors import throw, FailedLookupError
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -108,7 +109,14 @@ class StructDefinition(TypeDefinition):
     def __init__(self, members: list[Variable]) -> None:
         super().__init__()
 
+        # TODO: assert member names are unique
         self._members = members
+
+    def get_member(self, name: str) -> tuple[int, Type]:
+        for index, member in enumerate(self._members):
+            if member.name == name:
+                return index, member.type
+        throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
 
     def compatible_with(self, value: Any) -> bool:
         raise NotImplementedError()

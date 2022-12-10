@@ -2,12 +2,19 @@ from functools import cached_property
 from typing import Any, Iterator
 
 from .user_facing_errors import (
-    OperandError,
     assert_else_throw,
     throw,
+    OperandError,
+    TypeCheckerError,
 )
 
-from .builtin_types import StringType, FunctionSignature
+from .builtin_types import (
+    FunctionSignature,
+    IntType,
+    ReferenceType,
+    StringType,
+    StructDefinition,
+)
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 
@@ -164,3 +171,68 @@ class FunctionCallExpression(TypedExpression):
         # Can write to any reference return type. TODO we don't have references
         # yet, so any attempt to write to the return value should fail for now.
         throw(OperandError(f"Cannot modify the value returned by {self.signature}"))
+
+
+class StructMemberAccess(TypedExpression):
+    def __init__(self, variable: StackVariable, member_chain: list[str]) -> None:
+        self._variable = variable
+        self._access_indices: list[int] = []
+        self._member_chain = member_chain
+
+        # Calculate pointer offset early for TypeChecking
+        last_in_chain = variable.type
+        for member_name in member_chain:
+            assert_else_throw(
+                isinstance(last_in_chain.definition, StructDefinition),
+                TypeCheckerError("struct member access", last_in_chain.name, "{...}"),
+            )
+            assert isinstance(last_in_chain.definition, StructDefinition)
+
+            next_index, last_in_chain = last_in_chain.definition.get_member(member_name)
+            self._access_indices.append(next_index)
+
+        super().__init__(ReferenceType(last_in_chain))
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#getelementptr-instruction
+        assert isinstance(self._variable, StackVariable)
+
+        self.result_reg = next(reg_gen)
+
+        indices_ir_list: list[str] = []
+        for index in self._access_indices:
+            # We use ConstantExpression to generate the correct typed literals
+            indices_ir_list.append(ConstantExpression(IntType(), index).ir_ref)
+
+        indices_ir = ", ".join(indices_ir_list)
+
+        # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
+        return [
+            f"%{self.result_reg} = getelementptr inbounds {self.type.ir_type}, {self._variable.ir_ref}, {indices_ir}",
+        ]
+
+    @cached_property
+    def ir_ref_without_type(self) -> str:
+        assert isinstance(self._variable, StackVariable)
+        return f"%{self.result_reg}"
+
+    def __repr__(self) -> str:
+        chain = ".".join(self._member_chain)
+        return f"StructMemberAccess({self._variable.name}.{chain}: {self.type})"
+
+    def assert_can_read_from(self) -> None:
+        # Can ready any initialized variable.
+        # TODO: can we also check if the members are initialized?
+        assert isinstance(self._variable, StackVariable)
+        assert_else_throw(
+            self._variable.initialized,
+            OperandError(f"Cannot use uninitialized variable '{self._variable.name}'"),
+        )
+
+    def assert_can_write_to(self) -> None:
+        # Can write to any non-constant variable.
+        assert isinstance(self._variable, StackVariable)
+        assert_else_throw(
+            not self._variable.constant,
+            OperandError(f"Cannot modify constant variable '{self._variable.name}'"),
+        )

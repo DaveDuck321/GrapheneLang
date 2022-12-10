@@ -71,9 +71,7 @@ class TypeTransformer(Transformer_InPlace):
     @v_args(inline=True)
     def struct_type(self, *member_trees: Tree) -> cg.Type:
         members: list[cg.Variable] = []
-        for member_name_tree, member_type in zip(
-            member_trees[0::2], member_trees[1::2]
-        ):
+        for member_name_tree, member_type in zip(member_trees[::2], member_trees[1::2]):
             assert isinstance(member_type, cg.Type)
 
             member_name = extract_leaf_value(member_name_tree)
@@ -272,8 +270,24 @@ class ExpressionTransformer(Transformer_InPlace):
         assert var is not None  # Make the type checker happy.
 
         var_access = cg.VariableAccess(var)
-
         return FlattenedExpression([var_access])
+
+    @v_args(inline=True)
+    def accessed_struct_member(
+        self, var_name_tree: Tree, *member_chain_tokens: Tree
+    ) -> FlattenedExpression:
+        var_name = extract_leaf_value(var_name_tree)
+        variable = self._scope.search_for_variable(var_name)
+
+        assert_else_throw(variable is not None, FailedLookupError("variable", var_name))
+        assert variable is not None  # For the VSCode TypeChecker
+
+        member_chain: list[str] = []
+        for member in member_chain_tokens:
+            member_chain.append(extract_leaf_value(member))
+
+        struct_access = cg.StructMemberAccess(variable, member_chain)
+        return FlattenedExpression([struct_access])
 
 
 def generate_standalone_expression(
