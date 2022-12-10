@@ -126,13 +126,13 @@ class SymbolTableGenerator(Interpreter):
     ) -> cg.Function:
         fn_name = extract_leaf_value(name_tree)
 
-        fn_args = []
+        fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
         for arg_name_tree, arg_type_tree in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
             arg_name = extract_leaf_value(arg_name_tree)
             arg_type = TypeTransformer.parse(self._program, arg_type_tree)
 
-            fn_args.append(cg.Variable(arg_name, arg_type))
+            fn_args.append(cg.Parameter(arg_name, arg_type))
 
         fn_return_type = TypeTransformer.parse(self._program, return_type_tree)
 
@@ -298,6 +298,7 @@ def generate_variable_declaration(
 
         # Initialize variable.
         scope.add_generatable(value.subexpressions)
+        # TODO coerce types.
         scope.add_generatable(cg.VariableAssignment(var, value.expression()))
 
     # Need to parse value first.

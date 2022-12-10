@@ -9,14 +9,17 @@ from .user_facing_errors import (
 )
 
 from .builtin_types import BoolType
-from .interfaces import Generatable, TypedExpression, Variable
+from .interfaces import Generatable, TypedExpression, Variable, Type
 
 
 @dataclass
 class StackVariable(Variable):
-    constant: bool
-    initialized: bool
-    ir_reg: Optional[int] = None
+    def __init__(
+        self, name: str, type: Type, constant: bool, initialized: bool
+    ) -> None:
+        super().__init__(name, type, constant)
+
+        self.initialized = initialized
 
     @cached_property
     def ir_ref(self) -> str:

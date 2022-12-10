@@ -15,12 +15,16 @@ from .builtin_callables import get_builtin_callables
 from .builtin_types import get_builtin_types, FunctionSignature
 from .expressions import FunctionParameter, FunctionCallExpression
 from .generatable import Scope, StackVariable, VariableAssignment
-from .interfaces import Type, TypedExpression, Variable
+from .interfaces import Type, TypedExpression, Parameter
 
 
 class Function:
     def __init__(
-        self, name: str, parameters: list[Variable], return_type: Type, is_foreign: bool
+        self,
+        name: str,
+        parameters: list[Parameter],
+        return_type: Type,
+        is_foreign: bool,
     ) -> None:
         self._signature = FunctionSignature(
             name, [var.type for var in parameters], return_type, is_foreign
@@ -33,12 +37,12 @@ class Function:
         #   TODO: constant parameters (when/ if added to grammar)
         self._parameters: list[FunctionParameter] = []
         if not self.is_foreign():
-            for var in parameters:
-                fn_param = FunctionParameter(var.type)
+            for param in parameters:
+                fn_param = FunctionParameter(param.type)
                 self._parameters.append(fn_param)
                 self.top_level_scope.add_generatable(fn_param)
 
-                fn_param_var = StackVariable(var.name, var.type, False, True)
+                fn_param_var = StackVariable(param.name, param.type, False, True)
                 self.top_level_scope.add_variable(fn_param_var)
 
                 fn_param_var_assignment = VariableAssignment(fn_param_var, fn_param)

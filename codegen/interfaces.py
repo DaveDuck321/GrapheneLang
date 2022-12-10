@@ -35,9 +35,29 @@ class Type(ABC):
 
 
 @dataclass
-class Variable:
+class Parameter:
     name: str
     type: Type
+
+
+class Variable(ABC):
+    def __init__(self, name: str, type: Type, constant: bool) -> None:
+        super().__init__()
+
+        self.name = name
+        self.type = type
+        self.constant = constant
+
+        self.ir_reg: Optional[int] = None
+
+    @cached_property
+    @abstractmethod
+    def ir_ref(self) -> str:
+        pass
+
+    @abstractmethod
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        pass
 
 
 class Generatable(ABC):
