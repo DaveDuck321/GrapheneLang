@@ -11,6 +11,7 @@ all_tests = [
     "c_demo/compile_error",
     "c_demo/runtime_status",
     "order_of_operation",
+    "simple_typedef",
     "string_constants_ir",
     "string_constants",
     "subexpression_ordering",
