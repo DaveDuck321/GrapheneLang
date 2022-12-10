@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from .interfaces import Type, TypeDefinition
+from .interfaces import Type, TypeDefinition, Variable
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -13,9 +13,12 @@ class PrimitiveDefinition(TypeDefinition):
         assert self.align != 0
         return self.align
 
-    def get_ir_type(self) -> str:
+    def get_anonymous_ir_ref(self) -> str:
         assert self.ir != ""
         return self.ir
+
+    def get_named_ir_ref(self, name) -> str:
+        return f"%primitive.{name}"
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, TypeDefinition)

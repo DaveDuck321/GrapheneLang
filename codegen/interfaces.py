@@ -18,7 +18,11 @@ class TypeDefinition(ABC):
         pass
 
     @abstractmethod
-    def get_ir_type(self) -> str:
+    def get_anonymous_ir_ref(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_named_ir_ref(self, name: str) -> str:
         pass
 
     @abstractmethod
@@ -26,7 +30,7 @@ class TypeDefinition(ABC):
         pass
 
 
-class Type(ABC):
+class Type:
     is_reference = False
 
     def __init__(self, definition: TypeDefinition, name: str = "anonymous") -> None:
@@ -48,7 +52,17 @@ class Type(ABC):
 
     @cached_property
     def ir_type(self) -> str:
-        return self.definition.get_ir_type()
+        if self.name == "anonymous":
+            return self.definition.get_anonymous_ir_ref()
+        else:
+            return self.definition.get_named_ir_ref(self.name)
+
+    def get_definition_ir(self) -> list[str]:
+        if self.name == "anonymous":
+            return []
+        named_ref = self.definition.get_named_ir_ref(self.name)
+        anonymous_definition = self.definition.get_anonymous_ir_ref()
+        return [f"{named_ref} = type {anonymous_definition}"]
 
     @cached_property
     def mangled_name(self) -> str:
@@ -62,6 +76,11 @@ class Type(ABC):
 class Variable:
     name: str
     type: Type
+
+    def __eq__(self, other: Any) -> bool:
+        return self.name == other.name and self.type.is_implicitly_convertible_to(
+            other.type
+        )
 
 
 class Generatable(ABC):

@@ -309,6 +309,9 @@ class Program:
                 f'@{string_id} = private unnamed_addr constant [{length} x i8] c"{string}"'
             )
 
+        for type in self._types.values():
+            lines.extend(type.get_definition_ir())
+
         for fn in self._function_table.foreign_functions:
             lines.extend(fn.generate_ir())
 
