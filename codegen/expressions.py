@@ -16,7 +16,7 @@ class ConstantExpression(TypedExpression):
     def __init__(self, type: Type, value: Any) -> None:
         super().__init__(type)
 
-        self.value = type.cast_constant(value)
+        self.value = type.definition.cast_constant(value)
 
     def __repr__(self) -> str:
         return f"ConstantExpression({self.type}, {self.value})"

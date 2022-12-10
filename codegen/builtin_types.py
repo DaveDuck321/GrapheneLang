@@ -2,70 +2,103 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from .interfaces import Type
+from .interfaces import Type, TypeDefinition
+
+
+class PrimitiveDefinition(TypeDefinition):
+    align = 0
+    ir = ""
+
+    def get_alignment(self) -> int:
+        assert self.align != 0
+        return self.align
+
+    def get_ir_type(self) -> str:
+        assert self.ir != ""
+        return self.ir
+
+    def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, TypeDefinition)
+        return isinstance(other, type(self))
 
 
 class IntType(Type):
-    align = 4
-    ir_type = "i32"
+    class Definition(PrimitiveDefinition):
+        align = 4
+        ir = "i32"
+
+        def __init__(self) -> None:
+            super().__init__()
+
+        def compatible_with(self, value: Any) -> bool:
+            # TODO check if value fits inside an i32
+            return isinstance(value, int)
+
+        def cast_constant(self, value: int) -> int:
+            assert self.compatible_with(value)
+            return int(value)
 
     def __init__(self) -> None:
-        super().__init__("int", "__builtin_int")
-
-    def compatible_with(self, value: Any) -> bool:
-        # TODO check if value fits inside an i32
-        return isinstance(value, int)
-
-    def cast_constant(self, value: int) -> int:
-        assert self.compatible_with(value)
-        return int(value)
+        super().__init__(self.Definition(), "int")
 
 
 class BoolType(Type):
-    align = 1
-    ir_type = "i1"
+    class Definition(PrimitiveDefinition):
+        align = 1
+        ir = "i1"
+
+        def __init__(self) -> None:
+            super().__init__()
+
+        def compatible_with(self, value: Any) -> bool:
+            return isinstance(value, bool)
+
+        def cast_constant(self, value: bool) -> int:
+            assert self.compatible_with(value)
+            return int(value)
 
     def __init__(self) -> None:
-        super().__init__("bool", "__builtin_bool")
-
-    def compatible_with(self, value: Any) -> bool:
-        return isinstance(value, bool)
-
-    def cast_constant(self, value: bool) -> int:
-        assert self.compatible_with(value)
-        return int(value)
+        super().__init__(self.Definition(), "bool")
 
 
 class StringType(Type):
-    align = 1
-    ir_type = "ptr"
+    class Definition(PrimitiveDefinition):
+        align = 1
+        ir = "ptr"
+
+        def __init__(self) -> None:
+            super().__init__()
+
+        def compatible_with(self, value: Any) -> bool:
+            return isinstance(value, str)
+
+        def cast_constant(self, value: str) -> str:
+            assert self.compatible_with(value)
+            return str(value)
 
     def __init__(self) -> None:
-        super().__init__("string", "__builtin_str")
-
-    def compatible_with(self, value: Any) -> bool:
-        return isinstance(value, str)
-
-    def cast_constant(self, value: str) -> str:
-        assert self.compatible_with(value)
-        return str(value)
+        super().__init__(self.Definition(), "string")
 
 
 class ReferenceType(Type):
-    align = 8  # FIXME maybe we shouldn't hardcode pointer alignment.
-    ir_type = "ptr"
-    is_reference = True
+    class Definition(PrimitiveDefinition):
+        align = 8  # FIXME maybe we shouldn't hardcode pointer alignment.
+        ir = "ptr"
+        is_reference = True
+
+        def __init__(self, value_type: Type) -> None:
+            super().__init__()
+
+            self.value_type = value_type
+
+        def compatible_with(self, value: Any) -> bool:
+            raise NotImplementedError("ReferenceType.compatible_with")
+
+        def cast_constant(self, value: int) -> bool:
+            raise NotImplementedError("ReferenceType.cast_constant")
 
     def __init__(self, value_type: Type) -> None:
-        super().__init__(f"{value_type}&", "__builtin_ref")
-
-        self.value_type = value_type
-
-    def compatible_with(self, value: Any) -> bool:
-        raise NotImplementedError("ReferenceType.compatible_with")
-
-    def cast_constant(self, value: int) -> bool:
-        raise NotImplementedError("ReferenceType.cast_constant")
+        super().__init__(self.Definition(value_type), f"{value_type}&")
 
 
 @dataclass
@@ -105,9 +138,9 @@ class FunctionSignature:
     def __repr__(self) -> str:
         readable_arg_names = ", ".join(map(repr, self.arguments))
         if self.is_foreign():
-            return f"foreign {self.name}: ({readable_arg_names}) -> {self.return_type.name}"
+            return f"foreign {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
         else:
-            return f"function {self.name}: ({readable_arg_names}) -> {self.return_type.name}"
+            return f"function {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
 
     @cached_property
     def ir_ref(self) -> str:
