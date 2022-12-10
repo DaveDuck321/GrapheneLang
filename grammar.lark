@@ -104,7 +104,8 @@ _expression: logical_or
 _non_operator_expression: function_call
                         | accessed_variable_name
                         | "(" expression ")"
-                        | struct_initialization
+                        | named_struct_initialization
+                        | adhoc_struct_initialization
                         | ESCAPED_STRING
                         | SIGNED_INT
                         | SIGNED_FLOAT
@@ -117,7 +118,8 @@ function_call: function_name "(" inner_list_without_names ")"
 
 inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
 inner_list_without_names: (_expression ("," _expression)*)?
-struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
+named_struct_initialization: type_name "{" (inner_list_with_names | inner_list_without_names) "}"
+adhoc_struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
 
 
 %ignore C_COMMENT
