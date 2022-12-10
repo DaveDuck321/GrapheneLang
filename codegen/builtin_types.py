@@ -104,6 +104,36 @@ class ReferenceType(Type):
         super().__init__(self.Definition(value_type), f"{value_type}&")
 
 
+class StructDefinition(TypeDefinition):
+    def __init__(self, members: list[Variable]) -> None:
+        super().__init__()
+
+        self._members = members
+
+    def compatible_with(self, value: Any) -> bool:
+        raise NotImplementedError()
+
+    def cast_constant(self, value: int) -> bool:
+        raise NotImplementedError()
+
+    def get_anonymous_ir_ref(self) -> str:
+        member_ir = [member.type.ir_type for member in self._members]
+        return f"{{{', '.join(member_ir)}}}"
+
+    def get_named_ir_ref(self, name) -> str:
+        return f"%struct.{name}"
+
+    def get_alignment(self) -> int:
+        # TODO: can we be less conservative here
+        return max(member.type.align for member in self._members)
+
+    def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, TypeDefinition)
+        if not isinstance(other, StructDefinition):
+            return False
+        return self._members == other._members
+
+
 @dataclass
 class FunctionSignature:
     name: str
