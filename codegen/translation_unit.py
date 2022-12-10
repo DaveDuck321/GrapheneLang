@@ -84,10 +84,13 @@ class Function:
 
         args_ir = ", ".join(map(lambda param: param.ir_ref, self._parameters))
 
+        def indent_ir(ir: list[str]):
+            return [f"  {line}" for line in ir]
+
         return [
             f"define dso_local {self._signature.return_type.ir_type} @{self.mangled_name}({args_ir}) {{",
             "begin:",  # Name the implicit basic block
-            *self.top_level_scope.generate_ir(reg_gen),
+            *indent_ir(self.top_level_scope.generate_ir(reg_gen)),
             "}",
         ]
 
@@ -308,18 +311,23 @@ class Program:
 
         lines.append(f'target triple = "{target}"')
 
+        lines.append("")
         for string_id, (string, length) in self._strings.items():
             lines.append(
                 f'@{string_id} = private unnamed_addr constant [{length} x i8] c"{string}"'
             )
 
+        lines.append("")
         for type in self._types.values():
             lines.extend(type.get_definition_ir())
 
+        lines.append("")
         for fn in self._function_table.foreign_functions:
             lines.extend(fn.generate_ir())
 
+        lines.append("")
         for fn in self._function_table.graphene_functions:
             lines.extend(fn.generate_ir())
+            lines.append("")
 
         return lines
