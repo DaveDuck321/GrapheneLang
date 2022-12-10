@@ -4,22 +4,7 @@ from functools import cached_property
 from typing import Any, Iterator, Optional
 
 
-class Type(ABC):
-    align = 1  # Unaligned
-    ir_type = ""
-    is_reference = False
-
-    def __init__(self, name, definition) -> None:
-        self.name = name
-        self.definition = definition
-
-    def __repr__(self) -> str:
-        return self.name
-
-    @cached_property
-    def mangled_name(self) -> str:
-        return "__T_TODO_NAME_MANGLE_TYPE"
-
+class TypeDefinition(ABC):
     @abstractmethod
     def compatible_with(self, value: Any) -> bool:
         pass
@@ -27,6 +12,43 @@ class Type(ABC):
     @abstractmethod
     def cast_constant(self, value: int) -> bool:
         pass
+
+    @abstractmethod
+    def get_alignment(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_ir_type(self) -> str:
+        pass
+
+    @abstractmethod
+    def __eq__(self, other: Any) -> bool:
+        pass
+
+
+class Type(ABC):
+    is_reference = False
+
+    def __init__(self, definition: TypeDefinition, name: str = "anonymous") -> None:
+        self.definition = definition
+        self.name = name
+
+    def __repr__(self) -> str:
+        if self.name == "anonymous":
+            return repr(self.definition)
+        return self.name
+
+    @cached_property
+    def align(self) -> int:
+        return self.definition.get_alignment()
+
+    @cached_property
+    def ir_type(self) -> str:
+        return self.definition.get_ir_type()
+
+    @cached_property
+    def mangled_name(self) -> str:
+        return "__T_TODO_NAME_MANGLE_TYPE"
 
     def __eq__(self, other: Any) -> bool:
         # TODO how do we do comparisons with reference types?
