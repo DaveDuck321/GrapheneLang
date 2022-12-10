@@ -46,11 +46,15 @@ def extract_named_leaf_value(tree: Tree, name: str) -> str:
 
 
 class TypeTransformer(Transformer_InPlace):
-    # TODO parse references, ad-hoc, and generic types.
+    # TODO parse generic types.
     def __init__(self, program: cg.Program) -> None:
         super().__init__(visit_tokens=False)
 
         self._program = program
+
+    @v_args(inline=True)
+    def type(self, child: cg.Type) -> cg.Type:
+        return child
 
     @v_args(inline=True)
     def type_name(self, name: Token) -> cg.Type:
@@ -63,6 +67,21 @@ class TypeTransformer(Transformer_InPlace):
         assert isinstance(value_type, cg.Type)
 
         return cg.ReferenceType(value_type)
+
+    @v_args(inline=True)
+    def struct_type(self, *member_trees: Tree) -> cg.Type:
+        members: list[cg.Variable] = []
+        for member_name_tree, member_type in zip(
+            member_trees[0::2], member_trees[1::2]
+        ):
+            assert isinstance(member_type, cg.Type)
+
+            member_name = extract_leaf_value(member_name_tree)
+            assert isinstance(member_name, str)
+
+            members.append(cg.Variable(member_name, member_type))
+
+        return cg.Type(cg.StructDefinition(members))
 
     @classmethod
     def parse(cls, program: cg.Program, tree: Tree) -> cg.Type:
