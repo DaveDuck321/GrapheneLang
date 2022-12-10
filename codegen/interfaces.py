@@ -33,12 +33,18 @@ class TypeDefinition(ABC):
 class Type:
     is_reference = False
 
-    def __init__(self, definition: TypeDefinition, name: str = "anonymous") -> None:
+    def __init__(self, definition: TypeDefinition, name: Optional[str] = None) -> None:
         self.definition = definition
-        self.name = name
+
+        if name is None:
+            self.name = "__anonymous"
+            self.is_anonymous = True
+        else:
+            self.name = name
+            self.is_anonymous = False
 
     def __repr__(self) -> str:
-        if self.name == "anonymous":
+        if self.is_anonymous:
             return repr(self.definition)
         return self.name
 
@@ -52,14 +58,13 @@ class Type:
 
     @cached_property
     def ir_type(self) -> str:
-        if self.name == "anonymous":
+        if self.is_anonymous:
             return self.definition.get_anonymous_ir_ref()
         else:
             return self.definition.get_named_ir_ref(self.name)
 
     def get_definition_ir(self) -> list[str]:
-        if self.name == "anonymous":
-            return []
+        assert not self.is_anonymous
         named_ref = self.definition.get_named_ir_ref(self.name)
         anonymous_definition = self.definition.get_anonymous_ir_ref()
         return [f"{named_ref} = type {anonymous_definition}"]
