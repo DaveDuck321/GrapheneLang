@@ -103,6 +103,7 @@ _expression: logical_or
 
 _non_operator_expression: function_call
                         | accessed_variable_name
+                        | accessed_struct_member
                         | "(" expression ")"
                         | named_struct_initialization
                         | adhoc_struct_initialization
@@ -121,6 +122,8 @@ inner_list_without_names: (_expression ("," _expression)*)?
 named_struct_initialization: type_name "{" (inner_list_with_names | inner_list_without_names) "}"
 adhoc_struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
 
+// TODO: this should be recursive but it breaks variable lookup
+accessed_struct_member: variable_name ("." variable_name)+
 
 %ignore C_COMMENT
 %ignore CPP_COMMENT
