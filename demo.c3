@@ -1,3 +1,5 @@
+typedef my_i32 : int;
+
 foreign puts : (str: string) -> int;
 foreign raise : (sig: int) -> int;
 
@@ -41,7 +43,7 @@ function main: () -> int = {
     }
 
 
-    let y: int = 8;
+    let y: my_i32 = 8;
 
     // FIXME return 0;
     return 6 + 1 + y;
