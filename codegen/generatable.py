@@ -12,7 +12,6 @@ from .builtin_types import BoolType
 from .interfaces import Generatable, TypedExpression, Variable, Type
 
 
-@dataclass
 class StackVariable(Variable):
     def __init__(
         self, name: str, type: Type, constant: bool, initialized: bool
