@@ -68,8 +68,7 @@ class TypeTransformer(Transformer_InPlace):
 
         return cg.ReferenceType(value_type)
 
-    @v_args(inline=True)
-    def struct_type(self, *member_trees: Tree) -> cg.Type:
+    def struct_type(self, member_trees: list[Tree]) -> cg.Type:
         members: list[cg.Parameter] = []
         for member_name_tree, member_type in zip(member_trees[::2], member_trees[1::2]):
             assert isinstance(member_type, cg.Type)
