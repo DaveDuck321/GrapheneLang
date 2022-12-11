@@ -14,6 +14,12 @@ class PrimitiveDefinition(TypeDefinition):
         assert self.align != 0
         return self.align
 
+    def get_mangled_name(self) -> str:
+        # Assert not reached:
+        #   it should be impossible to create an anonymous primitive type
+        #   ref/ structs overwrite this
+        assert False
+
     def get_anonymous_ir_ref(self) -> str:
         assert self.ir != ""
         return self.ir
@@ -95,6 +101,9 @@ class ReferenceType(Type):
 
             self.value_type = value_type
 
+        def get_mangled_name(self) -> str:
+            return f"__RT{self.value_type.mangled_name}__TR"
+
         def compatible_with(self, value: Any) -> bool:
             raise NotImplementedError("ReferenceType.compatible_with")
 
@@ -105,7 +114,7 @@ class ReferenceType(Type):
             return self.value_type
 
     def __init__(self, value_type: Type) -> None:
-        super().__init__(self.Definition(value_type), f"{value_type}&")
+        super().__init__(self.Definition(value_type))
 
 
 class StructDefinition(TypeDefinition):
@@ -120,6 +129,10 @@ class StructDefinition(TypeDefinition):
             if member.name == name:
                 return index, member.type
         throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
+
+    def get_mangled_name(self) -> str:
+        subtypes = [member.type.mangled_name for member in self._members]
+        return f"__ST{''.join(subtypes)}__TS"
 
     def compatible_with(self, value: Any) -> bool:
         raise NotImplementedError()
@@ -177,7 +190,7 @@ class FunctionSignature:
             else:
                 legal_name_mangle.append(f"__O{ord(char)}")
 
-        return f"__{''.join(legal_name_mangle)}__ARGS__{arguments_mangle}"
+        return f"{''.join(legal_name_mangle)}{arguments_mangle}"
 
     def __repr__(self) -> str:
         readable_arg_names = ", ".join(map(repr, self.arguments))

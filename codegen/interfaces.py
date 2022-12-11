@@ -18,6 +18,10 @@ class TypeDefinition(ABC):
         pass
 
     @abstractmethod
+    def get_mangled_name(self) -> str:
+        pass
+
+    @abstractmethod
     def get_anonymous_ir_ref(self) -> str:
         pass
 
@@ -74,7 +78,10 @@ class Type:
 
     @cached_property
     def mangled_name(self) -> str:
-        return "__T_TODO_NAME_MANGLE_TYPE"
+        if self.is_anonymous:
+            return self.definition.get_mangled_name()
+        else:
+            return f"__T_{self.name}"
 
     def __eq__(self, other: Any) -> bool:
         assert False  # We can only compare TypeDefinitions
