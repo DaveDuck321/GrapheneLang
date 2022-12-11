@@ -69,6 +69,9 @@ class Type:
         anonymous_definition = self.definition.get_anonymous_ir_ref()
         return [f"{named_ref} = type {anonymous_definition}"]
 
+    def get_non_reference_type(self) -> "Type":
+        return self
+
     @cached_property
     def mangled_name(self) -> str:
         return "__T_TODO_NAME_MANGLE_TYPE"

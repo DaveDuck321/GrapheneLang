@@ -174,65 +174,68 @@ class FunctionCallExpression(TypedExpression):
 
 
 class StructMemberAccess(TypedExpression):
-    def __init__(self, variable: StackVariable, member_chain: list[str]) -> None:
-        self._variable = variable
-        self._access_indices: list[int] = []
-        self._member_chain = member_chain
+    def __init__(self, lhs: TypedExpression, member_name: str) -> None:
+        self._lhs = lhs
+        self._member_name = member_name
 
-        # Calculate pointer offset early for TypeChecking
-        last_in_chain = variable.type
-        for member_name in member_chain:
-            assert_else_throw(
-                isinstance(last_in_chain.definition, StructDefinition),
-                TypeCheckerError("struct member access", last_in_chain.name, "{...}"),
-            )
-            assert isinstance(last_in_chain.definition, StructDefinition)
+        self._struct_type = lhs.type.get_non_reference_type()
 
-            next_index, last_in_chain = last_in_chain.definition.get_member(member_name)
-            self._access_indices.append(next_index)
+        struct_definition = self._struct_type.definition
+        assert_else_throw(
+            isinstance(struct_definition, StructDefinition),
+            TypeCheckerError("struct member access", self._struct_type.name, "{...}"),
+        )
+        assert isinstance(struct_definition, StructDefinition)
 
-        super().__init__(ReferenceType(last_in_chain))
+        self._access_index, member_type = struct_definition.get_member(member_name)
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        self._source_struct_is_reference = lhs.type.is_reference
+        if self._source_struct_is_reference:
+            super().__init__(ReferenceType(member_type))
+        else:
+            super().__init__(member_type)
+
+    def generate_ir_for_reference_type(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
-        assert isinstance(self._variable, StackVariable)
-
-        self.result_reg = next(reg_gen)
-
-        indices_ir_list: list[str] = []
-        for index in self._access_indices:
-            # We use ConstantExpression to generate the correct typed literals
-            indices_ir_list.append(ConstantExpression(IntType(), index).ir_ref)
-
-        indices_ir = ", ".join(indices_ir_list)
+        index = ConstantExpression(IntType(), self._access_index)
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         return [
-            f"%{self.result_reg} = getelementptr inbounds {self.type.ir_type}, {self._variable.ir_ref}, {indices_ir}",
+            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type}, {self._lhs.ir_ref}, {index.ir_ref}",
         ]
+
+    def generate_ir_for_value_type(self) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#insertvalue-instruction
+
+        # <result> = extractvalue <aggregate type> <val>, <idx>{, <idx>}*
+        return [
+            f"%{self.result_reg} = extractvalue {self._lhs.ir_ref}, {self._access_index}"
+        ]
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        self.result_reg = next(reg_gen)
+        if self._source_struct_is_reference:
+            return self.generate_ir_for_reference_type()
+        else:
+            return self.generate_ir_for_value_type()
 
     @cached_property
     def ir_ref_without_type(self) -> str:
-        assert isinstance(self._variable, StackVariable)
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        chain = ".".join(self._member_chain)
-        return f"StructMemberAccess({self._variable.name}.{chain}: {self.type})"
+        return f"StructMemberAccess({self._struct_type.name}.{self._member_name}: {self.type})"
 
     def assert_can_read_from(self) -> None:
-        # Can ready any initialized variable.
-        # TODO: can we also check if the members are initialized?
-        assert isinstance(self._variable, StackVariable)
-        assert_else_throw(
-            self._variable.initialized,
-            OperandError(f"Cannot use uninitialized variable '{self._variable.name}'"),
-        )
+        # TODO: can we check if the members are initialized?
+        pass
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
-        assert isinstance(self._variable, StackVariable)
         assert_else_throw(
-            not self._variable.constant,
-            OperandError(f"Cannot modify constant variable '{self._variable.name}'"),
+            not self._source_struct_is_reference,
+            OperandError(f"Cannot modify temporary struct"),
         )
+        if self._source_struct_is_reference:
+            # TODO: check if the reference is const
+            pass

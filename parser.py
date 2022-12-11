@@ -273,21 +273,13 @@ class ExpressionTransformer(Transformer_InPlace):
         return FlattenedExpression([var_access])
 
     @v_args(inline=True)
-    def accessed_struct_member(
-        self, var_name_tree: Tree, *member_chain_tokens: Tree
+    def struct_member_access(
+        self, lhs: FlattenedExpression, member_tree: Tree
     ) -> FlattenedExpression:
-        var_name = extract_leaf_value(var_name_tree)
-        variable = self._scope.search_for_variable(var_name)
+        member_name = extract_leaf_value(member_tree)
 
-        assert_else_throw(variable is not None, FailedLookupError("variable", var_name))
-        assert variable is not None  # For the VSCode TypeChecker
-
-        member_chain: list[str] = []
-        for member in member_chain_tokens:
-            member_chain.append(extract_leaf_value(member))
-
-        struct_access = cg.StructMemberAccess(variable, member_chain)
-        return FlattenedExpression([struct_access])
+        struct_access = cg.StructMemberAccess(lhs.expression(), member_name)
+        return lhs.add_parent(struct_access)
 
 
 def generate_standalone_expression(

@@ -95,15 +95,17 @@ _expression: logical_or
           | power _mult_div_token mult_div -> operator_use
 !?power: unary_operator
        | unary_operator "**" power -> operator_use
-!?unary_operator: _non_operator_expression
+!?unary_operator: struct_member_access
                 | _unary_operator_token unary_operator -> unary_operator_use
+
+?struct_member_access: _non_operator_expression
+                     | struct_member_access "." variable_name
 
 // TODO: add support for arbitrary operators
 //  Alternatively we can prevent user defined operators not in this list
 
 _non_operator_expression: function_call
                         | accessed_variable_name
-                        | accessed_struct_member
                         | "(" expression ")"
                         | named_struct_initialization
                         | adhoc_struct_initialization
@@ -121,9 +123,6 @@ inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _exp
 inner_list_without_names: (_expression ("," _expression)*)?
 named_struct_initialization: type_name "{" (inner_list_with_names | inner_list_without_names) "}"
 adhoc_struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
-
-// TODO: this should be recursive but it breaks variable lookup
-accessed_struct_member: variable_name ("." variable_name)+
 
 %ignore C_COMMENT
 %ignore CPP_COMMENT

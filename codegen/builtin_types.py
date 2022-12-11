@@ -101,6 +101,9 @@ class ReferenceType(Type):
         def cast_constant(self, value: int) -> bool:
             raise NotImplementedError("ReferenceType.cast_constant")
 
+        def get_non_reference_type_definition(self) -> Type:
+            return self.value_type
+
     def __init__(self, value_type: Type) -> None:
         super().__init__(self.Definition(value_type), f"{value_type}&")
 
