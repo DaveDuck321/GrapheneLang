@@ -21,11 +21,15 @@ class StackVariable(Variable):
         self.initialized = initialized
 
     @cached_property
-    def ir_ref(self) -> str:
+    def ir_ref_without_type(self) -> str:
         assert self.ir_reg is not None
 
+        return f"%{self.ir_reg}"
+
+    @cached_property
+    def ir_ref(self) -> str:
         # alloca returns a pointer.
-        return f"ptr %{self.ir_reg}"
+        return f"ptr {self.ir_ref_without_type}"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         assert self.ir_reg is None

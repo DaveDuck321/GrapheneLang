@@ -99,6 +99,8 @@ class Parameter:
 
 
 class Variable(ABC):
+    # TODO much of this interface is common with TypedExpression. Maybe they
+    # should have a shared base class.
     def __init__(self, name: str, type: Type, constant: bool) -> None:
         super().__init__()
 
@@ -107,6 +109,11 @@ class Variable(ABC):
         self.constant = constant
 
         self.ir_reg: Optional[int] = None
+
+    @cached_property
+    @abstractmethod
+    def ir_ref_without_type(self) -> str:
+        pass
 
     @cached_property
     @abstractmethod
