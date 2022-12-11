@@ -1,8 +1,9 @@
-import sys
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Iterable, Optional
+import sys
+import traceback
 
 from lark import Lark, Token, Tree
 from lark.exceptions import VisitError
@@ -401,17 +402,17 @@ def generate_body(
         except VisitError as e:
             if not isinstance(e.orig_exc, GrapheneError):
                 raise e from e.orig_exc
-            raise ErrorWithLineInfo(e.orig_exc.message, line.meta.line) from None
+            raise ErrorWithLineInfo(e.orig_exc.message, line.meta.line)
 
         except GrapheneError as e:
-            raise ErrorWithLineInfo(e.message, line.meta.line) from None
+            raise ErrorWithLineInfo(e.message, line.meta.line)
 
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
     generate_body(program, function, function.top_level_scope, body)
 
 
-def generate_ir_from_source(file_path: Path):
+def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:
     grammar_path = Path(__file__).parent / "grammar.lark"
     lark = Lark.open(
         str(grammar_path), parser="lalr", start="program", propagate_positions=True
@@ -432,6 +433,10 @@ def generate_ir_from_source(file_path: Path):
         try:
             generate_function_body(program, function, body)
         except ErrorWithLineInfo as e:
+            if debug_compiler:
+                traceback.print_exc()
+                print("~~~ User-facing error message ~~~")
+
             print(
                 f'File "{file_path.absolute()}", line {e.line}, in "{function}"',
                 file=sys.stderr,

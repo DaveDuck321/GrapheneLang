@@ -11,6 +11,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", required=False, type=Path)
     parser.add_argument("--emit-llvm", action="store_true")
     parser.add_argument("--emit-everything", action="store_true")
+    parser.add_argument("--debug-compiler", action="store_true")
     args = parser.parse_args()
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
@@ -27,7 +28,7 @@ if __name__ == "__main__":
             llvm_output = args.output
 
     # Compile to ir
-    ir = generate_ir_from_source(args.input[0])
+    ir = generate_ir_from_source(args.input[0], args.debug_compiler)
 
     if will_emit_llvm:
         with llvm_output.open("w", encoding="utf-8") as file:
