@@ -70,14 +70,14 @@ class TypeTransformer(Transformer_InPlace):
 
     @v_args(inline=True)
     def struct_type(self, *member_trees: Tree) -> cg.Type:
-        members: list[cg.Variable] = []
+        members: list[cg.Parameter] = []
         for member_name_tree, member_type in zip(member_trees[::2], member_trees[1::2]):
             assert isinstance(member_type, cg.Type)
 
             member_name = extract_leaf_value(member_name_tree)
             assert isinstance(member_name, str)
 
-            members.append(cg.Variable(member_name, member_type))
+            members.append(cg.Parameter(member_name, member_type))
 
         return cg.Type(cg.StructDefinition(members))
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from .interfaces import Type, TypeDefinition, Variable
+from .interfaces import Type, TypeDefinition, Parameter
 from .user_facing_errors import throw, FailedLookupError
 
 
@@ -106,7 +106,7 @@ class ReferenceType(Type):
 
 
 class StructDefinition(TypeDefinition):
-    def __init__(self, members: list[Variable]) -> None:
+    def __init__(self, members: list[Parameter]) -> None:
         super().__init__()
 
         # TODO: assert member names are unique
