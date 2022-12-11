@@ -2,7 +2,7 @@ import sys
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 from lark import Lark, Token, Tree
 from lark.exceptions import VisitError
@@ -45,6 +45,14 @@ def extract_named_leaf_value(tree: Tree, name: str) -> str:
     return extract_leaf_value(get_unique_child(tree, name))
 
 
+def in_pairs(iterable: Iterable) -> Iterable:
+    # [iter(...), iter(...)] would make two different list_iterator objects.
+    # We only want one.
+    chunks = [iter(iterable)] * 2
+
+    return zip(*chunks, strict=True)
+
+
 class TypeTransformer(Transformer_InPlace):
     # TODO parse generic types.
     def __init__(self, program: cg.Program) -> None:
@@ -70,7 +78,7 @@ class TypeTransformer(Transformer_InPlace):
 
     def struct_type(self, member_trees: list[Tree]) -> cg.Type:
         members: list[cg.Parameter] = []
-        for member_name_tree, member_type in zip(member_trees[::2], member_trees[1::2]):
+        for member_name_tree, member_type in in_pairs(member_trees):
             assert isinstance(member_type, cg.Type)
 
             member_name = extract_leaf_value(member_name_tree)
@@ -158,7 +166,7 @@ class ParseFunctionSignatures(Interpreter):
 
         fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
-        for arg_name_tree, arg_type_tree in zip(fn_arg_trees[::2], fn_arg_trees[1::2]):
+        for arg_name_tree, arg_type_tree in in_pairs(fn_arg_trees):
             arg_name = extract_leaf_value(arg_name_tree)
             arg_type = TypeTransformer.parse(self._program, arg_type_tree)
 
