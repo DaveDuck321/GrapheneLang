@@ -28,12 +28,8 @@ class AddExpression(TypedExpression):
         conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, IntType())
         conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, IntType())
 
-        ir_lines: list[str] = []
-
-        for expr in extra_exprs_lhs:
-            ir_lines += expr.generate_ir(reg_gen)
-        for expr in extra_exprs_rhs:
-            ir_lines += expr.generate_ir(reg_gen)
+        ir_lines = self.expand_ir(extra_exprs_lhs, reg_gen)
+        ir_lines += self.expand_ir(extra_exprs_rhs, reg_gen)
 
         self.result_reg = next(reg_gen)
 
