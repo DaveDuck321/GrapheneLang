@@ -115,8 +115,9 @@ class ReferenceType(Type):
             # Opaque pointer type.
             return self.get_anonymous_ir_ref()
 
-        def get_non_reference_type(self) -> Type:
-            return self.value_type
+    def get_non_reference_type(self) -> Type:
+        assert isinstance(self.definition, self.Definition)
+        return self.definition.value_type
 
     def __init__(self, value_type: Type) -> None:
         super().__init__(self.Definition(value_type))

@@ -11,7 +11,7 @@ class Dereference(TypedExpression):
         assert isinstance(ref.type.definition, ReferenceType.Definition)
 
         # TODO need a nicer interface.
-        super().__init__(ref.type.definition.get_non_reference_type())
+        super().__init__(ref.type.get_non_reference_type())
 
         self.ref = ref
 
@@ -92,8 +92,7 @@ def is_type_implicitly_convertible(from_type: Type, target_type: Type) -> bool:
         return True
 
     if from_type.is_reference and not target_type.is_reference:
-        assert isinstance(from_type.definition, ReferenceType.Definition)
-        from_type = from_type.definition.get_non_reference_type()
+        from_type = from_type.get_non_reference_type()
 
     # TODO integer and float promotions.
 
