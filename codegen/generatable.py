@@ -111,10 +111,7 @@ class IfStatement(Generatable):
 
         conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
 
-        ir_lines: list[str] = []
-
-        for expr in extra_exprs:
-            ir_lines += expr.generate_ir(reg_gen)
+        ir_lines = self.expand_ir(extra_exprs, reg_gen)
 
         # TODO: should the if statement also generate condition code?
         #       atm its added to the parent scope by parser.generate_if_statement
@@ -160,10 +157,7 @@ class ReturnStatement(Generatable):
             self.returned_expr, self.return_type
         )
 
-        ir_lines: list[str] = []
-
-        for expr in extra_exprs:
-            ir_lines += expr.generate_ir(reg_gen)
+        ir_lines = self.expand_ir(extra_exprs, reg_gen)
 
         # ret <type> <value>; Return a value from a non-void function
         ir_lines.append(f"ret {conv_returned_expr.ir_ref}")
@@ -189,10 +183,7 @@ class VariableAssignment(Generatable):
 
         conv_value, extra_exprs = do_implicit_conversion(self.value, self.variable.type)
 
-        ir_lines: list[str] = []
-
-        for expr in extra_exprs:
-            ir_lines += expr.generate_ir(reg_gen)
+        ir_lines = self.expand_ir(extra_exprs, reg_gen)
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir_lines += [

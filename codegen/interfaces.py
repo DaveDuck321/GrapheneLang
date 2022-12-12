@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterator, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 
 class TypeDefinition(ABC):
@@ -130,6 +130,17 @@ class Generatable(ABC):
     @abstractmethod
     def __repr__(self) -> str:
         pass
+
+    @staticmethod
+    def expand_ir(
+        generatables: Iterable["Generatable"], reg_gen: Iterator[int]
+    ) -> list[str]:
+        ir_lines: list[str] = []
+
+        for generatable in generatables:
+            ir_lines.extend(generatable.generate_ir(reg_gen))
+
+        return ir_lines
 
 
 class TypedExpression(Generatable):
