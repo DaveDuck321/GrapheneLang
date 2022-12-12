@@ -1,20 +1,21 @@
 from functools import cached_property
-from typing import Iterator, Callable
+from typing import Callable, Iterator
 
-from .user_facing_errors import (
-    OperandError,
-    throw,
-)
-
+from .builtin_types import IntType
 from .interfaces import TypedExpression
+from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
+from .user_facing_errors import OperandError, throw
 
 
 class AddExpression(TypedExpression):
     def __init__(self, arguments: list[TypedExpression]) -> None:
         lhs, rhs = arguments
-        super().__init__(lhs.type)
 
-        assert lhs.type.is_implicitly_convertible_to(rhs.type)
+        # FIXME handle multiple int types.
+        super().__init__(IntType())
+        assert_is_implicitly_convertible(lhs, IntType(), "builtin add")
+        assert_is_implicitly_convertible(rhs, IntType(), "builtin add")
+
         self._lhs = lhs
         self._rhs = rhs
 
@@ -23,12 +24,25 @@ class AddExpression(TypedExpression):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#add-instruction
+        # FIXME handle multiple int types.
+        conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, IntType())
+        conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, IntType())
+
+        ir_lines: list[str] = []
+
+        for expr in extra_exprs_lhs:
+            ir_lines += expr.generate_ir(reg_gen)
+        for expr in extra_exprs_rhs:
+            ir_lines += expr.generate_ir(reg_gen)
+
         self.result_reg = next(reg_gen)
 
         # <result> = add nuw nsw <ty> <op1>, <op2>  ; yields ty:result
-        return [
-            f"%{self.result_reg} = add nuw nsw {self._lhs.ir_ref}, {self._rhs.ir_ref_without_type}"
-        ]
+        ir_lines.append(
+            f"%{self.result_reg} = add nuw nsw {conv_lhs.ir_ref}, {conv_rhs.ir_ref_without_type}"
+        )
+
+        return ir_lines
 
     @cached_property
     def ir_ref_without_type(self) -> str:

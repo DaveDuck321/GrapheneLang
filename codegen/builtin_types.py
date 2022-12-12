@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from .interfaces import Type, TypeDefinition, Parameter
-from .user_facing_errors import throw, FailedLookupError
+from .interfaces import Parameter, Type, TypeDefinition
+from .user_facing_errors import FailedLookupError, throw
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -91,10 +91,11 @@ class StringType(Type):
 
 
 class ReferenceType(Type):
+    is_reference = True
+
     class Definition(PrimitiveDefinition):
         align = 8  # FIXME maybe we shouldn't hardcode pointer alignment.
         ir = "ptr"
-        is_reference = True
 
         def __init__(self, value_type: Type) -> None:
             super().__init__()
@@ -110,7 +111,11 @@ class ReferenceType(Type):
         def cast_constant(self, value: int) -> bool:
             raise NotImplementedError("ReferenceType.cast_constant")
 
-        def get_non_reference_type_definition(self) -> Type:
+        def get_named_ir_ref(self, _: str) -> str:
+            # Opaque pointer type.
+            return self.get_anonymous_ir_ref()
+
+        def get_non_reference_type(self) -> Type:
             return self.value_type
 
     def __init__(self, value_type: Type) -> None:

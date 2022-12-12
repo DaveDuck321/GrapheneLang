@@ -63,34 +63,18 @@ class StringConstant(TypedExpression):
         throw(OperandError("Cannot modify a string constant"))
 
 
-class VariableAccess(TypedExpression):
+class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
-        super().__init__(variable.type)
+        super().__init__(ReferenceType(variable.type))
 
         self.variable = variable
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        # https://llvm.org/docs/LangRef.html#load-instruction
-
-        # TODO need to load other kinds of variables.
-        assert isinstance(self.variable, StackVariable)
-
-        self.result_reg = next(reg_gen)
-
-        # Need to load this variable from the stack to a register.
-        # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
-        return [
-            f"%{self.result_reg} = load {self.type.ir_type}, "
-            f"{self.variable.ir_ref}, align {self.type.align}"
-        ]
+    def __repr__(self) -> str:
+        return f"VariableReference({self.variable.name}: {self.variable.type})"
 
     @cached_property
     def ir_ref_without_type(self) -> str:
-        assert isinstance(self.variable, StackVariable)
-        return f"%{self.result_reg}"
-
-    def __repr__(self) -> str:
-        return f"VariableAccess({self.variable.name}: {self.variable.type})"
+        return self.variable.ir_ref_without_type
 
     def assert_can_read_from(self) -> None:
         # Can ready any initialized variable.
@@ -102,7 +86,6 @@ class VariableAccess(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
-        assert isinstance(self.variable, StackVariable)
         assert_else_throw(
             not self.variable.constant,
             OperandError(f"Cannot modify constant variable '{self.variable.name}'"),
