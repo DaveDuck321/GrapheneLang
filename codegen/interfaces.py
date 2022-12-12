@@ -48,10 +48,6 @@ class Type:
             return repr(self.definition)
         return self.name
 
-    def is_implicitly_convertible_to(self, other: "Type") -> bool:
-        assert isinstance(other, Type)
-        return self.definition == other.definition
-
     @cached_property
     def align(self) -> int:
         return self.definition.get_alignment()
@@ -77,7 +73,10 @@ class Type:
         return "__T_TODO_NAME_MANGLE_TYPE"
 
     def __eq__(self, other: Any) -> bool:
-        assert False  # We can only compare TypeDefinitions
+        assert isinstance(self, Type)
+        assert isinstance(other, Type)
+
+        return self.definition == other.definition
 
 
 @dataclass
@@ -85,10 +84,9 @@ class Parameter:
     name: str
     type: Type
 
-    def __eq__(self, other: Any) -> bool:
-        return self.name == other.name and self.type.is_implicitly_convertible_to(
-            other.type
-        )
+    def __eq__(self, _: Any) -> bool:
+        # No one was using this :).
+        assert False
 
 
 class Variable(ABC):

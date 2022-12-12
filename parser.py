@@ -276,8 +276,8 @@ class ExpressionTransformer(Transformer_InPlace):
         assert_else_throw(var is not None, FailedLookupError("variable", var_name))
         assert var is not None  # Make the type checker happy.
 
-        var_access = cg.VariableAccess(var)
-        return FlattenedExpression([var_access])
+        var_ref = cg.VariableReference(var)
+        return FlattenedExpression([var_ref])
 
     @v_args(inline=True)
     def struct_member_access(
@@ -305,7 +305,8 @@ def generate_return_statement(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     if not body.children:
-        expr = cg.ReturnStatement()
+        # FIXME change IntType() to void once we implement that.
+        expr = cg.ReturnStatement(cg.IntType())
         scope.add_generatable(expr)
         return
 
@@ -316,7 +317,9 @@ def generate_return_statement(
     assert isinstance(flattened_expr, FlattenedExpression)
     scope.add_generatable(flattened_expr.subexpressions)
 
-    expr = cg.ReturnStatement(flattened_expr.expression())
+    expr = cg.ReturnStatement(
+        function.get_signature().return_type, flattened_expr.expression()
+    )
     scope.add_generatable(expr)
 
 
@@ -357,7 +360,6 @@ def generate_variable_declaration(
 def generate_if_statement(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
-
     condition_tree, scope_tree = body.children
     ExpressionTransformer(program, function, scope).transform(condition_tree)
 

@@ -1,15 +1,10 @@
-from dataclasses import dataclass
 from functools import cached_property
 from typing import Iterable, Iterator, Optional
 
-from .user_facing_errors import (
-    RedefinitionError,
-    TypeCheckerError,
-    assert_else_throw,
-)
-
 from .builtin_types import BoolType
-from .interfaces import Generatable, TypedExpression, Variable, Type
+from .interfaces import Generatable, Type, TypedExpression, Variable
+from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
+from .user_facing_errors import RedefinitionError, assert_else_throw
 
 
 class StackVariable(Variable):
@@ -106,41 +101,52 @@ class IfStatement(Generatable):
         super().__init__()
 
         condition.assert_can_read_from()
+        assert_is_implicitly_convertible(condition, BoolType(), "if condition")
 
         self.condition = condition
         self.scope = scope
 
-        assert_else_throw(
-            self.condition.type.is_implicitly_convertible_to(BoolType()),
-            TypeCheckerError("if condition", self.condition.type.name, BoolType().name),
-        )
-
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#br-instruction
+
+        conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
+
+        ir_lines: list[str] = []
+
+        for expr in extra_exprs:
+            ir_lines += expr.generate_ir(reg_gen)
 
         # TODO: should the if statement also generate condition code?
         #       atm its added to the parent scope by parser.generate_if_statement
         # TODO: it also seems kind of strange that we generate the scope here
         # br i1 <cond>, label <iftrue>, label <iffalse>
-        return [
-            f"br {self.condition.ir_ref}, label %{self.scope.start_label}, label %{self.scope.end_label}",
+        ir_lines += [
+            f"br {conv_condition.ir_ref}, label %{self.scope.start_label}, label %{self.scope.end_label}",
             f"{self.scope.start_label}:",
             *self.scope.generate_ir(reg_gen),
             f"br label %{self.scope.end_label}",  # TODO: support `else` jump
             f"{self.scope.end_label}:",
         ]
 
+        return ir_lines
+
     def __repr__(self) -> str:
         return f"IfStatement({self.condition} {self.scope})"
 
 
 class ReturnStatement(Generatable):
-    def __init__(self, returned_expr: Optional[TypedExpression] = None) -> None:
+    def __init__(
+        self, return_type: Type, returned_expr: Optional[TypedExpression] = None
+    ) -> None:
         super().__init__()
 
         if returned_expr is not None:
             returned_expr.assert_can_read_from()
+            assert_is_implicitly_convertible(
+                returned_expr, return_type, "return statement"
+            )
 
+        self.return_type = return_type
         self.returned_expr = returned_expr
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -150,8 +156,19 @@ class ReturnStatement(Generatable):
             # ret void; Return from void function
             return ["ret void"]
 
+        conv_returned_expr, extra_exprs = do_implicit_conversion(
+            self.returned_expr, self.return_type
+        )
+
+        ir_lines: list[str] = []
+
+        for expr in extra_exprs:
+            ir_lines += expr.generate_ir(reg_gen)
+
         # ret <type> <value>; Return a value from a non-void function
-        return [f"ret {self.returned_expr.ir_ref}"]
+        ir_lines.append(f"ret {conv_returned_expr.ir_ref}")
+
+        return ir_lines
 
     def __repr__(self) -> str:
         return f"ReturnStatement({self.returned_expr})"
@@ -162,24 +179,28 @@ class VariableAssignment(Generatable):
         super().__init__()
 
         value.assert_can_read_from()
+        assert_is_implicitly_convertible(value, variable.type, "variable assignment")
 
-        assert_else_throw(
-            variable.type.is_implicitly_convertible_to(value.type),
-            TypeCheckerError(
-                "variable assignment", value.type.name, variable.type.name
-            ),
-        )
         self.variable = variable
         self.value = value
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#store-instruction
 
+        conv_value, extra_exprs = do_implicit_conversion(self.value, self.variable.type)
+
+        ir_lines: list[str] = []
+
+        for expr in extra_exprs:
+            ir_lines += expr.generate_ir(reg_gen)
+
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
-        return [
-            f"store {self.value.ir_ref}, {self.variable.ir_ref}, "
-            f"align {self.variable.type.align}"
+        ir_lines += [
+            f"store {conv_value.ir_ref}, {self.variable.ir_ref}, "
+            f"align {conv_value.type.align}"
         ]
+
+        return ir_lines
 
     def __repr__(self) -> str:
         return f"VariableAssignment({self.variable.name}: {self.variable.type})"

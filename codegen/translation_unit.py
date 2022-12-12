@@ -11,6 +11,7 @@ from .user_facing_errors import (
     throw,
 )
 
+from .type_conversions import is_type_implicitly_convertible
 from .builtin_callables import get_builtin_callables
 from .builtin_types import get_builtin_types, FunctionSignature
 from .expressions import FunctionParameter, FunctionCallExpression
@@ -154,7 +155,7 @@ class FunctionSymbolTable:
 
         for function in candidate_functions:
             if all(
-                arg.is_implicitly_convertible_to(other_arg)
+                is_type_implicitly_convertible(arg, other_arg)
                 for arg, other_arg in zip(fn_args, function.get_signature().arguments)
             ):
                 return function
