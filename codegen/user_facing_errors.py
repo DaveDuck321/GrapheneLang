@@ -43,6 +43,13 @@ class InvalidEscapeSequence(GrapheneError):
         super().__init__(f"Error: \\{escaped_char} is not a valid escape sequence")
 
 
+class GenericArgumentCountError(GrapheneError):
+    def __init__(self, name: str, actual: int, expected: int) -> None:
+        super().__init__(
+            f"Error: generic `{name}` expects {expected} arguments but received {actual}"
+        )
+
+
 def throw(error: GrapheneError):
     raise error
 

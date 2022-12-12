@@ -7,13 +7,14 @@ import traceback
 
 from lark import Lark, Token, Tree
 from lark.exceptions import VisitError
-from lark.visitors import Interpreter, Transformer_InPlace, v_args
+from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
     assert_else_throw,
     FailedLookupError,
     GrapheneError,
+    GenericArgumentCountError,
 )
 
 
@@ -54,22 +55,30 @@ def in_pairs(iterable: Iterable) -> Iterable:
     return zip(*chunks, strict=True)
 
 
-class TypeTransformer(Transformer_InPlace):
-    # TODO parse generic types.
-    def __init__(self, program: cg.Program) -> None:
+class TypeTransformer(Transformer):
+    def __init__(
+        self, program: cg.Program, generic_mapping: dict[str, cg.Type]
+    ) -> None:
         super().__init__(visit_tokens=False)
 
         self._program = program
+        self._generic_mapping = generic_mapping
 
     @v_args(inline=True)
     def type(self, child: cg.Type) -> cg.Type:
         return child
 
     @v_args(inline=True)
-    def type_name(self, name: Token) -> cg.Type:
+    def type_name(self, name: Token, type_map: Optional[Tree]) -> cg.Type:
         assert isinstance(name, Token)
 
-        return self._program.lookup_type(name)
+        if name in self._generic_mapping:
+            return self._generic_mapping[name]
+
+        if type_map is not None:
+            return self._program.lookup_generic_type(name, type_map.children)  # type: ignore
+        else:
+            return self._program.lookup_type(name)
 
     @v_args(inline=True)
     def ref_type(self, value_type: cg.Type) -> cg.Type:
@@ -90,13 +99,12 @@ class TypeTransformer(Transformer_InPlace):
         return cg.Type(cg.StructDefinition(members))
 
     @classmethod
-    def parse(cls, program: cg.Program, tree: Tree) -> cg.Type:
-        cls(program).transform(tree)
-
-        type_instance = tree.children[0]
-        assert isinstance(type_instance, cg.Type)
-
-        return type_instance
+    def parse(
+        cls, program: cg.Program, tree: Tree, type_map: dict[str, cg.Type] = {}
+    ) -> cg.Type:
+        result = cls(program, type_map).transform(tree)
+        assert isinstance(result, cg.Type)
+        return result
 
 
 class ParseTypeDefinitions(Interpreter):
@@ -105,13 +113,41 @@ class ParseTypeDefinitions(Interpreter):
 
         self._program = program
 
-    @v_args(inline=True)
-    def typedef(self, type_name_tree: Tree, rhs_tree: Tree):
-        type_name = extract_leaf_value(type_name_tree)
+    def _typedef(self, type_name: str, rhs_tree: Tree) -> None:
         rhs_type = TypeTransformer.parse(self._program, rhs_tree)
-
         new_type = cg.Type(rhs_type.definition, type_name)
         self._program.add_type(new_type)
+
+    def _typedef_generic(
+        self, type_name: str, generic_tree: Tree, rhs_tree: Tree
+    ) -> None:
+        available_generics: list[str] = []
+        for generic_name in generic_tree.children:
+            assert isinstance(generic_name, Token)
+            available_generics.append(generic_name.value)
+
+        def parse_generic(name: str, concrete_types: list[cg.Type]) -> cg.Type:
+            assert_else_throw(
+                len(concrete_types) == len(available_generics),
+                GenericArgumentCountError(
+                    type_name, len(concrete_types), len(available_generics)
+                ),
+            )
+
+            mapping = dict(zip(available_generics, concrete_types))
+            rhs = TypeTransformer.parse(self._program, rhs_tree, mapping)
+            return cg.Type(rhs.definition, name)
+
+        self._program.add_generic_type(type_name, parse_generic)
+
+    @v_args(inline=True)
+    def typedef(
+        self, type_name: Token, generic_tree: Optional[Tree], rhs_tree: Tree
+    ) -> None:
+        if generic_tree is not None:
+            return self._typedef_generic(type_name.value, generic_tree, rhs_tree)
+        else:
+            return self._typedef(type_name.value, rhs_tree)
 
 
 class ParseFunctionSignatures(Interpreter):

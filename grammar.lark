@@ -12,7 +12,7 @@ generic_annotation: "[" _inner_list_of_type_names "]"
 
 accessed_variable_name: CNAME
 variable_name: CNAME
-type_name: CNAME ( generic_annotation )?
+type_name: CNAME [ generic_annotation ]
 
 _inner_list_of_named_members: variable_name ":" type ("," variable_name ":" type)*
 _inner_list_of_types: (type ("," type)*)?
@@ -37,12 +37,13 @@ _top_level_program_feature: typedef
                           | variable_declaration
                           | const_declaration
 
-typedef: "typedef" type_name ":" type
+generic_definition_list: "[" _typedef_name ("," _typedef_name)* "]"
+_typedef_name: CNAME
+typedef: "typedef" _typedef_name [ generic_definition_list ] ":" type
 
 function_name: CNAME ( generic_annotation )?
-function_return_type: _type
 function_arguments: "(" (variable_name ":" type ("," variable_name ":" type)*)? ")"
-_function_declaration: ":" function_arguments "->" function_return_type
+_function_declaration: ":" function_arguments "->" type
 _function_definition: _function_declaration "=" scope
 foreign_function: "foreign" function_name _function_declaration
 named_function: "function" function_name _function_definition

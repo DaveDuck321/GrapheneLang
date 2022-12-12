@@ -1,6 +1,7 @@
 from collections import defaultdict
 from functools import cached_property
 from itertools import count
+from typing import Callable
 
 from .user_facing_errors import (
     FailedLookupError,
@@ -185,12 +186,33 @@ class Program:
 
         self._function_table = FunctionSymbolTable()
         self._types: dict[str, Type] = {}
+        self._generic_type_initializers: dict[
+            str, Callable[[str, list[Type]], Type]
+        ] = {}
         self._strings: dict[str, tuple[str, int]] = {}
 
         self._has_main: bool = False
 
         for type in get_builtin_types():
             self.add_type(type)
+
+    def lookup_generic_type(self, name: str, types: list[Type]) -> Type:
+        assert_else_throw(
+            name in self._generic_type_initializers,
+            FailedLookupError("generic type", f"typedef {name}[...] : ..."),
+        )
+
+        concrete_types_mangle: list[str] = []
+        for concrete_type in types:
+            concrete_types_mangle.append(concrete_type.mangled_name)
+
+        this_mangle = f"{name}{''.join(concrete_types_mangle)}"
+        if this_mangle in self._types:
+            return self._types[this_mangle]
+
+        this_type = self._generic_type_initializers[name](this_mangle, types)
+        self._types[this_mangle] = this_type
+        return this_type
 
     def lookup_type(self, name: str) -> Type:
         assert_else_throw(
@@ -210,6 +232,15 @@ class Program:
 
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
+
+    def add_generic_type(
+        self, type_name: str, parse_fn: Callable[[str, list[Type]], Type]
+    ) -> None:
+        assert_else_throw(
+            type_name not in self._generic_type_initializers,
+            RedefinitionError("generic type", type_name),
+        )
+        self._generic_type_initializers[type_name] = parse_fn
 
     def add_type(self, type: Type) -> None:
         assert_else_throw(
