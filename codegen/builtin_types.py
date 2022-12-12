@@ -9,23 +9,27 @@ from .user_facing_errors import FailedLookupError, throw
 class PrimitiveDefinition(TypeDefinition):
     align = 0
     ir = ""
+    inbuilt_name = ""
 
     def get_alignment(self) -> int:
         assert self.align != 0
         return self.align
 
-    def get_mangled_name(self) -> str:
+    def mangled_name_for_ir(self) -> str:
         # Assert not reached:
         #   it should be impossible to create an anonymous primitive type
         #   ref/ structs overwrite this
         assert False
 
-    def get_anonymous_ir_ref(self) -> str:
+    def get_anonymous_ir_type_def(self) -> str:
         assert self.ir != ""
         return self.ir
 
-    def get_named_ir_ref(self, name) -> str:
-        return f"%primitive.{name}"
+    def get_named_ir_type_ref(self, name) -> str:
+        return f"%alias.{name}"
+
+    def __repr__(self) -> str:
+        return f"Typedef({self.inbuilt_name})"
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, TypeDefinition)
@@ -36,6 +40,7 @@ class IntType(Type):
     class Definition(PrimitiveDefinition):
         align = 4
         ir = "i32"
+        inbuilt_name = "int"
 
         def __init__(self) -> None:
             super().__init__()
@@ -49,13 +54,15 @@ class IntType(Type):
             return int(value)
 
     def __init__(self) -> None:
-        super().__init__(self.Definition(), "int")
+        definition = self.Definition()
+        super().__init__(definition, definition.inbuilt_name)
 
 
 class BoolType(Type):
     class Definition(PrimitiveDefinition):
         align = 1
         ir = "i1"
+        inbuilt_name = "bool"
 
         def __init__(self) -> None:
             super().__init__()
@@ -68,13 +75,15 @@ class BoolType(Type):
             return int(value)
 
     def __init__(self) -> None:
-        super().__init__(self.Definition(), "bool")
+        definition = self.Definition()
+        super().__init__(definition, definition.inbuilt_name)
 
 
 class StringType(Type):
     class Definition(PrimitiveDefinition):
         align = 1
         ir = "ptr"
+        inbuilt_name = "string"
 
         def __init__(self) -> None:
             super().__init__()
@@ -87,7 +96,8 @@ class StringType(Type):
             return str(value)
 
     def __init__(self) -> None:
-        super().__init__(self.Definition(), "string")
+        definition = self.Definition()
+        super().__init__(definition, definition.inbuilt_name)
 
 
 class ReferenceType(Type):
@@ -102,8 +112,9 @@ class ReferenceType(Type):
 
             self.value_type = value_type
 
-        def get_mangled_name(self) -> str:
-            return f"__RT{self.value_type.mangled_name}__TR"
+        @cached_property
+        def mangled_name_for_ir(self) -> str:
+            return f"__RT{self.value_type.mangled_name_for_ir}__TR"
 
         def compatible_with(self, value: Any) -> bool:
             raise NotImplementedError("ReferenceType.compatible_with")
@@ -111,9 +122,9 @@ class ReferenceType(Type):
         def cast_constant(self, value: int) -> bool:
             raise NotImplementedError("ReferenceType.cast_constant")
 
-        def get_named_ir_ref(self, _: str) -> str:
+        def get_named_ir_type_ref(self, _: str) -> str:
             # Opaque pointer type.
-            return self.get_anonymous_ir_ref()
+            return self.get_anonymous_ir_type_def()
 
     def get_non_reference_type(self) -> Type:
         assert isinstance(self.definition, self.Definition)
@@ -136,8 +147,8 @@ class StructDefinition(TypeDefinition):
                 return index, member.type
         throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
 
-    def get_mangled_name(self) -> str:
-        subtypes = [member.type.mangled_name for member in self._members]
+    def mangled_name_for_ir(self) -> str:
+        subtypes = [member.type.mangled_name_for_ir for member in self._members]
         return f"__ST{''.join(subtypes)}__TS"
 
     def compatible_with(self, value: Any) -> bool:
@@ -146,16 +157,19 @@ class StructDefinition(TypeDefinition):
     def cast_constant(self, value: int) -> bool:
         raise NotImplementedError()
 
-    def get_anonymous_ir_ref(self) -> str:
-        member_ir = [member.type.ir_type for member in self._members]
+    def get_anonymous_ir_type_def(self) -> str:
+        member_ir = [member.type.ir_type_annotation for member in self._members]
         return f"{{{', '.join(member_ir)}}}"
 
-    def get_named_ir_ref(self, name) -> str:
+    def get_named_ir_type_ref(self, name) -> str:
         return f"%struct.{name}"
 
     def get_alignment(self) -> int:
         # TODO: can we be less conservative here
-        return max(member.type.align for member in self._members)
+        return max(member.type.get_alignment() for member in self._members)
+
+    def __repr__(self) -> str:
+        return f"StructDefinition({', '.join(map(repr, self._members))})"
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, TypeDefinition)
@@ -183,7 +197,7 @@ class FunctionSignature:
         if self.is_main() or self.is_foreign():
             return self.name
 
-        arguments_mangle = [arg.mangled_name for arg in self.arguments]
+        arguments_mangle = [arg.mangled_name_for_ir for arg in self.arguments]
 
         # FIXME separator
         arguments_mangle = "".join(arguments_mangle)
@@ -207,7 +221,7 @@ class FunctionSignature:
 
     @cached_property
     def ir_ref(self) -> str:
-        return f"{self.return_type.ir_type} @{self.mangled_name}"
+        return f"{self.return_type.ir_type_annotation} @{self.mangled_name}"
 
 
 def get_builtin_types() -> list[Type]:

@@ -16,7 +16,7 @@ class StackVariable(Variable):
         self.initialized = initialized
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         assert self.ir_reg is not None
 
         return f"%{self.ir_reg}"
@@ -24,7 +24,7 @@ class StackVariable(Variable):
     @cached_property
     def ir_ref(self) -> str:
         # alloca returns a pointer.
-        return f"ptr {self.ir_ref_without_type}"
+        return f"ptr {self.ir_ref_without_type_annotation}"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         assert self.ir_reg is None
@@ -32,7 +32,9 @@ class StackVariable(Variable):
 
         # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
         #            [, align <alignment>] [, addrspace(<num>)]
-        return [f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.align}"]
+        return [
+            f"%{self.ir_reg} = alloca {self.type.ir_type_annotation}, align {self.type.get_alignment()}"
+        ]
 
 
 class Scope(Generatable):
@@ -56,9 +58,10 @@ class Scope(Generatable):
         # Variables can be shadowed in different (nested) scopes, but they
         # must be unique in a single scope.
         assert_else_throw(
-            var.name not in self._variables, RedefinitionError("variable", var.name)
+            var.user_facing_graphene_name not in self._variables,
+            RedefinitionError("variable", var.user_facing_graphene_name),
         )
-        self._variables[var.name] = var
+        self._variables[var.user_facing_graphene_name] = var
 
     def search_for_variable(self, var_name: str) -> Optional[StackVariable]:
         # Search this scope first.
@@ -118,7 +121,7 @@ class IfStatement(Generatable):
         # TODO: it also seems kind of strange that we generate the scope here
         # br i1 <cond>, label <iftrue>, label <iffalse>
         ir_lines += [
-            f"br {conv_condition.ir_ref}, label %{self.scope.start_label}, label %{self.scope.end_label}",
+            f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.scope.start_label}, label %{self.scope.end_label}",
             f"{self.scope.start_label}:",
             *self.scope.generate_ir(reg_gen),
             f"br label %{self.scope.end_label}",  # TODO: support `else` jump
@@ -160,7 +163,7 @@ class ReturnStatement(Generatable):
         ir_lines = self.expand_ir(extra_exprs, reg_gen)
 
         # ret <type> <value>; Return a value from a non-void function
-        ir_lines.append(f"ret {conv_returned_expr.ir_ref}")
+        ir_lines.append(f"ret {conv_returned_expr.ir_ref_with_type_annotation}")
 
         return ir_lines
 
@@ -187,11 +190,11 @@ class VariableAssignment(Generatable):
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir_lines += [
-            f"store {conv_value.ir_ref}, {self.variable.ir_ref}, "
-            f"align {conv_value.type.align}"
+            f"store {conv_value.ir_ref_with_type_annotation}, {self.variable.ir_ref}, "
+            f"align {conv_value.type.get_alignment()}"
         ]
 
         return ir_lines
 
     def __repr__(self) -> str:
-        return f"VariableAssignment({self.variable.name}: {self.variable.type})"
+        return f"VariableAssignment({self.variable.user_facing_graphene_name}: {self.variable.type})"

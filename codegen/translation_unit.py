@@ -51,7 +51,7 @@ class Function:
                 self.top_level_scope.add_generatable(fn_param_var_assignment)
 
     def __repr__(self) -> str:
-        return repr(self._signature)
+        return f"Function({repr(self._signature)})"
 
     @cached_property
     def mangled_name(self) -> str:
@@ -67,9 +67,9 @@ class Function:
         return next(self.scope_id_iter)
 
     def generate_declaration(self) -> list[str]:
-        ir = f"declare dso_local {self._signature.return_type.ir_type} @{self.mangled_name}("
+        ir = f"declare dso_local {self._signature.return_type.ir_type_annotation} @{self.mangled_name}("
 
-        args_ir = [arg.ir_type for arg in self._signature.arguments]
+        args_ir = [arg.ir_type_annotation for arg in self._signature.arguments]
         ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
@@ -84,13 +84,15 @@ class Function:
         for param in self._parameters:
             param.set_reg(next(reg_gen))
 
-        args_ir = ", ".join(map(lambda param: param.ir_ref, self._parameters))
+        args_ir = ", ".join(
+            map(lambda param: param.ir_ref_with_type_annotation, self._parameters)
+        )
 
         def indent_ir(ir: list[str]):
             return [f"  {line}" for line in ir]
 
         return [
-            f"define dso_local {self._signature.return_type.ir_type} @{self.mangled_name}({args_ir}) {{",
+            f"define dso_local {self._signature.return_type.ir_type_annotation} @{self.mangled_name}({args_ir}) {{",
             "begin:",  # Name the implicit basic block
             *indent_ir(self.top_level_scope.generate_ir(reg_gen)),
             "}",
@@ -204,7 +206,7 @@ class Program:
 
         concrete_types_mangle: list[str] = []
         for concrete_type in types:
-            concrete_types_mangle.append(concrete_type.mangled_name)
+            concrete_types_mangle.append(concrete_type.mangled_name_for_ir)
 
         this_mangle = f"{name}{''.join(concrete_types_mangle)}"
         if this_mangle in self._types:
@@ -244,9 +246,10 @@ class Program:
 
     def add_type(self, type: Type) -> None:
         assert_else_throw(
-            type.name not in self._types, RedefinitionError("type", type.name)
+            type.user_facing_typedef_assigned_name not in self._types,
+            RedefinitionError("type", type.user_facing_typedef_assigned_name),
         )
-        self._types[type.name] = type
+        self._types[type.user_facing_typedef_assigned_name] = type
 
     @staticmethod
     def _get_string_identifier(index: int) -> str:
@@ -351,7 +354,7 @@ class Program:
 
         lines.append("")
         for type in self._types.values():
-            lines.extend(type.get_definition_ir())
+            lines.extend(type.get_ir_initial_type_def())
 
         lines.append("")
         for fn in self._function_table.foreign_functions:

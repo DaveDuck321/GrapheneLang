@@ -29,7 +29,7 @@ class ConstantExpression(TypedExpression):
         return f"ConstantExpression({self.type}, {self.value})"
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         return f"{self.value}"
 
     def assert_can_read_from(self) -> None:
@@ -51,7 +51,7 @@ class StringConstant(TypedExpression):
         return f"StringConstant({self.identifier})"
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         return f"@{self.identifier}"
 
     def assert_can_read_from(self) -> None:
@@ -70,25 +70,29 @@ class VariableReference(TypedExpression):
         self.variable = variable
 
     def __repr__(self) -> str:
-        return f"VariableReference({self.variable.name}: {self.variable.type})"
+        return f"VariableReference({self.variable.user_facing_graphene_name}: {self.variable.type})"
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
-        return self.variable.ir_ref_without_type
+    def ir_ref_without_type_annotation(self) -> str:
+        return self.variable.ir_ref_without_type_annotation
 
     def assert_can_read_from(self) -> None:
         # Can ready any initialized variable.
         assert isinstance(self.variable, StackVariable)
         assert_else_throw(
             self.variable.initialized,
-            OperandError(f"Cannot use uninitialized variable '{self.variable.name}'"),
+            OperandError(
+                f"Cannot use uninitialized variable '{self.variable.user_facing_graphene_name}'"
+            ),
         )
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
         assert_else_throw(
             not self.variable.constant,
-            OperandError(f"Cannot modify constant variable '{self.variable.name}'"),
+            OperandError(
+                f"Cannot modify constant variable '{self.variable.user_facing_graphene_name}'"
+            ),
         )
 
 
@@ -100,7 +104,7 @@ class FunctionParameter(TypedExpression):
         self.result_reg = reg
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         assert self.result_reg is not None
         return f"%{self.result_reg}"
 
@@ -132,7 +136,7 @@ class FunctionCallExpression(TypedExpression):
 
         ir = f"%{self.result_reg} = call {self.signature.ir_ref}("
 
-        args_ir = map(lambda arg: arg.ir_ref, self.args)
+        args_ir = map(lambda arg: arg.ir_ref_with_type_annotation, self.args)
         ir += str.join(", ", args_ir)
 
         ir += ")"
@@ -143,7 +147,7 @@ class FunctionCallExpression(TypedExpression):
         return f"FunctionCallExpression({self.signature})"
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def assert_can_read_from(self) -> None:
@@ -166,7 +170,11 @@ class StructMemberAccess(TypedExpression):
         struct_definition = self._struct_type.definition
         assert_else_throw(
             isinstance(struct_definition, StructDefinition),
-            TypeCheckerError("struct member access", self._struct_type.name, "{...}"),
+            TypeCheckerError(
+                "struct member access",
+                self._struct_type.user_facing_typedef_assigned_name,
+                "{...}",
+            ),
         )
         assert isinstance(struct_definition, StructDefinition)
 
@@ -184,7 +192,7 @@ class StructMemberAccess(TypedExpression):
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         return [
-            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type}, {self._lhs.ir_ref}, {index.ir_ref}",
+            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type_annotation}, {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
         ]
 
     def generate_ir_for_value_type(self) -> list[str]:
@@ -192,7 +200,7 @@ class StructMemberAccess(TypedExpression):
 
         # <result> = extractvalue <aggregate type> <val>, <idx>{, <idx>}*
         return [
-            f"%{self.result_reg} = extractvalue {self._lhs.ir_ref}, {self._access_index}"
+            f"%{self.result_reg} = extractvalue {self._lhs.ir_ref_with_type_annotation}, {self._access_index}"
         ]
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -203,11 +211,11 @@ class StructMemberAccess(TypedExpression):
             return self.generate_ir_for_value_type()
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        return f"StructMemberAccess({self._struct_type.name}.{self._member_name}: {self.type})"
+        return f"StructMemberAccess({self._struct_type.user_facing_typedef_assigned_name}.{self._member_name}: {self.type})"
 
     def assert_can_read_from(self) -> None:
         # TODO: can we check if the members are initialized?

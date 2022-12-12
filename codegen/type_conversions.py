@@ -24,12 +24,12 @@ class Dereference(TypedExpression):
         # register.
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         return [
-            f"%{self.result_reg} = load {self.type.ir_type}, "
-            f"{self.ref.ir_ref}, align {self.type.align}"
+            f"%{self.result_reg} = load {self.type.ir_type_annotation}, "
+            f"{self.ref.ir_ref_with_type_annotation}, align {self.type.get_alignment()}"
         ]
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
@@ -48,7 +48,7 @@ def do_implicit_conversion(
     """Attempt to convert expr to type target.
 
     Only the following conversions are allowed:
-    - from refererence type to value type.
+    - from reference type to value type.
     - integer promotion (TODO).
     - float promotion (TODO).
 
@@ -80,7 +80,11 @@ def do_implicit_conversion(
 
     assert_else_throw(
         expr_list[-1].type == target,
-        TypeCheckerError(context, expr.type.name, target.name),
+        TypeCheckerError(
+            context,
+            expr.type.user_facing_typedef_assigned_name,
+            target.user_facing_typedef_assigned_name,
+        ),
     )
 
     return expr_list[-1], expr_list[1:]

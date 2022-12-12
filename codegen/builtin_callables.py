@@ -28,20 +28,20 @@ class AddExpression(TypedExpression):
         conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, IntType())
         conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, IntType())
 
-        ir_lines = self.expand_ir(extra_exprs_lhs, reg_gen)
-        ir_lines += self.expand_ir(extra_exprs_rhs, reg_gen)
+        ir_lines: list[str] = []
+        ir_lines.extend(self.expand_ir(extra_exprs_lhs, reg_gen))
+        ir_lines.extend(self.expand_ir(extra_exprs_rhs, reg_gen))
 
         self.result_reg = next(reg_gen)
 
         # <result> = add nuw nsw <ty> <op1>, <op2>  ; yields ty:result
         ir_lines.append(
-            f"%{self.result_reg} = add nuw nsw {conv_lhs.ir_ref}, {conv_rhs.ir_ref_without_type}"
+            f"%{self.result_reg} = add nuw nsw {conv_lhs.ir_ref_with_type_annotation}, {conv_rhs.ir_ref_without_type_annotation}"
         )
-
         return ir_lines
 
     @cached_property
-    def ir_ref_without_type(self) -> str:
+    def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def assert_can_read_from(self) -> None:
