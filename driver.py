@@ -37,7 +37,14 @@ if __name__ == "__main__":
     # Use clang to finish compile
     if will_emit_binary:
         subprocess.run(
-            [getenv("GRAPHENE_CLANG_CMD", "clang"), "-xir", "-o", binary_output, "-"],
+            [
+                getenv("GRAPHENE_CLANG_CMD", "clang"),
+                "-Wno-override-module",  # Don't complain about the target triple.
+                "-xir",
+                "-o",
+                binary_output,
+                "-",
+            ],
             input=ir,
             text=True,
             encoding="utf-8",
