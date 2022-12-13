@@ -1,11 +1,11 @@
 import json
-from typing import Optional
-import schema
 import subprocess
-
 from argparse import ArgumentParser
 from pathlib import Path
 from subprocess import PIPE
+from typing import Optional
+
+import schema
 
 all_tests = [
     "c_demo/compile_error",

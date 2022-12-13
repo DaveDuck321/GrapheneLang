@@ -1,9 +1,9 @@
+import sys
+import traceback
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 from typing import Iterable, Optional
-import sys
-import traceback
 
 from lark import Lark, Token, Tree
 from lark.exceptions import VisitError
@@ -11,10 +11,10 @@ from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
-    assert_else_throw,
     FailedLookupError,
-    GrapheneError,
     GenericArgumentCountError,
+    GrapheneError,
+    assert_else_throw,
 )
 
 
