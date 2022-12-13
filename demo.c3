@@ -8,7 +8,7 @@ function a : () -> int = {
     return 1;
 };
 
-function b : (b: int) -> int = {
+function b : (b: i64) -> i64 = {
     puts("hello world b");
     return 7;
 };
@@ -24,9 +24,9 @@ function c : () -> int = {
 
 function main: () -> int = {
     a();
-    b(c());
+    let bb: i64 = b(c());
 
-    let x: int = 10;
+    let x: i64 = 10;
     {
         let s: string = "Hello!";
     }
