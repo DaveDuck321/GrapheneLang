@@ -302,8 +302,7 @@ class ExpressionTransformer(Transformer_InPlace):
         assert string[0] == '"' and string[-1] == '"'
         identifier = self._program.add_string(string[1:-1])
 
-        str_const = cg.StringConstant(identifier)
-
+        str_const = cg.ConstantExpression(cg.StringType(), identifier)
         return FlattenedExpression([str_const])
 
     @v_args(inline=True)

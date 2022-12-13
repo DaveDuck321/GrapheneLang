@@ -41,28 +41,6 @@ class ConstantExpression(TypedExpression):
         throw(OperandError(f"Cannot modify the constant {self.value}"))
 
 
-class StringConstant(TypedExpression):
-    def __init__(self, identifier: str) -> None:
-        super().__init__(StringType())
-
-        self.identifier = identifier
-
-    def __repr__(self) -> str:
-        return f"StringConstant({self.identifier})"
-
-    @cached_property
-    def ir_ref_without_type_annotation(self) -> str:
-        return f"@{self.identifier}"
-
-    def assert_can_read_from(self) -> None:
-        # Can always read a string constant.
-        pass
-
-    def assert_can_write_to(self) -> None:
-        # Can never write to a string constant.
-        throw(OperandError("Cannot modify a string constant"))
-
-
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
         super().__init__(ReferenceType(variable.type))

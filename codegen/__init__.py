@@ -8,7 +8,6 @@ from .builtin_types import (
 from .expressions import (
     ConstantExpression,
     StackVariable,
-    StringConstant,
     StructMemberAccess,
     VariableReference,
 )

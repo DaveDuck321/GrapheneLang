@@ -77,9 +77,12 @@ class StringType(Type):
         ir = "ptr"
         inbuilt_name = "string"
 
-        def to_ir_constant(self, value: str) -> str:
+        def to_ir_constant(self, identifier: str) -> str:
             # String constants are handled at the translation unit level.
-            assert False
+            assert identifier.startswith(".str.")
+
+            # Only need to add the @ to denote a global identifier.
+            return f"@{identifier}"
 
     def __init__(self) -> None:
         definition = self.Definition()
