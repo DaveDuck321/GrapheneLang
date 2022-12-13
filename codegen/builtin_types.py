@@ -4,17 +4,20 @@ from typing import Any
 
 from .interfaces import Parameter, Type, TypeDefinition
 from .user_facing_errors import (
-    assert_else_throw,
-    throw,
     FailedLookupError,
     InvalidIntSize,
+    assert_else_throw,
+    throw,
 )
 
 
 class PrimitiveDefinition(TypeDefinition):
-    align = 0
-    ir = ""
-    inbuilt_name = ""
+    def __init__(self, align: int, ir: str, inbuilt_name: str) -> None:
+        super().__init__()
+
+        self.align = align
+        self.ir = ir
+        self.inbuilt_name = inbuilt_name
 
     def get_alignment(self) -> int:
         assert self.align != 0
@@ -45,35 +48,51 @@ class PrimitiveDefinition(TypeDefinition):
                 and self.inbuilt_name == other.inbuilt_name
                 and self.ir == other.ir
             )
+
         return False
 
 
-def get_integral_definition(
-    name: str, size_in_bits: int, is_signed: bool
-) -> PrimitiveDefinition:
-    ir_type = f"i{size_in_bits}"
-    alignment = size_in_bits // 8
+class IntegerDefinition(PrimitiveDefinition):
+    def __init__(
+        self, align: int, ir: str, inbuilt_name: str, is_signed: bool, bits: int
+    ) -> None:
+        super().__init__(align, ir, inbuilt_name)
 
-    class Definition(PrimitiveDefinition):
-        align = alignment
-        ir = ir_type
-        inbuilt_name = name
+        self.is_signed = is_signed
+        self.bits = bits  # TODO: maybe PrimitiveDefinition should have a size property.
 
-        def to_ir_constant(self, value: str) -> str:
-            if is_signed:
-                range_lower = -(2 ** (size_in_bits - 1))
-                range_upper = 2 ** (size_in_bits - 1)
-            else:
-                range_lower = 0
-                range_upper = 2**size_in_bits
+    def to_ir_constant(self, value: str) -> str:
+        if self.is_signed:
+            range_lower = -(2 ** (self.bits - 1))
+            range_upper = 2 ** (self.bits - 1)
+        else:
+            range_lower = 0
+            range_upper = 2**self.bits
 
-            assert_else_throw(
-                range_lower <= int(value) < range_upper,
-                InvalidIntSize(name, int(value), range_lower, range_upper),
-            )
-            return value
+        assert_else_throw(
+            range_lower <= int(value) < range_upper,
+            InvalidIntSize(self.inbuilt_name, int(value), range_lower, range_upper),
+        )
 
-    return Definition()
+        return value
+
+    def __eq__(self, other: Any) -> bool:
+        if not super().__eq__(other):
+            return False
+
+        if isinstance(other, IntegerDefinition):
+            return self.is_signed == other.is_signed and self.bits == other.bits
+
+        return False
+
+    @classmethod
+    def get_integral_definition(
+        cls, name: str, size_in_bits: int, is_signed: bool
+    ) -> "IntegerDefinition":
+        ir_type = f"i{size_in_bits}"
+        alignment = size_in_bits // 8
+
+        return cls(alignment, ir_type, name, is_signed, size_in_bits)
 
 
 class GenericIntType(Type):
@@ -82,7 +101,9 @@ class GenericIntType(Type):
         is_divisible_into_bytes = (size_in_bits % 8) == 0
         assert is_power_of_2 and is_divisible_into_bytes
 
-        definition = get_integral_definition(name, size_in_bits, is_signed)
+        definition = IntegerDefinition.get_integral_definition(
+            name, size_in_bits, is_signed
+        )
         super().__init__(definition, definition.inbuilt_name)
 
 
@@ -93,9 +114,8 @@ class IntType(GenericIntType):
 
 class BoolType(Type):
     class Definition(PrimitiveDefinition):
-        align = 1
-        ir = "i1"
-        inbuilt_name = "bool"
+        def __init__(self) -> None:
+            super().__init__(1, "i1", "bool")
 
         def to_ir_constant(self, value: str) -> str:
             # We happen to be using the same boolean constants as LLVM IR.
@@ -110,9 +130,9 @@ class BoolType(Type):
 
 class StringType(Type):
     class Definition(PrimitiveDefinition):
-        align = 1
-        ir = "ptr"
-        inbuilt_name = "string"
+        def __init__(self) -> None:
+            # FIXME shouldn't this be pointer-aligned?
+            super().__init__(1, "ptr", "string")
 
         def to_ir_constant(self, identifier: str) -> str:
             # String constants are handled at the translation unit level.
@@ -129,11 +149,16 @@ class ReferenceType(Type):
     is_reference = True
 
     class Definition(PrimitiveDefinition):
-        align = 8  # FIXME maybe we shouldn't hardcode pointer alignment.
-        ir = "ptr"
-
         def __init__(self, value_type: Type) -> None:
-            super().__init__()
+            # TODO inbuilt_name
+            inbuilt_name = (
+                f"{value_type.definition.inbuilt_name}&"
+                if isinstance(value_type.definition, PrimitiveDefinition)
+                else "TODO_REF_NAME"
+            )
+
+            # FIXME maybe we shouldn't hardcode pointer alignment.
+            super().__init__(8, "ptr", inbuilt_name)
 
             self.value_type = value_type
 
@@ -145,7 +170,7 @@ class ReferenceType(Type):
             # Opaque pointer type.
             return self.get_anonymous_ir_type_def()
 
-        def to_ir_constant(self, value: str) -> str:
+        def to_ir_constant(self, _: str) -> str:
             # We shouldn't be able to initialize a reference with a constant.
             assert False
 
