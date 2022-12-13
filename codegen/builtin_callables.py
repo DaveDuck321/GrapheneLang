@@ -36,7 +36,8 @@ class AddExpression(TypedExpression):
 
         # <result> = add nuw nsw <ty> <op1>, <op2>  ; yields ty:result
         ir_lines.append(
-            f"%{self.result_reg} = add nuw nsw {conv_lhs.ir_ref_with_type_annotation}, {conv_rhs.ir_ref_without_type_annotation}"
+            f"%{self.result_reg} = add nuw nsw {conv_lhs.ir_ref_with_type_annotation},"
+            f" {conv_rhs.ir_ref_without_type_annotation}"
         )
         return ir_lines
 

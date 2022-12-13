@@ -77,8 +77,8 @@ class TypeTransformer(Transformer):
 
         if type_map is not None:
             return self._program.lookup_generic_type(name, type_map.children)  # type: ignore
-        else:
-            return self._program.lookup_type(name)
+
+        return self._program.lookup_type(name)
 
     @v_args(inline=True)
     def ref_type(self, value_type: cg.Type) -> cg.Type:
@@ -100,10 +100,17 @@ class TypeTransformer(Transformer):
 
     @classmethod
     def parse(
-        cls, program: cg.Program, tree: Tree, type_map: dict[str, cg.Type] = {}
+        cls,
+        program: cg.Program,
+        tree: Tree,
+        type_map: Optional[dict[str, cg.Type]] = None,
     ) -> cg.Type:
+        if type_map is None:
+            type_map = {}
+
         result = cls(program, type_map).transform(tree)
         assert isinstance(result, cg.Type)
+
         return result
 
 
@@ -146,8 +153,8 @@ class ParseTypeDefinitions(Interpreter):
     ) -> None:
         if generic_tree is not None:
             return self._typedef_generic(type_name.value, generic_tree, rhs_tree)
-        else:
-            return self._typedef(type_name.value, rhs_tree)
+
+        return self._typedef(type_name.value, rhs_tree)
 
 
 class ParseFunctionSignatures(Interpreter):
@@ -168,19 +175,19 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        fn = self._build_function(name_tree, args_tree, return_type_tree, False)
-        self._program.add_function(fn)
+        func = self._build_function(name_tree, args_tree, return_type_tree, False)
+        self._program.add_function(func)
 
         # Save the body to parse later (TODO: maybe forward declarations should be possible?)
-        self._function_body_trees.append((fn, body_tree))
+        self._function_body_trees.append((func, body_tree))
 
     @v_args(inline=True)
     def operator_function(
         self, op_tree: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ):
-        fn = self._build_function(op_tree, args_tree, return_type_tree, False)
-        self._program.add_function(fn)
-        self._function_body_trees.append((fn, body_tree))
+        func = self._build_function(op_tree, args_tree, return_type_tree, False)
+        self._program.add_function(func)
+        self._function_body_trees.append((func, body_tree))
 
     @v_args(inline=True)
     def foreign_function(
@@ -189,8 +196,8 @@ class ParseFunctionSignatures(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
     ) -> None:
-        fn = self._build_function(name_tree, args_tree, return_type_tree, True)
-        self._program.add_function(fn)
+        func = self._build_function(name_tree, args_tree, return_type_tree, True)
+        self._program.add_function(func)
 
     def _build_function(
         self,
@@ -479,6 +486,6 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
                 file=sys.stderr,
             )
             print(f"   {e.message}", file=sys.stderr)
-            exit(1)
+            sys.exit(1)
 
     return "\n".join(program.generate_ir())

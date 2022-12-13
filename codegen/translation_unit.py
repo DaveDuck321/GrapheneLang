@@ -67,7 +67,10 @@ class Function:
         return next(self.scope_id_iter)
 
     def generate_declaration(self) -> list[str]:
-        ir = f"declare dso_local {self._signature.return_type.ir_type_annotation} @{self.mangled_name}("
+        ir = (
+            f"declare dso_local {self._signature.return_type.ir_type_annotation}"
+            f" @{self.mangled_name}("
+        )
 
         args_ir = [arg.ir_type_annotation for arg in self._signature.arguments]
         ir += str.join(", ", args_ir)
@@ -91,7 +94,10 @@ class Function:
             return map(lambda line: line if line.endswith(":") else f"  {line}", ir)
 
         return [
-            f"define dso_local {self._signature.return_type.ir_type_annotation} @{self.mangled_name}({args_ir}) {{",
+            (
+                f"define dso_local {self._signature.return_type.ir_type_annotation}"
+                f" @{self.mangled_name}({args_ir}) {{"
+            ),
             "begin:",  # Name the implicit basic block
             *indent_ir(self.top_level_scope.generate_ir(reg_gen)),
             "}",
@@ -134,7 +140,7 @@ class FunctionSymbolTable:
                 ),
             )
             assert_else_throw(
-                target._signature.arguments != fn_to_add_signature.arguments,
+                target.get_signature().arguments != fn_to_add_signature.arguments,
                 RedefinitionError("function", get_printable_sig(fn_to_add_signature)),
             )
 
@@ -205,8 +211,8 @@ class Program:
 
         self._has_main: bool = False
 
-        for type in get_builtin_types():
-            self.add_type(type)
+        for builtin_type in get_builtin_types():
+            self.add_type(builtin_type)
 
     def lookup_generic_type(self, name: str, types: list[Type]) -> Type:
         assert_else_throw(
@@ -368,7 +374,8 @@ class Program:
         lines.append("")
         for identifier, encoded_string, encoded_length in self._strings.values():
             lines.append(
-                f'{identifier} = private unnamed_addr constant [{encoded_length} x i8] c"{encoded_string}"'
+                f"{identifier} = private unnamed_addr constant"
+                f' [{encoded_length} x i8] c"{encoded_string}"'
             )
 
         lines.append("")
@@ -376,12 +383,12 @@ class Program:
             lines.extend(type.get_ir_initial_type_def())
 
         lines.append("")
-        for fn in self._function_table.foreign_functions:
-            lines.extend(fn.generate_ir())
+        for func in self._function_table.foreign_functions:
+            lines.extend(func.generate_ir())
 
         lines.append("")
-        for fn in self._function_table.graphene_functions:
-            lines.extend(fn.generate_ir())
+        for func in self._function_table.graphene_functions:
+            lines.extend(func.generate_ir())
             lines.append("")
 
         return lines

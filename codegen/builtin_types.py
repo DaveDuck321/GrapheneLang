@@ -23,6 +23,7 @@ class PrimitiveDefinition(TypeDefinition):
         assert self.align != 0
         return self.align
 
+    @cached_property
     def mangled_name_for_ir(self) -> str:
         # Assert not reached:
         #   it should be impossible to create an anonymous primitive type
@@ -119,7 +120,7 @@ class BoolType(Type):
 
         def to_ir_constant(self, value: str) -> str:
             # We happen to be using the same boolean constants as LLVM IR.
-            assert value == "true" or value == "false"
+            assert value in ("true", "false")
 
             return value
 
@@ -134,11 +135,12 @@ class StringType(Type):
             # FIXME shouldn't this be pointer-aligned?
             super().__init__(1, "ptr", "string")
 
-        def to_ir_constant(self, identifier: str) -> str:
-            # String constants are handled at the translation unit level.
-            assert identifier.startswith("@.str.")
+        def to_ir_constant(self, value: str) -> str:
+            # String constants are handled at the translation unit level. We
+            # should already have an identifier.
+            assert value.startswith("@.str.")
 
-            return identifier
+            return value
 
     def __init__(self) -> None:
         definition = self.Definition()
@@ -195,6 +197,7 @@ class StructDefinition(TypeDefinition):
                 return index, member.type
         throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
 
+    @cached_property
     def mangled_name_for_ir(self) -> str:
         subtypes = [member.type.mangled_name_for_ir for member in self._members]
         return f"__ST{''.join(subtypes)}__TS"
@@ -260,10 +263,13 @@ class FunctionSignature:
 
     def __repr__(self) -> str:
         readable_arg_names = ", ".join(map(repr, self.arguments))
+
         if self.is_foreign():
             return f"foreign {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
-        else:
-            return f"function {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
+
+        return (
+            f"function {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
+        )
 
     @cached_property
     def ir_ref(self) -> str:

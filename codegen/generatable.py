@@ -9,9 +9,9 @@ from .user_facing_errors import RedefinitionError, assert_else_throw
 
 class StackVariable(Variable):
     def __init__(
-        self, name: str, type: Type, constant: bool, initialized: bool
+        self, name: str, var_type: Type, constant: bool, initialized: bool
     ) -> None:
-        super().__init__(name, type, constant)
+        super().__init__(name, var_type, constant)
 
         self.initialized = initialized
 
@@ -33,16 +33,17 @@ class StackVariable(Variable):
         # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
         #            [, align <alignment>] [, addrspace(<num>)]
         return [
-            f"%{self.ir_reg} = alloca {self.type.ir_type_annotation}, align {self.type.get_alignment()}"
+            f"%{self.ir_reg} = alloca {self.type.ir_type_annotation},"
+            f" align {self.type.get_alignment()}"
         ]
 
 
 class Scope(Generatable):
-    def __init__(self, id: int, outer_scope: Optional["Scope"] = None) -> None:
+    def __init__(self, scope_id: int, outer_scope: Optional["Scope"] = None) -> None:
         super().__init__()
 
-        assert id >= 0
-        self._id = id
+        assert scope_id >= 0
+        self._id = scope_id
 
         self._outer_scope: Optional[Scope] = outer_scope
         self._variables: dict[str, StackVariable] = {}
@@ -121,7 +122,10 @@ class IfStatement(Generatable):
         # TODO: it also seems kind of strange that we generate the scope here
         # br i1 <cond>, label <iftrue>, label <iffalse>
         ir_lines += [
-            f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.scope.start_label}, label %{self.scope.end_label}",
+            (
+                f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.scope.start_label},"
+                f" label %{self.scope.end_label}"
+            ),
             f"{self.scope.start_label}:",
             *self.scope.generate_ir(reg_gen),
             f"br label %{self.scope.end_label}",  # TODO: support `else` jump
@@ -197,4 +201,7 @@ class VariableAssignment(Generatable):
         return ir_lines
 
     def __repr__(self) -> str:
-        return f"VariableAssignment({self.variable.user_facing_graphene_name}: {self.variable.type})"
+        return (
+            f"VariableAssignment({self.variable.user_facing_graphene_name}:"
+            f" {self.variable.type})"
+        )

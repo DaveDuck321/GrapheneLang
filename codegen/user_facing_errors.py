@@ -32,9 +32,8 @@ class OverloadResolutionError(GrapheneError):
 
 
 class OperandError(GrapheneError):
-    def __init__(self, message: str) -> None:
-        # TODO error message.
-        super().__init__(message)
+    # TODO error message.
+    pass
 
 
 class InvalidEscapeSequence(GrapheneError):
@@ -52,7 +51,8 @@ class InvalidIntSize(GrapheneError):
         expected_upper: int,
     ) -> None:
         super().__init__(
-            f"Error: {type_name} cannot store value {actual_value}, permitted range [{expected_lower}, {expected_upper})"
+            f"Error: {type_name} cannot store value {actual_value}, permitted range"
+            f" [{expected_lower}, {expected_upper})"
         )
 
 

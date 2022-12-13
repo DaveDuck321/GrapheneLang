@@ -79,10 +79,10 @@ def validate_command_output_with_harness(
         raise TestFailure("status", status, stdout, stderr)
 
     if expected_output.get("stdout", stdout) != stdout:
-        raise TestFailure(f"stdout", status, stdout, stderr)
+        raise TestFailure("stdout", status, stdout, stderr)
 
     if expected_output.get("stderr", stderr) != stderr:
-        raise TestFailure(f"stderr", status, stdout, stderr)
+        raise TestFailure("stderr", status, stdout, stderr)
 
     return True
 

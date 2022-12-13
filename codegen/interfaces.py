@@ -66,8 +66,8 @@ class Type:
     def ir_type_annotation(self) -> str:
         if self.is_anonymous:
             return self.definition.get_anonymous_ir_type_def()
-        else:
-            return self.definition.get_named_ir_type_ref(self.mangled_name_for_ir)
+
+        return self.definition.get_named_ir_type_ref(self.mangled_name_for_ir)
 
     def get_ir_initial_type_def(self) -> list[str]:
         assert not self.is_anonymous
@@ -82,8 +82,8 @@ class Type:
     def mangled_name_for_ir(self) -> str:
         if self.is_anonymous:
             return f"__T__anon_{self.definition.mangled_name_for_ir}"
-        else:
-            return f"__T_{self.user_facing_typedef_assigned_name}"
+
+        return f"__T_{self.user_facing_typedef_assigned_name}"
 
 
 @dataclass
@@ -99,11 +99,11 @@ class Parameter:
 class Variable(ABC):
     # TODO much of this interface is common with TypedExpression. Maybe they
     # should have a shared base class.
-    def __init__(self, name: str, type: Type, constant: bool) -> None:
+    def __init__(self, name: str, var_type: Type, constant: bool) -> None:
         super().__init__()
 
         self.user_facing_graphene_name = name
-        self.type = type
+        self.type = var_type
         self.constant = constant
 
         self.ir_reg: Optional[int] = None
@@ -124,7 +124,7 @@ class Variable(ABC):
 
 
 class Generatable(ABC):
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, _: Iterator[int]) -> list[str]:
         return []
 
     @abstractmethod
@@ -144,10 +144,10 @@ class Generatable(ABC):
 
 
 class TypedExpression(Generatable):
-    def __init__(self, type: Type) -> None:
+    def __init__(self, expr_type: Type) -> None:
         super().__init__()
 
-        self.type = type
+        self.type = expr_type
         self.result_reg: Optional[int] = None
 
     @cached_property

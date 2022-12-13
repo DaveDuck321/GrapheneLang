@@ -1,18 +1,18 @@
 from functools import cached_property
-from typing import Any, Iterator
+from typing import Iterator
 
 from .builtin_types import FunctionSignature, IntType, ReferenceType, StructDefinition
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
-from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
+from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
 
 
 class ConstantExpression(TypedExpression):
-    def __init__(self, type: Type, value: str) -> None:
-        super().__init__(type)
+    def __init__(self, cst_type: Type, value: str) -> None:
+        super().__init__(cst_type)
 
-        self.value = type.definition.to_ir_constant(value)
+        self.value = cst_type.definition.to_ir_constant(value)
 
     def __repr__(self) -> str:
         return f"ConstantExpression({self.type}, {self.value})"
@@ -169,7 +169,8 @@ class StructMemberAccess(TypedExpression):
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         return [
-            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type_annotation}, {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
+            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type_annotation},"
+            f" {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}"
         ]
 
     def generate_ir_for_value_type(self) -> list[str]:
@@ -177,22 +178,27 @@ class StructMemberAccess(TypedExpression):
 
         # <result> = extractvalue <aggregate type> <val>, <idx>{, <idx>}*
         return [
-            f"%{self.result_reg} = extractvalue {self._lhs.ir_ref_with_type_annotation}, {self._access_index}"
+            f"%{self.result_reg} = extractvalue {self._lhs.ir_ref_with_type_annotation},"
+            f" {self._access_index}"
         ]
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         self.result_reg = next(reg_gen)
+
         if self._source_struct_is_reference:
             return self.generate_ir_for_reference_type()
-        else:
-            return self.generate_ir_for_value_type()
+
+        return self.generate_ir_for_value_type()
 
     @cached_property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        return f"StructMemberAccess({self._struct_type.user_facing_typedef_assigned_name}.{self._member_name}: {self.type})"
+        return (
+            f"StructMemberAccess({self._struct_type.user_facing_typedef_assigned_name}"
+            f".{self._member_name}: {self.type})"
+        )
 
     def assert_can_read_from(self) -> None:
         # TODO: can we check if the members are initialized?
@@ -202,7 +208,7 @@ class StructMemberAccess(TypedExpression):
         # Can write to any non-constant variable.
         assert_else_throw(
             not self._source_struct_is_reference,
-            OperandError(f"Cannot modify temporary struct"),
+            OperandError("Cannot modify temporary struct"),
         )
         if self._source_struct_is_reference:
             # TODO: check if the reference is const
