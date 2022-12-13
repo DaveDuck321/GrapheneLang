@@ -44,11 +44,7 @@ class PrimitiveDefinition(TypeDefinition):
         assert isinstance(other, TypeDefinition)
         if isinstance(other, PrimitiveDefinition):
             # TODO: I'm not sure this is the correct approach
-            return (
-                self.align == other.align
-                and self.inbuilt_name == other.inbuilt_name
-                and self.ir == other.ir
-            )
+            return self.align == other.align and self.ir == other.ir
 
         return False
 
