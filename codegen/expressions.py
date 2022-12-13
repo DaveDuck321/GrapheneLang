@@ -1,22 +1,10 @@
 from functools import cached_property
 from typing import Any, Iterator
 
-from .user_facing_errors import (
-    assert_else_throw,
-    throw,
-    OperandError,
-    TypeCheckerError,
-)
-
-from .builtin_types import (
-    FunctionSignature,
-    IntType,
-    ReferenceType,
-    StringType,
-    StructDefinition,
-)
+from .builtin_types import FunctionSignature, IntType, ReferenceType, StructDefinition
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
+from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
 
 
 class ConstantExpression(TypedExpression):
