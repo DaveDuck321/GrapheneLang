@@ -120,8 +120,7 @@ class BoolType(Type):
 class StringType(Type):
     class Definition(PrimitiveDefinition):
         def __init__(self) -> None:
-            # FIXME shouldn't this be pointer-aligned?
-            super().__init__(1, "ptr", "string")
+            super().__init__(8, "ptr", "string")
 
         def to_ir_constant(self, value: str) -> str:
             # String constants are handled at the translation unit level. We
