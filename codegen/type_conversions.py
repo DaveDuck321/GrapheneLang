@@ -8,9 +8,8 @@ from .user_facing_errors import TypeCheckerError, assert_else_throw
 
 class Dereference(TypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        assert isinstance(ref.type.definition, ReferenceType.Definition)
+        assert ref.type.is_reference
 
-        # TODO need a nicer interface.
         super().__init__(ref.type.get_non_reference_type())
 
         self.ref = ref
