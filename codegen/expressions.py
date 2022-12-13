@@ -5,6 +5,7 @@ from .builtin_types import FunctionSignature, IntType, ReferenceType, StructDefi
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
+from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 
 
 class ConstantExpression(TypedExpression):
@@ -89,8 +90,11 @@ class FunctionCallExpression(TypedExpression):
     ) -> None:
         super().__init__(signature.return_type)
 
-        for arg in args:
+        for arg, arg_type in zip(args, signature.arguments, strict=True):
             arg.assert_can_read_from()
+            # We do check this during overload resolution, but you can never be
+            # too careful.
+            assert_is_implicitly_convertible(arg, arg_type, "function call")
 
         self.signature = signature
         self.args = args
@@ -98,16 +102,27 @@ class FunctionCallExpression(TypedExpression):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#call-instruction
 
+        ir_lines: list[str] = []
+        conv_args: list[TypedExpression] = []
+
+        for arg, arg_type in zip(self.args, self.signature.arguments, strict=True):
+            conv_arg, extra_exprs = do_implicit_conversion(arg, arg_type)
+
+            ir_lines += self.expand_ir(extra_exprs, reg_gen)
+            conv_args.append(conv_arg)
+
         self.result_reg = next(reg_gen)
 
-        ir = f"%{self.result_reg} = call {self.signature.ir_ref}("
+        call_ir = f"%{self.result_reg} = call {self.signature.ir_ref}("
 
-        args_ir = map(lambda arg: arg.ir_ref_with_type_annotation, self.args)
-        ir += str.join(", ", args_ir)
+        args_ir = map(lambda arg: arg.ir_ref_with_type_annotation, conv_args)
+        call_ir += str.join(", ", args_ir)
 
-        ir += ")"
+        call_ir += ")"
 
-        return [ir]
+        ir_lines.append(call_ir)
+
+        return ir_lines
 
     def __repr__(self) -> str:
         return f"FunctionCallExpression({self.signature})"
