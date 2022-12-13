@@ -79,10 +79,9 @@ class StringType(Type):
 
         def to_ir_constant(self, identifier: str) -> str:
             # String constants are handled at the translation unit level.
-            assert identifier.startswith(".str.")
+            assert identifier.startswith("@.str.")
 
-            # Only need to add the @ to denote a global identifier.
-            return f"@{identifier}"
+            return identifier
 
     def __init__(self) -> None:
         definition = self.Definition()

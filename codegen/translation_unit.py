@@ -265,7 +265,7 @@ class Program:
     @staticmethod
     def _get_string_identifier(index: int) -> str:
         assert index >= 0
-        return f".str.{index}"
+        return f"@.str.{index}"
 
     def add_string(self, string: str) -> str:
         # Deduplicate string constants.
@@ -369,7 +369,7 @@ class Program:
         lines.append("")
         for identifier, encoded_string, encoded_length in self._strings.values():
             lines.append(
-                f'@{identifier} = private unnamed_addr constant [{encoded_length} x i8] c"{encoded_string}"'
+                f'{identifier} = private unnamed_addr constant [{encoded_length} x i8] c"{encoded_string}"'
             )
 
         lines.append("")
