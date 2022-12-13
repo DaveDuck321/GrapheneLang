@@ -37,6 +37,10 @@ class PrimitiveDefinition(TypeDefinition):
     def get_named_ir_type_ref(self, name) -> str:
         return f"%alias.{name}"
 
+    @cached_property
+    def user_facing_name_for_anonymous_type(self) -> str:
+        assert False
+
     def __repr__(self) -> str:
         return f"Typedef({self.inbuilt_name})"
 
@@ -159,6 +163,10 @@ class ReferenceType(Type):
             # We shouldn't be able to initialize a reference with a constant.
             assert False
 
+        @cached_property
+        def user_facing_name_for_anonymous_type(self) -> str:
+            return f"{self.value_type.user_facing_typedef_assigned_name}&"
+
     def get_non_reference_type(self) -> Type:
         assert isinstance(self.definition, self.Definition)
         return self.definition.value_type
@@ -199,6 +207,13 @@ class StructDefinition(TypeDefinition):
     def get_alignment(self) -> int:
         # TODO: can we be less conservative here
         return max(member.type.get_alignment() for member in self._members)
+
+    @cached_property
+    def user_facing_name_for_anonymous_type(self) -> str:
+        subtypes = [
+            member.type.user_facing_typedef_assigned_name for member in self._members
+        ]
+        return f"{{{', '.join(subtypes)}}}"
 
     def __repr__(self) -> str:
         return f"StructDefinition({', '.join(map(repr, self._members))})"
