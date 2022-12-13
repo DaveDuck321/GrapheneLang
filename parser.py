@@ -75,10 +75,8 @@ class TypeTransformer(Transformer):
         if name in self._generic_mapping:
             return self._generic_mapping[name]
 
-        if type_map is not None:
-            return self._program.lookup_generic_type(name, type_map.children)  # type: ignore
-
-        return self._program.lookup_type(name)
+        generic_args: list[cg.Type] = [] if type_map is None else type_map.children  # type: ignore
+        return self._program.lookup_type(name, generic_args)
 
     @v_args(inline=True)
     def ref_type(self, value_type: cg.Type) -> cg.Type:
@@ -120,20 +118,13 @@ class ParseTypeDefinitions(Interpreter):
 
         self._program = program
 
-    def _typedef(self, type_name: str, rhs_tree: Tree) -> None:
-        rhs_type = TypeTransformer.parse(self._program, rhs_tree)
-        new_type = cg.Type(rhs_type.definition, type_name)
-        self._program.add_type(new_type)
-
-    def _typedef_generic(
-        self, type_name: str, generic_tree: Tree, rhs_tree: Tree
-    ) -> None:
+    def _typedef(self, type_name: str, generics: list[Token], rhs_tree: Tree) -> None:
         available_generics: list[str] = []
-        for generic_name in generic_tree.children:
+        for generic_name in generics:
             assert isinstance(generic_name, Token)
             available_generics.append(generic_name.value)
 
-        def parse_generic(name: str, concrete_types: list[cg.Type]) -> cg.Type:
+        def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
             assert_else_throw(
                 len(concrete_types) == len(available_generics),
                 GenericArgumentCountError(
@@ -143,18 +134,16 @@ class ParseTypeDefinitions(Interpreter):
 
             mapping = dict(zip(available_generics, concrete_types))
             rhs = TypeTransformer.parse(self._program, rhs_tree, mapping)
-            return cg.Type(rhs.definition, name)
+            return cg.Type(rhs.definition, name_prefix, concrete_types)
 
-        self._program.add_generic_type(type_name, parse_generic)
+        self._program.add_type(type_name, type_parser)
 
     @v_args(inline=True)
     def typedef(
         self, type_name: Token, generic_tree: Optional[Tree], rhs_tree: Tree
     ) -> None:
-        if generic_tree is not None:
-            return self._typedef_generic(type_name.value, generic_tree, rhs_tree)
-
-        return self._typedef(type_name.value, rhs_tree)
+        generics = [] if generic_tree is None else generic_tree.children
+        return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore
 
 
 class ParseFunctionSignatures(Interpreter):

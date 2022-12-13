@@ -204,39 +204,27 @@ class Program:
 
         self._function_table = FunctionSymbolTable()
         self._types: dict[str, Type] = {}
-        self._generic_type_initializers: dict[
-            str, Callable[[str, list[Type]], Type]
-        ] = {}
+        self._type_initializers: dict[str, Callable[[str, list[Type]], Type]] = {}
         self._strings: dict[str, StringInfo] = {}
 
         self._has_main: bool = False
 
         for builtin_type in get_builtin_types():
-            self.add_type(builtin_type)
+            self._types[builtin_type.mangled_name_for_ir] = builtin_type
 
-    def lookup_generic_type(self, name: str, types: list[Type]) -> Type:
-        assert_else_throw(
-            name in self._generic_type_initializers,
-            FailedLookupError("generic type", f"typedef {name}[...] : ..."),
-        )
-
-        concrete_types_mangle: list[str] = []
-        for concrete_type in types:
-            concrete_types_mangle.append(concrete_type.mangled_name_for_ir)
-
-        this_mangle = f"{name}{''.join(concrete_types_mangle)}"
+    def lookup_type(self, name_prefix: str, generic_args: list[Type]) -> Type:
+        this_mangle = Type.mangle_generic_type(name_prefix, generic_args)
         if this_mangle in self._types:
             return self._types[this_mangle]
 
-        this_type = self._generic_type_initializers[name](this_mangle, types)
+        assert_else_throw(
+            name_prefix in self._type_initializers,
+            FailedLookupError("type", f"typedef {name_prefix}[...] : ..."),
+        )
+
+        this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
         self._types[this_mangle] = this_type
         return this_type
-
-    def lookup_type(self, name: str) -> Type:
-        assert_else_throw(
-            name in self._types, FailedLookupError("type", f"typedef {name} : ...")
-        )
-        return self._types[name]
 
     def lookup_call_expression(
         self, fn_name: str, fn_args: list[TypedExpression]
@@ -251,21 +239,18 @@ class Program:
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
 
-    def add_generic_type(
-        self, type_name: str, parse_fn: Callable[[str, list[Type]], Type]
+    def add_type(
+        self, type_prefix: str, parse_fn: Callable[[str, list[Type]], Type]
     ) -> None:
         assert_else_throw(
-            type_name not in self._generic_type_initializers,
-            RedefinitionError("generic type", type_name),
+            type_prefix not in self._type_initializers,
+            RedefinitionError("type", type_prefix),
         )
-        self._generic_type_initializers[type_name] = parse_fn
-
-    def add_type(self, type: Type) -> None:
         assert_else_throw(
-            type.user_facing_typedef_assigned_name not in self._types,
-            RedefinitionError("type", type.user_facing_typedef_assigned_name),
+            Type.mangle_generic_type(type_prefix, []) not in self._type_initializers,
+            RedefinitionError("builtin type", type_prefix),
         )
-        self._types[type.user_facing_typedef_assigned_name] = type
+        self._type_initializers[type_prefix] = parse_fn
 
     @staticmethod
     def _get_string_identifier(index: int) -> str:
