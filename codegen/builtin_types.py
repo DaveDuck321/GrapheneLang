@@ -54,13 +54,12 @@ class PrimitiveDefinition(TypeDefinition):
 
 
 class IntegerDefinition(PrimitiveDefinition):
-    def __init__(
-        self, align: int, ir: str, inbuilt_name: str, is_signed: bool, bits: int
-    ) -> None:
-        super().__init__(align, ir, inbuilt_name)
+    def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
+        super().__init__(size_in_bits // 8, f"i{size_in_bits}", name)
 
         self.is_signed = is_signed
-        self.bits = bits  # TODO: maybe PrimitiveDefinition should have a size property.
+        # TODO: maybe PrimitiveDefinition should have a size property.
+        self.bits = size_in_bits
 
     def to_ir_constant(self, value: str) -> str:
         if self.is_signed:
@@ -86,15 +85,6 @@ class IntegerDefinition(PrimitiveDefinition):
 
         return False
 
-    @classmethod
-    def get_integral_definition(
-        cls, name: str, size_in_bits: int, is_signed: bool
-    ) -> "IntegerDefinition":
-        ir_type = f"i{size_in_bits}"
-        alignment = size_in_bits // 8
-
-        return cls(alignment, ir_type, name, is_signed, size_in_bits)
-
 
 class GenericIntType(Type):
     def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
@@ -102,9 +92,7 @@ class GenericIntType(Type):
         is_divisible_into_bytes = (size_in_bits % 8) == 0
         assert is_power_of_2 and is_divisible_into_bytes
 
-        definition = IntegerDefinition.get_integral_definition(
-            name, size_in_bits, is_signed
-        )
+        definition = IntegerDefinition(name, size_in_bits, is_signed)
         super().__init__(definition, definition.inbuilt_name)
 
 
