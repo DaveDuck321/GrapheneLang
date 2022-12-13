@@ -3,7 +3,12 @@ from functools import cached_property
 from typing import Any
 
 from .interfaces import Parameter, Type, TypeDefinition
-from .user_facing_errors import FailedLookupError, throw
+from .user_facing_errors import (
+    assert_else_throw,
+    throw,
+    FailedLookupError,
+    InvalidIntSize,
+)
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -33,25 +38,57 @@ class PrimitiveDefinition(TypeDefinition):
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, TypeDefinition)
-        return isinstance(other, type(self))
+        if isinstance(other, PrimitiveDefinition):
+            # TODO: I'm not sure this is the correct approach
+            return (
+                self.align == other.align
+                and self.inbuilt_name == other.inbuilt_name
+                and self.ir == other.ir
+            )
+        return False
 
 
-class IntType(Type):
+def get_integral_definition(
+    name: str, size_in_bits: int, is_signed: bool
+) -> PrimitiveDefinition:
+    ir_type = f"i{size_in_bits}"
+    alignment = size_in_bits // 8
+
     class Definition(PrimitiveDefinition):
-        align = 4
-        ir = "i32"
-        inbuilt_name = "int"
-
-        def __init__(self) -> None:
-            super().__init__()
+        align = alignment
+        ir = ir_type
+        inbuilt_name = name
 
         def to_ir_constant(self, value: str) -> str:
-            # TODO verify that value fits in an i32.
+            if is_signed:
+                range_lower = -(2 ** (size_in_bits - 1))
+                range_upper = 2 ** (size_in_bits - 1)
+            else:
+                range_lower = 0
+                range_upper = 2**size_in_bits
+
+            assert_else_throw(
+                range_lower <= int(value) < range_upper,
+                InvalidIntSize(name, int(value), range_lower, range_upper),
+            )
             return value
 
-    def __init__(self) -> None:
-        definition = self.Definition()
+    return Definition()
+
+
+class GenericIntType(Type):
+    def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
+        is_power_of_2 = ((size_in_bits - 1) & size_in_bits) == 0
+        is_divisible_into_bytes = (size_in_bits % 8) == 0
+        assert is_power_of_2 and is_divisible_into_bytes
+
+        definition = get_integral_definition(name, size_in_bits, is_signed)
         super().__init__(definition, definition.inbuilt_name)
+
+
+class IntType(GenericIntType):
+    def __init__(self) -> None:
+        super().__init__("int", 32, True)
 
 
 class BoolType(Type):
@@ -209,4 +246,10 @@ class FunctionSignature:
 
 
 def get_builtin_types() -> list[Type]:
-    return [IntType(), StringType(), BoolType()]
+    # Generate sized int types
+    sized_int_types = []
+    for size in (8, 16, 32, 64, 128):
+        sized_int_types.append(GenericIntType(f"i{size}", size, True))
+        sized_int_types.append(GenericIntType(f"u{size}", size, False))
+
+    return sized_int_types + [IntType(), StringType(), BoolType()]
