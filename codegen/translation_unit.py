@@ -78,7 +78,6 @@ class Function:
         return [ir]
 
     def generate_definition(self) -> list[str]:
-        lines: list[str] = []
         reg_gen = count(0)  # First register is %0
 
         for param in self._parameters:
