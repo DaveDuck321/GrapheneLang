@@ -6,11 +6,7 @@ from typing import Any, Iterable, Iterator, Optional
 
 class TypeDefinition(ABC):
     @abstractmethod
-    def compatible_with(self, value: Any) -> bool:
-        pass
-
-    @abstractmethod
-    def cast_constant(self, value: int) -> bool:
+    def to_ir_constant(self, value: str) -> str:
         pass
 
     @abstractmethod

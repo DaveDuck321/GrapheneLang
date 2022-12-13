@@ -241,12 +241,12 @@ class ExpressionTransformer(Transformer_InPlace):
         self._scope = scope
 
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.IntType(), int(value))
+        const_expr = cg.ConstantExpression(cg.IntType(), value)
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)
     def bool_constant(self, value: str) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.BoolType(), value == "true")
+        const_expr = cg.ConstantExpression(cg.BoolType(), value)
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)

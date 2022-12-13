@@ -20,17 +20,17 @@ from .interfaces import Type, TypedExpression, Variable
 
 
 class ConstantExpression(TypedExpression):
-    def __init__(self, type: Type, value: Any) -> None:
+    def __init__(self, type: Type, value: str) -> None:
         super().__init__(type)
 
-        self.value = type.definition.cast_constant(value)
+        self.value = type.definition.to_ir_constant(value)
 
     def __repr__(self) -> str:
         return f"ConstantExpression({self.type}, {self.value})"
 
     @cached_property
     def ir_ref_without_type_annotation(self) -> str:
-        return f"{self.value}"
+        return self.value
 
     def assert_can_read_from(self) -> None:
         # Can always read the result of a constant expression.
@@ -188,7 +188,7 @@ class StructMemberAccess(TypedExpression):
 
     def generate_ir_for_reference_type(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
-        index = ConstantExpression(IntType(), self._access_index)
+        index = ConstantExpression(IntType(), str(self._access_index))
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         return [

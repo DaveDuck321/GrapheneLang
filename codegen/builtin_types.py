@@ -45,13 +45,9 @@ class IntType(Type):
         def __init__(self) -> None:
             super().__init__()
 
-        def compatible_with(self, value: Any) -> bool:
-            # TODO check if value fits inside an i32
-            return isinstance(value, int)
-
-        def cast_constant(self, value: int) -> int:
-            assert self.compatible_with(value)
-            return int(value)
+        def to_ir_constant(self, value: str) -> str:
+            # TODO verify that value fits in an i32.
+            return value
 
     def __init__(self) -> None:
         definition = self.Definition()
@@ -64,15 +60,11 @@ class BoolType(Type):
         ir = "i1"
         inbuilt_name = "bool"
 
-        def __init__(self) -> None:
-            super().__init__()
+        def to_ir_constant(self, value: str) -> str:
+            # We happen to be using the same boolean constants as LLVM IR.
+            assert value == "true" or value == "false"
 
-        def compatible_with(self, value: Any) -> bool:
-            return isinstance(value, bool)
-
-        def cast_constant(self, value: bool) -> int:
-            assert self.compatible_with(value)
-            return int(value)
+            return value
 
     def __init__(self) -> None:
         definition = self.Definition()
@@ -85,15 +77,9 @@ class StringType(Type):
         ir = "ptr"
         inbuilt_name = "string"
 
-        def __init__(self) -> None:
-            super().__init__()
-
-        def compatible_with(self, value: Any) -> bool:
-            return isinstance(value, str)
-
-        def cast_constant(self, value: str) -> str:
-            assert self.compatible_with(value)
-            return str(value)
+        def to_ir_constant(self, value: str) -> str:
+            # String constants are handled at the translation unit level.
+            assert False
 
     def __init__(self) -> None:
         definition = self.Definition()
@@ -116,15 +102,13 @@ class ReferenceType(Type):
         def mangled_name_for_ir(self) -> str:
             return f"__RT{self.value_type.mangled_name_for_ir}__TR"
 
-        def compatible_with(self, value: Any) -> bool:
-            raise NotImplementedError("ReferenceType.compatible_with")
-
-        def cast_constant(self, value: int) -> bool:
-            raise NotImplementedError("ReferenceType.cast_constant")
-
         def get_named_ir_type_ref(self, _: str) -> str:
             # Opaque pointer type.
             return self.get_anonymous_ir_type_def()
+
+        def to_ir_constant(self, value: str) -> str:
+            # We shouldn't be able to initialize a reference with a constant.
+            assert False
 
     def get_non_reference_type(self) -> Type:
         assert isinstance(self.definition, self.Definition)
@@ -151,10 +135,8 @@ class StructDefinition(TypeDefinition):
         subtypes = [member.type.mangled_name_for_ir for member in self._members]
         return f"__ST{''.join(subtypes)}__TS"
 
-    def compatible_with(self, value: Any) -> bool:
-        raise NotImplementedError()
-
-    def cast_constant(self, value: int) -> bool:
+    def to_ir_constant(self, value: str) -> str:
+        # TODO support structure constants.
         raise NotImplementedError()
 
     def get_anonymous_ir_type_def(self) -> str:
