@@ -88,7 +88,7 @@ class Function:
         )
 
         def indent_ir(ir: list[str]):
-            return [f"  {line}" for line in ir]
+            return map(lambda line: line if line.endswith(":") else f"  {line}", ir)
 
         return [
             f"define dso_local {self._signature.return_type.ir_type_annotation} @{self.mangled_name}({args_ir}) {{",
