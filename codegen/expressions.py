@@ -112,15 +112,11 @@ class FunctionCallExpression(TypedExpression):
             conv_args.append(conv_arg)
 
         self.result_reg = next(reg_gen)
-
-        call_ir = f"%{self.result_reg} = call {self.signature.ir_ref}("
-
         args_ir = map(lambda arg: arg.ir_ref_with_type_annotation, conv_args)
-        call_ir += str.join(", ", args_ir)
 
-        call_ir += ")"
-
-        ir_lines.append(call_ir)
+        ir_lines.append(
+            f"%{self.result_reg} = call {self.signature.ir_ref}({str.join(', ', args_ir)})"
+        )
 
         return ir_lines
 
