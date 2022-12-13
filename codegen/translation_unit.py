@@ -1,23 +1,23 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import cached_property
 from itertools import count
-from typing import Callable
+from typing import Callable, Iterator
 
+from .builtin_callables import get_builtin_callables
+from .builtin_types import FunctionSignature, get_builtin_types
+from .expressions import FunctionCallExpression, FunctionParameter
+from .generatable import Scope, StackVariable, VariableAssignment
+from .interfaces import Parameter, Type, TypedExpression
+from .type_conversions import is_type_implicitly_convertible
 from .user_facing_errors import (
     FailedLookupError,
+    InvalidEscapeSequence,
     OverloadResolutionError,
     RedefinitionError,
-    InvalidEscapeSequence,
     assert_else_throw,
     throw,
 )
-
-from .type_conversions import is_type_implicitly_convertible
-from .builtin_callables import get_builtin_callables
-from .builtin_types import get_builtin_types, FunctionSignature
-from .expressions import FunctionParameter, FunctionCallExpression
-from .generatable import Scope, StackVariable, VariableAssignment
-from .interfaces import Type, TypedExpression, Parameter
 
 
 class Function:
@@ -166,6 +166,17 @@ class FunctionSymbolTable:
         throw(OverloadResolutionError(fn_name, readable_arg_names))
 
 
+@dataclass
+class StringInfo:
+    identifier: str
+    encoded_string: str
+    encoded_length: int
+
+    def __iter__(self) -> Iterator:
+        # Support for unpack the dataclass.
+        return iter((self.identifier, self.encoded_string, self.encoded_length))
+
+
 class Program:
     # Based on https://en.cppreference.com/w/cpp/language/escape.
     # We omit \' because we don't have single-quoted strings, and \? because
@@ -191,7 +202,7 @@ class Program:
         self._generic_type_initializers: dict[
             str, Callable[[str, list[Type]], Type]
         ] = {}
-        self._strings: dict[str, tuple[str, int]] = {}
+        self._strings: dict[str, StringInfo] = {}
 
         self._has_main: bool = False
 
@@ -257,13 +268,22 @@ class Program:
         return f".str.{index}"
 
     def add_string(self, string: str) -> str:
-        id = self._get_string_identifier(len(self._strings))
+        # Deduplicate string constants.
+        if string in self._strings:
+            return self._strings[string].identifier
 
         # Encoding the string now means that we can provide line information in
         # case of an error.
-        self._strings[id] = self.encode_string(string)
+        encoded_string, encoded_length = self.encode_string(string)
+        identifier = self._get_string_identifier(len(self._strings))
 
-        return id
+        self._strings[string] = StringInfo(
+            identifier,
+            encoded_string,
+            encoded_length,
+        )
+
+        return identifier
 
     @classmethod
     def encode_string(cls, string: str) -> tuple[str, int]:
@@ -347,9 +367,9 @@ class Program:
         lines.append(f'target triple = "{target}"')
 
         lines.append("")
-        for string_id, (string, length) in self._strings.items():
+        for identifier, encoded_string, encoded_length in self._strings.values():
             lines.append(
-                f'@{string_id} = private unnamed_addr constant [{length} x i8] c"{string}"'
+                f'@{identifier} = private unnamed_addr constant [{encoded_length} x i8] c"{encoded_string}"'
             )
 
         lines.append("")
