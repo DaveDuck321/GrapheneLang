@@ -11,19 +11,13 @@ from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
+    ErrorWithLineInfo,
     FailedLookupError,
     GenericArgumentCountError,
     GrapheneError,
     RepeatedGenericName,
     assert_else_throw,
 )
-
-
-class ErrorWithLineInfo(ValueError):
-    def __init__(self, message: str, line: int) -> None:
-        super().__init__(message)
-        self.message = message
-        self.line = line
 
 
 def extract_leaf_value(tree: Tree) -> str:
@@ -443,10 +437,13 @@ def generate_body(
         except VisitError as e:
             if not isinstance(e.orig_exc, GrapheneError):
                 raise e from e.orig_exc
-            raise ErrorWithLineInfo(e.orig_exc.message, line.meta.line)
-
+            raise ErrorWithLineInfo(
+                e.orig_exc.message, line.meta.line, str(function.get_signature())
+            )
         except GrapheneError as e:
-            raise ErrorWithLineInfo(e.message, line.meta.line)
+            raise ErrorWithLineInfo(
+                e.message, line.meta.line, str(function.get_signature())
+            )
 
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
@@ -464,25 +461,25 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
 
     program = cg.Program()
 
-    # TODO: these stages can be combined if we require forward declaration
-    # FIXME: allow recursive types
-    ParseTypeDefinitions(program).visit(tree)
-    fn_pass = ParseFunctionSignatures(program)
-    fn_pass.visit(tree)
+    try:
+        # TODO: these stages can be combined if we require forward declaration
+        # FIXME: allow recursive types
+        ParseTypeDefinitions(program).visit(tree)
+        fn_pass = ParseFunctionSignatures(program)
+        fn_pass.visit(tree)
 
-    for function, body in fn_pass.get_function_body_trees():
-        try:
+        for function, body in fn_pass.get_function_body_trees():
             generate_function_body(program, function, body)
-        except ErrorWithLineInfo as e:
-            if debug_compiler:
-                traceback.print_exc()
-                print("~~~ User-facing error message ~~~")
+    except ErrorWithLineInfo as e:
+        if debug_compiler:
+            traceback.print_exc()
+            print("~~~ User-facing error message ~~~")
 
-            print(
-                f'File "{file_path.absolute()}", line {e.line}, in "{function}"',
-                file=sys.stderr,
-            )
-            print(f"   {e.message}", file=sys.stderr)
-            sys.exit(1)
+        print(
+            f"File '{file_path.absolute()}', line {e.line}, in '{e.context}'",
+            file=sys.stderr,
+        )
+        print(f"   {e.message}", file=sys.stderr)
+        sys.exit(1)
 
     return "\n".join(program.generate_ir())

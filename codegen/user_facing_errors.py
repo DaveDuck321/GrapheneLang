@@ -1,7 +1,25 @@
+from lark import Token
+
+
 class GrapheneError(ValueError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
-        self.message = message
+
+    @property
+    def message(self) -> str:
+        return str(self)
+
+
+class ErrorWithLineInfo(ValueError):
+    def __init__(self, message: str, line: int, context: str) -> None:
+        super().__init__(message)
+
+        self.line = line
+        self.context = context
+
+    @property
+    def message(self) -> str:
+        return str(self)
 
 
 class TypeCheckerError(GrapheneError):
@@ -63,11 +81,15 @@ class GenericArgumentCountError(GrapheneError):
         )
 
 
-class RepeatedGenericName(GrapheneError):
-    def __init__(self, generic_name: str, type_name: str) -> None:
+class RepeatedGenericName(ErrorWithLineInfo):
+    def __init__(self, generic_name: Token, type_name: str) -> None:
+        assert generic_name.line is not None
+
         super().__init__(
             f"Error: generic '{generic_name}' appears more than once in "
-            f"the declaration of '{type_name}'"
+            f"the declaration of '{type_name}'",
+            generic_name.line,
+            f"typedef {type_name} : ...",
         )
 
 
