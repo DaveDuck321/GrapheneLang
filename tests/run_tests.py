@@ -11,6 +11,7 @@ all_tests = [
     "c_demo/compile_error",
     "c_demo/runtime_status",
     "duplicate_generics",
+    "generics_parsing",
     "order_of_operation",
     "simple_typedef",
     "string_constants",
