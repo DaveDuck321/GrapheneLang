@@ -10,10 +10,11 @@ import schema
 all_tests = [
     "c_demo/compile_error",
     "c_demo/runtime_status",
+    "duplicate_generics",
     "order_of_operation",
     "simple_typedef",
-    "string_constants_ir",
     "string_constants",
+    "string_constants_ir",
     "subexpression_ordering",
     "unary_operators",
     "undeclared_variable",

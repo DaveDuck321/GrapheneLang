@@ -14,6 +14,7 @@ from codegen.user_facing_errors import (
     FailedLookupError,
     GenericArgumentCountError,
     GrapheneError,
+    RepeatedGenericName,
     assert_else_throw,
 )
 
@@ -122,6 +123,13 @@ class ParseTypeDefinitions(Interpreter):
         available_generics: list[str] = []
         for generic_name in generics:
             assert isinstance(generic_name, Token)
+
+            # FIXME this doesn't print file/line information.
+            assert_else_throw(
+                generic_name.value not in available_generics,
+                RepeatedGenericName(generic_name, type_name),
+            )
+
             available_generics.append(generic_name.value)
 
         def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:

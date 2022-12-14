@@ -63,6 +63,14 @@ class GenericArgumentCountError(GrapheneError):
         )
 
 
+class RepeatedGenericName(GrapheneError):
+    def __init__(self, generic_name: str, type_name: str) -> None:
+        super().__init__(
+            f"Error: generic '{generic_name}' appears more than once in "
+            f"the declaration of '{type_name}'"
+        )
+
+
 def throw(error: GrapheneError):
     raise error
 
