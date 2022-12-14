@@ -133,7 +133,7 @@ class FunctionSymbolTable:
 
         for target in matched_functions:
             assert_else_throw(
-                target.is_foreign(),
+                not target.is_foreign(),
                 RedefinitionError(
                     "non-overloadable foreign function",
                     get_printable_sig(target.get_signature()),
