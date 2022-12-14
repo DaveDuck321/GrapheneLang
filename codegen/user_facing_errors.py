@@ -93,10 +93,10 @@ class RepeatedGenericName(ErrorWithLineInfo):
         )
 
 
-def throw(error: GrapheneError):
+def throw(error: Exception):
     raise error
 
 
-def assert_else_throw(verify: bool, error: GrapheneError):
+def assert_else_throw(verify: bool, error: Exception):
     if not verify:
         throw(error)
