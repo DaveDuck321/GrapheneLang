@@ -68,10 +68,8 @@ class Type:
         self.user_facing_name_prefix = name_prefix or ""
         self._generic_args = generic_args
 
-        generic_names = []
-        for arg in generic_args:
-            generic_names.append(arg.user_facing_typedef_assigned_name)
-        generic_annotation = f"[{', '.join(generic_names)}]"
+        generic_names = [arg.user_facing_typedef_assigned_name for arg in generic_args]
+        generic_annotation = f"[{', '.join(generic_names)}]" if generic_names else ""
 
         if name_prefix is None:
             self.user_facing_typedef_assigned_name = f"__anonymous{self.definition.user_facing_name_for_anonymous_type}{generic_annotation}"
