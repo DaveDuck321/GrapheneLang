@@ -23,7 +23,7 @@ class Dereference(TypedExpression):
         # register.
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         return [
-            f"%{self.result_reg} = load {self.type.ir_type_annotation}, "
+            f"%{self.result_reg} = load {self.type.ir_name}, "
             f"{self.ref.ir_ref_with_type_annotation}, align {self.type.get_alignment()}"
         ]
 
@@ -64,7 +64,7 @@ class PromoteInteger(TypedExpression):
         # <result> = {s,z}ext <ty> <value> to <ty2> ; yields ty2
         return [
             f"%{self.result_reg} = {instruction} "
-            f"{self.src.ir_ref_with_type_annotation} to {self.type.ir_type_annotation}"
+            f"{self.src.ir_ref_with_type_annotation} to {self.type.ir_name}"
         ]
 
     @cached_property
@@ -134,8 +134,8 @@ def do_implicit_conversion(
         expr_list[-1].type == dest_type,
         TypeCheckerError(
             context,
-            src.type.user_facing_typedef_assigned_name,
-            dest_type.user_facing_typedef_assigned_name,
+            src.type.get_user_facing_name(False),
+            dest_type.get_user_facing_name(False),
         ),
     )
 
