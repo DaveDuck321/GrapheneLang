@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from .interfaces import Parameter, Type, TypeDefinition
 from .user_facing_errors import (
@@ -267,28 +267,22 @@ class FunctionSignature:
 
         return f"{''.join(legal_name_mangle)}{arguments_mangle}"
 
-    def __repr__(self) -> str:
-        readable_arg_names = ", ".join(map(repr, self.arguments))
-
-        if self.is_foreign():
-            return f"foreign {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
-
-        return (
-            f"function {self.name}: ({readable_arg_names}) -> {repr(self.return_type)}"
-        )
-
-    @cached_property
-    def user_facing_name(self) -> str:
+    def _repr_impl(self, key: Callable[[Type], str]) -> str:
         prefix = "foreign" if self.is_foreign() else "function"
 
-        readable_arg_names = str.join(
-            ", ", map(lambda arg: arg.get_user_facing_name(False), self.arguments)
-        )
+        readable_arg_names = str.join(", ", map(key, self.arguments))
 
         return (
             f"{prefix} {self.name}: ({readable_arg_names}) -> "
-            f"{self.return_type.get_user_facing_name(False)}"
+            f"{key(self.return_type)}"
         )
+
+    def __repr__(self) -> str:
+        return self._repr_impl(lambda t: repr(t))
+
+    @cached_property
+    def user_facing_name(self) -> str:
+        return self._repr_impl(lambda t: t.get_user_facing_name(False))
 
     @cached_property
     def ir_ref(self) -> str:
