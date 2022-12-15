@@ -11,24 +11,26 @@ class TypeDefinition(ABC):
 
     @abstractmethod
     def get_alignment(self) -> int:
+        # FIXME should also be a property.
         pass
 
     @cached_property
     @abstractmethod
-    def mangled_name_for_ir(self) -> str:
+    def user_facing_name(self) -> str:
         pass
 
     @abstractmethod
-    def get_anonymous_ir_type_def(self) -> str:
-        pass
-
-    @abstractmethod
-    def get_named_ir_type_ref(self, name: str) -> str:
+    def get_ir_name(self, alias: Optional[str]) -> str:
         pass
 
     @cached_property
     @abstractmethod
-    def user_facing_name_for_anonymous_type(self) -> str:
+    def ir_definition(self) -> str:
+        pass
+
+    @cached_property
+    @abstractmethod
+    def mangled_ir_name(self) -> str:
         pass
 
     @abstractmethod
@@ -45,48 +47,63 @@ class Type:
 
     @staticmethod
     def mangle_list(types: list["Type"]) -> str:
-        generic_mangles: list[str] = []
-        for type in types:
-            generic_mangles.append(type.mangled_name_for_ir)
-        return f"{''.join(generic_mangles)}"
+        generic_mangles = map(lambda t: t.mangled_ir_name, types)
+        return str.join("", generic_mangles)
 
     @staticmethod
-    def mangle_generic_type(name_prefix: str, generics: list["Type"]) -> str:
-        if len(generics) == 0:
-            return f"__T_{name_prefix}"
+    def mangle_generic_type(alias: str, generics: Optional[list["Type"]]) -> str:
+        name = f"__T_{alias}"
 
-        generic_mangle = Type.mangle_list(generics)
-        return f"__T_{name_prefix}__G_{generic_mangle}"
+        if generics:
+            generic_mangle = Type.mangle_list(generics)
+            name += f"__G_{generic_mangle}"
+
+        return name
 
     def __init__(
         self,
         definition: TypeDefinition,
-        name_prefix: Optional[str] = None,
-        generic_args: list["Type"] = [],
+        typedef_alias: Optional[str] = None,
+        generic_args: Optional[list["Type"]] = None,
     ) -> None:
         self.definition = definition
-        self.user_facing_name_prefix = name_prefix or ""
+        self._typedef_alias = typedef_alias  # Name given in typedef, without generics.
         self._generic_args = generic_args
 
-        generic_names = [arg.user_facing_typedef_assigned_name for arg in generic_args]
-        generic_annotation = f"[{', '.join(generic_names)}]" if generic_names else ""
+    @cached_property
+    def generic_annotation(self) -> str:
+        if not self._generic_args:
+            return ""
 
-        if name_prefix is None:
-            self.user_facing_typedef_assigned_name = f"__anonymous{self.definition.user_facing_name_for_anonymous_type}{generic_annotation}"
-            self.is_anonymous = True
-        else:
-            self.user_facing_typedef_assigned_name = (
-                f"{name_prefix}{generic_annotation}"
-            )
-            self.is_anonymous = False
+        generic_names = map(
+            lambda arg: arg.get_user_facing_name(True), self._generic_args
+        )
+
+        return f"[{', '.join(generic_names)}]"
 
     def __repr__(self) -> str:
-        if self.is_anonymous:
-            return f"Type({repr(self.definition)})"
-        return f"Type({self.user_facing_typedef_assigned_name})"
+        name = f"{self._typedef_alias} = " if self._typedef_alias else ""
+        name += repr(self.definition)
+
+        return f"{self.__class__.__name__}({name})"
+
+    def get_user_facing_name(self, full: bool) -> str:
+        # Return everything (that's available).
+        if full:
+            name = f"typedef {self._typedef_alias} = " if self._typedef_alias else ""
+            name += self.definition.user_facing_name
+
+            # FIXME returns e.g. "typedef int = int"  for primitive types.
+            return name
+
+        # If this is the product of a typedef, return the name given.
+        if self._typedef_alias:
+            return self._typedef_alias
+
+        # Fall back to the type definition.
+        return self.definition.user_facing_name
 
     def __eq__(self, other: Any) -> bool:
-        assert isinstance(self, Type)
         assert isinstance(other, Type)
 
         return self.definition == other.definition
@@ -95,31 +112,26 @@ class Type:
         return self.definition.get_alignment()
 
     @cached_property
-    def ir_type_annotation(self) -> str:
-        if self.is_anonymous:
-            return self.definition.get_anonymous_ir_type_def()
+    def ir_name(self) -> str:
+        if self._typedef_alias:
+            return self.definition.get_ir_name(self.mangled_ir_name)
 
-        return self.definition.get_named_ir_type_ref(self.mangled_name_for_ir)
+        return self.definition.get_ir_name(None)
 
     def get_ir_initial_type_def(self) -> list[str]:
-        assert not self.is_anonymous
-        named_ref = self.definition.get_named_ir_type_ref(self.mangled_name_for_ir)
-        definition = self.definition.get_anonymous_ir_type_def()
+        assert self._typedef_alias
+        named_ref = self.definition.get_ir_name(self.mangled_ir_name)
+        definition = self.definition.ir_definition
         return [f"{named_ref} = type {definition}"]
 
     def get_non_reference_type(self) -> "Type":
         return self
 
     @cached_property
-    def mangled_name_for_ir(self) -> str:
-        if self.is_anonymous:
-            return self.mangle_generic_type(
-                f"anon_{self.definition.mangled_name_for_ir}", self._generic_args
-            )
+    def mangled_ir_name(self) -> str:
+        alias = self._typedef_alias or f"anon_{self.definition.mangled_ir_name}"
 
-        return self.mangle_generic_type(
-            self.user_facing_name_prefix, self._generic_args
-        )
+        return self.mangle_generic_type(alias, self._generic_args)
 
 
 @dataclass
@@ -188,7 +200,7 @@ class TypedExpression(Generatable):
 
     @cached_property
     def ir_ref_with_type_annotation(self) -> str:
-        type_annotation = self.type.ir_type_annotation
+        type_annotation = self.type.ir_name
         reference = self.ir_ref_without_type_annotation
         return f"{type_annotation} {reference}"
 

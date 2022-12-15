@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any
+from typing import Any, Optional
 
 from .interfaces import Parameter, Type, TypeDefinition
 from .user_facing_errors import (
@@ -12,43 +12,46 @@ from .user_facing_errors import (
 
 
 class PrimitiveDefinition(TypeDefinition):
-    def __init__(self, align: int, ir: str, inbuilt_name: str) -> None:
+    def __init__(self, align: int, ir: str, name: str) -> None:
         super().__init__()
 
-        self.align = align
-        self.ir = ir
-        self.inbuilt_name = inbuilt_name
+        assert align > 0
+        assert ir
+        assert name
+
+        self._align = align
+        self._ir = ir
+        self._name = name
 
     def get_alignment(self) -> int:
-        assert self.align != 0
-        return self.align
+        return self._align
 
     @cached_property
-    def mangled_name_for_ir(self) -> str:
+    def user_facing_name(self) -> str:
+        return self._name
+
+    def get_ir_name(self, alias: Optional[str]) -> str:
+        return f"%alias.{alias}" if alias else self.ir_definition
+
+    @cached_property
+    def ir_definition(self) -> str:
+        return self._ir
+
+    @cached_property
+    def mangled_ir_name(self) -> str:
         # Assert not reached:
         #   it should be impossible to create an anonymous primitive type
         #   ref/ structs overwrite this
         assert False
 
-    def get_anonymous_ir_type_def(self) -> str:
-        assert self.ir != ""
-        return self.ir
-
-    def get_named_ir_type_ref(self, name) -> str:
-        return f"%alias.{name}"
-
-    @cached_property
-    def user_facing_name_for_anonymous_type(self) -> str:
-        assert False
-
     def __repr__(self) -> str:
-        return f"Typedef({self.inbuilt_name})"
+        return f"{self.__class__.__name__}({self._name})"
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, TypeDefinition)
         if isinstance(other, PrimitiveDefinition):
             # TODO: I'm not sure this is the correct approach
-            return self.align == other.align and self.ir == other.ir
+            return self._align == other._align and self._ir == other._ir
 
         return False
 
@@ -71,7 +74,7 @@ class IntegerDefinition(PrimitiveDefinition):
 
         assert_else_throw(
             range_lower <= int(value) < range_upper,
-            InvalidIntSize(self.inbuilt_name, int(value), range_lower, range_upper),
+            InvalidIntSize(self._name, int(value), range_lower, range_upper),
         )
 
         return value
@@ -93,7 +96,7 @@ class GenericIntType(Type):
         assert is_power_of_2 and is_divisible_into_bytes
 
         definition = IntegerDefinition(name, size_in_bits, is_signed)
-        super().__init__(definition, definition.inbuilt_name)
+        super().__init__(definition, definition._name)
 
 
 class IntType(GenericIntType):
@@ -114,7 +117,7 @@ class BoolType(Type):
 
     def __init__(self) -> None:
         definition = self.Definition()
-        super().__init__(definition, definition.inbuilt_name)
+        super().__init__(definition, definition._name)
 
 
 class StringType(Type):
@@ -131,7 +134,7 @@ class StringType(Type):
 
     def __init__(self) -> None:
         definition = self.Definition()
-        super().__init__(definition, definition.inbuilt_name)
+        super().__init__(definition, definition._name)
 
 
 class ReferenceType(Type):
@@ -141,7 +144,7 @@ class ReferenceType(Type):
         def __init__(self, value_type: Type) -> None:
             # TODO inbuilt_name
             inbuilt_name = (
-                f"{value_type.definition.inbuilt_name}&"
+                f"{value_type.definition._name}&"
                 if isinstance(value_type.definition, PrimitiveDefinition)
                 else "TODO_REF_NAME"
             )
@@ -151,21 +154,21 @@ class ReferenceType(Type):
 
             self.value_type = value_type
 
-        @cached_property
-        def mangled_name_for_ir(self) -> str:
-            return f"__RT{self.value_type.mangled_name_for_ir}__TR"
-
-        def get_named_ir_type_ref(self, _: str) -> str:
+        def get_ir_name(self, _: Optional[str]) -> str:
             # Opaque pointer type.
-            return self.get_anonymous_ir_type_def()
+            return self.ir_definition
+
+        @cached_property
+        def mangled_ir_name(self) -> str:
+            return f"__RT{self.value_type.mangled_ir_name}__TR"
 
         def to_ir_constant(self, _: str) -> str:
             # We shouldn't be able to initialize a reference with a constant.
             assert False
 
         @cached_property
-        def user_facing_name_for_anonymous_type(self) -> str:
-            return f"{self.value_type.user_facing_typedef_assigned_name}&"
+        def user_facing_name(self) -> str:
+            return f"{self.value_type.get_user_facing_name(False)}&"
 
     def get_non_reference_type(self) -> Type:
         assert isinstance(self.definition, self.Definition)
@@ -188,32 +191,37 @@ class StructDefinition(TypeDefinition):
                 return index, member.type
         throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
 
-    @cached_property
-    def mangled_name_for_ir(self) -> str:
-        subtypes = [member.type.mangled_name_for_ir for member in self._members]
-        return f"__ST{''.join(subtypes)}__TS"
-
     def to_ir_constant(self, value: str) -> str:
         # TODO support structure constants.
         raise NotImplementedError()
 
-    def get_anonymous_ir_type_def(self) -> str:
-        member_ir = [member.type.ir_type_annotation for member in self._members]
-        return f"{{{', '.join(member_ir)}}}"
+    @cached_property
+    def user_facing_name(self) -> str:
+        subtypes = map(lambda m: m.type.get_user_facing_name(False), self._members)
+        return "{" + str.join(", ", subtypes) + "}"
 
-    def get_named_ir_type_ref(self, name) -> str:
-        return f"%struct.{name}"
+    def get_ir_name(self, alias: Optional[str]) -> str:
+        # If this type has an alias, then we've generated a definition for it at
+        # the top of the IR source.
+        if alias:
+            return f"%struct.{alias}"
+
+        # If it doesn't, then we need to define the type here.
+        return self.ir_definition
+
+    @cached_property
+    def ir_definition(self) -> str:
+        member_ir = map(lambda m: m.type.ir_name, self._members)
+        return "{" + str.join(", ", member_ir) + "}"
+
+    @cached_property
+    def mangled_ir_name(self) -> str:
+        subtypes = map(lambda m: m.type.mangled_ir_name, self._members)
+        return f"__ST{''.join(subtypes)}__TS"
 
     def get_alignment(self) -> int:
         # TODO: can we be less conservative here
         return max(member.type.get_alignment() for member in self._members)
-
-    @cached_property
-    def user_facing_name_for_anonymous_type(self) -> str:
-        subtypes = [
-            member.type.user_facing_typedef_assigned_name for member in self._members
-        ]
-        return f"{{{', '.join(subtypes)}}}"
 
     def __repr__(self) -> str:
         return f"StructDefinition({', '.join(map(repr, self._members))})"
@@ -244,7 +252,7 @@ class FunctionSignature:
         if self.is_main() or self.is_foreign():
             return self.name
 
-        arguments_mangle = [arg.mangled_name_for_ir for arg in self.arguments]
+        arguments_mangle = [arg.mangled_ir_name for arg in self.arguments]
 
         # FIXME separator
         arguments_mangle = "".join(arguments_mangle)
@@ -271,7 +279,7 @@ class FunctionSignature:
 
     @cached_property
     def ir_ref(self) -> str:
-        return f"{self.return_type.ir_type_annotation} @{self.mangled_name}"
+        return f"{self.return_type.ir_name} @{self.mangled_name}"
 
 
 def get_builtin_types() -> list[Type]:

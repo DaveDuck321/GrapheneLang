@@ -149,7 +149,7 @@ class StructMemberAccess(TypedExpression):
             isinstance(struct_definition, StructDefinition),
             TypeCheckerError(
                 "struct member access",
-                self._struct_type.user_facing_typedef_assigned_name,
+                self._struct_type.get_user_facing_name(False),
                 "{...}",
             ),
         )
@@ -169,7 +169,7 @@ class StructMemberAccess(TypedExpression):
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         return [
-            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type_annotation},"
+            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_name},"
             f" {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}"
         ]
 
@@ -196,7 +196,7 @@ class StructMemberAccess(TypedExpression):
 
     def __repr__(self) -> str:
         return (
-            f"StructMemberAccess({self._struct_type.user_facing_typedef_assigned_name}"
+            f"StructMemberAccess({self._struct_type.get_user_facing_name(False)}"
             f".{self._member_name}: {self.type})"
         )
 
