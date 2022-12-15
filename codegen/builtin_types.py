@@ -23,7 +23,8 @@ class PrimitiveDefinition(TypeDefinition):
         self._ir = ir
         self._name = name
 
-    def get_alignment(self) -> int:
+    @cached_property
+    def alignment(self) -> int:
         return self._align
 
     @cached_property
@@ -150,7 +151,8 @@ class ReferenceType(Type):
             # We shouldn't be able to initialize a reference with a constant.
             assert False
 
-        def get_alignment(self) -> int:
+        @cached_property
+        def alignment(self) -> int:
             # FIXME replace magic number. References are pointer-aligned.
             return 8
 
@@ -230,9 +232,10 @@ class StructDefinition(TypeDefinition):
         subtypes = map(lambda m: m.type.mangled_name, self._members)
         return f"__ST{''.join(subtypes)}__TS"
 
-    def get_alignment(self) -> int:
+    @cached_property
+    def alignment(self) -> int:
         # TODO: can we be less conservative here
-        return max(member.type.get_alignment() for member in self._members)
+        return max(member.type.alignment for member in self._members)
 
     def __repr__(self) -> str:
         return f"StructDefinition({', '.join(map(repr, self._members))})"

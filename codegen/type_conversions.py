@@ -24,7 +24,7 @@ class Dereference(TypedExpression):
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         return [
             f"%{self.result_reg} = load {self.type.ir_type}, "
-            f"{self.ref.ir_ref_with_type_annotation}, align {self.type.get_alignment()}"
+            f"{self.ref.ir_ref_with_type_annotation}, align {self.type.alignment}"
         ]
 
     @cached_property
