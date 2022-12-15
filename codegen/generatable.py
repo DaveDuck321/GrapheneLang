@@ -59,10 +59,10 @@ class Scope(Generatable):
         # Variables can be shadowed in different (nested) scopes, but they
         # must be unique in a single scope.
         assert_else_throw(
-            var.user_facing_graphene_name not in self._variables,
-            RedefinitionError("variable", var.user_facing_graphene_name),
+            var.user_facing_name not in self._variables,
+            RedefinitionError("variable", var.user_facing_name),
         )
-        self._variables[var.user_facing_graphene_name] = var
+        self._variables[var.user_facing_name] = var
 
     def search_for_variable(self, var_name: str) -> Optional[StackVariable]:
         # Search this scope first.
@@ -202,6 +202,6 @@ class VariableAssignment(Generatable):
 
     def __repr__(self) -> str:
         return (
-            f"VariableAssignment({self.variable.user_facing_graphene_name}:"
+            f"VariableAssignment({self.variable.user_facing_name}:"
             f" {self.variable.type})"
         )

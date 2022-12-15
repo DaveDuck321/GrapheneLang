@@ -37,7 +37,9 @@ class VariableReference(TypedExpression):
         self.variable = variable
 
     def __repr__(self) -> str:
-        return f"VariableReference({self.variable.user_facing_graphene_name}: {self.variable.type})"
+        return (
+            f"VariableReference({self.variable.user_facing_name}: {self.variable.type})"
+        )
 
     @cached_property
     def ir_ref_without_type_annotation(self) -> str:
@@ -49,7 +51,7 @@ class VariableReference(TypedExpression):
         assert_else_throw(
             self.variable.initialized,
             OperandError(
-                f"Cannot use uninitialized variable '{self.variable.user_facing_graphene_name}'"
+                f"Cannot use uninitialized variable '{self.variable.user_facing_name}'"
             ),
         )
 
@@ -58,7 +60,7 @@ class VariableReference(TypedExpression):
         assert_else_throw(
             not self.variable.constant,
             OperandError(
-                f"Cannot modify constant variable '{self.variable.user_facing_graphene_name}'"
+                f"Cannot modify constant variable '{self.variable.user_facing_name}'"
             ),
         )
 
