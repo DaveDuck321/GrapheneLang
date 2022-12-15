@@ -150,11 +150,15 @@ class Variable(ABC):
     def __init__(self, name: str, var_type: Type, constant: bool) -> None:
         super().__init__()
 
-        self.user_facing_graphene_name = name
+        self._name = name
         self.type = var_type
         self.constant = constant
 
         self.ir_reg: Optional[int] = None
+
+    @cached_property
+    def user_facing_name(self) -> str:
+        return self._name
 
     @cached_property
     @abstractmethod
