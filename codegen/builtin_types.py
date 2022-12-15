@@ -140,35 +140,46 @@ class StringType(Type):
 class ReferenceType(Type):
     is_reference = True
 
-    class Definition(PrimitiveDefinition):
+    class Definition(TypeDefinition):
         def __init__(self, value_type: Type) -> None:
-            # TODO inbuilt_name
-            inbuilt_name = (
-                f"{value_type.definition._name}&"
-                if isinstance(value_type.definition, PrimitiveDefinition)
-                else "TODO_REF_NAME"
-            )
-
-            # FIXME maybe we shouldn't hardcode pointer alignment.
-            super().__init__(8, "ptr", inbuilt_name)
+            super().__init__()
 
             self.value_type = value_type
+
+        def to_ir_constant(self, _: str) -> str:
+            # We shouldn't be able to initialize a reference with a constant.
+            assert False
+
+        def get_alignment(self) -> int:
+            # FIXME replace magic number. References are pointer-aligned.
+            return 8
+
+        @cached_property
+        def user_facing_name(self) -> str:
+            return f"{self.value_type.get_user_facing_name(False)}&"
 
         def get_ir_type(self, _: Optional[str]) -> str:
             # Opaque pointer type.
             return self.ir_definition
 
         @cached_property
+        def ir_definition(self) -> str:
+            return "ptr"
+
+        @cached_property
         def mangled_name(self) -> str:
             return f"__RT{self.value_type.mangled_name}__TR"
 
-        def to_ir_constant(self, _: str) -> str:
-            # We shouldn't be able to initialize a reference with a constant.
-            assert False
+        def __repr__(self) -> str:
+            return f"ReferenceType.Definition({repr(self.value_type)})"
 
-        @cached_property
-        def user_facing_name(self) -> str:
-            return f"{self.value_type.get_user_facing_name(False)}&"
+        def __eq__(self, other: Any) -> bool:
+            assert isinstance(other, TypeDefinition)
+
+            if isinstance(other, ReferenceType.Definition):
+                return self.value_type == other.value_type
+
+            return False
 
     def get_non_reference_type(self) -> Type:
         assert isinstance(self.definition, self.Definition)
