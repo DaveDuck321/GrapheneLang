@@ -33,8 +33,7 @@ class StackVariable(Variable):
         # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
         #            [, align <alignment>] [, addrspace(<num>)]
         return [
-            f"%{self.ir_reg} = alloca {self.type.ir_type},"
-            f" align {self.type.get_alignment()}"
+            f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.alignment}"
         ]
 
 
@@ -195,7 +194,7 @@ class VariableAssignment(Generatable):
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir_lines += [
             f"store {conv_value.ir_ref_with_type_annotation}, {self.variable.ir_ref}, "
-            f"align {conv_value.type.get_alignment()}"
+            f"align {conv_value.type.alignment}"
         ]
 
         return ir_lines

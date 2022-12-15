@@ -9,9 +9,9 @@ class TypeDefinition(ABC):
     def to_ir_constant(self, value: str) -> str:
         pass
 
+    @cached_property
     @abstractmethod
-    def get_alignment(self) -> int:
-        # FIXME should also be a property.
+    def alignment(self) -> int:
         pass
 
     @cached_property
@@ -108,8 +108,9 @@ class Type:
 
         return self.definition == other.definition
 
-    def get_alignment(self) -> int:
-        return self.definition.get_alignment()
+    @cached_property
+    def alignment(self) -> int:
+        return self.definition.alignment
 
     @cached_property
     def ir_type(self) -> str:
