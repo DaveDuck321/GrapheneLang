@@ -438,11 +438,15 @@ def generate_body(
             if not isinstance(e.orig_exc, GrapheneError):
                 raise e from e.orig_exc
             raise ErrorWithLineInfo(
-                e.orig_exc.message, line.meta.line, str(function.get_signature())
+                e.orig_exc.message,
+                line.meta.line,
+                function.get_signature().user_facing_name,
             )
         except GrapheneError as e:
             raise ErrorWithLineInfo(
-                e.message, line.meta.line, str(function.get_signature())
+                e.message,
+                line.meta.line,
+                function.get_signature().user_facing_name,
             )
 
 
