@@ -278,6 +278,19 @@ class FunctionSignature:
         )
 
     @cached_property
+    def user_facing_name(self) -> str:
+        prefix = "foreign" if self.is_foreign() else "function"
+
+        readable_arg_names = str.join(
+            ", ", map(lambda arg: arg.get_user_facing_name(False), self.arguments)
+        )
+
+        return (
+            f"{prefix} {self.name}: ({readable_arg_names}) -> "
+            f"{self.return_type.get_user_facing_name(False)}"
+        )
+
+    @cached_property
     def ir_ref(self) -> str:
         return f"{self.return_type.ir_name} @{self.mangled_name}"
 
