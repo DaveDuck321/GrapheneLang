@@ -169,7 +169,7 @@ class StructMemberAccess(TypedExpression):
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         return [
-            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_name},"
+            f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type},"
             f" {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}"
         ]
 

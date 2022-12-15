@@ -30,7 +30,7 @@ class PrimitiveDefinition(TypeDefinition):
     def user_facing_name(self) -> str:
         return self._name
 
-    def get_ir_name(self, alias: Optional[str]) -> str:
+    def get_ir_type(self, alias: Optional[str]) -> str:
         return f"%alias.{alias}" if alias else self.ir_definition
 
     @cached_property
@@ -38,7 +38,7 @@ class PrimitiveDefinition(TypeDefinition):
         return self._ir
 
     @cached_property
-    def mangled_ir_name(self) -> str:
+    def mangled_name(self) -> str:
         # Assert not reached:
         #   it should be impossible to create an anonymous primitive type
         #   ref/ structs overwrite this
@@ -154,13 +154,13 @@ class ReferenceType(Type):
 
             self.value_type = value_type
 
-        def get_ir_name(self, _: Optional[str]) -> str:
+        def get_ir_type(self, _: Optional[str]) -> str:
             # Opaque pointer type.
             return self.ir_definition
 
         @cached_property
-        def mangled_ir_name(self) -> str:
-            return f"__RT{self.value_type.mangled_ir_name}__TR"
+        def mangled_name(self) -> str:
+            return f"__RT{self.value_type.mangled_name}__TR"
 
         def to_ir_constant(self, _: str) -> str:
             # We shouldn't be able to initialize a reference with a constant.
@@ -200,7 +200,7 @@ class StructDefinition(TypeDefinition):
         subtypes = map(lambda m: m.type.get_user_facing_name(False), self._members)
         return "{" + str.join(", ", subtypes) + "}"
 
-    def get_ir_name(self, alias: Optional[str]) -> str:
+    def get_ir_type(self, alias: Optional[str]) -> str:
         # If this type has an alias, then we've generated a definition for it at
         # the top of the IR source.
         if alias:
@@ -211,12 +211,12 @@ class StructDefinition(TypeDefinition):
 
     @cached_property
     def ir_definition(self) -> str:
-        member_ir = map(lambda m: m.type.ir_name, self._members)
+        member_ir = map(lambda m: m.type.ir_type, self._members)
         return "{" + str.join(", ", member_ir) + "}"
 
     @cached_property
-    def mangled_ir_name(self) -> str:
-        subtypes = map(lambda m: m.type.mangled_ir_name, self._members)
+    def mangled_name(self) -> str:
+        subtypes = map(lambda m: m.type.mangled_name, self._members)
         return f"__ST{''.join(subtypes)}__TS"
 
     def get_alignment(self) -> int:
@@ -252,7 +252,7 @@ class FunctionSignature:
         if self.is_main() or self.is_foreign():
             return self.name
 
-        arguments_mangle = [arg.mangled_ir_name for arg in self.arguments]
+        arguments_mangle = [arg.mangled_name for arg in self.arguments]
 
         # FIXME separator
         arguments_mangle = "".join(arguments_mangle)
@@ -286,7 +286,7 @@ class FunctionSignature:
 
     @cached_property
     def ir_ref(self) -> str:
-        return f"{self.return_type.ir_name} @{self.mangled_name}"
+        return f"{self.return_type.ir_type} @{self.mangled_name}"
 
 
 def get_builtin_types() -> list[Type]:

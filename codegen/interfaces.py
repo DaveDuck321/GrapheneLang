@@ -20,7 +20,7 @@ class TypeDefinition(ABC):
         pass
 
     @abstractmethod
-    def get_ir_name(self, alias: Optional[str]) -> str:
+    def get_ir_type(self, alias: Optional[str]) -> str:
         pass
 
     @cached_property
@@ -30,7 +30,7 @@ class TypeDefinition(ABC):
 
     @cached_property
     @abstractmethod
-    def mangled_ir_name(self) -> str:
+    def mangled_name(self) -> str:
         pass
 
     @abstractmethod
@@ -47,7 +47,7 @@ class Type:
 
     @staticmethod
     def mangle_list(types: list["Type"]) -> str:
-        generic_mangles = map(lambda t: t.mangled_ir_name, types)
+        generic_mangles = map(lambda t: t.mangled_name, types)
         return str.join("", generic_mangles)
 
     @staticmethod
@@ -112,15 +112,15 @@ class Type:
         return self.definition.get_alignment()
 
     @cached_property
-    def ir_name(self) -> str:
+    def ir_type(self) -> str:
         if self._typedef_alias:
-            return self.definition.get_ir_name(self.mangled_ir_name)
+            return self.definition.get_ir_type(self.mangled_name)
 
-        return self.definition.get_ir_name(None)
+        return self.definition.get_ir_type(None)
 
     def get_ir_initial_type_def(self) -> list[str]:
         assert self._typedef_alias
-        named_ref = self.definition.get_ir_name(self.mangled_ir_name)
+        named_ref = self.definition.get_ir_type(self.mangled_name)
         definition = self.definition.ir_definition
         return [f"{named_ref} = type {definition}"]
 
@@ -128,8 +128,8 @@ class Type:
         return self
 
     @cached_property
-    def mangled_ir_name(self) -> str:
-        alias = self._typedef_alias or f"anon_{self.definition.mangled_ir_name}"
+    def mangled_name(self) -> str:
+        alias = self._typedef_alias or f"anon_{self.definition.mangled_name}"
 
         return self.mangle_generic_type(alias, self._generic_args)
 
@@ -200,7 +200,7 @@ class TypedExpression(Generatable):
 
     @cached_property
     def ir_ref_with_type_annotation(self) -> str:
-        type_annotation = self.type.ir_name
+        type_annotation = self.type.ir_type
         reference = self.ir_ref_without_type_annotation
         return f"{type_annotation} {reference}"
 

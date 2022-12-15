@@ -23,7 +23,7 @@ class Dereference(TypedExpression):
         # register.
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         return [
-            f"%{self.result_reg} = load {self.type.ir_name}, "
+            f"%{self.result_reg} = load {self.type.ir_type}, "
             f"{self.ref.ir_ref_with_type_annotation}, align {self.type.get_alignment()}"
         ]
 
@@ -64,7 +64,7 @@ class PromoteInteger(TypedExpression):
         # <result> = {s,z}ext <ty> <value> to <ty2> ; yields ty2
         return [
             f"%{self.result_reg} = {instruction} "
-            f"{self.src.ir_ref_with_type_annotation} to {self.type.ir_name}"
+            f"{self.src.ir_ref_with_type_annotation} to {self.type.ir_type}"
         ]
 
     @cached_property
