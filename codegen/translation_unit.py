@@ -68,11 +68,11 @@ class Function:
 
     def generate_declaration(self) -> list[str]:
         ir = (
-            f"declare dso_local {self._signature.return_type.ir_name}"
+            f"declare dso_local {self._signature.return_type.ir_type}"
             f" @{self.mangled_name}("
         )
 
-        args_ir = [arg.ir_name for arg in self._signature.arguments]
+        args_ir = [arg.ir_type for arg in self._signature.arguments]
         ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
@@ -95,7 +95,7 @@ class Function:
 
         return [
             (
-                f"define dso_local {self._signature.return_type.ir_name}"
+                f"define dso_local {self._signature.return_type.ir_type}"
                 f" @{self.mangled_name}({args_ir}) {{"
             ),
             "begin:",  # Name the implicit basic block
@@ -210,7 +210,7 @@ class Program:
         self._has_main: bool = False
 
         for builtin_type in get_builtin_types():
-            self._types[builtin_type.mangled_ir_name] = builtin_type
+            self._types[builtin_type.mangled_name] = builtin_type
 
     def lookup_type(self, name_prefix: str, generic_args: list[Type]) -> Type:
         this_mangle = Type.mangle_generic_type(name_prefix, generic_args)

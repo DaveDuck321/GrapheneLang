@@ -33,7 +33,7 @@ class StackVariable(Variable):
         # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
         #            [, align <alignment>] [, addrspace(<num>)]
         return [
-            f"%{self.ir_reg} = alloca {self.type.ir_name},"
+            f"%{self.ir_reg} = alloca {self.type.ir_type},"
             f" align {self.type.get_alignment()}"
         ]
 
