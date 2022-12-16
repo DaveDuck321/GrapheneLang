@@ -14,6 +14,7 @@ from codegen.user_facing_errors import (
     ErrorWithLineInfo,
     FailedLookupError,
     GenericArgumentCountError,
+    GenericHasGenericAnnotation,
     GrapheneError,
     RepeatedGenericName,
     assert_else_throw,
@@ -69,6 +70,7 @@ class TypeTransformer(Transformer):
         assert isinstance(name, Token)
 
         if name in self._generic_mapping:
+            assert_else_throw(type_map is None, GenericHasGenericAnnotation(name))
             return self._generic_mapping[name]
 
         generic_args: list[cg.Type] = [] if type_map is None else type_map.children  # type: ignore

@@ -95,6 +95,14 @@ class RepeatedGenericName(ErrorWithLineInfo):
         )
 
 
+class GenericHasGenericAnnotation(GrapheneError):
+    def __init__(self, generic_name: str) -> None:
+        super().__init__(
+            f"Error: generic '{generic_name}' has a generic annotation "
+            "(generic types may not have additional generic annotations)"
+        )
+
+
 def throw(error: Exception):
     raise error
 

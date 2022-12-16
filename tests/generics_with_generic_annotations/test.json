@@ -1,0 +1,19 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../driver.py",
+            "main.c3",
+            "--emit-llvm",
+            "-o",
+            "./out/main.ll"
+        ],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 6, in 'function main: () -> int'",
+                "   Error: generic 'T' has a generic annotation (generic types may not have additional generic annotations)"
+            ]
+        }
+    }
+}

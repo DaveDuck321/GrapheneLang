@@ -13,6 +13,7 @@ all_tests = [
     "c_demo/runtime_status",
     "duplicate_generics",
     "generics_parsing",
+    "generics_with_generic_annotations",
     "order_of_operation",
     "simple_typedef",
     "string_constants",
