@@ -8,7 +8,11 @@
             "./out/a.out"
         ],
         "output": {
-            "status": 1
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 3, in 'function main: () -> int'",
+                "Cannot use uninitialized variable 'x'"
+            ]
         }
     }
 }

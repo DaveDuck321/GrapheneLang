@@ -8,7 +8,11 @@
             "./out/a.out"
         ],
         "output": {
-            "status": 1
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 1, in 'typedef my_struct : ...'",
+                "Error: generic 'T' appears more than once in the declaration of 'my_struct'"
+            ]
         }
     }
 }
