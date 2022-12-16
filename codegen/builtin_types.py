@@ -292,7 +292,7 @@ class FunctionSignature:
         )
 
     def __repr__(self) -> str:
-        return self._repr_impl(lambda t: repr(t))
+        return self._repr_impl(repr)
 
     @cached_property
     def user_facing_name(self) -> str:

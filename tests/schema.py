@@ -19,7 +19,7 @@ def validate_config_follows_schema(config: dict, current_key="", schema=config_s
 
         # Validate types
         schema_value = schema[key]
-        if type(option) != type(schema_value):
+        if type(option) is not type(schema_value):
             raise JSONConfigError(
                 f"'{full_key}' must be of type '{type(schema_value)}' not '{type(option)}'"
             )
@@ -27,9 +27,10 @@ def validate_config_follows_schema(config: dict, current_key="", schema=config_s
         # Validate list elements are also the correct type
         if isinstance(schema_value, list):
             for item in option:
-                if type(item) != type(schema_value[0]):
+                if type(item) is not type(schema_value[0]):
                     raise JSONConfigError(
-                        f"'{full_key}' must be of type '[{type(schema_value[0])}]' not '[{type(item)}]'"
+                        f"'{full_key}' must be of type '[{type(schema_value[0])}]' "
+                        f"not '[{type(item)}]'"
                     )
 
         # Recurse for dict types

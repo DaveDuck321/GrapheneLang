@@ -434,17 +434,17 @@ def generate_body(
     for line in body.children:
         try:
             generators[line.data](program, function, scope, line)
-        except VisitError as e:
-            if not isinstance(e.orig_exc, GrapheneError):
-                raise e from e.orig_exc
+        except VisitError as exc:
+            if not isinstance(exc.orig_exc, GrapheneError):
+                raise exc from exc.orig_exc
             raise ErrorWithLineInfo(
-                e.orig_exc.message,
+                exc.orig_exc.message,
                 line.meta.line,
                 function.get_signature().user_facing_name,
             )
-        except GrapheneError as e:
+        except GrapheneError as exc:
             raise ErrorWithLineInfo(
-                e.message,
+                exc.message,
                 line.meta.line,
                 function.get_signature().user_facing_name,
             )
@@ -474,16 +474,16 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
 
         for function, body in fn_pass.get_function_body_trees():
             generate_function_body(program, function, body)
-    except ErrorWithLineInfo as e:
+    except ErrorWithLineInfo as exc:
         if debug_compiler:
             traceback.print_exc()
             print("~~~ User-facing error message ~~~")
 
         print(
-            f"File '{file_path.absolute()}', line {e.line}, in '{e.context}'",
+            f"File '{file_path.absolute()}', line {exc.line}, in '{exc.context}'",
             file=sys.stderr,
         )
-        print(f"   {e.message}", file=sys.stderr)
+        print(f"   {exc.message}", file=sys.stderr)
         sys.exit(1)
 
     return "\n".join(program.generate_ir())

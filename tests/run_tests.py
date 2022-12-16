@@ -30,7 +30,6 @@ class TestFailure(RuntimeError):
         status: int,
         stdout: list[str],
         stderr: list[str],
-        stage: Optional[str] = None,
     ) -> None:
         super().__init__(f"Actual '{name}' does not match expected")
 
@@ -38,7 +37,13 @@ class TestFailure(RuntimeError):
         self.status = status
         self.stdout = stdout
         self.stderr = stderr
+
+        self.stage: Optional[str] = None
+
+    def with_stage(self, stage: str) -> "TestFailure":
         self.stage = stage
+
+        return self
 
     def __str__(self) -> str:
         assert self.stage is not None
@@ -72,7 +77,13 @@ def validate_command_output_with_harness(
 ):
 
     result = subprocess.run(
-        command, cwd=str(directory), stdin=PIPE, stdout=PIPE, stderr=PIPE, text=True
+        command,
+        check=False,
+        cwd=str(directory),
+        stdin=PIPE,
+        stdout=PIPE,
+        stderr=PIPE,
+        text=True,
     )
     status = result.returncode
     stdout, stderr = result.stdout.splitlines(), result.stderr.splitlines()
@@ -110,8 +121,8 @@ def run_test(path: Path, io_harness=True) -> None:
             config["compile"].get("command", []),
             config["compile"].get("output", {}),
         )
-    except TestFailure as e:
-        raise TestFailure(e.name, e.status, e.stdout, e.stderr, stage="compile")
+    except TestFailure as exc:
+        raise exc.with_stage("compile")
 
     if "runtime" not in config:
         return
@@ -122,8 +133,8 @@ def run_test(path: Path, io_harness=True) -> None:
             config["runtime"].get("command", []),
             config["runtime"].get("output", {}),
         )
-    except TestFailure as e:
-        raise TestFailure(e.name, e.status, e.stdout, e.stderr, stage="runtime")
+    except TestFailure as exc:
+        raise exc.with_stage("runtime")
 
 
 def run_tests(tests: list[str]) -> int:

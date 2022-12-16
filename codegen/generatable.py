@@ -95,6 +95,9 @@ class Scope(Generatable):
         #       We need to ensure each basic block has a terminating instruction
         return contained_ir
 
+    def is_empty(self) -> bool:
+        return not self._lines
+
     def __repr__(self) -> str:
         return f"{{{','.join(map(repr, self._lines))}}}"
 

@@ -106,7 +106,7 @@ class Function:
     def generate_ir(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#functions
         if self.is_foreign():
-            assert not self.top_level_scope._lines
+            assert self.top_level_scope.is_empty()
             return self.generate_declaration()
 
         return self.generate_definition()
