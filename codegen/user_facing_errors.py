@@ -77,7 +77,7 @@ class InvalidIntSize(GrapheneError):
 class GenericArgumentCountError(GrapheneError):
     def __init__(self, name: str, actual: int, expected: int) -> None:
         super().__init__(
-            f"Error: generic `{name}` expects {expected} arguments but received {actual}"
+            f"Error: generic '{name}' expects {expected} arguments but received {actual}"
         )
 
 
