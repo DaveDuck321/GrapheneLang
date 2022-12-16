@@ -2,8 +2,11 @@ import fnmatch
 import json
 import subprocess
 from argparse import ArgumentParser
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import cpu_count
 from pathlib import Path
 from subprocess import PIPE
+from threading import Lock
 from typing import Optional
 
 import schema
@@ -16,8 +19,8 @@ all_tests = [
     "generics_with_generic_annotations",
     "order_of_operation",
     "simple_typedef",
-    "string_constants",
     "string_constants_ir",
+    "string_constants",
     "subexpression_ordering",
     "unary_operators",
     "undeclared_variable",
@@ -159,25 +162,34 @@ def run_test(path: Path, io_harness=True) -> None:
         raise exc.with_stage("runtime")
 
 
-def run_tests(tests: list[str]) -> int:
-    passed: int = 0
-    failed: int = 0
+# Mutex to ensure prints remain ordered (within each test)
+io_lock = Lock()
 
-    for i, test in enumerate(tests, 1):
-        print(f"TEST {i}: '{test}'")
-        try:
-            run_test(Path(__file__).parent / test)
-            passed += 1
+
+def run_test_print_result(test: tuple[int, str]) -> bool:
+    test_number, test_name = test
+    try:
+        run_test(Path(__file__).parent / test_name)
+        with io_lock:
+            print(f"TEST {test_number}: '{test_name}'")
             print("   PASSED")
-        except TestFailure as error:
-            failed += 1
+        return True
+    except TestFailure as error:
+        with io_lock:
             print(error)
             print()
+        return False
 
+
+def run_tests(tests: list[str], workers: int) -> int:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        passed = sum(executor.map(run_test_print_result, enumerate(tests, 1)))
+
+    failed = len(tests) - passed
     if failed:
         print(f"FAILED {failed}/{len(tests)} TESTS!")
     else:
-        print(f"PASSED {passed} TESTS")
+        print(f"PASSED ALL {passed} TESTS")
 
     return failed
 
@@ -185,9 +197,10 @@ def run_tests(tests: list[str]) -> int:
 if __name__ == "__main__":
     parser = ArgumentParser("run_tests.py")
     parser.add_argument("--test", required=False)
+    parser.add_argument("--workers", required=False, type=int, default=cpu_count())
 
     args = parser.parse_args()
     if args.test is not None:
         run_test(Path(__file__).parent / args.test, io_harness=False)
     else:
-        exit(run_tests(all_tests))
+        exit(run_tests(all_tests, args.workers))
