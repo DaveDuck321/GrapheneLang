@@ -101,7 +101,11 @@ class TypeTransformer(Transformer):
         if type_map is None:
             type_map = {}
 
-        result = cls(program, type_map).transform(tree)
+        try:
+            result = cls(program, type_map).transform(tree)
+        except VisitError as exc:
+            raise exc.orig_exc
+
         assert isinstance(result, cg.Type)
 
         return result
@@ -435,13 +439,13 @@ def generate_body(
         try:
             generators[line.data](program, function, scope, line)
         except VisitError as exc:
-            if not isinstance(exc.orig_exc, GrapheneError):
-                raise exc from exc.orig_exc
-            raise ErrorWithLineInfo(
-                exc.orig_exc.message,
-                line.meta.line,
-                function.get_signature().user_facing_name,
-            ) from exc.orig_exc
+            if isinstance(exc.orig_exc, GrapheneError):
+                raise ErrorWithLineInfo(
+                    exc.orig_exc.message,
+                    line.meta.line,
+                    function.get_signature().user_facing_name,
+                ) from exc.orig_exc
+            raise exc.orig_exc
         except GrapheneError as exc:
             raise ErrorWithLineInfo(
                 exc.message,
