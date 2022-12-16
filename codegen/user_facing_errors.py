@@ -83,6 +83,18 @@ class GenericArgumentCountError(GrapheneError):
         )
 
 
+class MissingBorrowError(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: borrow '&' required to use type '{type_name}' as reference"
+        )
+
+
+class BorrowTypeError(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(f"Error: cannot borrow non-reference type '{type_name}'")
+
+
 class RepeatedGenericName(ErrorWithLineInfo):
     def __init__(self, generic_name: Token, type_name: str) -> None:
         assert generic_name.line is not None
