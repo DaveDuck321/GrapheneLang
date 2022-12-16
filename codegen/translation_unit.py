@@ -153,7 +153,9 @@ class FunctionSymbolTable:
     def lookup_function(self, fn_name: str, fn_args: list[Type]):
         candidate_functions = self._functions[fn_name]
 
-        readable_arg_names = ", ".join(map(repr, fn_args))
+        readable_arg_names = ", ".join(
+            arg.get_user_facing_name(False) for arg in fn_args
+        )
         assert_else_throw(
             len(candidate_functions) > 0,
             FailedLookupError(
