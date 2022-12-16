@@ -99,13 +99,16 @@ def validate_command_output_with_harness(
         if len(actual) != len(expected):
             return False
 
+        actual_trimmed = map(str.strip, actual)
+        expected_trimmed = map(str.strip, expected)
+
         # fnmatchcase() allows common Unix shell-style wildcards in expected
         # output, including:
         # - * to match everything
         # - ? to match any single character
         # - [seq] to match any character in seq
         # - [!seq] to match any character not in seq
-        return all(map(fnmatch.fnmatchcase, actual, expected))
+        return all(map(fnmatch.fnmatchcase, actual_trimmed, expected_trimmed))
 
     if expected_output.get("status", 0) != status:
         raise TestFailure("status", status, stdout, stderr)
