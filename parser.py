@@ -441,7 +441,7 @@ def generate_body(
                 exc.orig_exc.message,
                 line.meta.line,
                 function.get_signature().user_facing_name,
-            ) from exc
+            ) from exc.orig_exc
         except GrapheneError as exc:
             raise ErrorWithLineInfo(
                 exc.message,
