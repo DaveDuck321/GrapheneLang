@@ -19,6 +19,11 @@ function c : () -> int = {
     return 1;
 };
 
+function d : (var : i64&) -> int = {
+    puts("hello world d");
+    return 0;
+};
+
 @operator +: (a: int, b: int) -> int = {
     return __builtin_add(a, b);
 };
@@ -26,6 +31,8 @@ function c : () -> int = {
 function main: () -> int = {
     a();
     let bb: i64 = b(c());
+
+    d(&bb);
 
     let x: i64 = 10;
     {

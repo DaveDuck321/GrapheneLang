@@ -80,7 +80,7 @@ class TypeTransformer(Transformer):
     def ref_type(self, value_type: cg.Type) -> cg.Type:
         assert isinstance(value_type, cg.Type)
 
-        return cg.ReferenceType(value_type)
+        return cg.ReferenceType(value_type, False)
 
     def struct_type(self, member_trees: list[Tree]) -> cg.Type:
         members: list[cg.Parameter] = []
@@ -327,6 +327,11 @@ class ExpressionTransformer(Transformer_InPlace):
 
         struct_access = cg.StructMemberAccess(lhs.expression(), member_name)
         return lhs.add_parent(struct_access)
+
+    @v_args(inline=True)
+    def borrow_operator_use(self, lhs: FlattenedExpression):
+        borrow = cg.Borrow(lhs.expression())
+        return lhs.add_parent(borrow)
 
 
 def generate_standalone_expression(
