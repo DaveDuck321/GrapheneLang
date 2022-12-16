@@ -1,3 +1,4 @@
+import fnmatch
 import json
 import subprocess
 from argparse import ArgumentParser
@@ -73,9 +74,8 @@ def validate_command_status(
 def validate_command_output_with_harness(
     directory: Path,
     command: list[str],
-    expected_output,
+    expected_output: dict[str, list[str]],
 ):
-
     result = subprocess.run(
         command,
         check=False,
@@ -88,13 +88,31 @@ def validate_command_output_with_harness(
     status = result.returncode
     stdout, stderr = result.stdout.splitlines(), result.stderr.splitlines()
 
+    def match_output(actual: list[str], expected: Optional[list[str]]) -> bool:
+        if expected is None:
+            return True
+
+        assert isinstance(actual, list)
+        assert isinstance(expected, list)
+
+        if len(actual) != len(expected):
+            return False
+
+        # fnmatchcase() allows common Unix shell-style wildcards in expected
+        # output, including:
+        # - * to match everything
+        # - ? to match any single character
+        # - [seq] to match any character in seq
+        # - [!seq] to match any character not in seq
+        return all(map(fnmatch.fnmatchcase, actual, expected))
+
     if expected_output.get("status", 0) != status:
         raise TestFailure("status", status, stdout, stderr)
 
-    if expected_output.get("stdout", stdout) != stdout:
+    if not match_output(stdout, expected_output.get("stdout")):
         raise TestFailure("stdout", status, stdout, stderr)
 
-    if expected_output.get("stderr", stderr) != stderr:
+    if not match_output(stderr, expected_output.get("stderr")):
         raise TestFailure("stderr", status, stdout, stderr)
 
     return True
