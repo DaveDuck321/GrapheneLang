@@ -6,6 +6,7 @@ from .builtin_types import (
     StructDefinition,
 )
 from .expressions import (
+    Borrow,
     ConstantExpression,
     StackVariable,
     StructMemberAccess,

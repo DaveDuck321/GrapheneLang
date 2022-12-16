@@ -5,7 +5,13 @@ from .builtin_types import FunctionSignature, IntType, ReferenceType, StructDefi
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
-from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
+from .user_facing_errors import (
+    BorrowTypeError,
+    OperandError,
+    TypeCheckerError,
+    assert_else_throw,
+    throw,
+)
 
 
 class ConstantExpression(TypedExpression):
@@ -32,7 +38,7 @@ class ConstantExpression(TypedExpression):
 
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
-        super().__init__(ReferenceType(variable.type))
+        super().__init__(ReferenceType(variable.type, False))
 
         self.variable = variable
 
@@ -66,6 +72,13 @@ class VariableReference(TypedExpression):
 
 
 class FunctionParameter(TypedExpression):
+    def __init__(self, expr_type: Type) -> None:
+        if expr_type.is_reference:
+            # Implicit borrow here
+            super().__init__(ReferenceType(expr_type.get_non_reference_type(), True))
+        else:
+            super().__init__(expr_type)
+
     def __repr__(self) -> str:
         return f"FunctionParameter({self.type})"
 
@@ -139,6 +152,33 @@ class FunctionCallExpression(TypedExpression):
         throw(OperandError(f"Cannot modify the value returned by {self.signature}"))
 
 
+class Borrow(TypedExpression):
+    def __init__(self, expr: TypedExpression) -> None:
+        assert_else_throw(
+            expr.type.is_reference,
+            BorrowTypeError(expr.type.get_user_facing_name(False)),
+        )
+        self._expr = expr
+        this_type = ReferenceType(expr.type.get_non_reference_type(), True)
+        super().__init__(this_type)
+
+    def __repr__(self) -> str:
+        return f"Borrow({repr(self._expr)})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        return self._expr.generate_ir(reg_gen)
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        return self._expr.ir_ref_without_type_annotation
+
+    def assert_can_read_from(self) -> None:
+        return self._expr.assert_can_read_from()
+
+    def assert_can_write_to(self) -> None:
+        return self._expr.assert_can_write_to()
+
+
 class StructMemberAccess(TypedExpression):
     def __init__(self, lhs: TypedExpression, member_name: str) -> None:
         self._lhs = lhs
@@ -161,7 +201,7 @@ class StructMemberAccess(TypedExpression):
 
         self._source_struct_is_reference = lhs.type.is_reference
         if self._source_struct_is_reference:
-            super().__init__(ReferenceType(member_type))
+            super().__init__(ReferenceType(member_type, False))
         else:
             super().__init__(member_type)
 
