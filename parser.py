@@ -61,6 +61,7 @@ class TypeTransformer(Transformer):
 
     @v_args(inline=True)
     def type(self, child: cg.Type) -> cg.Type:
+        assert isinstance(child, cg.Type)
         return child
 
     @v_args(inline=True)
@@ -122,7 +123,6 @@ class ParseTypeDefinitions(Interpreter):
         for generic_name in generics:
             assert isinstance(generic_name, Token)
 
-            # FIXME this doesn't print file/line information.
             assert_else_throw(
                 generic_name.value not in available_generics,
                 RepeatedGenericName(generic_name, type_name),
