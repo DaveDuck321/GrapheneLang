@@ -441,13 +441,13 @@ def generate_body(
                 exc.orig_exc.message,
                 line.meta.line,
                 function.get_signature().user_facing_name,
-            )
+            ) from exc
         except GrapheneError as exc:
             raise ErrorWithLineInfo(
                 exc.message,
                 line.meta.line,
                 function.get_signature().user_facing_name,
-            )
+            ) from exc
 
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
