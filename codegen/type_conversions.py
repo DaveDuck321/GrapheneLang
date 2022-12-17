@@ -3,7 +3,13 @@ from typing import Iterator
 
 from .builtin_types import IntegerDefinition
 from .interfaces import Type, TypedExpression
-from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
+from .user_facing_errors import (
+    MissingBorrowError,
+    OperandError,
+    TypeCheckerError,
+    assert_else_throw,
+    throw,
+)
 
 
 class Dereference(TypedExpression):
@@ -107,12 +113,23 @@ def do_implicit_conversion(
     """
     expr_list: list[TypedExpression] = [src]
 
+    if src.type.is_reference and dest_type.is_reference:
+        assert_else_throw(
+            src.type.is_borrowed,
+            MissingBorrowError(src.type.get_user_facing_name(False)),
+        )
+
     # Same type, nothing to do.
     if src.type == dest_type:
         return expr_list[-1], expr_list[1:]
 
     # Check if we need to dereference the expression.
-    if src.type.is_reference and not dest_type.is_reference:
+    #   we never try to dereference a borrowed reference
+    if (
+        src.type.is_reference
+        and not src.type.is_borrowed
+        and not dest_type.is_reference
+    ):
         expr_list.append(Dereference(src))
 
     current_def = expr_list[-1].type.definition
