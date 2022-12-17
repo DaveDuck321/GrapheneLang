@@ -166,16 +166,15 @@ def run_test(path: Path, io_harness=True) -> None:
 io_lock = Lock()
 
 
-def run_test_print_result(test: tuple[int, str]) -> bool:
-    test_number, test_name = test
+def run_test_print_result(test_name: str) -> bool:
     try:
         run_test(Path(__file__).parent / test_name)
         with io_lock:
-            print(f"TEST {test_number}: '{test_name}'")
-            print("   PASSED")
+            print(f"PASSED '{test_name}'")
         return True
     except TestFailure as error:
         with io_lock:
+            print(f"FAILED '{test_name}'")
             print(error)
             print()
         return False
@@ -183,7 +182,7 @@ def run_test_print_result(test: tuple[int, str]) -> bool:
 
 def run_tests(tests: list[str], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        passed = sum(executor.map(run_test_print_result, enumerate(tests, 1)))
+        passed = sum(executor.map(run_test_print_result, tests))
 
     failed = len(tests) - passed
     if failed:
