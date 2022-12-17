@@ -187,10 +187,8 @@ class ReferenceType(Type):
         assert isinstance(self.definition, self.Definition)
         return self.definition.value_type
 
-    def __init__(self, value_type: Type, is_explicitly_borrowed: bool) -> None:
-        super().__init__(
-            self.Definition(value_type), is_explicitly_borrowed=is_explicitly_borrowed
-        )
+    def __init__(self, value_type: Type, is_borrowed: bool) -> None:
+        super().__init__(self.Definition(value_type), is_borrowed=is_borrowed)
 
 
 class StructDefinition(TypeDefinition):

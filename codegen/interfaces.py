@@ -65,10 +65,10 @@ class Type:
         definition: TypeDefinition,
         typedef_alias: Optional[str] = None,
         generic_args: Optional[list["Type"]] = None,
-        is_explicitly_borrowed: bool = False,
+        is_borrowed: bool = False,
     ) -> None:
         self.definition = definition
-        self.is_explicitly_borrowed = is_explicitly_borrowed
+        self.is_borrowed = is_borrowed
         self._typedef_alias = typedef_alias  # Name given in typedef, without generics.
         self._generic_args = generic_args
 
