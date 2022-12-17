@@ -160,35 +160,26 @@ def do_implicit_conversion(
 
 
 def is_type_implicitly_convertible(src_type: Type, dest_type: Type) -> bool:
-    # TODO can we implement this using do_implicit_conversion()?
-    if dest_type.is_reference and src_type.is_reference and not src_type.is_borrowed:
+    class Wrapper(TypedExpression):
+        def __repr__(self) -> str:
+            return f"Wrapper({repr(self.type)})"
+
+        @cached_property
+        def ir_ref_without_type_annotation(self) -> str:
+            assert False
+
+        def assert_can_read_from(self) -> None:
+            assert False
+
+        def assert_can_write_to(self) -> None:
+            assert False
+
+    try:
+        do_implicit_conversion(Wrapper(src_type), dest_type)
+    except TypeCheckerError:
         return False
 
-    if src_type == dest_type:
-        return True
-
-    if (
-        src_type.is_reference
-        and not src_type.is_borrowed
-        and not dest_type.is_reference
-    ):
-        src_type = src_type.get_non_reference_type()
-
-    current_def = src_type.definition
-    dest_def = dest_type.definition
-
-    # Integer promotion.
-    if (
-        isinstance(current_def, IntegerDefinition)
-        and isinstance(dest_def, IntegerDefinition)
-        and current_def.is_signed == dest_def.is_signed
-        and current_def.bits < dest_def.bits
-    ):
-        return True
-
-    # TODO float promotion.
-
-    return src_type == dest_type
+    return True
 
 
 def assert_is_implicitly_convertible(
