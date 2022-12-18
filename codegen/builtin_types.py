@@ -138,50 +138,75 @@ class StringType(Type):
         super().__init__(definition, definition._name)
 
 
-class ReferenceType(Type):
+class AddressableTypeDefinition(TypeDefinition):
+    def __init__(self, value_type: Type) -> None:
+        super().__init__()
+
+        self.value_type = value_type
+
+    def to_ir_constant(self, _: str) -> str:
+        # We shouldn't be able to initialize a reference with a constant.
+        assert False
+
+    @cached_property
+    def alignment(self) -> int:
+        # FIXME replace magic number. References are pointer-aligned.
+        return 8
+
+    def get_ir_type(self, _: Optional[str]) -> str:
+        # Opaque pointer type.
+        return self.ir_definition
+
+    @cached_property
+    def ir_definition(self) -> str:
+        return "ptr"
+
+    def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, TypeDefinition)
+
+        if isinstance(other, type(self)):
+            return self.value_type == other.value_type
+
+        return False
+
+
+class AddressableValueType(Type):
     is_reference = True
 
-    class Definition(TypeDefinition):
-        def __init__(self, value_type: Type) -> None:
-            super().__init__()
-
-            self.value_type = value_type
-
-        def to_ir_constant(self, _: str) -> str:
-            # We shouldn't be able to initialize a reference with a constant.
+    class Definition(AddressableTypeDefinition):
+        @cached_property
+        def mangled_name(self) -> str:
             assert False
 
         @cached_property
-        def alignment(self) -> int:
-            # FIXME replace magic number. References are pointer-aligned.
-            return 8
+        def user_facing_name(self) -> str:
+            return f"{self.value_type.get_user_facing_name(False)}"
+
+        def __repr__(self) -> str:
+            return f"AddressableValue.Definition({repr(self.value_type)})"
+
+    def get_non_reference_type(self) -> Type:
+        assert isinstance(self.definition, self.Definition)
+        return self.definition.value_type
+
+    def __init__(self, value_type: Type) -> None:
+        super().__init__(self.Definition(value_type))
+
+
+class ReferenceType(Type):
+    is_reference = True
+
+    class Definition(AddressableTypeDefinition):
+        @cached_property
+        def mangled_name(self) -> str:
+            return f"__RT{self.value_type.mangled_name}__TR"
 
         @cached_property
         def user_facing_name(self) -> str:
             return f"{self.value_type.get_user_facing_name(False)}&"
 
-        def get_ir_type(self, _: Optional[str]) -> str:
-            # Opaque pointer type.
-            return self.ir_definition
-
-        @cached_property
-        def ir_definition(self) -> str:
-            return "ptr"
-
-        @cached_property
-        def mangled_name(self) -> str:
-            return f"__RT{self.value_type.mangled_name}__TR"
-
         def __repr__(self) -> str:
             return f"ReferenceType.Definition({repr(self.value_type)})"
-
-        def __eq__(self, other: Any) -> bool:
-            assert isinstance(other, TypeDefinition)
-
-            if isinstance(other, ReferenceType.Definition):
-                return self.value_type == other.value_type
-
-            return False
 
     def get_non_reference_type(self) -> Type:
         assert isinstance(self.definition, self.Definition)

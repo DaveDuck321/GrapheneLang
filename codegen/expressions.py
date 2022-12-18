@@ -1,7 +1,13 @@
 from functools import cached_property
 from typing import Iterator
 
-from .builtin_types import FunctionSignature, IntType, ReferenceType, StructDefinition
+from .builtin_types import (
+    AddressableValueType,
+    FunctionSignature,
+    IntType,
+    ReferenceType,
+    StructDefinition,
+)
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
@@ -38,7 +44,7 @@ class ConstantExpression(TypedExpression):
 
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
-        super().__init__(ReferenceType(variable.type, False))
+        super().__init__(AddressableValueType(variable.type))
 
         self.variable = variable
 
@@ -201,7 +207,7 @@ class StructMemberAccess(TypedExpression):
 
         self._source_struct_is_reference = lhs.type.is_reference
         if self._source_struct_is_reference:
-            super().__init__(ReferenceType(member_type, False))
+            super().__init__(AddressableValueType(member_type))
         else:
             super().__init__(member_type)
 
