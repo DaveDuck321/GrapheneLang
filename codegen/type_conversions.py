@@ -4,7 +4,6 @@ from typing import Iterator
 from .builtin_types import IntegerDefinition
 from .interfaces import Type, TypedExpression
 from .user_facing_errors import (
-    MissingBorrowError,
     OperandError,
     TypeCheckerError,
     assert_else_throw,
@@ -88,6 +87,20 @@ class PromoteInteger(TypedExpression):
         throw(OperandError("Cannot modify promoted integers"))
 
 
+def dereference_as_required_for_borrow(
+    src: TypedExpression,
+) -> list[TypedExpression]:
+
+    expr_list: list[TypedExpression] = [src]
+    while expr_list[-1].type.is_reference:
+        expr_list.append(Dereference(expr_list[-1]))
+
+    if src.type.is_borrowed:
+        # Borrow is required to ALWAYS return a top level reference
+        return expr_list[:-1]
+    return expr_list
+
+
 def do_implicit_conversion(
     src: TypedExpression, dest_type: Type, context: str = ""
 ) -> tuple[TypedExpression, list[TypedExpression]]:
@@ -111,26 +124,11 @@ def do_implicit_conversion(
             desired type, plus a list of expressions that need to be evaluated
             in order to perform the conversion.
     """
-    expr_list: list[TypedExpression] = [src]
-
-    if src.type.is_reference and dest_type.is_reference:
-        assert_else_throw(
-            src.type.is_borrowed,
-            MissingBorrowError(src.type.get_user_facing_name(False)),
-        )
+    expr_list = dereference_as_required_for_borrow(src)
 
     # Same type, nothing to do.
     if src.type == dest_type:
         return expr_list[-1], expr_list[1:]
-
-    # Check if we need to dereference the expression.
-    #   we never try to dereference a borrowed reference
-    if (
-        src.type.is_reference
-        and not src.type.is_borrowed
-        and not dest_type.is_reference
-    ):
-        expr_list.append(Dereference(src))
 
     current_def = expr_list[-1].type.definition
     dest_def = dest_type.definition
