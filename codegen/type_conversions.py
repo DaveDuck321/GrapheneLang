@@ -87,18 +87,16 @@ class PromoteInteger(TypedExpression):
         throw(OperandError("Cannot modify promoted integers"))
 
 
-def dereference_as_required_for_borrow(
-    src: TypedExpression,
-) -> list[TypedExpression]:
-
+def dereference_to_value(src: TypedExpression) -> list[TypedExpression]:
     expr_list: list[TypedExpression] = [src]
     while expr_list[-1].type.is_reference:
         expr_list.append(Dereference(expr_list[-1]))
 
-    if src.type.is_borrowed:
-        # Borrow is required to ALWAYS return a top level reference
-        return expr_list[:-1]
     return expr_list
+
+
+def dereference_to_addressable(src: TypedExpression) -> list[TypedExpression]:
+    return dereference_to_value(src)[:-1]
 
 
 def do_implicit_conversion(
@@ -124,7 +122,10 @@ def do_implicit_conversion(
             desired type, plus a list of expressions that need to be evaluated
             in order to perform the conversion.
     """
-    expr_list = dereference_as_required_for_borrow(src)
+    if src.type.is_borrowed:
+        expr_list = dereference_to_addressable(src)
+    else:
+        expr_list = dereference_to_value(src)
 
     # Same type, nothing to do.
     if src.type == dest_type:

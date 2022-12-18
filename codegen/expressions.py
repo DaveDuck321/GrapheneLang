@@ -10,7 +10,11 @@ from .builtin_types import (
 )
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
-from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
+from .type_conversions import (
+    assert_is_implicitly_convertible,
+    do_implicit_conversion,
+    dereference_to_addressable,
+)
 from .user_facing_errors import (
     BorrowTypeError,
     OperandError,
@@ -187,10 +191,18 @@ class Borrow(TypedExpression):
 
 class StructMemberAccess(TypedExpression):
     def __init__(self, lhs: TypedExpression, member_name: str) -> None:
-        self._lhs = lhs
         self._member_name = member_name
 
-        self._struct_type = lhs.type.get_non_reference_type()
+        # TODO: it kinda seems like we're borrowing here... should we use that syntax?
+        if lhs.type.is_reference:
+            derefs = dereference_to_addressable(lhs)
+            self._deref_exprs = derefs[1:]
+            self._lhs = derefs[-1]
+        else:
+            self._deref_exprs = []
+            self._lhs = lhs
+
+        self._struct_type = self._lhs.type.get_non_reference_type()
 
         struct_definition = self._struct_type.definition
         assert_else_throw(
@@ -211,32 +223,38 @@ class StructMemberAccess(TypedExpression):
         else:
             super().__init__(member_type)
 
-    def generate_ir_for_reference_type(self) -> list[str]:
+    def generate_ir_for_reference_type(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
+        deref_ir = []
+        for expression in self._deref_exprs:
+            deref_ir.extend(expression.generate_ir(reg_gen))
+
         index = ConstantExpression(IntType(), str(self._access_index))
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
+        self.result_reg = next(reg_gen)
         return [
+            *deref_ir,
             f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type},"
-            f" {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}"
+            f" {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
         ]
 
-    def generate_ir_for_value_type(self) -> list[str]:
+    def generate_ir_for_value_type(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#insertvalue-instruction
+        assert len(self._deref_exprs) == 0
 
         # <result> = extractvalue <aggregate type> <val>, <idx>{, <idx>}*
+        self.result_reg = next(reg_gen)
         return [
             f"%{self.result_reg} = extractvalue {self._lhs.ir_ref_with_type_annotation},"
             f" {self._access_index}"
         ]
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        self.result_reg = next(reg_gen)
-
         if self._source_struct_is_reference:
-            return self.generate_ir_for_reference_type()
+            return self.generate_ir_for_reference_type(reg_gen)
 
-        return self.generate_ir_for_value_type()
+        return self.generate_ir_for_value_type(reg_gen)
 
     @cached_property
     def ir_ref_without_type_annotation(self) -> str:
