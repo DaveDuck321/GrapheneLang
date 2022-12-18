@@ -9,7 +9,10 @@ from .builtin_types import FunctionSignature, get_builtin_types
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
-from .type_conversions import is_type_implicitly_convertible
+from .type_conversions import (
+    get_type_after_implicit_derefs,
+    is_type_implicitly_convertible,
+)
 from .user_facing_errors import (
     FailedLookupError,
     InvalidEscapeSequence,
@@ -234,7 +237,7 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_args)
 
-        arg_types = [arg.type for arg in fn_args]
+        arg_types = [get_type_after_implicit_derefs(arg) for arg in fn_args]
         function = self._function_table.lookup_function(fn_name, arg_types)
         return FunctionCallExpression(function.get_signature(), fn_args)
 

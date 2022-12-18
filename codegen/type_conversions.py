@@ -99,6 +99,14 @@ def dereference_to_addressable(src: TypedExpression) -> list[TypedExpression]:
     return dereference_to_value(src)[:-1]
 
 
+def get_type_after_implicit_derefs(src: TypedExpression) -> Type:
+    if src.type.is_borrowed:
+        # Borrows prevent automatic dereferencing
+        return dereference_to_addressable(src)[-1].type
+
+    return dereference_to_value(src)[-1].type
+
+
 def do_implicit_conversion(
     src: TypedExpression, dest_type: Type, context: str = ""
 ) -> tuple[TypedExpression, list[TypedExpression]]:
