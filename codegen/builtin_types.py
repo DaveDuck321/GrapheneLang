@@ -40,9 +40,8 @@ class PrimitiveDefinition(TypeDefinition):
 
     @cached_property
     def mangled_name(self) -> str:
-        # Assert not reached:
-        #   it should be impossible to create an anonymous primitive type
-        #   ref/ structs overwrite this
+        # Assert not reached: not all primitive types can be instantiated
+        # anonymously. Those that can (e.g. structs, ints) overwrite this.
         assert False
 
     def __repr__(self) -> str:
@@ -80,6 +79,10 @@ class IntegerDefinition(PrimitiveDefinition):
 
         return value
 
+    @cached_property
+    def mangled_name(self) -> str:
+        return self._name
+
     def __eq__(self, other: Any) -> bool:
         if not super().__eq__(other):
             return False
@@ -97,7 +100,7 @@ class GenericIntType(Type):
         assert is_power_of_2 and is_divisible_into_bytes
 
         definition = IntegerDefinition(name, size_in_bits, is_signed)
-        super().__init__(definition, definition._name)
+        super().__init__(definition)
 
 
 class IntType(GenericIntType):

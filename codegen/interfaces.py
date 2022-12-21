@@ -156,7 +156,10 @@ class Type:
         return self.definition.get_ir_type(None)
 
     def get_ir_initial_type_def(self) -> list[str]:
-        assert self._typedef_alias
+        # Not a typedef, nothing to do.
+        if not self._typedef_alias:
+            return []
+
         named_ref = self.definition.get_ir_type(self.mangled_name)
         return [f"{named_ref} = type {self.ir_definition}"]
 
@@ -172,9 +175,10 @@ class Type:
     def mangled_name(self) -> str:
         assert not self.is_unborrowed_ref
 
-        alias = self._typedef_alias or f"anon_{self.definition.mangled_name}"
+        alias = self._typedef_alias or self.definition.mangled_name
         value_type_mangled = self.mangle_generic_type(alias, self._generic_args)
 
+        # FIXME embed reference count.
         return (
             f"__RT{value_type_mangled}__TR" if self.is_reference else value_type_mangled
         )
