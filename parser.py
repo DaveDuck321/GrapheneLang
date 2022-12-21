@@ -80,7 +80,7 @@ class TypeTransformer(Transformer):
     def ref_type(self, value_type: cg.Type) -> cg.Type:
         assert isinstance(value_type, cg.Type)
 
-        return cg.ReferenceType(value_type, False)
+        return value_type.to_reference()
 
     def struct_type(self, member_trees: list[Tree]) -> cg.Type:
         members: list[cg.Parameter] = []
