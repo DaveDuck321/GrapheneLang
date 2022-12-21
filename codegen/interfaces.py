@@ -243,6 +243,15 @@ class Type:
 
         return decayed_type
 
+    def new_from_typedef(
+        self, typedef_alias: str, generic_args: list["Type"]
+    ) -> "Type":
+        new_type = self.copy()
+        new_type._typedef_alias = typedef_alias
+        new_type._generic_args = generic_args
+
+        return new_type
+
 
 @dataclass
 class Parameter:
