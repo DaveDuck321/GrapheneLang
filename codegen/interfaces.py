@@ -178,9 +178,10 @@ class Type:
         alias = self._typedef_alias or self.definition.mangled_name
         value_type_mangled = self.mangle_generic_type(alias, self._generic_args)
 
-        # FIXME embed reference count.
         return (
-            f"__RT{value_type_mangled}__TR" if self.is_reference else value_type_mangled
+            f"__RT{self.ref_depth}{value_type_mangled}__{self.ref_depth}TR"
+            if self.is_reference
+            else value_type_mangled
         )
 
     def to_ir_constant(self, value: str) -> str:
