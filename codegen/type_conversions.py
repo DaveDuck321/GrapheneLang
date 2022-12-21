@@ -13,9 +13,7 @@ from .user_facing_errors import (
 
 class Dereference(TypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        assert ref.type.is_reference
-
-        super().__init__(ref.type.get_non_reference_type())
+        super().__init__(ref.type.to_dereferenced_type())
 
         self.ref = ref
 
@@ -46,8 +44,30 @@ class Dereference(TypedExpression):
         self.ref.assert_can_write_to()
 
 
+class Decay(TypedExpression):
+    def __init__(self, expr: TypedExpression) -> None:
+        super().__init__(expr.type.to_decayed_type())
+
+        self.expr = expr
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        return self.expr.ir_ref_without_type_annotation
+
+    def __repr__(self) -> str:
+        return f"Decay({self.expr})"
+
+    def assert_can_read_from(self) -> None:
+        self.expr.assert_can_read_from()
+
+    def assert_can_write_to(self) -> None:
+        self.expr.assert_can_write_to()
+
+
 class PromoteInteger(TypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
+        assert not src.type.is_pointer
+        assert not dest_type.is_pointer
         assert isinstance(src.type.definition, IntegerDefinition)
         assert isinstance(dest_type.definition, IntegerDefinition)
         assert src.type.definition.is_signed == dest_type.definition.is_signed
@@ -92,19 +112,21 @@ def dereference_to_value(src: TypedExpression) -> list[TypedExpression]:
     while expr_list[-1].type.is_reference:
         expr_list.append(Dereference(expr_list[-1]))
 
-    return expr_list
+    return expr_list[1:]
 
 
-def dereference_to_addressable(src: TypedExpression) -> list[TypedExpression]:
+def dereference_to_single_reference(src: TypedExpression) -> list[TypedExpression]:
     return dereference_to_value(src)[:-1]
 
 
 def get_type_after_implicit_derefs(src: TypedExpression) -> Type:
+    value_type = src.type.to_value_type()
+
     if src.type.is_borrowed:
         # Borrows prevent automatic dereferencing
-        return dereference_to_addressable(src)[-1].type
+        return value_type.to_unborrowed_ref().to_borrowed_ref()
 
-    return dereference_to_value(src)[-1].type
+    return value_type
 
 
 def do_implicit_conversion(
@@ -130,14 +152,18 @@ def do_implicit_conversion(
             desired type, plus a list of expressions that need to be evaluated
             in order to perform the conversion.
     """
-    if src.type.is_borrowed:
-        expr_list = dereference_to_addressable(src)
-    else:
-        expr_list = dereference_to_value(src)
+    expr_list = [src]
 
-    # Same type, nothing to do.
-    if src.type == dest_type:
-        return expr_list[-1], expr_list[1:]
+    # TODO what a mess!
+    if src.type.is_borrowed:
+        expr_list += dereference_to_single_reference(expr_list[-1])
+    else:
+        # FIXME this is probably not what we want. Maybe we should use
+        # dest_type.is_borrowed (and ensure that all callers set it where
+        # required).
+        if expr_list[-1].type.is_unborrowed_ref and not dest_type.is_reference:
+            expr_list.append(Decay(expr_list[-1]))
+        expr_list += dereference_to_value(expr_list[-1])
 
     current_def = expr_list[-1].type.definition
     dest_def = dest_type.definition

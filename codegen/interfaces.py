@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from copy import copy
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterable, Iterator, Optional
@@ -43,8 +44,6 @@ class TypeDefinition(ABC):
 
 
 class Type:
-    is_reference = False
-
     @staticmethod
     def mangle_list(types: list["Type"]) -> str:
         generic_mangles = map(lambda t: t.mangled_name, types)
@@ -65,12 +64,29 @@ class Type:
         definition: TypeDefinition,
         typedef_alias: Optional[str] = None,
         generic_args: Optional[list["Type"]] = None,
-        is_borrowed: bool = False,
     ) -> None:
         self.definition = definition
-        self.is_borrowed = is_borrowed
         self._typedef_alias = typedef_alias  # Name given in typedef, without generics.
         self._generic_args = generic_args
+
+        # TODO explanation.
+        self.is_unborrowed_ref: bool = False
+        self.is_borrowed: bool = False
+        self._ref_depth: int = 0
+
+    @property
+    def ref_depth(self) -> int:
+        assert self._ref_depth >= 0
+
+        return self._ref_depth
+
+    @property
+    def is_reference(self) -> bool:
+        return self.ref_depth > 0
+
+    @property
+    def is_pointer(self) -> bool:
+        return self.is_unborrowed_ref or self.is_reference
 
     @cached_property
     def generic_annotation(self) -> str:
@@ -87,13 +103,17 @@ class Type:
         name = f"{self._typedef_alias} = " if self._typedef_alias else ""
         name += repr(self.definition)
 
+        # TODO this could be more informative (borrowed, ref_depth).
         return f"{self.__class__.__name__}({name})"
 
     def get_user_facing_name(self, full: bool) -> str:
+        ref_suffix = "&" * self.ref_depth + "*" * self.is_unborrowed_ref
+
         # Return everything (that's available).
         if full:
             name = f"typedef {self._typedef_alias} = " if self._typedef_alias else ""
             name += self.definition.user_facing_name
+            name += ref_suffix
 
             # FIXME returns e.g. "typedef int = int"  for primitive types.
             return name
@@ -103,19 +123,33 @@ class Type:
             return self._typedef_alias
 
         # Fall back to the type definition.
-        return self.definition.user_facing_name
+        return self.definition.user_facing_name + ref_suffix
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
 
-        return self.definition == other.definition
+        return (
+            self.definition == other.definition
+            and self.is_unborrowed_ref == other.is_unborrowed_ref
+            and self.ref_depth == other.ref_depth
+        )
 
-    @cached_property
+    @property
     def alignment(self) -> int:
-        return self.definition.alignment
+        # FIXME replace magic number.
+        return 8 if self.is_pointer else self.definition.alignment
 
-    @cached_property
+    @property
+    def ir_definition(self) -> str:
+        # Opaque pointer type.
+        return "ptr" if self.is_pointer else self.definition.ir_definition
+
+    @property
     def ir_type(self) -> str:
+        # Opaque pointer type.
+        if self.is_pointer:
+            return "ptr"
+
         if self._typedef_alias:
             return self.definition.get_ir_type(self.mangled_name)
 
@@ -124,17 +158,85 @@ class Type:
     def get_ir_initial_type_def(self) -> list[str]:
         assert self._typedef_alias
         named_ref = self.definition.get_ir_type(self.mangled_name)
-        definition = self.definition.ir_definition
-        return [f"{named_ref} = type {definition}"]
+        return [f"{named_ref} = type {self.ir_definition}"]
 
-    def get_non_reference_type(self) -> "Type":
-        return self
+    def to_value_type(self) -> "Type":
+        value_type = self.copy()
+        value_type._ref_depth = 0
+        value_type.is_unborrowed_ref = False
+        value_type.is_borrowed = False
 
-    @cached_property
+        return value_type
+
+    @property
     def mangled_name(self) -> str:
-        alias = self._typedef_alias or f"anon_{self.definition.mangled_name}"
+        assert not self.is_unborrowed_ref
 
-        return self.mangle_generic_type(alias, self._generic_args)
+        alias = self._typedef_alias or f"anon_{self.definition.mangled_name}"
+        value_type_mangled = self.mangle_generic_type(alias, self._generic_args)
+
+        return (
+            f"__RT{value_type_mangled}__TR" if self.is_reference else value_type_mangled
+        )
+
+    def to_ir_constant(self, value: str) -> str:
+        # We shouldn't be able to initialize a pointer type with a constant.
+        assert not self.is_pointer
+
+        return self.definition.to_ir_constant(value)
+
+    def copy(self) -> "Type":
+        # TODO remove typedef alias.
+        # FIXME should this be a deepcopy()?
+        return copy(self)
+
+    def to_reference(self) -> "Type":
+        assert not self.is_unborrowed_ref
+
+        ref_type = self.copy()
+        ref_type._ref_depth += 1
+
+        return ref_type
+
+    def to_dereferenced_type(self) -> "Type":
+        assert not self.is_unborrowed_ref
+        assert self.is_reference
+
+        deref_type = self.copy()
+        deref_type._ref_depth -= 1
+
+        return deref_type
+
+    def to_unborrowed_ref(self) -> "Type":
+        assert not self.is_unborrowed_ref
+
+        unborrowed_type = self.copy()
+        unborrowed_type.is_unborrowed_ref = True
+
+        return unborrowed_type
+
+    def to_borrowed_ref(self) -> "Type":
+        # is_unborrowed_ref decays into a reference when borrowed.
+        assert self.is_unborrowed_ref
+        assert not self.is_borrowed
+
+        borrowed_type = self.copy()
+        borrowed_type._ref_depth += 1
+        borrowed_type.is_borrowed = True
+        borrowed_type.is_unborrowed_ref = False
+
+        return borrowed_type
+
+    def to_decayed_type(self) -> "Type":
+        # Decay into a reference without borrowing.
+        assert self.is_unborrowed_ref
+        assert not self.is_borrowed
+
+        decayed_type = self.copy()
+        decayed_type._ref_depth += 1
+        decayed_type.is_unborrowed_ref = False
+
+        return decayed_type
 
 
 @dataclass

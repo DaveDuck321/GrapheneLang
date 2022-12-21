@@ -1,19 +1,13 @@
 from functools import cached_property
 from typing import Iterator
 
-from .builtin_types import (
-    AddressableValueType,
-    FunctionSignature,
-    IntType,
-    ReferenceType,
-    StructDefinition,
-)
+from .builtin_types import FunctionSignature, IntType, StructDefinition
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
+    dereference_to_single_reference,
     do_implicit_conversion,
-    dereference_to_addressable,
 )
 from .user_facing_errors import (
     BorrowTypeError,
@@ -28,7 +22,7 @@ class ConstantExpression(TypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
         super().__init__(cst_type)
 
-        self.value = cst_type.definition.to_ir_constant(value)
+        self.value = cst_type.to_ir_constant(value)
 
     def __repr__(self) -> str:
         return f"ConstantExpression({self.type}, {self.value})"
@@ -48,7 +42,7 @@ class ConstantExpression(TypedExpression):
 
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
-        super().__init__(AddressableValueType(variable.type))
+        super().__init__(variable.type.to_unborrowed_ref())
 
         self.variable = variable
 
@@ -83,11 +77,13 @@ class VariableReference(TypedExpression):
 
 class FunctionParameter(TypedExpression):
     def __init__(self, expr_type: Type) -> None:
-        if expr_type.is_reference:
-            # Implicit borrow here
-            super().__init__(ReferenceType(expr_type.get_non_reference_type(), True))
-        else:
-            super().__init__(expr_type)
+        this_type = expr_type.copy()
+        # Implicit borrow here.
+        # XXX can't use to_borrowed(), since that increments ref_depth. We only
+        # want to flag that the type has been borrowed.
+        this_type.is_borrowed = expr_type.is_reference
+
+        super().__init__(this_type)
 
     def __repr__(self) -> str:
         return f"FunctionParameter({self.type})"
@@ -164,13 +160,16 @@ class FunctionCallExpression(TypedExpression):
 
 class Borrow(TypedExpression):
     def __init__(self, expr: TypedExpression) -> None:
+        this_type = expr.type
+
         assert_else_throw(
-            expr.type.is_reference,
-            BorrowTypeError(expr.type.get_user_facing_name(False)),
+            this_type.is_unborrowed_ref,
+            BorrowTypeError(this_type.get_user_facing_name(False)),
         )
+
         self._expr = expr
-        this_type = ReferenceType(expr.type.get_non_reference_type(), True)
-        super().__init__(this_type)
+
+        super().__init__(this_type.to_borrowed_ref())
 
     def __repr__(self) -> str:
         return f"Borrow({repr(self._expr)})"
@@ -183,10 +182,10 @@ class Borrow(TypedExpression):
         return self._expr.ir_ref_without_type_annotation
 
     def assert_can_read_from(self) -> None:
-        return self._expr.assert_can_read_from()
+        self._expr.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        return self._expr.assert_can_write_to()
+        self._expr.assert_can_write_to()
 
 
 class StructMemberAccess(TypedExpression):
@@ -195,14 +194,14 @@ class StructMemberAccess(TypedExpression):
 
         # TODO: it kinda seems like we're borrowing here... should we use that syntax?
         if lhs.type.is_reference:
-            derefs = dereference_to_addressable(lhs)
-            self._deref_exprs = derefs[1:]
-            self._lhs = derefs[-1]
+            self._deref_exprs = dereference_to_single_reference(lhs)
+            self._lhs = self._deref_exprs[-1]
         else:
             self._deref_exprs = []
             self._lhs = lhs
 
-        self._struct_type = self._lhs.type.get_non_reference_type()
+        # FIXME is this necessary?
+        self._struct_type = self._lhs.type.to_value_type()
 
         struct_definition = self._struct_type.definition
         assert_else_throw(
@@ -217,11 +216,14 @@ class StructMemberAccess(TypedExpression):
 
         self._access_index, member_type = struct_definition.get_member(member_name)
 
-        self._source_struct_is_reference = lhs.type.is_reference
-        if self._source_struct_is_reference:
-            super().__init__(AddressableValueType(member_type))
-        else:
-            super().__init__(member_type)
+        # FIXME changed this to is_pointer, is that correct?
+        self._source_struct_is_reference = lhs.type.is_pointer
+
+        super().__init__(
+            member_type.to_unborrowed_ref()
+            if self._source_struct_is_reference
+            else member_type
+        )
 
     def generate_ir_for_reference_type(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
