@@ -3,12 +3,7 @@ from typing import Iterator
 
 from .builtin_types import IntegerDefinition
 from .interfaces import Type, TypedExpression
-from .user_facing_errors import (
-    OperandError,
-    TypeCheckerError,
-    assert_else_throw,
-    throw,
-)
+from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
 
 
 class Dereference(TypedExpression):
@@ -41,7 +36,7 @@ class Dereference(TypedExpression):
         self.ref.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        self.ref.assert_can_write_to()
+        throw(OperandError("Cannot modify a dereferenced value"))
 
 
 class Decay(TypedExpression):
