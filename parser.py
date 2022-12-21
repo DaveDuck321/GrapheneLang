@@ -142,7 +142,7 @@ class ParseTypeDefinitions(Interpreter):
 
             mapping = dict(zip(available_generics, concrete_types))
             rhs = TypeTransformer.parse(self._program, rhs_tree, mapping)
-            return cg.Type(rhs.definition, name_prefix, concrete_types)
+            return rhs.new_from_typedef(name_prefix, concrete_types)
 
         self._program.add_type(type_name, type_parser)
 

@@ -1,4 +1,5 @@
 typedef my_i32 : int;
+typedef i64_ref : i64&;
 typedef my_struct[T] : {a: T, b: my_i32};
 
 foreign puts : (str: string) -> int;
@@ -19,7 +20,7 @@ function c : () -> int = {
     return 1;
 };
 
-function d : (var : i64&) -> int = {
+function d : (var : i64_ref) -> int = {
     puts("hello world d");
     return 0;
 };
