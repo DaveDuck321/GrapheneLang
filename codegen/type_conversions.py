@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Iterator
+from typing import Iterator, Optional
 
 from .builtin_types import IntegerDefinition
 from .interfaces import Type, TypedExpression
@@ -114,23 +114,15 @@ def dereference_to_single_reference(src: TypedExpression) -> list[TypedExpressio
     return dereference_to_value(src)[:-1]
 
 
-def get_type_after_implicit_derefs(src: TypedExpression) -> Type:
-    value_type = src.type.to_value_type()
-
-    if src.type.is_borrowed:
-        # Borrows prevent automatic dereferencing
-        return value_type.to_unborrowed_ref().to_borrowed_ref()
-
-    return value_type
-
-
-def do_implicit_conversion(
+def implicit_conversion_impl(
     src: TypedExpression, dest_type: Type, context: str = ""
-) -> tuple[TypedExpression, list[TypedExpression]]:
-    """Attempt to convert expr to type target.
+) -> tuple[tuple[int, int], list[TypedExpression]]:
+    """Attempt to convert expression src to type dest_type.
 
     Only the following conversions are allowed:
-    - from reference type to value type.
+    - decaying an unborrowed reference to a normal reference (without
+      borrowing).
+    - dereferencing any reference type.
     - integer promotion.
     - float promotion (TODO).
 
@@ -141,36 +133,55 @@ def do_implicit_conversion(
     Args:
         src (TypedExpression): expression to convert.
         dest_type (Type): desired type.
+        context (str, optional): conversion context, used in error messages.
+            Defaults to "".
 
     Returns:
-        tuple[TypedExpression, list[TypedExpression]]: The expression of the
-            desired type, plus a list of expressions that need to be evaluated
-            in order to perform the conversion.
+        tuple[tuple[int, int], list[TypedExpression]]: Tuple contains the
+            promotion cost, followed by the dereferencing cost. The list
+            contains the chain of expressions required to convert the expression
+            to dest_type. The first element of the list is always src.
     """
     expr_list = [src]
 
-    # TODO what a mess!
-    if src.type.is_borrowed:
-        expr_list += dereference_to_single_reference(expr_list[-1])
-    else:
-        # FIXME this is probably not what we want. Maybe we should use
-        # dest_type.is_borrowed (and ensure that all callers set it where
-        # required).
-        if expr_list[-1].type.is_unborrowed_ref and not dest_type.is_reference:
-            expr_list.append(Decay(expr_list[-1]))
-        expr_list += dereference_to_value(expr_list[-1])
+    promotion_cost: int = 0
+    dereferencing_cost: int = 0
+
+    # If src hasn't been borrowed, then we are forced to decay the unborrowed
+    # reference into a normal reference, and hope that everything works out.
+    if expr_list[-1].type.is_unborrowed_ref:
+        expr_list.append(Decay(expr_list[-1]))
+
+    # If src hasn't been borrowed, then we can only read its value.
+    ref_depth_required = dest_type.ref_depth if expr_list[-1].type.is_borrowed else 0
+
+    # We are only allowed to dereference.
+    assert_else_throw(
+        expr_list[-1].type.ref_depth >= ref_depth_required,
+        TypeCheckerError(
+            context,
+            src.type.get_user_facing_name(False),
+            dest_type.get_user_facing_name(False),
+        ),
+    )
+
+    dereferencing_cost = expr_list[-1].type.ref_depth - ref_depth_required
+    for _ in range(dereferencing_cost):
+        expr_list.append(Dereference(expr_list[-1]))
 
     current_def = expr_list[-1].type.definition
     dest_def = dest_type.definition
 
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.
+    # FIXME check types are not pointers.
     if (
         isinstance(current_def, IntegerDefinition)
         and isinstance(dest_def, IntegerDefinition)
         and current_def.is_signed == dest_def.is_signed
         and current_def.bits < dest_def.bits
     ):
+        promotion_cost += dest_def.bits // current_def.bits
         expr_list.append(PromoteInteger(expr_list[-1], dest_type))
 
     # TODO float promotion.
@@ -184,26 +195,35 @@ def do_implicit_conversion(
         ),
     )
 
+    return (promotion_cost, dereferencing_cost), expr_list
+
+
+def do_implicit_conversion(
+    src: TypedExpression, dest_type: Type, context: str = ""
+) -> tuple[TypedExpression, list[TypedExpression]]:
+    _, expr_list = implicit_conversion_impl(src, dest_type, context)
+
     return expr_list[-1], expr_list[1:]
 
 
+class Wrapper(TypedExpression):
+    def __repr__(self) -> str:
+        return f"Wrapper({repr(self.type)})"
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert False
+
+    def assert_can_read_from(self) -> None:
+        assert False
+
+    def assert_can_write_to(self) -> None:
+        assert False
+
+
 def is_type_implicitly_convertible(src_type: Type, dest_type: Type) -> bool:
-    class Wrapper(TypedExpression):
-        def __repr__(self) -> str:
-            return f"Wrapper({repr(self.type)})"
-
-        @cached_property
-        def ir_ref_without_type_annotation(self) -> str:
-            assert False
-
-        def assert_can_read_from(self) -> None:
-            assert False
-
-        def assert_can_write_to(self) -> None:
-            assert False
-
     try:
-        do_implicit_conversion(Wrapper(src_type), dest_type)
+        implicit_conversion_impl(Wrapper(src_type), dest_type)
     except TypeCheckerError:
         return False
 
@@ -215,4 +235,14 @@ def assert_is_implicitly_convertible(
 ) -> None:
     # Just discard the return value. It will throw if the conversion fails.
     # TODO maybe we could cache the result for later.
-    do_implicit_conversion(expr, target, context)
+    implicit_conversion_impl(expr, target, context)
+
+
+def get_implicit_conversion_cost(
+    src_type: Type, dest_type: Type
+) -> Optional[tuple[int, int]]:
+    try:
+        costs, _ = implicit_conversion_impl(Wrapper(src_type), dest_type)
+        return costs
+    except TypeCheckerError:
+        return None

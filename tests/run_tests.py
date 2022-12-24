@@ -19,6 +19,7 @@ all_tests = [
     "generics_with_generic_annotations",
     "order_of_operation",
     "reference_borrowing",
+    "reference_nesting",
     "reference_overloading",
     "simple_typedef",
     "string_constants_ir",

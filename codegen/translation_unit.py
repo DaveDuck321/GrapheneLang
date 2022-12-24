@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, reduce
 from itertools import count
 from typing import Callable, Iterator
 
@@ -9,11 +9,9 @@ from .builtin_types import FunctionSignature, get_builtin_types
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
-from .type_conversions import (
-    get_type_after_implicit_derefs,
-    is_type_implicitly_convertible,
-)
+from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
+    AmbiguousFunctionCall,
     FailedLookupError,
     InvalidEscapeSequence,
     OverloadResolutionError,
@@ -154,6 +152,7 @@ class FunctionSymbolTable:
             self.graphene_functions.append(fn_to_add)
 
     def lookup_function(self, fn_name: str, fn_args: list[Type]):
+        # FIXME check argument number.
         candidate_functions = self._functions[fn_name]
 
         readable_arg_names = ", ".join(
@@ -166,12 +165,50 @@ class FunctionSymbolTable:
             ),
         )
 
+        functions_by_cost: list[tuple[tuple[int, int], Function]] = []
+        tuple_add = lambda a, b: tuple(sum(pair) for pair in zip(a, b))
+
         for function in candidate_functions:
-            if all(
-                is_type_implicitly_convertible(arg, other_arg)
-                for arg, other_arg in zip(fn_args, function.get_signature().arguments)
-            ):
-                return function
+            per_arg = list(
+                map(
+                    get_implicit_conversion_cost,
+                    fn_args,
+                    function.get_signature().arguments,
+                )
+            )
+
+            # Conversion failed for at least one argument, discard the candidate
+            # function.
+            if any(cost is None for cost in per_arg):
+                continue
+
+            costs = reduce(tuple_add, per_arg, (0, 0))
+            assert costs is not None
+
+            functions_by_cost.append((costs, function))
+
+        # List is sorted by the first element, then by the second.
+        functions_by_cost.sort(key=lambda t: t[0])
+
+        if len(functions_by_cost) == 1:
+            return functions_by_cost[0][1]
+
+        if len(functions_by_cost) > 1:
+            first, second = functions_by_cost[:2]
+
+            # If there's two or more equally good candidates, then this function
+            # call is ambiguous.
+            assert_else_throw(
+                first[0] < second[0],
+                AmbiguousFunctionCall(
+                    fn_name,
+                    readable_arg_names,
+                    first[1].get_signature().user_facing_name,
+                    second[1].get_signature().user_facing_name,
+                ),
+            )
+
+            return first[1]
 
         throw(OverloadResolutionError(fn_name, readable_arg_names))
 
@@ -237,7 +274,7 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_args)
 
-        arg_types = [get_type_after_implicit_derefs(arg) for arg in fn_args]
+        arg_types = [arg.type for arg in fn_args]
         function = self._function_table.lookup_function(fn_name, arg_types)
         return FunctionCallExpression(function.get_signature(), fn_args)
 
