@@ -6,7 +6,10 @@ _value_type: type_name
            | struct_type
            | function_type
 ref_type: _type "&" | "(" _type ")" "&"
-_type: _value_type | ref_type
+stack_array_type: _type "[" SIGNED_INT ("," SIGNED_INT)* "]"
+heap_array_type: _type "[" "&" ("," SIGNED_INT)* "]"
+
+_type: _value_type | ref_type | stack_array_type | heap_array_type
 type: _type
 generic_annotation: "<" _inner_list_of_type_names ">"
 
@@ -101,8 +104,11 @@ _expression: logical_or
 ?borrow_operator: struct_member_access
                 | "&" struct_member_access -> borrow_operator_use
 
-?struct_member_access: _non_operator_expression
+?struct_member_access: array_index_operator
                      | struct_member_access "." variable_name
+
+?array_index_operator: _non_operator_expression
+                     | array_index_operator "["  expression ("," expression)*  "]"
 
 // TODO: add support for arbitrary operators
 //  Alternatively we can prevent user defined operators not in this list
