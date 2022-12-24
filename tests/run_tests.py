@@ -12,6 +12,7 @@ from typing import Optional
 import schema
 
 all_tests = [
+    "ambiguous_function_call",
     "c_demo/compile_error",
     "c_demo/runtime_status",
     "duplicate_generics",
