@@ -1,6 +1,6 @@
 typedef my_i32 : int;
 typedef i64_ref : i64&;
-typedef my_struct[T] : {a: T, b: my_i32};
+typedef my_struct<T> : {a: T, b: my_i32};
 
 foreign puts : (str: string) -> int;
 foreign raise : (sig: int) -> int;
@@ -53,7 +53,7 @@ function main: () -> int = {
 
 
     let y: my_i32 = 8;
-    let z : my_struct[i32]; // Note: currently UB (struct uninitialized)
+    let z : my_struct<i32>; // Note: currently UB (struct uninitialized)
 
     // FIXME return 0;
     return 6 + 1 + z.a;
