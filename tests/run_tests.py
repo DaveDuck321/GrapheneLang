@@ -19,6 +19,7 @@ all_tests = [
     "generics_parsing",
     "generics_with_generic_annotations",
     "order_of_operation",
+    "overload_resolution_avoids_integer_promotion",
     "reference_borrowing",
     "reference_nesting",
     "reference_overloading",
