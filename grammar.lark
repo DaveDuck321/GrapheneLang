@@ -101,20 +101,16 @@ _expression: logical_or
        | unary_operator "**" power -> operator_use
 !?unary_operator: borrow_operator
                 | _unary_operator_token unary_operator -> unary_operator_use
-?borrow_operator: struct_member_access
-                | "&" struct_member_access -> borrow_operator_use
-
-?struct_member_access: array_index_operator
-                     | struct_member_access "." variable_name
-
-?array_index_operator: _non_operator_expression
-                     | array_index_operator "["  expression ("," expression)*  "]"
+?borrow_operator: _non_operator_expression
+                | "&" _non_operator_expression -> borrow_operator_use
 
 // TODO: add support for arbitrary operators
 //  Alternatively we can prevent user defined operators not in this list
 
 _non_operator_expression: function_call
                         | accessed_variable_name
+                        | struct_member_access
+                        | array_index_access
                         | "(" expression ")"
                         | named_struct_initialization
                         | adhoc_struct_initialization
@@ -122,6 +118,9 @@ _non_operator_expression: function_call
                         | SIGNED_INT
                         | SIGNED_FLOAT
                         | bool_constant
+
+struct_member_access: _non_operator_expression "." variable_name
+array_index_access: _non_operator_expression "["  expression ("," expression)*  "]"
 
 variable_declaration: "let" variable_name ":" type ["=" _expression]
 const_declaration: "const" variable_name ":" type "=" _expression
