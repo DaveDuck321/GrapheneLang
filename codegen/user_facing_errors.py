@@ -45,7 +45,7 @@ class OverloadResolutionError(GrapheneError):
     def __init__(self, fn_name: str, arguments: str) -> None:
         # TODO: suggest available overloads here
         super().__init__(
-            f"Error: overload resolution for function '{fn_name}({arguments})' failed"
+            f"Error: overload resolution for function call '{fn_name}({arguments})' failed"
         )
 
 
