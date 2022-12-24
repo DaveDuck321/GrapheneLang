@@ -197,6 +197,63 @@ class StructDefinition(TypeDefinition):
         return self._members == other._members
 
 
+class ArrayDefinition(TypeDefinition):
+    UNKNOWN_DIMENSION = 0
+
+    def __init__(self, element_type: Type, dimensions: list[int]) -> None:
+        super().__init__()
+
+        self._element_type = element_type
+        self._dimensions = dimensions
+
+    def to_ir_constant(self, value: str) -> str:
+        # TODO support array constants.
+        raise NotImplementedError()
+
+    @cached_property
+    def user_facing_name(self) -> str:
+        type_name = self._element_type.get_user_facing_name(False)
+        dimensions = ", ".join(map(str, self._dimensions))
+        return f"{type_name}[{dimensions}]"
+
+    def get_ir_type(self, alias: Optional[str]) -> str:
+        if alias:
+            return f"%array.{alias}"
+
+        return self.ir_definition
+
+    @cached_property
+    def ir_definition(self) -> str:
+        def ir_sub_definition(dims: list[int]):
+            if len(dims) == 0:
+                return self._element_type.ir_type
+            return f"[{dims[0]} x {ir_sub_definition(dims[1:])}]"
+
+        return ir_sub_definition(self._dimensions)
+
+    @cached_property
+    def mangled_name(self) -> str:
+        dimensions = ", ".join(map(str, self._dimensions))
+        return f"__AR{self._element_type.mangled_name}{dimensions}__AR"
+
+    @cached_property
+    def alignment(self) -> int:
+        return self._element_type.alignment
+
+    def __repr__(self) -> str:
+        dimensions = ", ".join(map(str, self._dimensions))
+        return f"Array({self._element_type} x ({dimensions}))"
+
+    def __eq__(self, other: Any) -> bool:
+        assert isinstance(other, TypeDefinition)
+        if not isinstance(other, ArrayDefinition):
+            return False
+        return (
+            self._dimensions == other._dimensions
+            and self._element_type == other._element_type
+        )
+
+
 @dataclass
 class FunctionSignature:
     name: str

@@ -82,6 +82,25 @@ class TypeTransformer(Transformer):
 
         return value_type.to_reference()
 
+    @v_args(inline=True)
+    def stack_array_type(
+        self, element_type: cg.Type, *dimension_tokens: Token
+    ) -> cg.Type:
+        dimensions: list[int] = [dimension.value for dimension in dimension_tokens]
+        return cg.Type(cg.ArrayDefinition(element_type, dimensions))
+
+    @v_args(inline=True)
+    def heap_array_type(
+        self, element_type: cg.Type, *dimension_tokens: Token
+    ) -> cg.Type:
+        dimensions: list[int] = [cg.ArrayDefinition.UNKNOWN_DIMENSION]
+        for dimension in dimension_tokens:
+            dimensions.append(dimension.value)
+
+        # A heap array must always be passed by reference
+        underlying_array = cg.Type(cg.ArrayDefinition(element_type, dimensions))
+        return underlying_array.to_reference()
+
     def struct_type(self, member_trees: list[Tree]) -> cg.Type:
         members: list[cg.Parameter] = []
         for member_name_tree, member_type in in_pairs(member_trees):

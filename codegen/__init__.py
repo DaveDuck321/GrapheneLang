@@ -1,4 +1,10 @@
-from .builtin_types import BoolType, IntType, StringType, StructDefinition
+from .builtin_types import (
+    ArrayDefinition,
+    BoolType,
+    IntType,
+    StringType,
+    StructDefinition,
+)
 from .expressions import (
     Borrow,
     ConstantExpression,
