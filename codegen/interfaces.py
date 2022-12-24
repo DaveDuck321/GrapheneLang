@@ -168,7 +168,7 @@ class Type:
         if self.is_pointer:
             return "ptr"
 
-        if self._typedef_alias:
+        if self._typedef_alias and self._ref_depth == self._typedef_alias_ref_depth:
             return self.definition.get_ir_type(self.mangled_name)
 
         return self.definition.get_ir_type(None)
