@@ -118,19 +118,18 @@ class Type:
         return f"{self.__class__.__name__}({name})"
 
     def get_user_facing_name(self, full: bool) -> str:
-        # It shouldn't be possible to dereference a typedef'd type.
-        assert self._ref_depth >= self._typedef_alias_ref_depth
-
+        prefix = "*" * max(self._typedef_alias_ref_depth - self._ref_depth, 0)
         suffix = (
             # This works in all cases because self._typedef_alias_ref_depth
             # is 0 if self._typedef_alias is not set.
-            "&" * (self._ref_depth - self._typedef_alias_ref_depth)
-            + "*" * self.is_unborrowed_ref
+            "&" * max(self._ref_depth - self._typedef_alias_ref_depth, 0)
+            + "#" * self.is_unborrowed_ref
             + " (borrowed)" * self.is_borrowed
         )
 
         # Return everything (that's available).
-        if full:
+        # TODO this should return something like "T&&, where typedef T = ...".
+        if full and self._ref_depth == self._typedef_alias_ref_depth:
             name = f"typedef {self._typedef_alias} = " if self._typedef_alias else ""
             name += self.definition.user_facing_name
             name += suffix
@@ -139,10 +138,10 @@ class Type:
 
         # If this is the product of a typedef, return the name given.
         if self._typedef_alias:
-            return self._typedef_alias + suffix
+            return prefix + self._typedef_alias + suffix
 
         # Fall back to the type definition.
-        return self.definition.user_facing_name + suffix
+        return prefix + self.definition.user_facing_name + suffix
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
