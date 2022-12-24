@@ -180,7 +180,7 @@ class ParseFunctionSignatures(Interpreter):
         self._program = program
         self._function_body_trees: list[tuple[cg.Function, Tree]] = []
 
-    def get_function_body_trees(self):
+    def get_function_body_trees(self) -> list[tuple[cg.Function, Tree]]:
         return self._function_body_trees
 
     @v_args(inline=True)
@@ -191,19 +191,13 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        func = self._build_function(name_tree, args_tree, return_type_tree, False)
-        self._program.add_function(func)
-
-        # Save the body to parse later (TODO: maybe forward declarations should be possible?)
-        self._function_body_trees.append((func, body_tree))
+        self._parse_function(name_tree, args_tree, return_type_tree, body_tree, False)
 
     @v_args(inline=True)
     def operator_function(
         self, op_tree: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
-    ):
-        func = self._build_function(op_tree, args_tree, return_type_tree, False)
-        self._program.add_function(func)
-        self._function_body_trees.append((func, body_tree))
+    ) -> None:
+        self._parse_function(op_tree, args_tree, return_type_tree, body_tree, False)
 
     @v_args(inline=True)
     def foreign_function(
@@ -212,8 +206,29 @@ class ParseFunctionSignatures(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
     ) -> None:
-        func = self._build_function(name_tree, args_tree, return_type_tree, True)
-        self._program.add_function(func)
+        self._parse_function(name_tree, args_tree, return_type_tree, None, True)
+
+    def _parse_function(
+        self,
+        name_tree: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Optional[Tree],
+        foreign: bool,
+    ) -> None:
+        try:
+            func = self._build_function(name_tree, args_tree, return_type_tree, foreign)
+            self._program.add_function(func)
+
+            # Save the body to parse later (TODO: maybe forward declarations
+            # should be possible?)
+            if body_tree is not None:
+                self._function_body_trees.append((func, body_tree))
+        except GrapheneError as exc:
+            # Not ideal but better than nothing.
+            raise ErrorWithLineInfo(
+                exc.message, name_tree.meta.line, extract_leaf_value(name_tree)
+            ) from exc
 
     def _build_function(
         self,
