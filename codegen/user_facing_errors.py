@@ -49,6 +49,16 @@ class OverloadResolutionError(GrapheneError):
         )
 
 
+class AmbiguousFunctionCall(GrapheneError):
+    def __init__(
+        self, fn_name: str, arguments: str, candidate_1: str, candidate_2: str
+    ) -> None:
+        super().__init__(
+            f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous. "
+            f"Equally good candidates are '{candidate_1}' and '{candidate_2}'."
+        )
+
+
 class OperandError(GrapheneError):
     # TODO error message.
     pass
