@@ -66,13 +66,24 @@ class Type:
         generic_args: Optional[list["Type"]] = None,
     ) -> None:
         self.definition = definition
-        self._typedef_alias = typedef_alias  # Name given in typedef, without generics.
         self._generic_args = generic_args
 
         # TODO explanation.
         self.is_unborrowed_ref: bool = False
         self.is_borrowed: bool = False
         self._ref_depth: int = 0
+
+        # Name given in typedef, without generics.
+        self._typedef_alias: Optional[str] = None
+        # Reference depth when the alias was set.
+        self._typedef_alias_ref_depth: int = 0
+
+        if typedef_alias is not None:
+            self._set_typedef_alias(typedef_alias)
+
+    def _set_typedef_alias(self, typedef_alias: str) -> None:
+        self._typedef_alias = typedef_alias
+        self._typedef_alias_ref_depth = self._ref_depth
 
     @property
     def ref_depth(self) -> int:
@@ -107,23 +118,31 @@ class Type:
         return f"{self.__class__.__name__}({name})"
 
     def get_user_facing_name(self, full: bool) -> str:
-        ref_suffix = "&" * self.ref_depth + "*" * self.is_unborrowed_ref
+        # It shouldn't be possible to dereference a typedef'd type.
+        assert self._ref_depth >= self._typedef_alias_ref_depth
+
+        suffix = (
+            # This works in all cases because self._typedef_alias_ref_depth
+            # is 0 if self._typedef_alias is not set.
+            "&" * (self._ref_depth - self._typedef_alias_ref_depth)
+            + "*" * self.is_unborrowed_ref
+            + " (borrowed)" * self.is_borrowed
+        )
 
         # Return everything (that's available).
         if full:
             name = f"typedef {self._typedef_alias} = " if self._typedef_alias else ""
             name += self.definition.user_facing_name
-            name += ref_suffix
+            name += suffix
 
-            # FIXME returns e.g. "typedef int = int"  for primitive types.
             return name
 
         # If this is the product of a typedef, return the name given.
         if self._typedef_alias:
-            return self._typedef_alias
+            return self._typedef_alias + suffix
 
         # Fall back to the type definition.
-        return self.definition.user_facing_name + ref_suffix
+        return self.definition.user_facing_name + suffix
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
@@ -191,7 +210,6 @@ class Type:
         return self.definition.to_ir_constant(value)
 
     def copy(self) -> "Type":
-        # TODO remove typedef alias.
         # FIXME should this be a deepcopy()?
         return copy(self)
 
@@ -247,7 +265,7 @@ class Type:
         self, typedef_alias: str, generic_args: list["Type"]
     ) -> "Type":
         new_type = self.copy()
-        new_type._typedef_alias = typedef_alias
+        new_type._set_typedef_alias(typedef_alias)
         new_type._generic_args = generic_args
 
         return new_type
