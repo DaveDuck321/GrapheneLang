@@ -244,6 +244,11 @@ class ExpressionTransformer(Transformer_InPlace):
         self._function = function
         self._scope = scope
 
+    @v_args(inline=True)
+    def expression(self, value: FlattenedExpression) -> FlattenedExpression:
+        assert isinstance(value, FlattenedExpression)
+        return value
+
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.IntType(), value)
         return FlattenedExpression([const_expr])
@@ -395,11 +400,13 @@ def generate_variable_declaration(
         # TODO coerce types.
         scope.add_generatable(cg.VariableAssignment(var, value.expression()))
 
-    # Need to parse value first.
-    ExpressionTransformer(program, function, scope).transform(body)
-
-    # Use helper to unpack children.
-    parse_variable_declaration(*body.children)  # type: ignore
+    name_tree, type_tree, value_tree = body.children
+    expression_value = (
+        ExpressionTransformer(program, function, scope).transform(value_tree)
+        if value_tree is not None
+        else None
+    )
+    parse_variable_declaration(name_tree, type_tree, expression_value)
 
 
 def generate_if_statement(
