@@ -8,7 +8,7 @@ _value_type: type_name
 ref_type: _value_type "&" | "(" _value_type ")" "&"
 _type: _value_type | ref_type
 type: _type
-generic_annotation: "[" _inner_list_of_type_names "]"
+generic_annotation: "<" _inner_list_of_type_names ">"
 
 accessed_variable_name: CNAME
 variable_name: CNAME
@@ -37,7 +37,7 @@ _top_level_program_feature: typedef
                           | variable_declaration
                           | const_declaration
 
-generic_definition_list: "[" _typedef_name ("," _typedef_name)* "]"
+generic_definition_list: "<" _typedef_name ("," _typedef_name)* ">"
 _typedef_name: CNAME
 typedef: "typedef" _typedef_name [ generic_definition_list ] ":" type
 
