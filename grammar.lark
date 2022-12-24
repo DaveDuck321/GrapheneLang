@@ -5,7 +5,7 @@ program: (_top_level_program_line)*
 _value_type: type_name
            | struct_type
            | function_type
-ref_type: _value_type "&" | "(" _value_type ")" "&"
+ref_type: _type "&" | "(" _type ")" "&"
 _type: _value_type | ref_type
 type: _type
 generic_annotation: "<" _inner_list_of_type_names ">"
