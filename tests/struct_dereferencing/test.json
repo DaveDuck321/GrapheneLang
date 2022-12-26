@@ -1,0 +1,14 @@
+{
+    "compile": {
+        "command": ["python", "../../driver.py", "main.c3", "-o", "./out/out.ll", "--emit-llvm"],
+        "output": {
+            "status": 0
+        }
+    },
+    "runtime": {
+        "command": ["llc", "out/out.ll", "-o", "out/out.S"],
+        "output": {
+            "status": 0
+        }
+    }
+}

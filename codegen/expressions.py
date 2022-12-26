@@ -8,6 +8,7 @@ from .type_conversions import (
     assert_is_implicitly_convertible,
     dereference_to_single_reference,
     do_implicit_conversion,
+    Decay,
 )
 from .user_facing_errors import (
     BorrowTypeError,
@@ -192,15 +193,18 @@ class StructMemberAccess(TypedExpression):
     def __init__(self, lhs: TypedExpression, member_name: str) -> None:
         self._member_name = member_name
 
-        # TODO: it kinda seems like we're borrowing here... should we use that syntax?
-        if lhs.type.is_reference:
-            self._deref_exprs = dereference_to_single_reference(lhs)
-            self._lhs = self._deref_exprs[-1]
-        else:
-            self._deref_exprs = []
-            self._lhs = lhs
+        self._deref_exprs = []
+        self._lhs = lhs
 
-        # FIXME is this necessary?
+        # TODO: this is kinda ugly now
+        if lhs.type.is_pointer:
+            if lhs.type.is_unborrowed_ref:
+                self._lhs = Decay(lhs)
+
+            self._deref_exprs.extend(dereference_to_single_reference(self._lhs))
+            if len(self._deref_exprs) != 0:
+                self._lhs = self._deref_exprs[-1]
+
         self._struct_type = self._lhs.type.to_value_type()
 
         struct_definition = self._struct_type.definition

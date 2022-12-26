@@ -26,6 +26,7 @@ all_tests = [
     "simple_typedef",
     "string_constants_ir",
     "string_constants",
+    "struct_dereferencing",
     "subexpression_ordering",
     "unary_operators",
     "undeclared_variable",
