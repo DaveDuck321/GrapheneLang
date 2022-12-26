@@ -174,9 +174,10 @@ def implicit_conversion_impl(
 
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.
-    # FIXME check types are not pointers.
     if (
-        isinstance(current_def, IntegerDefinition)
+        not expr_list[-1].type.is_pointer
+        and not dest_type.is_pointer
+        and isinstance(current_def, IntegerDefinition)
         and isinstance(dest_def, IntegerDefinition)
         and current_def.is_signed == dest_def.is_signed
         and current_def.bits < dest_def.bits
