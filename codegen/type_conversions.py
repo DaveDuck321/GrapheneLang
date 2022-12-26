@@ -144,20 +144,26 @@ def implicit_conversion_impl(
     """
     expr_list = [src]
 
+    def last_expr() -> TypedExpression:
+        return expr_list[-1]
+
+    def last_type() -> Type:
+        return expr_list[-1].type
+
     promotion_cost: int = 0
     dereferencing_cost: int = 0
 
     # If src hasn't been borrowed, then we are forced to decay the unborrowed
     # reference into a normal reference, and hope that everything works out.
-    if expr_list[-1].type.is_unborrowed_ref:
-        expr_list.append(Decay(expr_list[-1]))
+    if last_type().is_unborrowed_ref:
+        expr_list.append(Decay(last_expr()))
 
     # If src hasn't been borrowed, then we can only read its value.
-    ref_depth_required = dest_type.ref_depth if expr_list[-1].type.is_borrowed else 0
+    ref_depth_required = dest_type.ref_depth if last_type().is_borrowed else 0
 
     # We are only allowed to dereference.
     assert_else_throw(
-        expr_list[-1].type.ref_depth >= ref_depth_required,
+        last_type().ref_depth >= ref_depth_required,
         TypeCheckerError(
             context,
             src.type.get_user_facing_name(False),
@@ -165,30 +171,30 @@ def implicit_conversion_impl(
         ),
     )
 
-    dereferencing_cost = expr_list[-1].type.ref_depth - ref_depth_required
+    dereferencing_cost = last_type().ref_depth - ref_depth_required
     for _ in range(dereferencing_cost):
-        expr_list.append(Dereference(expr_list[-1]))
+        expr_list.append(Dereference(last_expr()))
 
-    current_def = expr_list[-1].type.definition
+    last_def = last_type().definition
     dest_def = dest_type.definition
 
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.
     if (
-        not expr_list[-1].type.is_pointer
+        not last_type().is_pointer
         and not dest_type.is_pointer
-        and isinstance(current_def, IntegerDefinition)
+        and isinstance(last_def, IntegerDefinition)
         and isinstance(dest_def, IntegerDefinition)
-        and current_def.is_signed == dest_def.is_signed
-        and current_def.bits < dest_def.bits
+        and last_def.is_signed == dest_def.is_signed
+        and last_def.bits < dest_def.bits
     ):
-        promotion_cost += dest_def.bits // current_def.bits
-        expr_list.append(PromoteInteger(expr_list[-1], dest_type))
+        promotion_cost += dest_def.bits // last_def.bits
+        expr_list.append(PromoteInteger(last_expr(), dest_type))
 
     # TODO float promotion.
 
     assert_else_throw(
-        expr_list[-1].type == dest_type,
+        last_type() == dest_type,
         TypeCheckerError(
             context,
             src.type.get_user_facing_name(False),
