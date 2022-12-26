@@ -152,17 +152,9 @@ class FunctionSymbolTable:
             self.graphene_functions.append(fn_to_add)
 
     def lookup_function(self, fn_name: str, fn_args: list[Type]):
-        # FIXME check argument number.
-        candidate_functions = self._functions[fn_name]
-
-        readable_arg_names = ", ".join(
-            arg.get_user_facing_name(False) for arg in fn_args
-        )
-        assert_else_throw(
-            len(candidate_functions) > 0,
-            FailedLookupError(
-                "function", f"function {fn_name}: ({readable_arg_names}) -> ..."
-            ),
+        candidate_functions = filter(
+            lambda fn: len(fn.get_signature().arguments) == len(fn_args),
+            self._functions[fn_name],
         )
 
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
@@ -189,6 +181,17 @@ class FunctionSymbolTable:
 
         # List is sorted by the first element, then by the second.
         functions_by_cost.sort(key=lambda t: t[0])
+
+        readable_arg_names = ", ".join(
+            arg.get_user_facing_name(False) for arg in fn_args
+        )
+
+        assert_else_throw(
+            len(functions_by_cost) > 0,
+            FailedLookupError(
+                "function", f"function {fn_name}: ({readable_arg_names}) -> ..."
+            ),
+        )
 
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
