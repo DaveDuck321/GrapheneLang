@@ -9,6 +9,7 @@ if __name__ == "__main__":
     # TODO: support multiple source files
     parser.add_argument("input", nargs=1, type=Path)
     parser.add_argument("-o", "--output", required=False, type=Path)
+    parser.add_argument("-c", "--compile-to-object", action="store_true")
     parser.add_argument("--emit-llvm", action="store_true")
     parser.add_argument("--emit-everything", action="store_true")
     parser.add_argument("--debug-compiler", action="store_true")
@@ -35,6 +36,10 @@ if __name__ == "__main__":
             file.write(ir)
 
     # Use clang to finish compile
+    extra_flags = []
+    if args.compile_to_object:
+        extra_flags.append("-c")
+
     if will_emit_binary:
         subprocess.run(
             [
@@ -43,6 +48,7 @@ if __name__ == "__main__":
                 "-xir",
                 "-o",
                 binary_output,
+                *extra_flags,
                 "-",
             ],
             input=ir,
