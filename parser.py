@@ -255,13 +255,14 @@ class ParseFunctionSignatures(Interpreter):
 
 @dataclass
 class FlattenedExpression:
-    subexpressions: list[cg.TypedExpression]
+    subexpressions: list[cg.Generatable]
 
     def add_parent(self, expression: cg.TypedExpression) -> "FlattenedExpression":
         self.subexpressions.append(expression)
         return self
 
     def expression(self) -> cg.TypedExpression:
+        assert isinstance(self.subexpressions[-1], cg.TypedExpression)
         return self.subexpressions[-1]
 
     def type(self) -> cg.Type:
@@ -357,6 +358,32 @@ class ExpressionTransformer(Transformer_InPlace):
 
         var_ref = cg.VariableReference(var)
         return FlattenedExpression([var_ref])
+
+    def ensure_pointer_is_available(self, expr: FlattenedExpression):
+        # Copy expression to stack if it is not a pointer
+        if expr.type().is_pointer:
+            return expr
+
+        temp_var = cg.StackVariable("", expr.type(), True, True)
+        self._scope.add_variable(temp_var)
+
+        expr.subexpressions.append(cg.VariableAssignment(temp_var, expr.expression()))
+        return expr.add_parent(cg.VariableReference(temp_var))
+
+    @v_args(inline=True)
+    def array_index_access(
+        self, lhs: FlattenedExpression, *index_exprs: FlattenedExpression
+    ) -> FlattenedExpression:
+
+        lhs = self.ensure_pointer_is_available(lhs)
+        result = FlattenedExpression([*lhs.subexpressions])
+
+        cg_indices: list[cg.TypedExpression] = []
+        for index_expr in index_exprs:
+            cg_indices.append(index_expr.expression())
+            result.subexpressions.extend(index_expr.subexpressions)
+
+        return result.add_parent(cg.ArrayIndexAccess(lhs.expression(), cg_indices))
 
     @v_args(inline=True)
     def struct_member_access(

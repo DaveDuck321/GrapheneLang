@@ -1,7 +1,7 @@
 from functools import cached_property
 from typing import Iterator
 
-from .builtin_types import FunctionSignature, IntType, StructDefinition
+from .builtin_types import FunctionSignature, IntType, StructDefinition, ArrayDefinition
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
@@ -11,6 +11,7 @@ from .type_conversions import (
     Decay,
 )
 from .user_facing_errors import (
+    ArrayIndexCount,
     BorrowTypeError,
     OperandError,
     TypeCheckerError,
@@ -164,7 +165,7 @@ class Borrow(TypedExpression):
         this_type = expr.type
 
         assert_else_throw(
-            this_type.is_unborrowed_ref,
+            this_type.is_pointer,
             BorrowTypeError(this_type.get_user_facing_name(False)),
         )
 
@@ -285,3 +286,89 @@ class StructMemberAccess(TypedExpression):
         if self._source_struct_is_reference:
             # TODO: check if the reference is const
             pass
+
+
+class ArrayIndexAccess(TypedExpression):
+    def __init__(
+        self, array_ptr: TypedExpression, indices: list[TypedExpression]
+    ) -> None:
+        # NOTE: needs pointer since getelementptr must be used for runtime indexing
+        assert array_ptr.type.is_pointer
+
+        array_definition = array_ptr.type.definition
+        assert_else_throw(
+            isinstance(array_definition, ArrayDefinition),
+            TypeCheckerError(
+                "array index access",
+                array_ptr.type.get_user_facing_name(False),
+                "T[...]",
+            ),
+        )
+        assert isinstance(array_definition, ArrayDefinition)
+        assert_else_throw(
+            len(array_definition._dimensions) == len(indices),
+            ArrayIndexCount(
+                array_ptr.type.get_user_facing_name(False),
+                len(indices),
+                len(array_definition._dimensions),
+            ),
+        )
+
+        self._array_ptr = array_ptr
+        self._conversion_exprs: list[TypedExpression] = []
+
+        # We need to operate on a pure reference type so we can dereference
+        if array_ptr.type.is_unborrowed_ref:
+            self._array_ptr = Decay(array_ptr)
+
+        # Recursively dereference (without any further implicit conversions)
+        self._conversion_exprs.extend(dereference_to_single_reference(self._array_ptr))
+        if len(self._conversion_exprs) != 0:
+            self._array_ptr = self._conversion_exprs[-1]
+
+        self._array_type = array_ptr.type.to_value_type()
+
+        # Now convert all the indices into integers using standard implicit rules
+        self._indices: list[TypedExpression] = []
+        for index in indices:
+            # FIXME: use size_t or similar
+            index_expr, conversions = do_implicit_conversion(
+                index, IntType(), "array index access"
+            )
+            self._indices.append(index_expr)
+            self._conversion_exprs.extend(conversions)
+
+        super().__init__(array_definition._element_type.to_unborrowed_ref())
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#getelementptr-instruction
+        conversion_ir = []
+        for expression in self._conversion_exprs:
+            conversion_ir.extend(expression.generate_ir(reg_gen))
+
+        indices_ir = []
+        for index in self._indices:
+            indices_ir.append(index.ir_ref_with_type_annotation)
+
+        # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
+        self.result_reg = next(reg_gen)
+        return [
+            *conversion_ir,
+            f"%{self.result_reg} = getelementptr inbounds {self._array_type.ir_type},"
+            f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
+        ]
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        return f"%{self.result_reg}"
+
+    def __repr__(self) -> str:
+        indices = ", ".join(map(repr, self._indices))
+        return f"ArrayIndexAccess({self._array_type}[{indices}])"
+
+    def assert_can_read_from(self) -> None:
+        # TODO: can we check if the members are initialized?
+        pass
+
+    def assert_can_write_to(self) -> None:
+        pass

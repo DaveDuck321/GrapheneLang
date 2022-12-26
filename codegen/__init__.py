@@ -6,6 +6,7 @@ from .builtin_types import (
     StructDefinition,
 )
 from .expressions import (
+    ArrayIndexAccess,
     Borrow,
     ConstantExpression,
     StackVariable,
@@ -13,5 +14,5 @@ from .expressions import (
     VariableReference,
 )
 from .generatable import IfStatement, ReturnStatement, VariableAssignment
-from .interfaces import Parameter, Type, TypedExpression, Variable
+from .interfaces import Parameter, Type, TypedExpression, Variable, Generatable
 from .translation_unit import Function, Program, Scope
