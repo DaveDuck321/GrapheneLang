@@ -17,7 +17,6 @@ from .user_facing_errors import (
     OverloadResolutionError,
     RedefinitionError,
     assert_else_throw,
-    throw,
 )
 
 
@@ -188,32 +187,34 @@ class FunctionSymbolTable:
 
         assert_else_throw(
             len(functions_by_cost) > 0,
-            FailedLookupError(
-                "function", f"function {fn_name}: ({readable_arg_names}) -> ..."
+            OverloadResolutionError(
+                fn_name,
+                readable_arg_names,
+                [
+                    fn.get_signature().user_facing_name
+                    for fn in self._functions[fn_name]
+                ],
             ),
         )
 
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
 
-        if len(functions_by_cost) > 1:
-            first, second = functions_by_cost[:2]
+        first, second = functions_by_cost[:2]
 
-            # If there's two or more equally good candidates, then this function
-            # call is ambiguous.
-            assert_else_throw(
-                first[0] < second[0],
-                AmbiguousFunctionCall(
-                    fn_name,
-                    readable_arg_names,
-                    first[1].get_signature().user_facing_name,
-                    second[1].get_signature().user_facing_name,
-                ),
-            )
+        # If there are two or more equally good candidates, then this function
+        # call is ambiguous.
+        assert_else_throw(
+            first[0] < second[0],
+            AmbiguousFunctionCall(
+                fn_name,
+                readable_arg_names,
+                first[1].get_signature().user_facing_name,
+                second[1].get_signature().user_facing_name,
+            ),
+        )
 
-            return first[1]
-
-        throw(OverloadResolutionError(fn_name, readable_arg_names))
+        return first[1]
 
 
 @dataclass

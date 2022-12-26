@@ -42,11 +42,23 @@ class FailedLookupError(GrapheneError):
 
 
 class OverloadResolutionError(GrapheneError):
-    def __init__(self, fn_name: str, arguments: str) -> None:
-        # TODO: suggest available overloads here
-        super().__init__(
+    def __init__(
+        self, fn_name: str, arguments: str, available_overloads: list[str]
+    ) -> None:
+        msg = [
             f"Error: overload resolution for function call '{fn_name}({arguments})' failed"
-        )
+        ]
+
+        # TODO need a better way to indent these.
+        if available_overloads:
+            msg.append("   Available overloads:")
+
+            for overload in available_overloads:
+                msg.append("     - " + overload)
+        else:
+            msg.append("   No overloads available")
+
+        super().__init__(str.join("\n", msg))
 
 
 class AmbiguousFunctionCall(GrapheneError):
