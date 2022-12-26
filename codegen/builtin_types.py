@@ -213,12 +213,9 @@ class ArrayDefinition(TypeDefinition):
     @cached_property
     def user_facing_name(self) -> str:
         type_name = self._element_type.get_user_facing_name(False)
-        dimensions = ", ".join(
-            map(
-                lambda d: str(d) if d != self.UNKNOWN_DIMENSION else "&",
-                self._dimensions,
-            )
-        )
+        # TODO: ideally we would print T[&, 2, 3] for heap arrays
+        #       atm `Type` would insert an extra (incorrect) reference symbol if we tried this
+        dimensions = ", ".join(map(str, self._dimensions))
         return f"{type_name}[{dimensions}]"
 
     def get_ir_type(self, alias: Optional[str]) -> str:
