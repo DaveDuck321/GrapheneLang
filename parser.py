@@ -489,6 +489,21 @@ def generate_if_statement(
     scope.add_generatable(if_statement)
 
 
+def generate_assignment(
+    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+) -> None:
+
+    lhs_tree, rhs_tree = body.children
+    lhs = ExpressionTransformer(program, function, scope).transform(lhs_tree)
+    rhs = ExpressionTransformer(program, function, scope).transform(rhs_tree)
+    assert isinstance(lhs, FlattenedExpression)
+    assert isinstance(rhs, FlattenedExpression)
+
+    scope.add_generatable(lhs.subexpressions)
+    scope.add_generatable(rhs.subexpressions)
+    scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
+
+
 def generate_scope_body(
     program: cg.Program, function: cg.Function, outer_scope: cg.Scope, body: Tree
 ) -> None:
@@ -502,12 +517,13 @@ def generate_body(
 ) -> None:
 
     generators = {
-        "return_statement": generate_return_statement,
+        "assignment": generate_assignment,
+        "const_declaration": partial(generate_variable_declaration, True),
         "expression": generate_standalone_expression,
+        "if_statement": generate_if_statement,
+        "return_statement": generate_return_statement,
         "scope": generate_scope_body,
         "variable_declaration": partial(generate_variable_declaration, False),
-        "const_declaration": partial(generate_variable_declaration, True),
-        "if_statement": generate_if_statement,
     }
 
     for line in body.children:
