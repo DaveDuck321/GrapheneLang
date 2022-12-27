@@ -237,9 +237,7 @@ class StructMemberAccess(TypedExpression):
 
     def generate_ir_for_reference_type(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
-        deref_ir = []
-        for expression in self._deref_exprs:
-            deref_ir.extend(expression.generate_ir(reg_gen))
+        deref_ir = self.expand_ir(self._deref_exprs, reg_gen)
 
         # In llvm structs behind a pointer are treated like an array
         pointer_offset = ConstantExpression(IntType(), "0")
@@ -350,9 +348,7 @@ class ArrayIndexAccess(TypedExpression):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
-        conversion_ir = []
-        for expression in self._conversion_exprs:
-            conversion_ir.extend(expression.generate_ir(reg_gen))
+        conversion_ir = self.expand_ir(self._conversion_exprs, reg_gen)
 
         pointer_offset = ConstantExpression(IntType(), "0")
         indices_ir = [pointer_offset.ir_ref_with_type_annotation]
