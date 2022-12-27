@@ -59,6 +59,9 @@ class VariableReference(TypedExpression):
 
     def assert_can_read_from(self) -> None:
         # Can ready any initialized variable.
+        return  # XXX: hack
+
+        # FIXME: if we write to a variable via a reference we do not know if it has been initialized
         assert isinstance(self.variable, StackVariable)
         assert_else_throw(
             self.variable.initialized,
