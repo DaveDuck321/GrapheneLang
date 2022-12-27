@@ -3,8 +3,17 @@ from typing import Iterable, Iterator, Optional
 
 from .builtin_types import BoolType
 from .interfaces import Generatable, Type, TypedExpression, Variable
-from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
-from .user_facing_errors import RedefinitionError, assert_else_throw
+from .type_conversions import (
+    assert_is_implicitly_convertible,
+    Decay,
+    Dereference,
+    do_implicit_conversion,
+)
+from .user_facing_errors import (
+    AssignmentToNonPointerError,
+    RedefinitionError,
+    assert_else_throw,
+)
 
 
 class StackVariable(Variable):
@@ -212,11 +221,50 @@ class VariableAssignment(Generatable):
 class Assignment(Generatable):
     def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
         super().__init__()
+        # FIXME: this completely ignores const-correctness
+        assert_else_throw(
+            dst.type.is_pointer,
+            AssignmentToNonPointerError(dst.type.get_user_facing_name(False)),
+        )
+
         self._dst = dst
         self._src = src
 
+        self._conversion_exprs: list[TypedExpression] = []
+
+        # Is the destination a reference before Decay?
+        is_reference = self._dst.type.is_reference
+
+        # For consistency between function returns and variable usages, decay
+        #   everything is a plain reference
+        if self._dst.type.is_unborrowed_ref:
+            self._dst = Decay(self._dst)
+            self._conversion_exprs.append(self._dst)
+
+        # We assign to a nested reference by always writing to the address pointed
+        #   to by the topmost reference
+        if is_reference:
+            # Deref once to get the (top level) underlying memory address
+            self._dst = Dereference(self._dst)
+            self._conversion_exprs.append(self._dst)
+
+        assert self._dst.type.is_reference
+
+        target_type = self._dst.type.to_dereferenced_type()
+        assert_is_implicitly_convertible(self._src, target_type, "assignment")
+
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        raise NotImplementedError()
+        # https://llvm.org/docs/LangRef.html#store-instruction
+        conversion_ir: list[str] = []
+        for expr in self._conversion_exprs:
+            conversion_ir.extend(expr.generate_ir(reg_gen))
+
+        # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>][, !nontemporal !<nontemp_node>][, !invariant.group !<empty_node>]
+        return [
+            *conversion_ir,
+            f"store {self._src.ir_ref_with_type_annotation}, "
+            f"{self._dst.ir_ref_with_type_annotation}, align {self._dst.type.alignment}",
+        ]
 
     def __repr__(self) -> str:
         return f"Assignment({self._dst} = {self._src})"
