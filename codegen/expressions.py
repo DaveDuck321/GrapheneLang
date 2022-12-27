@@ -57,11 +57,12 @@ class VariableReference(TypedExpression):
     def ir_ref_without_type_annotation(self) -> str:
         return self.variable.ir_ref_without_type_annotation
 
+    def set_initialized_through_mutable_borrow(self) -> None:
+        assert isinstance(self.variable, StackVariable)
+        self.variable.initialized = True
+
     def assert_can_read_from(self) -> None:
         # Can ready any initialized variable.
-        return  # XXX: hack
-
-        # FIXME: if we write to a variable via a reference we do not know if it has been initialized
         assert isinstance(self.variable, StackVariable)
         assert_else_throw(
             self.variable.initialized,
@@ -168,9 +169,13 @@ class Borrow(TypedExpression):
         this_type = expr.type
 
         assert_else_throw(
-            this_type.is_pointer,
+            this_type.is_unborrowed_ref,
             BorrowTypeError(this_type.get_user_facing_name(False)),
         )
+
+        # FIXME: const borrows should not initialize a variable
+        if isinstance(expr, VariableReference):
+            expr.set_initialized_through_mutable_borrow()
 
         self._expr = expr
 
