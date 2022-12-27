@@ -250,19 +250,25 @@ class Assignment(Generatable):
 
         assert self._dst.type.is_reference
 
-        target_type = self._dst.type.to_dereferenced_type()
-        assert_is_implicitly_convertible(self._src, target_type, "assignment")
+        self._target_type = self._dst.type.to_dereferenced_type()
+        assert_is_implicitly_convertible(self._src, self._target_type, "assignment")
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#store-instruction
+        converted_src, src_conversions = do_implicit_conversion(
+            self._src, self._target_type, "assignment"
+        )
+
         conversion_ir: list[str] = []
+        for expr in src_conversions:
+            conversion_ir.extend(expr.generate_ir(reg_gen))
         for expr in self._conversion_exprs:
             conversion_ir.extend(expr.generate_ir(reg_gen))
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>][, !nontemporal !<nontemp_node>][, !invariant.group !<empty_node>]
         return [
             *conversion_ir,
-            f"store {self._src.ir_ref_with_type_annotation}, "
+            f"store {converted_src.ir_ref_with_type_annotation}, "
             f"{self._dst.ir_ref_with_type_annotation}, align {self._dst.type.alignment}",
         ]
 
