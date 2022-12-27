@@ -13,6 +13,7 @@ import schema
 
 all_tests = [
     "ambiguous_function_call",
+    "array_assignments",
     "c_demo/compile_error",
     "c_demo/runtime_status",
     "duplicate_generics",
@@ -26,11 +27,13 @@ all_tests = [
     "simple_typedef",
     "string_constants_ir",
     "string_constants",
+    "struct_assignments",
     "struct_dereferencing",
     "subexpression_ordering",
     "unary_operators",
     "undeclared_variable",
     "uninitialized_variable_usage",
+    "variable_assignments",
 ]
 
 
