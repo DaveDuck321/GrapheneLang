@@ -184,9 +184,6 @@ class Borrow(TypedExpression):
     def __repr__(self) -> str:
         return f"Borrow({repr(self._expr)})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        return self._expr.generate_ir(reg_gen)
-
     @cached_property
     def ir_ref_without_type_annotation(self) -> str:
         return self._expr.ir_ref_without_type_annotation
