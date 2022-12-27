@@ -260,10 +260,8 @@ class Assignment(Generatable):
         )
 
         conversion_ir: list[str] = []
-        for expr in src_conversions:
-            conversion_ir.extend(expr.generate_ir(reg_gen))
-        for expr in self._conversion_exprs:
-            conversion_ir.extend(expr.generate_ir(reg_gen))
+        conversion_ir.extend(self.expand_ir(src_conversions, reg_gen))
+        conversion_ir.extend(self.expand_ir(self._conversion_exprs, reg_gen))
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>][, !nontemporal !<nontemp_node>][, !invariant.group !<empty_node>]
         return [
