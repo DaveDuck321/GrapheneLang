@@ -63,6 +63,12 @@ _line_of_code_without_semi: expression
                           | variable_declaration
                           | const_declaration
                           | return_statement
+                          | assignment
+
+variable_declaration: "let" variable_name ":" type ["=" expression]
+const_declaration: "const" variable_name ":" type "=" expression
+return_statement: "return" (_expression)?
+assignment: expression "=" expression
 
 condition: _expression
 if_statement: "if" "(" condition ")" scope
@@ -122,9 +128,6 @@ _non_operator_expression: function_call
 struct_member_access: _non_operator_expression "." variable_name
 array_index_access: _non_operator_expression "["  expression ("," expression)*  "]"
 
-variable_declaration: "let" variable_name ":" type ["=" expression]
-const_declaration: "const" variable_name ":" type "=" expression
-return_statement: "return" (_expression)?
 function_call: function_name "(" inner_list_without_names ")"
 
 inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*

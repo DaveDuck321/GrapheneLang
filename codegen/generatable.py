@@ -207,3 +207,16 @@ class VariableAssignment(Generatable):
             f"VariableAssignment({self.variable.user_facing_name}:"
             f" {self.variable.type})"
         )
+
+
+class Assignment(Generatable):
+    def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
+        super().__init__()
+        self._dst = dst
+        self._src = src
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        raise NotImplementedError()
+
+    def __repr__(self) -> str:
+        return f"Assignment({self._dst} = {self._src})"
