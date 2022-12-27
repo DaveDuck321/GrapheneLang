@@ -458,7 +458,6 @@ def generate_variable_declaration(
 
         # Initialize variable.
         scope.add_generatable(value.subexpressions)
-        # TODO coerce types.
         scope.add_generatable(cg.VariableAssignment(var, value.expression()))
 
     name_tree, type_tree, value_tree = body.children
