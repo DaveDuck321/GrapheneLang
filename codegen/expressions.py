@@ -241,6 +241,8 @@ class StructMemberAccess(TypedExpression):
         for expression in self._deref_exprs:
             deref_ir.extend(expression.generate_ir(reg_gen))
 
+        # In llvm structs behind a pointer are treated like an array
+        pointer_offset = ConstantExpression(IntType(), "0")
         index = ConstantExpression(IntType(), str(self._access_index))
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
@@ -248,7 +250,8 @@ class StructMemberAccess(TypedExpression):
         return [
             *deref_ir,
             f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type},"
-            f" {self._lhs.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
+            f" {self._lhs.ir_ref_with_type_annotation}, "
+            f"{pointer_offset.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
         ]
 
     def generate_ir_for_value_type(self, reg_gen: Iterator[int]) -> list[str]:
@@ -351,7 +354,8 @@ class ArrayIndexAccess(TypedExpression):
         for expression in self._conversion_exprs:
             conversion_ir.extend(expression.generate_ir(reg_gen))
 
-        indices_ir = []
+        pointer_offset = ConstantExpression(IntType(), "0")
+        indices_ir = [pointer_offset.ir_ref_with_type_annotation]
         for index in self._indices:
             indices_ir.append(index.ir_ref_with_type_annotation)
 
