@@ -117,6 +117,13 @@ class BorrowTypeError(GrapheneError):
         super().__init__(f"Error: cannot borrow non-reference type '{type_name}'")
 
 
+class AssignmentToNonPointerError(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot assign to non-reference '{type_name}' since it does not have an address"
+        )
+
+
 class RepeatedGenericName(ErrorWithLineInfo):
     def __init__(self, generic_name: Token, type_name: str) -> None:
         assert generic_name.line is not None
