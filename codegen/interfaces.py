@@ -114,8 +114,12 @@ class Type:
         name = f"{self._typedef_alias} = " if self._typedef_alias else ""
         name += repr(self.definition)
 
-        # TODO this could be more informative (borrowed, ref_depth).
-        return f"{self.__class__.__name__}({name})"
+        return (
+            f"{self.__class__.__name__}({name}, "
+            f"is_unborrowed_ref={self.is_unborrowed_ref}, "
+            f"borrowed={self.is_borrowed}, "
+            f"ref_depth={self._ref_depth})"
+        )
 
     def get_user_facing_name(self, full: bool) -> str:
         prefix = "*" * max(self._typedef_alias_ref_depth - self._ref_depth, 0)
