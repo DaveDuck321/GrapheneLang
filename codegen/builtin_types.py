@@ -287,7 +287,7 @@ class FunctionSignature:
         # Name mangle operators into digits
         legal_name_mangle = []
         for char in self.name:
-            if char.isalnum():
+            if char.isalnum() or char == '_':
                 legal_name_mangle.append(char)
             else:
                 legal_name_mangle.append(f"__O{ord(char)}")
