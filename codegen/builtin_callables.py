@@ -1,20 +1,21 @@
 from functools import cached_property
 from typing import Callable, Iterator
 
-from .builtin_types import IntType
+from .builtin_types import GenericIntType, IntegerDefinition
 from .interfaces import TypedExpression
-from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
-from .user_facing_errors import OperandError, throw
+from .type_conversions import do_implicit_conversion
+from .user_facing_errors import TypeCheckerError, OperandError, throw
 
 
 class AddExpression(TypedExpression):
     def __init__(self, arguments: list[TypedExpression]) -> None:
         lhs, rhs = arguments
+        # This is not a user-facing function, we don't need sensible error messages
+        assert isinstance(lhs.type, GenericIntType)
+        assert isinstance(rhs.type, GenericIntType)
+        assert lhs.type.definition == rhs.type.definition
 
-        # FIXME handle multiple int types.
-        super().__init__(IntType())
-        assert_is_implicitly_convertible(lhs, IntType(), "builtin add")
-        assert_is_implicitly_convertible(rhs, IntType(), "builtin add")
+        super().__init__(lhs.type.to_value_type())
 
         self._lhs = lhs
         self._rhs = rhs
@@ -24,9 +25,8 @@ class AddExpression(TypedExpression):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#add-instruction
-        # FIXME handle multiple int types.
-        conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, IntType())
-        conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, IntType())
+        conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, self.type)
+        conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, self.type)
 
         ir_lines: list[str] = []
         ir_lines.extend(self.expand_ir(extra_exprs_lhs, reg_gen))
@@ -34,9 +34,12 @@ class AddExpression(TypedExpression):
 
         self.result_reg = next(reg_gen)
 
-        # <result> = add nuw nsw <ty> <op1>, <op2>  ; yields ty:result
+        assert isinstance(self.type.definition, IntegerDefinition)
+        overflow_ir = "nsw" if self.type.definition.is_signed else "nuw"
+
+        # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
         ir_lines.append(
-            f"%{self.result_reg} = add nuw nsw {conv_lhs.ir_ref_with_type_annotation},"
+            f"%{self.result_reg} = add {overflow_ir} {conv_lhs.ir_ref_with_type_annotation},"
             f" {conv_rhs.ir_ref_without_type_annotation}"
         )
         return ir_lines
