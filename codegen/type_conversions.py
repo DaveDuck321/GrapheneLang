@@ -1,7 +1,7 @@
 from functools import cached_property
 from typing import Iterator, Optional
 
-from .builtin_types import IntegerDefinition
+from .builtin_types import ArrayDefinition, IntegerDefinition
 from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
 
@@ -102,6 +102,39 @@ class PromoteInteger(TypedExpression):
         throw(OperandError("Cannot modify promoted integers"))
 
 
+class Reinterpret(TypedExpression):
+    def __init__(self, src: TypedExpression, dest_type: Type) -> None:
+        super().__init__(dest_type)
+
+        self._src = src
+        self._no_conversion_needed = self._src.type.ir_type == self.type.ir_type
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#bitcast-to-instruction
+        if self._no_conversion_needed:
+            return []
+
+        self.result_reg = next(reg_gen)
+        return [
+            f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} to {self.type.ir_type}"
+        ]
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        if self._no_conversion_needed:
+            return self._src.ir_ref_without_type_annotation
+        return f"%{self.result_reg}"
+
+    def __repr__(self) -> str:
+        return f"Reinterpret({self._src.type} to {self.type})"
+
+    def assert_can_read_from(self) -> None:
+        self._src.assert_can_read_from()
+
+    def assert_can_write_to(self) -> None:
+        self._src.assert_can_write_to()
+
+
 def dereference_to_value(src: TypedExpression) -> list[TypedExpression]:
     expr_list: list[TypedExpression] = [src]
     while expr_list[-1].type.is_reference:
@@ -190,6 +223,18 @@ def implicit_conversion_impl(
     ):
         promotion_cost += dest_def.bits // last_def.bits
         expr_list.append(PromoteInteger(last_expr(), dest_type))
+
+    # Array reference equivalence
+    if (
+        last_type().is_reference
+        and dest_type.is_reference
+        and isinstance(last_def, ArrayDefinition)
+        and isinstance(dest_def, ArrayDefinition)
+        and last_def.dimensions[1:] == dest_def.dimensions[1:]
+        and last_def.dimensions[0] >= dest_def.dimensions[0]
+    ):
+        # TODO: promotion cost going from known size to smaller/ unknown size
+        expr_list.append(Reinterpret(last_expr(), dest_type))
 
     # TODO float promotion.
 

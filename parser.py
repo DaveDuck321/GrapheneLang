@@ -86,7 +86,7 @@ class TypeTransformer(Transformer):
     def stack_array_type(
         self, element_type: cg.Type, *dimension_tokens: Token
     ) -> cg.Type:
-        dimensions: list[int] = [dimension.value for dimension in dimension_tokens]
+        dimensions: list[int] = [int(dimension.value) for dimension in dimension_tokens]
         return cg.Type(cg.ArrayDefinition(element_type, dimensions))
 
     @v_args(inline=True)
@@ -95,7 +95,7 @@ class TypeTransformer(Transformer):
     ) -> cg.Type:
         dimensions: list[int] = [cg.ArrayDefinition.UNKNOWN_DIMENSION]
         for dimension in dimension_tokens:
-            dimensions.append(dimension.value)
+            dimensions.append(int(dimension.value))
 
         # A heap array must always be passed by reference
         underlying_array = cg.Type(cg.ArrayDefinition(element_type, dimensions))

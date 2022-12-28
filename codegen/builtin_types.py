@@ -206,6 +206,10 @@ class ArrayDefinition(TypeDefinition):
         self._element_type = element_type
         self._dimensions = dimensions
 
+    @cached_property
+    def dimensions(self) -> list[int]:
+        return self._dimensions
+
     def to_ir_constant(self, value: str) -> str:
         # TODO support array constants.
         raise NotImplementedError()
