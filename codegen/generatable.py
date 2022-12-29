@@ -222,6 +222,10 @@ class Assignment(Generatable):
     def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
         super().__init__()
         # FIXME: this completely ignores const-correctness
+
+        dst.assert_can_write_to()
+        src.assert_can_read_from()
+
         assert_else_throw(
             dst.type.is_pointer,
             AssignmentToNonPointerError(dst.type.get_user_facing_name(False)),
@@ -236,13 +240,13 @@ class Assignment(Generatable):
         is_reference = self._dst.type.is_reference
 
         # For consistency between function returns and variable usages, decay
-        #   everything is a plain reference
+        #   everything to a plain reference
         if self._dst.type.is_unborrowed_ref:
             self._dst = Decay(self._dst)
             self._conversion_exprs.append(self._dst)
 
-        # We assign to a nested reference by always writing to the address pointed
-        #   to by the topmost reference
+        # We assign to a nested reference by always writing to the address
+        #   pointed to by the topmost reference
         if is_reference:
             # Deref once to get the (top level) underlying memory address
             self._dst = Dereference(self._dst)
@@ -263,7 +267,7 @@ class Assignment(Generatable):
         conversion_ir.extend(self.expand_ir(src_conversions, reg_gen))
         conversion_ir.extend(self.expand_ir(self._conversion_exprs, reg_gen))
 
-        # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>][, !nontemporal !<nontemp_node>][, !invariant.group !<empty_node>]
+        # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         return [
             *conversion_ir,
             f"store {converted_src.ir_ref_with_type_annotation}, "
