@@ -314,6 +314,9 @@ class Variable(ABC):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         pass
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._name}: {repr(self.type)})"
+
 
 class Generatable(ABC):
     def generate_ir(self, _: Iterator[int]) -> list[str]:
