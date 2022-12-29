@@ -280,6 +280,7 @@ class InitializerList:
 
         return len(self.exprs)
 
+
 class ExpressionTransformer(Transformer_InPlace):
     def __init__(
         self, program: cg.Program, function: cg.Function, scope: cg.Scope
@@ -420,14 +421,14 @@ class ExpressionTransformer(Transformer_InPlace):
         return InitializerList(objects, None)
 
     def struct_initializer_with_names(
-        self, objects: list[FlattenedExpression]
+        self, objects: list[FlattenedExpression | Token]
     ) -> InitializerList:
         assert isinstance(objects, list)
 
-        x = list(map(list, zip(*in_pairs(objects))))
-        # TODO
+        # Use zip to transpose a list of pairs into a pair of lists.
+        names, exprs = list(map(list, zip(*in_pairs(objects))))
 
-        raise NotImplementedError()
+        return InitializerList(exprs, names)
 
     @v_args(inline=True)
     def adhoc_struct_initialization(
@@ -508,23 +509,25 @@ def generate_variable_declaration(
             assert isinstance(var_type.definition, cg.StructDefinition)
             assert var_type.definition.member_count == len(rhs)
 
-            for idx, expr in enumerate(rhs.exprs):
-                member = var_type.definition.get_member_by_index(idx)
-
-                # TODO proper errors.
-                if rhs.names:
-                    assert rhs.names[idx] == member.name
-
+            def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
                 scope.add_generatable(expr.subexpressions)
 
                 var_ref = cg.VariableReference(var)
                 scope.add_generatable(var_ref)
 
-                struct_access = cg.StructMemberAccess(var_ref, member.name)
+                struct_access = cg.StructMemberAccess(var_ref, member_name)
                 scope.add_generatable(struct_access)
 
                 var_assignment = cg.Assignment(struct_access, expr.expression())
                 scope.add_generatable(var_assignment)
+
+            if rhs.names:
+                for name, expr in zip(rhs.names, rhs.exprs):
+                    assign_to_member(expr, name)
+            else:
+                for idx, expr in enumerate(rhs.exprs):
+                    member = var_type.definition.get_member_by_index(idx)
+                    assign_to_member(expr, member.name)
 
     name_tree, type_tree, value_tree = body.children
     expression_value = (

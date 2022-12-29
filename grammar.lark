@@ -134,7 +134,7 @@ _inner_list_without_names: (_expression ("," _expression)*)?
 inner_list_without_names: _inner_list_without_names
 struct_initializer_without_names: _inner_list_without_names
 
-_inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
+_inner_list_with_names: CNAME ":" _expression ("," CNAME ":" _expression)*
 inner_list_with_names: _inner_list_with_names
 struct_initializer_with_names: _inner_list_with_names
 
