@@ -148,11 +148,18 @@ class StructDefinition(TypeDefinition):
         # TODO: assert member names are unique
         self._members = members
 
-    def get_member(self, name: str) -> tuple[int, Type]:
+    def get_member_by_name(self, name: str) -> tuple[int, Type]:
         for index, member in enumerate(self._members):
             if member.name == name:
                 return index, member.type
         throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
+
+    def get_member_by_index(self, index: int) -> Parameter:
+        return self._members[index]
+
+    @cached_property
+    def member_count(self) -> int:
+        return len(self._members)
 
     def to_ir_constant(self, value: str) -> str:
         # TODO support structure constants.

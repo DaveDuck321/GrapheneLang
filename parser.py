@@ -269,6 +269,17 @@ class FlattenedExpression:
         return self.expression().type
 
 
+@dataclass
+class InitializerList:
+    exprs: list[FlattenedExpression]
+    names: Optional[list[str]]
+
+    def __len__(self) -> int:
+        if self.names:
+            assert len(self.exprs) == len(self.names)
+
+        return len(self.exprs)
+
 class ExpressionTransformer(Transformer_InPlace):
     def __init__(
         self, program: cg.Program, function: cg.Function, scope: cg.Scope
@@ -280,8 +291,10 @@ class ExpressionTransformer(Transformer_InPlace):
         self._scope = scope
 
     @v_args(inline=True)
-    def expression(self, value: FlattenedExpression) -> FlattenedExpression:
-        assert isinstance(value, FlattenedExpression)
+    def expression(
+        self, value: FlattenedExpression | InitializerList
+    ) -> FlattenedExpression | InitializerList:
+        assert isinstance(value, (FlattenedExpression, InitializerList))
         return value
 
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
@@ -399,6 +412,35 @@ class ExpressionTransformer(Transformer_InPlace):
         borrow = cg.Borrow(lhs.expression())
         return lhs.add_parent(borrow)
 
+    def struct_initializer_without_names(
+        self, objects: list[FlattenedExpression]
+    ) -> InitializerList:
+        assert isinstance(objects, list)
+
+        return InitializerList(objects, None)
+
+    def struct_initializer_with_names(
+        self, objects: list[FlattenedExpression]
+    ) -> InitializerList:
+        assert isinstance(objects, list)
+
+        x = list(map(list, zip(*in_pairs(objects))))
+        # TODO
+
+        raise NotImplementedError()
+
+    @v_args(inline=True)
+    def adhoc_struct_initialization(
+        self, init_list: InitializerList
+    ) -> InitializerList:
+        assert isinstance(init_list, InitializerList)
+
+        # TODO handle empty initializer lists.
+        if not init_list.exprs:
+            raise NotImplementedError()
+
+        return init_list
+
 
 def generate_standalone_expression(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
@@ -444,21 +486,45 @@ def generate_variable_declaration(
     def parse_variable_declaration(
         name_tree: Tree,
         type_tree: Tree,
-        value: Optional[FlattenedExpression] = None,  # FIXME lark placeholders.
+        rhs: Optional[
+            FlattenedExpression | InitializerList
+        ] = None,  # FIXME lark placeholders.
     ) -> None:
         # Extract variable name and type.
         var_name = extract_leaf_value(name_tree)
         var_type = TypeTransformer.parse(program, type_tree)
 
-        var = cg.StackVariable(var_name, var_type, is_const, value is not None)
+        var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
         scope.add_variable(var)
 
-        if value is None:
-            return
-
         # Initialize variable.
-        scope.add_generatable(value.subexpressions)
-        scope.add_generatable(cg.VariableAssignment(var, value.expression()))
+        if isinstance(rhs, FlattenedExpression):
+            scope.add_generatable(rhs.subexpressions)
+            scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
+
+        # Initialize struct.
+        elif isinstance(rhs, InitializerList):
+            # TODO proper errors.
+            assert isinstance(var_type.definition, cg.StructDefinition)
+            assert var_type.definition.member_count == len(rhs)
+
+            for idx, expr in enumerate(rhs.exprs):
+                member = var_type.definition.get_member_by_index(idx)
+
+                # TODO proper errors.
+                if rhs.names:
+                    assert rhs.names[idx] == member.name
+
+                scope.add_generatable(expr.subexpressions)
+
+                var_ref = cg.VariableReference(var)
+                scope.add_generatable(var_ref)
+
+                struct_access = cg.StructMemberAccess(var_ref, member.name)
+                scope.add_generatable(struct_access)
+
+                var_assignment = cg.Assignment(struct_access, expr.expression())
+                scope.add_generatable(var_assignment)
 
     name_tree, type_tree, value_tree = body.children
     expression_value = (

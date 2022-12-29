@@ -130,10 +130,18 @@ array_index_access: _non_operator_expression "["  expression ("," expression)*  
 
 function_call: function_name "(" inner_list_without_names ")"
 
-inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
-inner_list_without_names: (_expression ("," _expression)*)?
-named_struct_initialization: type_name "{" (inner_list_with_names | inner_list_without_names) "}"
-adhoc_struct_initialization: "{" (inner_list_with_names | inner_list_without_names) "}"
+_inner_list_without_names: (_expression ("," _expression)*)?
+inner_list_without_names: _inner_list_without_names
+struct_initializer_without_names: _inner_list_without_names
+
+_inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
+inner_list_with_names: _inner_list_with_names
+struct_intializer_with_names: _inner_list_with_names
+
+_adhoc_struct_initialization: "{" (struct_intializer_with_names | struct_initializer_without_names) "}"
+adhoc_struct_initialization: _adhoc_struct_initialization
+
+named_struct_initialization: type_name _adhoc_struct_initialization
 
 %ignore C_COMMENT
 %ignore CPP_COMMENT
