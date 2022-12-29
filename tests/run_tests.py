@@ -29,6 +29,8 @@ all_tests = [
     "string_constants",
     "struct_assignments",
     "struct_dereferencing",
+    "struct_init_list_with_names",
+    "struct_init_list_without_names",
     "subexpression_ordering",
     "unary_operators",
     "undeclared_variable",
