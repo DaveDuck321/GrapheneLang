@@ -16,6 +16,7 @@ from codegen.user_facing_errors import (
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
+    InvalidInitializerListAssignment,
     InvalidInitializerListLength,
     RepeatedGenericName,
     assert_else_throw,
@@ -506,8 +507,12 @@ def generate_variable_declaration(
 
         # Initialize struct.
         elif isinstance(rhs, InitializerList):
-            # TODO proper errors.
-            assert isinstance(var_type.definition, cg.StructDefinition)
+            assert_else_throw(
+                isinstance(var_type.definition, cg.StructDefinition),
+                InvalidInitializerListAssignment(var_type.get_user_facing_name(False)),
+            )
+            assert isinstance(var_type.definition, cg.StructDefinition) # Help the type checker.
+
             assert_else_throw(
                 var_type.definition.member_count == len(rhs),
                 InvalidInitializerListLength(
