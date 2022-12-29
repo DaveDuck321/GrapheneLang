@@ -16,6 +16,7 @@ from codegen.user_facing_errors import (
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
+    InvalidInitializerListLength,
     RepeatedGenericName,
     assert_else_throw,
 )
@@ -507,7 +508,12 @@ def generate_variable_declaration(
         elif isinstance(rhs, InitializerList):
             # TODO proper errors.
             assert isinstance(var_type.definition, cg.StructDefinition)
-            assert var_type.definition.member_count == len(rhs)
+            assert_else_throw(
+                var_type.definition.member_count == len(rhs),
+                InvalidInitializerListLength(
+                    len(rhs), var_type.definition.member_count
+                ),
+            )
 
             def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
                 scope.add_generatable(expr.subexpressions)

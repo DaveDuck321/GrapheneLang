@@ -144,6 +144,17 @@ class GenericHasGenericAnnotation(GrapheneError):
         )
 
 
+class InvalidInitializerListLength(GrapheneError):
+    def __init__(self, actual: int, expected: int) -> None:
+        objects = "object" if actual == 1 else "objects"
+        members = "member" if expected == 1 else "members"
+
+        super().__init__(
+            f"Error: initializer list with {actual} {objects} cannot be "
+            f"assigned to a struct with {expected} {members}"
+        )
+
+
 def throw(error: Exception):
     raise error
 
