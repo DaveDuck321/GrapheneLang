@@ -224,7 +224,9 @@ class StructMemberAccess(TypedExpression):
         )
         assert isinstance(struct_definition, StructDefinition)
 
-        self._access_index, member_type = struct_definition.get_member(member_name)
+        self._access_index, member_type = struct_definition.get_member_by_name(
+            member_name
+        )
 
         # FIXME changed this to is_pointer, is that correct?
         self._source_struct_is_reference = lhs.type.is_pointer
@@ -286,7 +288,7 @@ class StructMemberAccess(TypedExpression):
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
         assert_else_throw(
-            not self._source_struct_is_reference,
+            self._source_struct_is_reference,
             OperandError("Cannot modify temporary struct"),
         )
         if self._source_struct_is_reference:
