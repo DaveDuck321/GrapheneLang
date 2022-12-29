@@ -29,6 +29,7 @@ all_tests = [
     "string_constants",
     "struct_assignments",
     "struct_dereferencing",
+    "struct_init_list_invalid_assignment",
     "struct_init_list_with_missing_name",
     "struct_init_list_with_names",
     "struct_init_list_with_wrong_name",
