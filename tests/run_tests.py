@@ -30,6 +30,7 @@ all_tests = [
     "struct_assignments",
     "struct_dereferencing",
     "struct_init_list_with_names",
+    "struct_init_list_with_wrong_name",
     "struct_init_list_without_names",
     "subexpression_ordering",
     "unary_operators",
