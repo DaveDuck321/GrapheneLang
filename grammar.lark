@@ -136,9 +136,9 @@ struct_initializer_without_names: _inner_list_without_names
 
 _inner_list_with_names: variable_name ":" _expression ("," variable_name ":" _expression)*
 inner_list_with_names: _inner_list_with_names
-struct_intializer_with_names: _inner_list_with_names
+struct_initializer_with_names: _inner_list_with_names
 
-_adhoc_struct_initialization: "{" (struct_intializer_with_names | struct_initializer_without_names) "}"
+_adhoc_struct_initialization: "{" (struct_initializer_with_names | struct_initializer_without_names) "}"
 adhoc_struct_initialization: _adhoc_struct_initialization
 
 named_struct_initialization: type_name _adhoc_struct_initialization
