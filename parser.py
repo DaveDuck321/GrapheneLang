@@ -30,21 +30,6 @@ def extract_leaf_value(tree: Tree) -> str:
     return str(tree.children[0])
 
 
-def get_unique_child(tree: Tree, name: str) -> Tree:
-    matches = [child for child in tree.children if child.data == name]
-
-    if not matches:
-        raise RuntimeError(f"Tree {tree} doesn't have child {name}")
-    if len(matches) > 1:
-        raise RuntimeError(f"Tree {tree} has more than one children {name}")
-
-    return matches[0]
-
-
-def extract_named_leaf_value(tree: Tree, name: str) -> str:
-    return extract_leaf_value(get_unique_child(tree, name))
-
-
 def in_pairs(iterable: Iterable) -> Iterable:
     # [iter(...), iter(...)] would make two different list_iterator objects.
     # We only want one.
