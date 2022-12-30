@@ -262,6 +262,18 @@ class InitializerList:
 
         return len(self.exprs)
 
+    @property
+    def user_facing_name(self) -> str:
+        type_names = [expr.type().get_user_facing_name(False) for expr in self.exprs]
+
+        members = (
+            [f"{name}: {type_name}" for name, type_name in zip(self.names, type_names)]
+            if self.names is not None
+            else type_names
+        )
+
+        return "{" + str.join(", ", members) + "}"
+
 
 class ExpressionTransformer(Transformer_InPlace):
     def __init__(
@@ -482,7 +494,9 @@ def generate_variable_declaration(
         elif isinstance(rhs, InitializerList):
             assert_else_throw(
                 isinstance(var_type.definition, cg.StructDefinition),
-                InvalidInitializerListAssignment(var_type.get_user_facing_name(False)),
+                InvalidInitializerListAssignment(
+                    var_type.get_user_facing_name(False), rhs.user_facing_name
+                ),
             )
             # Help the type checker.
             assert isinstance(var_type.definition, cg.StructDefinition)
