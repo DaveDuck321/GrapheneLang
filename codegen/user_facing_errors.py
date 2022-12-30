@@ -156,10 +156,10 @@ class InvalidInitializerListLength(GrapheneError):
 
 
 class InvalidInitializerListAssignment(GrapheneError):
-    def __init__(self, non_struct_type: str) -> None:
+    def __init__(self, non_struct_type: str, init_list_type_name: str) -> None:
         super().__init__(
             "Error: initializer list cannot be assigned to type "
-            f"'{non_struct_type}' (expected a struct type)"
+            f"'{non_struct_type}' (expected a struct type similar to '{init_list_type_name}')"
         )
 
 
