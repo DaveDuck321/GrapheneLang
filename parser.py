@@ -238,8 +238,8 @@ class ParseFunctionSignatures(Interpreter):
 
         fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
-        for arg_name_tree, arg_type_tree in in_pairs(fn_arg_trees):
-            arg_name = extract_leaf_value(arg_name_tree)
+        for arg_name, arg_type_tree in in_pairs(fn_arg_trees):
+            assert isinstance(arg_name, Token)
             arg_type = TypeTransformer.parse(self._program, arg_type_tree)
 
             fn_args.append(cg.Parameter(arg_name, arg_type))
