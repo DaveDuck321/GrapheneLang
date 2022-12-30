@@ -398,9 +398,9 @@ class ExpressionTransformer(Transformer_InPlace):
 
     @v_args(inline=True)
     def struct_member_access(
-        self, lhs: FlattenedExpression, member_tree: Tree
+        self, lhs: FlattenedExpression, member_name: Token
     ) -> FlattenedExpression:
-        member_name = extract_leaf_value(member_tree)
+        assert isinstance(member_name, Token)
 
         struct_access = cg.StructMemberAccess(lhs.expression(), member_name)
         return lhs.add_parent(struct_access)
@@ -537,6 +537,8 @@ def generate_variable_declaration(
         if value_tree is not None
         else None
     )
+
+    assert isinstance(name_tree, Token)
     parse_variable_declaration(name_tree, type_tree, expression_value)
 
 
