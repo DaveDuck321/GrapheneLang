@@ -45,7 +45,7 @@ _typedef_name: CNAME
 typedef: "typedef" _typedef_name [ generic_definition_list ] ":" type
 
 function_name: CNAME ( generic_annotation )?
-function_arguments: "(" (variable_name ":" type ("," variable_name ":" type)*)? ")"
+function_arguments: "(" (CNAME ":" type ("," CNAME ":" type)*)? ")"
 _function_declaration: ":" function_arguments "->" type
 _function_definition: _function_declaration "=" scope
 foreign_function: "foreign" function_name _function_declaration
