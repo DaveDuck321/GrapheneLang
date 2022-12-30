@@ -478,14 +478,13 @@ def generate_variable_declaration(
     body: Tree,
 ) -> None:
     def parse_variable_declaration(
-        name_tree: Tree,
+        var_name: Token,
         type_tree: Tree,
         rhs: Optional[
             FlattenedExpression | InitializerList
         ] = None,  # FIXME lark placeholders.
     ) -> None:
-        # Extract variable name and type.
-        var_name = extract_leaf_value(name_tree)
+        assert isinstance(var_name, Token)
         var_type = TypeTransformer.parse(program, type_tree)
 
         var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
