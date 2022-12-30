@@ -433,10 +433,6 @@ class ExpressionTransformer(Transformer_InPlace):
     ) -> InitializerList:
         assert isinstance(init_list, InitializerList)
 
-        # TODO handle empty initializer lists.
-        if not init_list.exprs:
-            raise NotImplementedError()
-
         return init_list
 
 
