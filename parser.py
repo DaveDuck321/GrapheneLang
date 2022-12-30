@@ -465,9 +465,7 @@ def generate_variable_declaration(
     def parse_variable_declaration(
         var_name: Token,
         type_tree: Tree,
-        rhs: Optional[
-            FlattenedExpression | InitializerList
-        ] = None,  # FIXME lark placeholders.
+        rhs: Optional[FlattenedExpression | InitializerList],
     ) -> None:
         assert isinstance(var_name, Token)
         var_type = TypeTransformer.parse(program, type_tree)
