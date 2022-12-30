@@ -20,7 +20,7 @@ type_name: CNAME [ generic_annotation ]
 _inner_list_of_named_members: variable_name ":" type ("," variable_name ":" type)*
 _inner_list_of_types: (type ("," type)*)?
 _inner_list_of_type_names: (type_name ("," type_name)*)?
-struct_type: "{" _inner_list_of_named_members "}"
+struct_type: "{" _inner_list_of_named_members? "}"
 
 _function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_types) ")") | type
 function_type: _function_type_component "->" _function_type_component

@@ -192,7 +192,11 @@ class StructDefinition(TypeDefinition):
     @cached_property
     def alignment(self) -> int:
         # TODO: can we be less conservative here
-        return max(member.type.alignment for member in self._members)
+        return (
+            max(member.type.alignment for member in self._members)
+            if self._members
+            else 1
+        )
 
     def __repr__(self) -> str:
         return f"StructDefinition({', '.join(map(repr, self._members))})"
@@ -294,7 +298,7 @@ class FunctionSignature:
         # Name mangle operators into digits
         legal_name_mangle = []
         for char in self.name:
-            if char.isalnum() or char == '_':
+            if char.isalnum() or char == "_":
                 legal_name_mangle.append(char)
             else:
                 legal_name_mangle.append(f"__O{ord(char)}")
