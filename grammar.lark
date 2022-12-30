@@ -14,7 +14,6 @@ type: _type
 generic_annotation: "<" _inner_list_of_type_names ">"
 
 accessed_variable_name: CNAME
-variable_name: CNAME
 type_name: CNAME [ generic_annotation ]
 
 _inner_list_of_named_members: CNAME ":" type ("," CNAME ":" type)*
@@ -125,7 +124,7 @@ _non_operator_expression: function_call
                         | SIGNED_FLOAT
                         | bool_constant
 
-struct_member_access: _non_operator_expression "." variable_name
+struct_member_access: _non_operator_expression "." CNAME
 array_index_access: _non_operator_expression "["  expression ("," expression)*  "]"
 
 function_call: function_name "(" inner_list_without_names ")"
