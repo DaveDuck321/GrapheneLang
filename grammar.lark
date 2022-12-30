@@ -65,8 +65,8 @@ _line_of_code_without_semi: expression
                           | return_statement
                           | assignment
 
-variable_declaration: "let" variable_name ":" type ["=" expression]
-const_declaration: "const" variable_name ":" type "=" expression
+variable_declaration: "let" CNAME ":" type ["=" expression]
+const_declaration: "const" CNAME ":" type "=" expression
 return_statement: "return" (_expression)?
 assignment: expression "=" expression
 
