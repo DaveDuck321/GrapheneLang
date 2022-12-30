@@ -4,9 +4,9 @@ from typing import Iterable, Iterator, Optional
 from .builtin_types import BoolType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import (
-    assert_is_implicitly_convertible,
     Decay,
     Dereference,
+    assert_is_implicitly_convertible,
     do_implicit_conversion,
 )
 from .user_facing_errors import (
@@ -221,7 +221,6 @@ class VariableAssignment(Generatable):
 class Assignment(Generatable):
     def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
         super().__init__()
-        # FIXME: this completely ignores const-correctness
 
         dst.assert_can_write_to()
         src.assert_can_read_from()
