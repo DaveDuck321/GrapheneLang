@@ -103,15 +103,10 @@ class TypeTransformer(Transformer):
         underlying_array = cg.Type(cg.ArrayDefinition(element_type, dimensions))
         return underlying_array.to_reference()
 
-    def struct_type(self, member_trees: list[Tree]) -> cg.Type:
-        members: list[cg.Parameter] = []
-        for member_name_tree, member_type in in_pairs(member_trees):
-            assert isinstance(member_type, cg.Type)
-
-            member_name = extract_leaf_value(member_name_tree)
-            assert isinstance(member_name, str)
-
-            members.append(cg.Parameter(member_name, member_type))
+    def struct_type(self, member_trees: list[Token | cg.Type]) -> cg.Type:
+        members = [
+            cg.Parameter(m_name, m_type) for m_name, m_type in in_pairs(member_trees)
+        ]
 
         return cg.Type(cg.StructDefinition(members))
 
@@ -511,7 +506,8 @@ def generate_variable_declaration(
                 isinstance(var_type.definition, cg.StructDefinition),
                 InvalidInitializerListAssignment(var_type.get_user_facing_name(False)),
             )
-            assert isinstance(var_type.definition, cg.StructDefinition) # Help the type checker.
+            # Help the type checker.
+            assert isinstance(var_type.definition, cg.StructDefinition)
 
             assert_else_throw(
                 var_type.definition.member_count == len(rhs),
