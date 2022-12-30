@@ -13,6 +13,6 @@ from .expressions import (
     StructMemberAccess,
     VariableReference,
 )
-from .generatable import IfStatement, ReturnStatement, VariableAssignment, Assignment
-from .interfaces import Parameter, Type, TypedExpression, Variable, Generatable
+from .generatable import Assignment, IfStatement, ReturnStatement, VariableAssignment
+from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
 from .translation_unit import Function, Program, Scope
