@@ -263,9 +263,12 @@ class Program:
         if this_mangle in self._types:
             return self._types[this_mangle]
 
+        specialization = ", ".join(
+            arg.get_user_facing_name(False) for arg in generic_args
+        )
         assert_else_throw(
             name_prefix in self._type_initializers,
-            FailedLookupError("type", f"typedef {name_prefix}[...] : ..."),
+            FailedLookupError("type", f"typedef {name_prefix}<{specialization}> : ..."),
         )
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
