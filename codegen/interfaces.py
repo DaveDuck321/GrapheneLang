@@ -108,7 +108,7 @@ class Type:
             lambda arg: arg.get_user_facing_name(True), self._generic_args
         )
 
-        return f"[{', '.join(generic_names)}]"
+        return f"<{', '.join(generic_names)}>"
 
     def __repr__(self) -> str:
         name = f"{self._typedef_alias} = " if self._typedef_alias else ""
@@ -123,7 +123,7 @@ class Type:
 
     def get_user_facing_name(self, full: bool) -> str:
         prefix = "*" * max(self._typedef_alias_ref_depth - self._ref_depth, 0)
-        suffix = (
+        suffix = self.generic_annotation + (
             # This works in all cases because self._typedef_alias_ref_depth
             # is 0 if self._typedef_alias is not set.
             "&" * max(self._ref_depth - self._typedef_alias_ref_depth, 0)
