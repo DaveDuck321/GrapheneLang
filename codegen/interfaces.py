@@ -99,7 +99,7 @@ class Type:
     def is_pointer(self) -> bool:
         return self.is_unborrowed_ref or self.is_reference
 
-    @cached_property
+    @property
     def generic_annotation(self) -> str:
         if not self._generic_args:
             return ""
