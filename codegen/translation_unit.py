@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from itertools import count
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Optional
 
 from .builtin_callables import get_builtin_callables
 from .builtin_types import FunctionSignature, get_builtin_types
@@ -66,18 +66,13 @@ class Function:
         return next(self.scope_id_iter)
 
     def generate_declaration(self) -> list[str]:
-        ir = (
-            f"declare dso_local {self._signature.return_type.ir_type}"
-            f" @{self.mangled_name}("
-        )
-
         args_ir = [arg.ir_type for arg in self._signature.arguments]
-        ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
-        ir += ") nounwind"
-
-        return [ir]
+        return [
+            f"declare dso_local {self._signature.return_type.ir_type}"
+            f" @{self.mangled_name}({str.join(', ', args_ir)}) nounwind"
+        ]
 
     def generate_definition(self) -> list[str]:
         reg_gen = count(0)  # First register is %0
@@ -89,8 +84,8 @@ class Function:
             map(lambda param: param.ir_ref_with_type_annotation, self._parameters)
         )
 
-        def indent_ir(ir: list[str]):
-            return map(lambda line: line if line.endswith(":") else f"  {line}", ir)
+        def indent_ir(lines: list[str]):
+            return map(lambda line: line if line.endswith(":") else f"  {line}", lines)
 
         return [
             (
@@ -152,7 +147,14 @@ class FunctionSymbolTable:
         )
 
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
-        tuple_add = lambda a, b: tuple(sum(pair) for pair in zip(a, b))
+
+        def tuple_add(
+            lhs: Optional[tuple[int, int]], rhs: Optional[tuple[int, int]]
+        ) -> Optional[tuple[int, int]]:
+            if lhs is None or rhs is None:
+                return None
+
+            return tuple(sum(pair) for pair in zip(lhs, rhs))
 
         for function in candidate_functions:
             per_arg = list(
@@ -163,15 +165,12 @@ class FunctionSymbolTable:
                 )
             )
 
-            # Conversion failed for at least one argument, discard the candidate
-            # function.
-            if any(cost is None for cost in per_arg):
-                continue
-
             costs = reduce(tuple_add, per_arg, (0, 0))
-            assert costs is not None
 
-            functions_by_cost.append((costs, function))
+            # Conversion might fail for some arguments. In that case, discard
+            # this candidate.
+            if costs is not None:
+                functions_by_cost.append((costs, function))
 
         # List is sorted by the first element, then by the second.
         functions_by_cost.sort(key=lambda t: t[0])
@@ -193,7 +192,7 @@ class FunctionSymbolTable:
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
 
-        first, second = functions_by_cost[:2]
+        first, second, *_ = functions_by_cost
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
@@ -395,8 +394,8 @@ class Program:
             )
 
         lines.append("")
-        for type in self._types.values():
-            lines.extend(type.get_ir_initial_type_def())
+        for defined_type in self._types.values():
+            lines.extend(defined_type.get_ir_initial_type_def())
 
         lines.append("")
         for func in self._function_table.foreign_functions:
