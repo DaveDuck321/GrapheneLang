@@ -154,6 +154,23 @@ class ParseTypeDefinitions(Interpreter):
         generics = [] if generic_tree is None else generic_tree.children
         return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore
 
+    @v_args(inline=True)
+    def specialized_typedef(
+        self, type_name: Token, specialization_tree: Tree, rhs_tree: Tree
+    ) -> None:
+        specialization = []
+        for specialization_type_tree in specialization_tree.children:
+            specialization.append(
+                TypeTransformer.parse(self._program, specialization_type_tree)
+            )
+
+        def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
+            assert concrete_types == specialization
+            rhs = TypeTransformer.parse(self._program, rhs_tree)
+            return rhs.new_from_typedef(name_prefix, concrete_types)
+
+        self._program.add_specialized_type(type_name, type_parser, specialization)
+
 
 class ParseFunctionSignatures(Interpreter):
     def __init__(self, program: cg.Program) -> None:

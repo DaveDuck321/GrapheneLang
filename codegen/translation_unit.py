@@ -298,6 +298,22 @@ class Program:
         )
         self._type_initializers[type_prefix] = parse_fn
 
+    def add_specialized_type(
+        self,
+        type_prefix: str,
+        parse_fn: Callable[[str, list[Type]], Type],
+        specialization: list[Type],
+    ) -> None:
+        parsed_type = parse_fn(type_prefix, specialization)
+        mangled_name = Type.mangle_generic_type(type_prefix, specialization)
+        assert_else_throw(
+            mangled_name not in self._types,
+            RedefinitionError(
+                "specialized type", parsed_type.get_user_facing_name(False)
+            ),
+        )
+        self._types[mangled_name] = parsed_type
+
     @staticmethod
     def _get_string_identifier(index: int) -> str:
         assert index >= 0
