@@ -1,22 +1,20 @@
 from functools import cached_property
 from typing import Iterator
 
-from .builtin_types import FunctionSignature, IntType, StructDefinition, ArrayDefinition
+from .builtin_types import ArrayDefinition, FunctionSignature, IntType, StructDefinition
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
+    Decay,
     assert_is_implicitly_convertible,
     dereference_to_single_reference,
     do_implicit_conversion,
-    Decay,
 )
 from .user_facing_errors import (
     ArrayIndexCount,
     BorrowTypeError,
     OperandError,
     TypeCheckerError,
-    assert_else_throw,
-    throw,
 )
 
 
@@ -39,7 +37,7 @@ class ConstantExpression(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can never write to a constant expression (an rvalue).
-        throw(OperandError(f"Cannot modify the constant {self.value}"))
+        raise OperandError(f"Cannot modify the constant {self.value}")
 
 
 class VariableReference(TypedExpression):
@@ -62,23 +60,20 @@ class VariableReference(TypedExpression):
         self.variable.initialized = True
 
     def assert_can_read_from(self) -> None:
-        # Can ready any initialized variable.
         assert isinstance(self.variable, StackVariable)
-        assert_else_throw(
-            self.variable.initialized,
-            OperandError(
+
+        # Can ready any initialized variable.
+        if not self.variable.initialized:
+            raise OperandError(
                 f"Cannot use uninitialized variable '{self.variable.user_facing_name}'"
-            ),
-        )
+            )
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
-        assert_else_throw(
-            not self.variable.constant,
-            OperandError(
+        if self.variable.constant:
+            raise OperandError(
                 f"Cannot modify constant variable '{self.variable.user_facing_name}'"
-            ),
-        )
+            )
 
 
 class FunctionParameter(TypedExpression):
@@ -161,17 +156,15 @@ class FunctionCallExpression(TypedExpression):
     def assert_can_write_to(self) -> None:
         # Can write to any reference return type. TODO we don't have references
         # yet, so any attempt to write to the return value should fail for now.
-        throw(OperandError(f"Cannot modify the value returned by {self.signature}"))
+        raise OperandError(f"Cannot modify the value returned by {self.signature}")
 
 
 class Borrow(TypedExpression):
     def __init__(self, expr: TypedExpression) -> None:
         this_type = expr.type
 
-        assert_else_throw(
-            this_type.is_unborrowed_ref,
-            BorrowTypeError(this_type.get_user_facing_name(False)),
-        )
+        if not this_type.is_unborrowed_ref:
+            raise BorrowTypeError(this_type.get_user_facing_name(False))
 
         # FIXME: const borrows should not initialize a variable
         if isinstance(expr, VariableReference):
@@ -214,15 +207,12 @@ class StructMemberAccess(TypedExpression):
         self._struct_type = self._lhs.type.to_value_type()
 
         struct_definition = self._struct_type.definition
-        assert_else_throw(
-            isinstance(struct_definition, StructDefinition),
-            TypeCheckerError(
+        if not isinstance(struct_definition, StructDefinition):
+            raise TypeCheckerError(
                 "struct member access",
                 self._struct_type.get_user_facing_name(False),
                 "{...}",
-            ),
-        )
-        assert isinstance(struct_definition, StructDefinition)
+            )
 
         self._access_index, member_type = struct_definition.get_member_by_name(
             member_name
@@ -287,10 +277,9 @@ class StructMemberAccess(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
-        assert_else_throw(
-            self._source_struct_is_reference,
-            OperandError("Cannot modify temporary struct"),
-        )
+        if not self._source_struct_is_reference:
+            raise OperandError("Cannot modify temporary struct")
+
         if self._source_struct_is_reference:
             # TODO: check if the reference is const
             pass
@@ -304,23 +293,19 @@ class ArrayIndexAccess(TypedExpression):
         assert array_ptr.type.is_pointer
 
         array_definition = array_ptr.type.definition
-        assert_else_throw(
-            isinstance(array_definition, ArrayDefinition),
-            TypeCheckerError(
+        if not isinstance(array_definition, ArrayDefinition):
+            raise TypeCheckerError(
                 "array index access",
                 array_ptr.type.get_user_facing_name(False),
                 "T[...]",
-            ),
-        )
-        assert isinstance(array_definition, ArrayDefinition)
-        assert_else_throw(
-            len(array_definition._dimensions) == len(indices),
-            ArrayIndexCount(
+            )
+
+        if len(array_definition._dimensions) != len(indices):
+            raise ArrayIndexCount(
                 array_ptr.type.get_user_facing_name(False),
                 len(indices),
                 len(array_definition._dimensions),
-            ),
-        )
+            )
 
         self._array_ptr = array_ptr
         self._conversion_exprs: list[TypedExpression] = []

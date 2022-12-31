@@ -9,11 +9,7 @@ from .type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
 )
-from .user_facing_errors import (
-    AssignmentToNonPointerError,
-    RedefinitionError,
-    assert_else_throw,
-)
+from .user_facing_errors import AssignmentToNonPointerError, RedefinitionError
 
 
 class StackVariable(Variable):
@@ -66,10 +62,9 @@ class Scope(Generatable):
     def add_variable(self, var: StackVariable) -> None:
         # Variables can be shadowed in different (nested) scopes, but they
         # must be unique in a single scope.
-        assert_else_throw(
-            var.user_facing_name not in self._variables,
-            RedefinitionError("variable", var.user_facing_name),
-        )
+        if var.user_facing_name in self._variables:
+            raise RedefinitionError("variable", var.user_facing_name)
+
         self._variables[var.user_facing_name] = var
 
     def search_for_variable(self, var_name: str) -> Optional[StackVariable]:
@@ -225,10 +220,8 @@ class Assignment(Generatable):
         dst.assert_can_write_to()
         src.assert_can_read_from()
 
-        assert_else_throw(
-            dst.type.is_pointer,
-            AssignmentToNonPointerError(dst.type.get_user_facing_name(False)),
-        )
+        if not dst.type.is_pointer:
+            raise AssignmentToNonPointerError(dst.type.get_user_facing_name(False))
 
         self._dst = dst
         self._src = src
