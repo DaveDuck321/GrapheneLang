@@ -1,5 +1,5 @@
 typedef my_i32 : int;
-typedef my_struct<T> : {a: T, b: my_i32};
+typedef[T] my_struct : {a: T, b: my_i32};
 
 @operator +: (a: i64, b: i64) -> i64 = {
     return __builtin_add(a, b);

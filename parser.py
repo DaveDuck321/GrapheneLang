@@ -148,8 +148,8 @@ class ParseTypeDefinitions(Interpreter):
         self._program.add_type(type_name, type_parser)
 
     @v_args(inline=True)
-    def typedef(
-        self, type_name: Token, generic_tree: Optional[Tree], rhs_tree: Tree
+    def generic_typedef(
+        self, generic_tree: Optional[Tree], type_name: Token, rhs_tree: Tree
     ) -> None:
         generics = [] if generic_tree is None else generic_tree.children
         return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore

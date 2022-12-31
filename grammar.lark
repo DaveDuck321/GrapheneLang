@@ -11,10 +11,9 @@ heap_array_type: _type "[" "&" ("," SIGNED_INT)* "]"
 
 _type: _value_type | ref_type | stack_array_type | heap_array_type
 type: _type
-generic_annotation: "<" _inner_list_of_type_names ">"
 
 accessed_variable_name: CNAME
-type_name: CNAME [ generic_annotation ]
+type_name: CNAME [ generic_specialization ]
 
 _inner_list_of_named_members: CNAME ":" type ("," CNAME ":" type)*
 _inner_list_of_types: (type ("," type)*)?
@@ -39,11 +38,15 @@ _top_level_program_feature: typedef
                           | variable_declaration
                           | const_declaration
 
-generic_definition_list: "<" _typedef_name ("," _typedef_name)* ">"
-_typedef_name: CNAME
-typedef: "typedef" _typedef_name [ generic_definition_list ] ":" type
 
-function_name: CNAME ( generic_annotation )?
+_typedef_name: CNAME
+generic_specialization: "<" _inner_list_of_type_names ">"
+generic_definition_list: "[" _typedef_name ("," _typedef_name)* "]"
+// TODO: allow partial specialization in the future?
+typedef: "typedef" [ generic_definition_list ] _typedef_name ":" type -> generic_typedef
+       | "typedef" _typedef_name generic_specialization ":" type -> specialized_typedef
+
+function_name: CNAME ( generic_specialization )?
 function_arguments: "(" (CNAME ":" type ("," CNAME ":" type)*)? ")"
 _function_declaration: ":" function_arguments "->" type
 _function_definition: _function_declaration "=" scope
