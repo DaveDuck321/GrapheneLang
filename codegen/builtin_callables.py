@@ -4,7 +4,7 @@ from typing import Callable, Iterator
 from .builtin_types import GenericIntType, IntegerDefinition
 from .interfaces import TypedExpression
 from .type_conversions import do_implicit_conversion
-from .user_facing_errors import TypeCheckerError, OperandError, throw
+from .user_facing_errors import OperandError, throw
 
 
 class AddExpression(TypedExpression):
