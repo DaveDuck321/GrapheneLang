@@ -17,7 +17,6 @@ type_name: CNAME [ generic_specialization ]
 
 _inner_list_of_named_members: CNAME ":" type ("," CNAME ":" type)*
 _inner_list_of_types: (type ("," type)*)?
-_inner_list_of_type_names: (type_name ("," type_name)*)?
 struct_type: "{" _inner_list_of_named_members? "}"
 
 _function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_types) ")") | type
@@ -40,7 +39,7 @@ _top_level_program_feature: typedef
 
 
 _typedef_name: CNAME
-generic_specialization: "<" _inner_list_of_type_names ">"
+generic_specialization: "<" type_name ("," type_name)* ">"
 generic_definition_list: "[" _typedef_name ("," _typedef_name)* "]"
 // TODO: allow partial specialization in the future?
 typedef: "typedef" [ generic_definition_list ] _typedef_name ":" type -> generic_typedef
