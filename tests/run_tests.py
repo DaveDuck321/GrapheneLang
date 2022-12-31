@@ -11,36 +11,7 @@ from typing import Optional
 
 import schema
 
-all_tests = [
-    "ambiguous_function_call",
-    "array_assignments",
-    "c_demo/compile_error",
-    "c_demo/runtime_status",
-    "duplicate_generics",
-    "generics_parsing",
-    "generics_with_generic_annotations",
-    "order_of_operation",
-    "overload_resolution_avoids_integer_promotion",
-    "reference_borrowing",
-    "reference_nesting",
-    "reference_overloading",
-    "simple_typedef",
-    "string_constants_ir",
-    "string_constants",
-    "struct_assignments",
-    "struct_dereferencing",
-    "struct_init_list_invalid_assignment_with_names",
-    "struct_init_list_invalid_assignment_without_names",
-    "struct_init_list_with_missing_name",
-    "struct_init_list_with_names",
-    "struct_init_list_with_wrong_name",
-    "struct_init_list_without_names",
-    "subexpression_ordering",
-    "unary_operators",
-    "undeclared_variable",
-    "uninitialized_variable_usage",
-    "variable_assignments",
-]
+PARENT_DIR = Path(__file__).parent
 
 
 class TestFailure(RuntimeError):
@@ -181,9 +152,12 @@ def run_test(path: Path, io_harness=True) -> None:
 io_lock = Lock()
 
 
-def run_test_print_result(test_name: str) -> bool:
+def run_test_print_result(test_dir: Path) -> bool:
+    assert test_dir.is_dir()
+    test_name = str(test_dir.relative_to(PARENT_DIR))
+
     try:
-        run_test(Path(__file__).parent / test_name)
+        run_test(test_dir)
         with io_lock:
             print(f"PASSED '{test_name}'")
         return True
@@ -195,7 +169,7 @@ def run_test_print_result(test_name: str) -> bool:
         return False
 
 
-def run_tests(tests: list[str], workers: int) -> int:
+def run_tests(tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
         passed = sum(executor.map(run_test_print_result, tests))
 
@@ -208,13 +182,23 @@ def run_tests(tests: list[str], workers: int) -> int:
     return failed
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = ArgumentParser("run_tests.py")
     parser.add_argument("--test", required=False)
     parser.add_argument("--workers", required=False, type=int, default=cpu_count())
 
     args = parser.parse_args()
     if args.test is not None:
-        run_test(Path(__file__).parent / args.test, io_harness=False)
+        run_test(PARENT_DIR / args.test, io_harness=False)
     else:
-        exit(run_tests(all_tests, args.workers))
+        all_test_dirs = [
+            test_path.parent
+            for test_path in PARENT_DIR.rglob("**/test.json")
+            if test_path.is_file()
+        ]
+
+        exit(run_tests(all_test_dirs, args.workers))
+
+
+if __name__ == "__main__":
+    main()
