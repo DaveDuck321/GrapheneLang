@@ -8,7 +8,11 @@
             "./out/a.out"
         ],
         "output": {
-            "status": 1
+            "status": 1,
+            "stderr": [
+                "File */main.c3', line 4, in 'typedef specialization'",
+                "Error: multiple definitions of specialized type 'MyType<u8>'"
+            ]
         }
     }
 }
