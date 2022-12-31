@@ -121,25 +121,22 @@ class FunctionSymbolTable:
         fn_to_add_signature = fn_to_add.get_signature()
         matched_functions = self._functions[fn_to_add_signature.name]
 
-        def get_printable_sig(sig: FunctionSignature) -> str:
-            return f"{sig.name}: ({', '.join(map(str, sig.arguments))})"
-
         if fn_to_add_signature.is_foreign() and len(matched_functions) > 0:
             RedefinitionError(
                 "non-overloadable foreign function",
-                get_printable_sig(fn_to_add_signature),
+                fn_to_add_signature.user_facing_name,
             )
 
         for target in matched_functions:
             if target.is_foreign():
                 raise RedefinitionError(
                     "non-overloadable foreign function",
-                    get_printable_sig(target.get_signature()),
+                    target.get_signature().user_facing_name,
                 )
 
             if target.get_signature().arguments == fn_to_add_signature.arguments:
                 raise RedefinitionError(
-                    "function", get_printable_sig(fn_to_add_signature)
+                    "function", fn_to_add_signature.user_facing_name
                 )
 
         matched_functions.append(fn_to_add)
