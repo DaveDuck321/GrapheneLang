@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import cpu_count
 from pathlib import Path
 from subprocess import PIPE
+from sys import exit as sys_exit
 from threading import Lock
 from typing import Optional
 
@@ -197,7 +198,7 @@ def main() -> None:
             if test_path.is_file()
         ]
 
-        exit(run_tests(all_test_dirs, args.workers))
+        sys_exit(run_tests(all_test_dirs, args.workers))
 
 
 if __name__ == "__main__":
