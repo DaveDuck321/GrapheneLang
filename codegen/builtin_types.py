@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Callable, Optional
+import uuid
 
 from .interfaces import Parameter, Type, TypeDefinition
 from .user_facing_errors import (
@@ -148,6 +149,9 @@ class StructDefinition(TypeDefinition):
         # TODO: assert member names are unique
         self._members = members
 
+        # Different structs should compare different even if they have the same body
+        self._uuid = uuid.uuid4()
+
     def get_member_by_name(self, name: str) -> tuple[int, Type]:
         for index, member in enumerate(self._members):
             if member.name == name:
@@ -205,7 +209,7 @@ class StructDefinition(TypeDefinition):
         assert isinstance(other, TypeDefinition)
         if not isinstance(other, StructDefinition):
             return False
-        return self._members == other._members
+        return self._uuid == other._uuid
 
 
 class ArrayDefinition(TypeDefinition):
