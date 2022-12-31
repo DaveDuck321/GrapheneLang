@@ -116,7 +116,8 @@ class Reinterpret(TypedExpression):
 
         self.result_reg = next(reg_gen)
         return [
-            f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} to {self.type.ir_type}"
+            f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} "
+            f"to {self.type.ir_type}"
         ]
 
     @cached_property

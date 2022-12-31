@@ -8,15 +8,15 @@ from .user_facing_errors import FailedLookupError, InvalidIntSize
 
 
 class PrimitiveDefinition(TypeDefinition):
-    def __init__(self, align: int, ir: str, name: str) -> None:
+    def __init__(self, align: int, ir_type: str, name: str) -> None:
         super().__init__()
 
         assert align > 0
-        assert ir
+        assert ir_type
         assert name
 
         self._align = align
-        self._ir = ir
+        self._ir = ir_type
         self._name = name
 
     @cached_property
@@ -68,7 +68,7 @@ class IntegerDefinition(PrimitiveDefinition):
             range_lower = 0
             range_upper = 2**self.bits
 
-        if not (range_lower <= int(value) < range_upper):
+        if not range_lower <= int(value) < range_upper:
             raise InvalidIntSize(self._name, int(value), range_lower, range_upper)
 
         return value
