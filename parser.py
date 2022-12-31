@@ -19,7 +19,6 @@ from codegen.user_facing_errors import (
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
     RepeatedGenericName,
-    assert_else_throw,
 )
 
 
@@ -57,7 +56,9 @@ class TypeTransformer(Transformer):
         assert isinstance(name, Token)
 
         if name in self._generic_mapping:
-            assert_else_throw(type_map is None, GenericHasGenericAnnotation(name))
+            if type_map is not None:
+                raise GenericHasGenericAnnotation(name)
+
             return self._generic_mapping[name]
 
         generic_args: list[cg.Type] = [] if type_map is None else type_map.children  # type: ignore
@@ -126,20 +127,16 @@ class ParseTypeDefinitions(Interpreter):
         for generic_name in generics:
             assert isinstance(generic_name, Token)
 
-            assert_else_throw(
-                generic_name.value not in available_generics,
-                RepeatedGenericName(generic_name, type_name),
-            )
+            if generic_name.value in available_generics:
+                raise RepeatedGenericName(generic_name, type_name)
 
             available_generics.append(generic_name.value)
 
         def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
-            assert_else_throw(
-                len(concrete_types) == len(available_generics),
-                GenericArgumentCountError(
+            if len(concrete_types) != len(available_generics):
+                raise GenericArgumentCountError(
                     type_name, len(concrete_types), len(available_generics)
-                ),
-            )
+                )
 
             mapping = dict(zip(available_generics, concrete_types))
             rhs = TypeTransformer.parse(self._program, rhs_tree, mapping)
@@ -361,8 +358,8 @@ class ExpressionTransformer(Transformer_InPlace):
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
         var = self._scope.search_for_variable(var_name)
 
-        assert_else_throw(var is not None, FailedLookupError("variable", var_name))
-        assert var is not None  # Make the type checker happy.
+        if var is None:
+            raise FailedLookupError("variable", var_name)
 
         var_ref = cg.VariableReference(var)
         return FlattenedExpression([var_ref])
@@ -492,21 +489,15 @@ def generate_variable_declaration(
 
         # Initialize struct.
         elif isinstance(rhs, InitializerList):
-            assert_else_throw(
-                isinstance(var_type.definition, cg.StructDefinition),
-                InvalidInitializerListAssignment(
+            if not isinstance(var_type.definition, cg.StructDefinition):
+                raise InvalidInitializerListAssignment(
                     var_type.get_user_facing_name(False), rhs.user_facing_name
-                ),
-            )
-            # Help the type checker.
-            assert isinstance(var_type.definition, cg.StructDefinition)
+                )
 
-            assert_else_throw(
-                var_type.definition.member_count == len(rhs),
-                InvalidInitializerListLength(
+            if var_type.definition.member_count != len(rhs):
+                raise InvalidInitializerListLength(
                     len(rhs), var_type.definition.member_count
-                ),
-            )
+                )
 
             def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
                 scope.add_generatable(expr.subexpressions)

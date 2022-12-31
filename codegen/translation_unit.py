@@ -16,7 +16,6 @@ from .user_facing_errors import (
     InvalidEscapeSequence,
     OverloadResolutionError,
     RedefinitionError,
-    assert_else_throw,
 )
 
 
@@ -132,17 +131,16 @@ class FunctionSymbolTable:
             )
 
         for target in matched_functions:
-            assert_else_throw(
-                not target.is_foreign(),
-                RedefinitionError(
+            if target.is_foreign():
+                raise RedefinitionError(
                     "non-overloadable foreign function",
                     get_printable_sig(target.get_signature()),
-                ),
-            )
-            assert_else_throw(
-                target.get_signature().arguments != fn_to_add_signature.arguments,
-                RedefinitionError("function", get_printable_sig(fn_to_add_signature)),
-            )
+                )
+
+            if target.get_signature().arguments == fn_to_add_signature.arguments:
+                raise RedefinitionError(
+                    "function", get_printable_sig(fn_to_add_signature)
+                )
 
         matched_functions.append(fn_to_add)
         if fn_to_add.is_foreign():
@@ -185,17 +183,15 @@ class FunctionSymbolTable:
             arg.get_user_facing_name(False) for arg in fn_args
         )
 
-        assert_else_throw(
-            len(functions_by_cost) > 0,
-            OverloadResolutionError(
+        if not functions_by_cost:
+            raise OverloadResolutionError(
                 fn_name,
                 readable_arg_names,
                 [
                     fn.get_signature().user_facing_name
                     for fn in self._functions[fn_name]
                 ],
-            ),
-        )
+            )
 
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
@@ -204,15 +200,13 @@ class FunctionSymbolTable:
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
-        assert_else_throw(
-            first[0] < second[0],
-            AmbiguousFunctionCall(
+        if first[0] == second[0]:
+            raise AmbiguousFunctionCall(
                 fn_name,
                 readable_arg_names,
                 first[1].get_signature().user_facing_name,
                 second[1].get_signature().user_facing_name,
-            ),
-        )
+            )
 
         return first[1]
 
@@ -263,10 +257,8 @@ class Program:
         if this_mangle in self._types:
             return self._types[this_mangle]
 
-        assert_else_throw(
-            name_prefix in self._type_initializers,
-            FailedLookupError("type", f"typedef {name_prefix}[...] : ..."),
-        )
+        if name_prefix not in self._type_initializers:
+            raise FailedLookupError("type", f"typedef {name_prefix}[...] : ...")
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
         self._types[this_mangle] = this_type
@@ -288,14 +280,12 @@ class Program:
     def add_type(
         self, type_prefix: str, parse_fn: Callable[[str, list[Type]], Type]
     ) -> None:
-        assert_else_throw(
-            type_prefix not in self._type_initializers,
-            RedefinitionError("type", type_prefix),
-        )
-        assert_else_throw(
-            Type.mangle_generic_type(type_prefix, []) not in self._type_initializers,
-            RedefinitionError("builtin type", type_prefix),
-        )
+        if type_prefix in self._type_initializers:
+            raise RedefinitionError("type", type_prefix)
+
+        if Type.mangle_generic_type(type_prefix, []) in self._type_initializers:
+            raise RedefinitionError("builtin type", type_prefix)
+
         self._type_initializers[type_prefix] = parse_fn
 
     @staticmethod
@@ -366,10 +356,8 @@ class Program:
                 # that we don't end a screen with a \.
                 _, escaped_char = next(chars)
 
-                assert_else_throw(
-                    escaped_char in cls.ESCAPE_SEQUENCES_TABLE,
-                    InvalidEscapeSequence(escaped_char),
-                )
+                if escaped_char not in cls.ESCAPE_SEQUENCES_TABLE:
+                    raise InvalidEscapeSequence(escaped_char)
 
                 # Easier if we always encode the representation of the escape
                 # sequence.

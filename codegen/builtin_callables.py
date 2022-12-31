@@ -4,7 +4,7 @@ from typing import Callable, Iterator
 from .builtin_types import GenericIntType, IntegerDefinition
 from .interfaces import TypedExpression
 from .type_conversions import do_implicit_conversion
-from .user_facing_errors import OperandError, throw
+from .user_facing_errors import OperandError
 
 
 class AddExpression(TypedExpression):
@@ -52,7 +52,7 @@ class AddExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        throw(OperandError("Cannot assign to `__builtin_add(..., ...)`"))
+        raise OperandError("Cannot assign to `__builtin_add(..., ...)`")
 
 
 def get_builtin_callables() -> dict[
