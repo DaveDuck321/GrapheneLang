@@ -266,9 +266,12 @@ class Program:
         specialization = ", ".join(
             arg.get_user_facing_name(False) for arg in generic_args
         )
+        specialization_prefix = f"<{specialization}>" if specialization else ""
         assert_else_throw(
             name_prefix in self._type_initializers,
-            FailedLookupError("type", f"typedef {name_prefix}<{specialization}> : ..."),
+            FailedLookupError(
+                "type", f"typedef {name_prefix}{specialization_prefix} : ..."
+            ),
         )
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
