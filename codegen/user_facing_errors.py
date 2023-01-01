@@ -161,3 +161,12 @@ class InvalidInitializerListAssignment(GrapheneError):
             "Error: initializer list cannot be assigned to type "
             f"'{non_struct_type}' (expected a struct type similar to '{init_list_type_name}')"
         )
+
+
+class MissingFunctionReturn(ErrorWithLineInfo):
+    def __init__(self, function_name: str, line: int) -> None:
+        super().__init__(
+            f"Error: control flow reaches end of non-void function",
+            line,
+            function_name,
+        )

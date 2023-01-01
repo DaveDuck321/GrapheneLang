@@ -323,6 +323,10 @@ class Generatable(ABC):
         return []
 
     @abstractmethod
+    def is_return_guaranteed(self) -> bool:
+        pass
+
+    @abstractmethod
     def __repr__(self) -> str:
         pass
 
@@ -344,6 +348,10 @@ class TypedExpression(Generatable):
 
         self.type = expr_type
         self.result_reg: Optional[int] = None
+
+    def is_return_guaranteed(self) -> bool:
+        # At the moment no TypedExpressions can return
+        return False
 
     @cached_property
     def ir_ref_with_type_annotation(self) -> str:

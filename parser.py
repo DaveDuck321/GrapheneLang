@@ -18,6 +18,7 @@ from codegen.user_facing_errors import (
     GrapheneError,
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
+    MissingFunctionReturn,
     RepeatedGenericName,
 )
 
@@ -638,6 +639,11 @@ def generate_body(
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
     generate_body(program, function, function.top_level_scope, body)
+    if not function.top_level_scope.is_return_guaranteed():
+        raise MissingFunctionReturn(
+            function.get_signature().user_facing_name,
+            body.meta.end_line,
+        )
 
 
 def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:

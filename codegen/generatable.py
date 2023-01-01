@@ -102,6 +102,13 @@ class Scope(Generatable):
     def is_empty(self) -> bool:
         return not self._lines
 
+    def is_return_guaranteed(self) -> bool:
+        for line in self._lines:
+            if line.is_return_guaranteed():
+                # TODO: it would be nice if we could give a dead code warning here
+                return True
+        return False
+
     def __repr__(self) -> str:
         return f"{{{','.join(map(repr, self._lines))}}}"
 
@@ -140,6 +147,10 @@ class IfStatement(Generatable):
 
         return ir_lines
 
+    def is_return_guaranteed(self) -> bool:
+        # TODO: if else is present we can return True
+        return False
+
     def __repr__(self) -> str:
         return f"IfStatement({self.condition} {self.scope})"
 
@@ -177,6 +188,9 @@ class ReturnStatement(Generatable):
 
         return ir_lines
 
+    def is_return_guaranteed(self) -> bool:
+        return True
+
     def __repr__(self) -> str:
         return f"ReturnStatement({self.returned_expr})"
 
@@ -205,6 +219,9 @@ class VariableAssignment(Generatable):
         ]
 
         return ir_lines
+
+    def is_return_guaranteed(self) -> bool:
+        return False
 
     def __repr__(self) -> str:
         return (
@@ -265,6 +282,9 @@ class Assignment(Generatable):
             f"store {converted_src.ir_ref_with_type_annotation}, "
             f"{self._dst.ir_ref_with_type_annotation}, align {self._dst.type.alignment}",
         ]
+
+    def is_return_guaranteed(self) -> bool:
+        return False
 
     def __repr__(self) -> str:
         return f"Assignment({self._dst} = {self._src})"

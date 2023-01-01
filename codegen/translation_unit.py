@@ -75,6 +75,8 @@ class Function:
         ]
 
     def generate_definition(self) -> list[str]:
+        assert self.top_level_scope.is_return_guaranteed()
+
         reg_gen = count(0)  # First register is %0
 
         for param in self._parameters:
