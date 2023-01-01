@@ -402,6 +402,14 @@ class ExpressionTransformer(Transformer_InPlace):
 
         return self._function_call_impl(fn_name, fn_args)
 
+    @v_args(inline=True)
+    def ufcs_call_with_borrow(
+        self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
+    ) -> FlattenedExpression:
+        borrowed_this = this.add_parent(cg.Borrow(this.expression()))
+
+        return self.ufcs_call(borrowed_this, name_tree, args_tree)
+
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
         identifier = self._program.add_string(string[1:-1])
