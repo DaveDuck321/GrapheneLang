@@ -258,8 +258,10 @@ class Program:
                 arg.get_user_facing_name(False) for arg in generic_args
             )
             specialization_prefix = f"<{specialization}>" if specialization else ""
-            
-            raise FailedLookupError("type", f"typedef {name_prefix}{specialization_prefix} : ...")
+
+            raise FailedLookupError(
+                "type", f"typedef {name_prefix}{specialization_prefix} : ..."
+            )
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
         self._types[this_mangle] = this_type
@@ -297,12 +299,12 @@ class Program:
     ) -> None:
         parsed_type = parse_fn(type_prefix, specialization)
         mangled_name = Type.mangle_generic_type(type_prefix, specialization)
-        assert_else_throw(
-            mangled_name not in self._types,
-            RedefinitionError(
+
+        if mangled_name in self._types:
+            raise RedefinitionError(
                 "specialized type", parsed_type.get_user_facing_name(False)
-            ),
-        )
+            )
+
         self._types[mangled_name] = parsed_type
 
     @staticmethod
