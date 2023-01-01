@@ -1,6 +1,6 @@
 typedef my_i32 : int;
 typedef i64_ref : i64&;
-typedef my_struct<T> : {a: T, b: my_i32};
+typedef[T] my_struct : {a: T, b: my_i32};
 
 foreign puts : (str: string) -> int;
 foreign raise : (sig: int) -> int;
