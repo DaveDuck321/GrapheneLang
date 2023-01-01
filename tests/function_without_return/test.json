@@ -1,0 +1,18 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../driver.py",
+            "main.c3",
+            "-o",
+            "./out/a.out"
+        ],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 5, in 'function without_return: (bool) -> int'",
+                "Error: control flow reaches end of non-void function"
+            ]
+        }
+    }
+}
