@@ -110,7 +110,12 @@ class FunctionCallExpression(TypedExpression):
     def __init__(
         self, signature: FunctionSignature, args: list[TypedExpression]
     ) -> None:
-        super().__init__(signature.return_type)
+        super().__init__(
+            # Replace the last reference with an unborrowed reference.
+            signature.return_type.to_dereferenced_type().to_unborrowed_ref()
+            if signature.return_type.is_reference
+            else signature.return_type
+        )
 
         for arg, arg_type in zip(args, signature.arguments, strict=True):
             arg.assert_can_read_from()
