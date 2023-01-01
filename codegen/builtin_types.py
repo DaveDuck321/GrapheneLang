@@ -1,27 +1,22 @@
+import uuid
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Callable, Optional
-import uuid
 
 from .interfaces import Parameter, Type, TypeDefinition
-from .user_facing_errors import (
-    FailedLookupError,
-    InvalidIntSize,
-    assert_else_throw,
-    throw,
-)
+from .user_facing_errors import FailedLookupError, InvalidIntSize
 
 
 class PrimitiveDefinition(TypeDefinition):
-    def __init__(self, align: int, ir: str, name: str) -> None:
+    def __init__(self, align: int, ir_type: str, name: str) -> None:
         super().__init__()
 
         assert align > 0
-        assert ir
+        assert ir_type
         assert name
 
         self._align = align
-        self._ir = ir
+        self._ir = ir_type
         self._name = name
 
     @cached_property
@@ -73,10 +68,8 @@ class IntegerDefinition(PrimitiveDefinition):
             range_lower = 0
             range_upper = 2**self.bits
 
-        assert_else_throw(
-            range_lower <= int(value) < range_upper,
-            InvalidIntSize(self._name, int(value), range_lower, range_upper),
-        )
+        if not range_lower <= int(value) < range_upper:
+            raise InvalidIntSize(self._name, int(value), range_lower, range_upper)
 
         return value
 
@@ -156,7 +149,7 @@ class StructDefinition(TypeDefinition):
         for index, member in enumerate(self._members):
             if member.name == name:
                 return index, member.type
-        throw(FailedLookupError("struct member", f"{{{name}: ...}}"))
+        raise FailedLookupError("struct member", f"{{{name}: ...}}")
 
     def get_member_by_index(self, index: int) -> Parameter:
         return self._members[index]

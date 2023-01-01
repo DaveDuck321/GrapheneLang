@@ -3,7 +3,7 @@ from typing import Iterator, Optional
 
 from .builtin_types import ArrayDefinition, IntegerDefinition
 from .interfaces import Type, TypedExpression
-from .user_facing_errors import OperandError, TypeCheckerError, assert_else_throw, throw
+from .user_facing_errors import OperandError, TypeCheckerError
 
 
 class Dereference(TypedExpression):
@@ -36,7 +36,7 @@ class Dereference(TypedExpression):
         self.ref.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        throw(OperandError("Cannot modify a dereferenced value"))
+        raise OperandError("Cannot modify a dereferenced value")
 
 
 class Decay(TypedExpression):
@@ -99,7 +99,7 @@ class PromoteInteger(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # TODO this isn't very helpful.
-        throw(OperandError("Cannot modify promoted integers"))
+        raise OperandError("Cannot modify promoted integers")
 
 
 class Reinterpret(TypedExpression):
@@ -116,7 +116,8 @@ class Reinterpret(TypedExpression):
 
         self.result_reg = next(reg_gen)
         return [
-            f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} to {self.type.ir_type}"
+            f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} "
+            f"to {self.type.ir_type}"
         ]
 
     @cached_property
@@ -195,14 +196,12 @@ def implicit_conversion_impl(
     ref_depth_required = dest_type.ref_depth if last_type().is_borrowed else 0
 
     # We are only allowed to dereference.
-    assert_else_throw(
-        last_type().ref_depth >= ref_depth_required,
-        TypeCheckerError(
+    if last_type().ref_depth < ref_depth_required:
+        raise TypeCheckerError(
             context,
             src.type.get_user_facing_name(False),
             dest_type.get_user_facing_name(False),
-        ),
-    )
+        )
 
     dereferencing_cost = last_type().ref_depth - ref_depth_required
     for _ in range(dereferencing_cost):
@@ -238,14 +237,12 @@ def implicit_conversion_impl(
 
     # TODO float promotion.
 
-    assert_else_throw(
-        last_type() == dest_type,
-        TypeCheckerError(
+    if last_type() != dest_type:
+        raise TypeCheckerError(
             context,
             src.type.get_user_facing_name(False),
             dest_type.get_user_facing_name(False),
-        ),
-    )
+        )
 
     return (promotion_cost, dereferencing_cost), expr_list
 

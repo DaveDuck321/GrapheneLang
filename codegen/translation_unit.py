@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from itertools import count
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Optional
 
 from .builtin_callables import get_builtin_callables
 from .builtin_types import FunctionSignature, get_builtin_types
@@ -16,7 +16,6 @@ from .user_facing_errors import (
     InvalidEscapeSequence,
     OverloadResolutionError,
     RedefinitionError,
-    assert_else_throw,
 )
 
 
@@ -67,18 +66,13 @@ class Function:
         return next(self.scope_id_iter)
 
     def generate_declaration(self) -> list[str]:
-        ir = (
-            f"declare dso_local {self._signature.return_type.ir_type}"
-            f" @{self.mangled_name}("
-        )
-
         args_ir = [arg.ir_type for arg in self._signature.arguments]
-        ir += str.join(", ", args_ir)
 
         # XXX nounwind indicates that the function never raises an exception.
-        ir += ") nounwind"
-
-        return [ir]
+        return [
+            f"declare dso_local {self._signature.return_type.ir_type}"
+            f" @{self.mangled_name}({str.join(', ', args_ir)}) nounwind"
+        ]
 
     def generate_definition(self) -> list[str]:
         reg_gen = count(0)  # First register is %0
@@ -90,8 +84,8 @@ class Function:
             map(lambda param: param.ir_ref_with_type_annotation, self._parameters)
         )
 
-        def indent_ir(ir: list[str]):
-            return map(lambda line: line if line.endswith(":") else f"  {line}", ir)
+        def indent_ir(lines: list[str]):
+            return map(lambda line: line if line.endswith(":") else f"  {line}", lines)
 
         return [
             (
@@ -122,27 +116,23 @@ class FunctionSymbolTable:
         fn_to_add_signature = fn_to_add.get_signature()
         matched_functions = self._functions[fn_to_add_signature.name]
 
-        def get_printable_sig(sig: FunctionSignature) -> str:
-            return f"{sig.name}: ({', '.join(map(str, sig.arguments))})"
-
         if fn_to_add_signature.is_foreign() and len(matched_functions) > 0:
             RedefinitionError(
                 "non-overloadable foreign function",
-                get_printable_sig(fn_to_add_signature),
+                fn_to_add_signature.user_facing_name,
             )
 
         for target in matched_functions:
-            assert_else_throw(
-                not target.is_foreign(),
-                RedefinitionError(
+            if target.is_foreign():
+                raise RedefinitionError(
                     "non-overloadable foreign function",
-                    get_printable_sig(target.get_signature()),
-                ),
-            )
-            assert_else_throw(
-                target.get_signature().arguments != fn_to_add_signature.arguments,
-                RedefinitionError("function", get_printable_sig(fn_to_add_signature)),
-            )
+                    target.get_signature().user_facing_name,
+                )
+
+            if target.get_signature().arguments == fn_to_add_signature.arguments:
+                raise RedefinitionError(
+                    "function", fn_to_add_signature.user_facing_name
+                )
 
         matched_functions.append(fn_to_add)
         if fn_to_add.is_foreign():
@@ -157,7 +147,14 @@ class FunctionSymbolTable:
         )
 
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
-        tuple_add = lambda a, b: tuple(sum(pair) for pair in zip(a, b))
+
+        def tuple_add(
+            lhs: Optional[tuple[int, int]], rhs: Optional[tuple[int, int]]
+        ) -> Optional[tuple[int, int]]:
+            if lhs is None or rhs is None:
+                return None
+
+            return tuple(sum(pair) for pair in zip(lhs, rhs))
 
         for function in candidate_functions:
             per_arg = list(
@@ -168,15 +165,12 @@ class FunctionSymbolTable:
                 )
             )
 
-            # Conversion failed for at least one argument, discard the candidate
-            # function.
-            if any(cost is None for cost in per_arg):
-                continue
-
             costs = reduce(tuple_add, per_arg, (0, 0))
-            assert costs is not None
 
-            functions_by_cost.append((costs, function))
+            # Conversion might fail for some arguments. In that case, discard
+            # this candidate.
+            if costs is not None:
+                functions_by_cost.append((costs, function))
 
         # List is sorted by the first element, then by the second.
         functions_by_cost.sort(key=lambda t: t[0])
@@ -185,34 +179,30 @@ class FunctionSymbolTable:
             arg.get_user_facing_name(False) for arg in fn_args
         )
 
-        assert_else_throw(
-            len(functions_by_cost) > 0,
-            OverloadResolutionError(
+        if not functions_by_cost:
+            raise OverloadResolutionError(
                 fn_name,
                 readable_arg_names,
                 [
                     fn.get_signature().user_facing_name
                     for fn in self._functions[fn_name]
                 ],
-            ),
-        )
+            )
 
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
 
-        first, second = functions_by_cost[:2]
+        first, second, *_ = functions_by_cost
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
-        assert_else_throw(
-            first[0] < second[0],
-            AmbiguousFunctionCall(
+        if first[0] == second[0]:
+            raise AmbiguousFunctionCall(
                 fn_name,
                 readable_arg_names,
                 first[1].get_signature().user_facing_name,
                 second[1].get_signature().user_facing_name,
-            ),
-        )
+            )
 
         return first[1]
 
@@ -263,16 +253,13 @@ class Program:
         if this_mangle in self._types:
             return self._types[this_mangle]
 
-        specialization = ", ".join(
-            arg.get_user_facing_name(False) for arg in generic_args
-        )
-        specialization_prefix = f"<{specialization}>" if specialization else ""
-        assert_else_throw(
-            name_prefix in self._type_initializers,
-            FailedLookupError(
-                "type", f"typedef {name_prefix}{specialization_prefix} : ..."
-            ),
-        )
+        if name_prefix not in self._type_initializers:
+            specialization = ", ".join(
+                arg.get_user_facing_name(False) for arg in generic_args
+            )
+            specialization_prefix = f"<{specialization}>" if specialization else ""
+            
+            raise FailedLookupError("type", f"typedef {name_prefix}{specialization_prefix} : ...")
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
         self._types[this_mangle] = this_type
@@ -294,14 +281,12 @@ class Program:
     def add_type(
         self, type_prefix: str, parse_fn: Callable[[str, list[Type]], Type]
     ) -> None:
-        assert_else_throw(
-            type_prefix not in self._type_initializers,
-            RedefinitionError("type", type_prefix),
-        )
-        assert_else_throw(
-            Type.mangle_generic_type(type_prefix, []) not in self._type_initializers,
-            RedefinitionError("builtin type", type_prefix),
-        )
+        if type_prefix in self._type_initializers:
+            raise RedefinitionError("type", type_prefix)
+
+        if Type.mangle_generic_type(type_prefix, []) in self._type_initializers:
+            raise RedefinitionError("builtin type", type_prefix)
+
         self._type_initializers[type_prefix] = parse_fn
 
     def add_specialized_type(
@@ -388,10 +373,8 @@ class Program:
                 # that we don't end a screen with a \.
                 _, escaped_char = next(chars)
 
-                assert_else_throw(
-                    escaped_char in cls.ESCAPE_SEQUENCES_TABLE,
-                    InvalidEscapeSequence(escaped_char),
-                )
+                if escaped_char not in cls.ESCAPE_SEQUENCES_TABLE:
+                    raise InvalidEscapeSequence(escaped_char)
 
                 # Easier if we always encode the representation of the escape
                 # sequence.
@@ -432,8 +415,8 @@ class Program:
             )
 
         lines.append("")
-        for type in self._types.values():
-            lines.extend(type.get_ir_initial_type_def())
+        for defined_type in self._types.values():
+            lines.extend(defined_type.get_ir_initial_type_def())
 
         lines.append("")
         for func in self._function_table.foreign_functions:

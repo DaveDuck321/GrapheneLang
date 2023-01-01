@@ -161,12 +161,3 @@ class InvalidInitializerListAssignment(GrapheneError):
             "Error: initializer list cannot be assigned to type "
             f"'{non_struct_type}' (expected a struct type similar to '{init_list_type_name}')"
         )
-
-
-def throw(error: Exception):
-    raise error
-
-
-def assert_else_throw(verify: bool, error: Exception):
-    if not verify:
-        throw(error)
