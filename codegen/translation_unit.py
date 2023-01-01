@@ -254,7 +254,14 @@ class Program:
             return self._types[this_mangle]
 
         if name_prefix not in self._type_initializers:
-            raise FailedLookupError("type", f"typedef {name_prefix}[...] : ...")
+            specialization = ", ".join(
+                arg.get_user_facing_name(False) for arg in generic_args
+            )
+            specialization_prefix = f"<{specialization}>" if specialization else ""
+
+            raise FailedLookupError(
+                "type", f"typedef {name_prefix}{specialization_prefix} : ..."
+            )
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
         self._types[this_mangle] = this_type
@@ -283,6 +290,22 @@ class Program:
             raise RedefinitionError("builtin type", type_prefix)
 
         self._type_initializers[type_prefix] = parse_fn
+
+    def add_specialized_type(
+        self,
+        type_prefix: str,
+        parse_fn: Callable[[str, list[Type]], Type],
+        specialization: list[Type],
+    ) -> None:
+        parsed_type = parse_fn(type_prefix, specialization)
+        mangled_name = Type.mangle_generic_type(type_prefix, specialization)
+
+        if mangled_name in self._types:
+            raise RedefinitionError(
+                "specialized type", parsed_type.get_user_facing_name(False)
+            )
+
+        self._types[mangled_name] = parsed_type
 
     @staticmethod
     def _get_string_identifier(index: int) -> str:

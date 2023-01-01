@@ -37,6 +37,20 @@ def in_pairs(iterable: Iterable) -> Iterable:
     return zip(*chunks, strict=True)
 
 
+def inline_and_wrap_user_facing_errors(context: str):
+    def wrapper(f, _, children, meta):
+        try:
+            f(*children)
+        except GrapheneError as exc:
+            raise ErrorWithLineInfo(
+                exc.message,
+                meta.line,
+                context,
+            ) from exc
+
+    return wrapper
+
+
 class TypeTransformer(Transformer):
     def __init__(
         self, program: cg.Program, generic_mapping: dict[str, cg.Type]
@@ -144,12 +158,29 @@ class ParseTypeDefinitions(Interpreter):
 
         self._program.add_type(type_name, type_parser)
 
-    @v_args(inline=True)
-    def typedef(
-        self, type_name: Token, generic_tree: Optional[Tree], rhs_tree: Tree
+    @v_args(wrapper=inline_and_wrap_user_facing_errors("typedef"))
+    def generic_typedef(
+        self, generic_tree: Optional[Tree], type_name: Token, rhs_tree: Tree
     ) -> None:
         generics = [] if generic_tree is None else generic_tree.children
         return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore
+
+    @v_args(wrapper=inline_and_wrap_user_facing_errors("typedef specialization"))
+    def specialized_typedef(
+        self, type_name: Token, specialization_tree: Tree, rhs_tree: Tree
+    ) -> None:
+        specialization = []
+        for specialization_type_tree in specialization_tree.children:
+            specialization.append(
+                TypeTransformer.parse(self._program, specialization_type_tree)
+            )
+
+        def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
+            assert concrete_types == specialization
+            rhs = TypeTransformer.parse(self._program, rhs_tree)
+            return rhs.new_from_typedef(name_prefix, concrete_types)
+
+        self._program.add_specialized_type(type_name, type_parser, specialization)
 
 
 class ParseFunctionSignatures(Interpreter):
@@ -629,6 +660,7 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
 
         for function, body in fn_pass.get_function_body_trees():
             generate_function_body(program, function, body)
+
     except ErrorWithLineInfo as exc:
         if debug_compiler:
             traceback.print_exc()
