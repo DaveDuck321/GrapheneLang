@@ -76,11 +76,12 @@ if_statement: "if" "(" condition ")" scope
 
 // We just match python's order of operation
 // https://docs.python.org/3/reference/expressions.html#operator-precedence
-!_compare_token: "<" | ">" | "==" | ">=" | "<=" | "!="
-!_shift_token: "<<" | ">>"
-!_add_sub_token: "+" | "-"
-!_mult_div_token: "*" | "@" | "/" | "//" | "%"
-!_unary_operator_token: "!" | "-" | "+"
+COMPARE_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!="
+SHIFT_TOKEN.1: "<<" | ">>"
+ADD_SUB_TOKEN: "+" | "-"
+MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
+UNARY_OPERATOR_TOKEN: "!" | "-" | "+"
+POWER_TOKEN.1: "**"
 
 // See below for recursive expression defintion
 expression: _expression
@@ -90,24 +91,24 @@ _expression: logical_or
              | logical_and "||" logical_or -> operator_use
 !?logical_and: comparison_op
              | comparison_op "&&" logical_and -> operator_use
-!?comparison_op: bitwise_or
-               | bitwise_or _compare_token comparison_op -> operator_use
+?comparison_op: bitwise_or
+               | bitwise_or COMPARE_TOKEN comparison_op -> operator_use
 !?bitwise_or: bitwise_xor
             | bitwise_xor "|" bitwise_or -> operator_use
 !?bitwise_xor: bitwise_and
              | bitwise_xor "^" bitwise_xor -> operator_use
 !?bitwise_and: bit_shift
              | bit_shift "&" bitwise_and -> operator_use
-!?bit_shift: add_sub
-           | add_sub _shift_token bit_shift -> operator_use
-!?add_sub: mult_div
-         | mult_div _add_sub_token add_sub -> operator_use
-!?mult_div: power
-          | power _mult_div_token mult_div -> operator_use
-!?power: unary_operator
-       | unary_operator "**" power -> operator_use
-!?unary_operator: borrow_operator
-                | _unary_operator_token unary_operator -> unary_operator_use
+?bit_shift: add_sub
+           | add_sub SHIFT_TOKEN bit_shift -> operator_use
+?add_sub: mult_div
+         | mult_div ADD_SUB_TOKEN add_sub -> operator_use
+?mult_div: power
+          | power MULT_DIV_TOKEN mult_div -> operator_use
+?power: unary_operator
+       | unary_operator POWER_TOKEN power -> operator_use
+?unary_operator: borrow_operator
+                | UNARY_OPERATOR_TOKEN unary_operator -> unary_operator_use
 ?borrow_operator: _non_operator_expression
                 | "&" _non_operator_expression -> borrow_operator_use
 
