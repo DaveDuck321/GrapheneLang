@@ -23,7 +23,7 @@ _function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_ty
 function_type: _function_type_component "->" _function_type_component
 
 // Symbols
-operator: /[.<>%*$@|&\/=?!+-]+/
+OPERATOR: /[.<>%*$@|&\/=?!+-]+/
 !bool_constant: "true" | "false"
 
 // Top level
@@ -52,7 +52,7 @@ _function_definition: _function_declaration "=" scope
 foreign_function: "foreign" CNAME _function_declaration
 named_function: "function" generic_definition_list CNAME _function_definition -> generic_named_function
               | "function" function_name _function_definition -> specialized_named_function
-operator_function: "@operator" operator _function_definition
+operator_function: "@operator" OPERATOR _function_definition
 constructor_function: "@constructor" _function_definition
 destructor_function: "@destructor" _function_definition
 

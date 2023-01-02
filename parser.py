@@ -23,13 +23,6 @@ from codegen.user_facing_errors import (
 )
 
 
-def extract_leaf_value(tree: Tree) -> str:
-    assert len(tree.children) == 1
-    assert isinstance(tree.children[0], Token)
-
-    return str(tree.children[0])
-
-
 def in_pairs(iterable: Iterable) -> Iterable:
     # [iter(...), iter(...)] would make two different list_iterator objects.
     # We only want one.
@@ -208,10 +201,9 @@ class ParseFunctionSignatures(Interpreter):
 
     @v_args(wrapper=inline_and_wrap_user_facing_errors("@operator signature"))
     def operator_function(
-        self, op_tree: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
+        self, op_name: Token, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ) -> None:
-        op = extract_leaf_value(op_tree)
-        self._parse_function(op, args_tree, return_type_tree, body_tree, False)
+        self._parse_function(op_name, args_tree, return_type_tree, body_tree, False)
 
     @v_args(wrapper=inline_and_wrap_user_facing_errors("foreign signature"))
     def foreign_function(
