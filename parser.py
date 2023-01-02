@@ -208,11 +208,10 @@ class ParseFunctionSignatures(Interpreter):
     @inline_and_wrap_user_facing_errors("foreign signature")
     def foreign_function(
         self,
-        fn_name: str,
+        fn_name: Token,
         args_tree: Tree,
         return_type_tree: Tree,
     ) -> None:
-
         self._parse_function(fn_name, args_tree, return_type_tree, None, True)
 
     def _parse_function(
@@ -338,7 +337,7 @@ class ExpressionTransformer(Transformer_InPlace):
 
         call_expr = self._program.lookup_call_expression(
             operator.value,
-            [],  # Don't specialized operators
+            [],  # Don't specialize operators
             [lhs.expression(), rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
@@ -353,7 +352,7 @@ class ExpressionTransformer(Transformer_InPlace):
 
         call_expr = self._program.lookup_call_expression(
             operator.value,
-            [],  # Don't specialized operators
+            [],  # Don't specialize operators
             [rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
@@ -375,9 +374,9 @@ class ExpressionTransformer(Transformer_InPlace):
 
         specialization: list[cg.Type] = []
         if specialization_tree is not None:
-            for concrete_type in specialization_tree.children:
+            for concrete_type_tree in specialization_tree.children:
                 specialization.append(
-                    TypeTransformer.parse(self._program, concrete_type)
+                    TypeTransformer.parse(self._program, concrete_type_tree)
                 )
 
         call_expr = self._program.lookup_call_expression(
