@@ -24,7 +24,7 @@ function_type: _function_type_component "->" _function_type_component
 
 // Symbols
 operator: /[.<>%*$@|&\/=?!+-]+/
-!bool_constant: "true" | "false"
+BOOL_CONSTANT.1: "true" | "false"
 
 // Top level
 _top_level_program_line: _top_level_program_feature ";"
@@ -124,7 +124,7 @@ _non_operator_expression: function_call
                         | ESCAPED_STRING
                         | SIGNED_INT
                         | SIGNED_FLOAT
-                        | bool_constant
+                        | BOOL_CONSTANT
 
 struct_member_access: _non_operator_expression "." CNAME
 array_index_access: _non_operator_expression "["  expression ("," expression)*  "]"

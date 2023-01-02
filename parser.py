@@ -326,7 +326,7 @@ class ExpressionTransformer(Transformer_InPlace):
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)
-    def bool_constant(self, value: str) -> FlattenedExpression:
+    def BOOL_CONSTANT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.BoolType(), value)
         return FlattenedExpression([const_expr])
 
