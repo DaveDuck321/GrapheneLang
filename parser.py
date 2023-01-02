@@ -42,7 +42,7 @@ def inline_and_wrap_user_facing_errors(context: str):
                 context,
             ) from exc
 
-    return wrapper
+    return v_args(wrapper=wrapper)
 
 
 class TypeTransformer(Transformer):
@@ -152,14 +152,14 @@ class ParseTypeDefinitions(Interpreter):
 
         self._program.add_type(type_name, type_parser)
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("typedef"))
+    @inline_and_wrap_user_facing_errors("typedef")
     def generic_typedef(
         self, generic_tree: Optional[Tree], type_name: Token, rhs_tree: Tree
     ) -> None:
         generics = [] if generic_tree is None else generic_tree.children
         return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("typedef specialization"))
+    @inline_and_wrap_user_facing_errors("typedef specialization")
     def specialized_typedef(
         self, type_name: Token, specialization_tree: Tree, rhs_tree: Tree
     ) -> None:
@@ -187,7 +187,7 @@ class ParseFunctionSignatures(Interpreter):
     def get_function_body_trees(self) -> list[tuple[cg.Function, Tree]]:
         return self._function_body_trees
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("function signature"))
+    @inline_and_wrap_user_facing_errors("function signature")
     def specialized_named_function(
         self,
         function_name_tree: Tree,
@@ -199,13 +199,13 @@ class ParseFunctionSignatures(Interpreter):
         assert isinstance(name, str)
         self._parse_function(name, args_tree, return_type_tree, body_tree, False)
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("@operator signature"))
+    @inline_and_wrap_user_facing_errors("@operator signature")
     def operator_function(
         self, op_name: Token, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ) -> None:
         self._parse_function(op_name, args_tree, return_type_tree, body_tree, False)
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("foreign signature"))
+    @inline_and_wrap_user_facing_errors("foreign signature")
     def foreign_function(
         self,
         fn_name: str,
