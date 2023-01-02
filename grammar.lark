@@ -116,7 +116,6 @@ _expression: logical_or
 
 _non_operator_expression: function_call
                         | ufcs_call
-                        | ufcs_call_with_borrow
                         | accessed_variable_name
                         | struct_member_access
                         | array_index_access
@@ -133,8 +132,7 @@ array_index_access: _non_operator_expression "["  expression ("," expression)*  
 
 _function_call: function_name "(" inner_list_without_names ")"
 function_call: _function_call
-ufcs_call: _non_operator_expression "." _function_call
-ufcs_call_with_borrow: _non_operator_expression ":" _function_call
+ufcs_call: _non_operator_expression ":" _function_call
 
 _inner_list_without_names: (_expression ("," _expression)*)?
 inner_list_without_names: _inner_list_without_names
