@@ -2,15 +2,18 @@ from functools import cached_property
 from typing import Callable, Iterator
 
 from .builtin_types import GenericIntType, IntegerDefinition
-from .interfaces import TypedExpression
+from .interfaces import TypedExpression, Type
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
 
 class AddExpression(TypedExpression):
-    def __init__(self, arguments: list[TypedExpression]) -> None:
+    def __init__(
+        self, specialization: list[Type], arguments: list[TypedExpression]
+    ) -> None:
         lhs, rhs = arguments
         # This is not a user-facing function, we don't need sensible error messages
+        assert len(specialization) == 0
         assert isinstance(lhs.type, GenericIntType)
         assert isinstance(rhs.type, GenericIntType)
         assert lhs.type.definition == rhs.type.definition
@@ -56,7 +59,7 @@ class AddExpression(TypedExpression):
 
 
 def get_builtin_callables() -> dict[
-    str, Callable[[list[TypedExpression]], TypedExpression]
+    str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
 ]:
     return {
         "__builtin_add": AddExpression,

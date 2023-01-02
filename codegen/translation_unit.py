@@ -270,10 +270,13 @@ class Program:
         return this_type
 
     def lookup_call_expression(
-        self, fn_name: str, fn_args: list[TypedExpression]
+        self,
+        fn_name: str,
+        fn_specialization: list[Type],
+        fn_args: list[TypedExpression],
     ) -> TypedExpression:
         if fn_name in self._builtin_callables:
-            return self._builtin_callables[fn_name](fn_args)
+            return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
         arg_types = [arg.type for arg in fn_args]
         function = self._function_table.lookup_function(fn_name, arg_types)

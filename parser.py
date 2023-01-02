@@ -346,6 +346,7 @@ class ExpressionTransformer(Transformer_InPlace):
 
         call_expr = self._program.lookup_call_expression(
             operator.value,
+            [],  # Don't specialized operators
             [lhs.expression(), rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
@@ -360,12 +361,16 @@ class ExpressionTransformer(Transformer_InPlace):
 
         call_expr = self._program.lookup_call_expression(
             operator.value,
+            [],  # Don't specialized operators
             [rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
 
     def _function_call_impl(
-        self, fn_name: str, fn_args: list[FlattenedExpression]
+        self,
+        fn_name: str,
+        specialization_tree: Optional[Tree],
+        fn_args: list[FlattenedExpression],
     ) -> FlattenedExpression:
         flattened_expr = FlattenedExpression([])
         arg_types_for_lookup = []
@@ -376,29 +381,40 @@ class ExpressionTransformer(Transformer_InPlace):
             fn_call_args.append(arg.expression())
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        call_expr = self._program.lookup_call_expression(fn_name, fn_call_args)
+        specialization: list[cg.Type] = []
+        if specialization_tree is not None:
+            for concrete_type in specialization_tree.children:
+                specialization.append(
+                    TypeTransformer.parse(self._program, concrete_type)
+                )
+
+        call_expr = self._program.lookup_call_expression(
+            fn_name, specialization, fn_call_args
+        )
         return flattened_expr.add_parent(call_expr)
 
     @v_args(inline=True)
     def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
-        fn_name, fn_specialization = name_tree.children
+        fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
         assert is_flattened_expression_list(args_tree.children)
 
-        return self._function_call_impl(fn_name, args_tree.children)
+        return self._function_call_impl(
+            fn_name, specialization_tree, args_tree.children
+        )
 
     @v_args(inline=True)
     def ufcs_call(
         self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
     ) -> FlattenedExpression:
-        fn_name, fn_specialization = name_tree.children
+        fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
 
         fn_args = args_tree.children
         fn_args.insert(0, this)
         assert is_flattened_expression_list(fn_args)
 
-        return self._function_call_impl(fn_name, fn_args)
+        return self._function_call_impl(fn_name, specialization_tree, fn_args)
 
     @v_args(inline=True)
     def ufcs_call_with_borrow(
