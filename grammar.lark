@@ -23,7 +23,7 @@ _function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_ty
 function_type: _function_type_component "->" _function_type_component
 
 // Symbols
-operator: /[.<>%*$@|&\/=?!+-]+/
+OPERATOR: /[.<>%*$@|&\/=?!+-]+/
 BOOL_CONSTANT.1: "true" | "false"
 
 // Top level
@@ -45,13 +45,14 @@ generic_definition_list: "[" _typedef_name ("," _typedef_name)* "]"
 typedef: "typedef" [ generic_definition_list ] _typedef_name ":" type -> generic_typedef
        | "typedef" _typedef_name generic_specialization ":" type -> specialized_typedef
 
-function_name: CNAME ( generic_specialization )?
+function_name: CNAME [generic_specialization]
 function_arguments: "(" (CNAME ":" type ("," CNAME ":" type)*)? ")"
 _function_declaration: ":" function_arguments "->" type
 _function_definition: _function_declaration "=" scope
-foreign_function: "foreign" function_name _function_declaration
-named_function: "function" function_name _function_definition
-operator_function: "@operator" operator _function_definition
+foreign_function: "foreign" CNAME _function_declaration
+named_function: "function" generic_definition_list CNAME _function_definition -> generic_named_function
+              | "function" function_name _function_definition -> specialized_named_function
+operator_function: "@operator" OPERATOR _function_definition
 constructor_function: "@constructor" _function_definition
 destructor_function: "@destructor" _function_definition
 

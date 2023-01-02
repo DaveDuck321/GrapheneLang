@@ -23,13 +23,6 @@ from codegen.user_facing_errors import (
 )
 
 
-def extract_leaf_value(tree: Tree) -> str:
-    assert len(tree.children) == 1
-    assert isinstance(tree.children[0], Token)
-
-    return str(tree.children[0])
-
-
 def in_pairs(iterable: Iterable) -> Iterable:
     # [iter(...), iter(...)] would make two different list_iterator objects.
     # We only want one.
@@ -49,7 +42,7 @@ def inline_and_wrap_user_facing_errors(context: str):
                 context,
             ) from exc
 
-    return wrapper
+    return v_args(wrapper=wrapper)
 
 
 class TypeTransformer(Transformer):
@@ -159,14 +152,14 @@ class ParseTypeDefinitions(Interpreter):
 
         self._program.add_type(type_name, type_parser)
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("typedef"))
+    @inline_and_wrap_user_facing_errors("typedef")
     def generic_typedef(
         self, generic_tree: Optional[Tree], type_name: Token, rhs_tree: Tree
     ) -> None:
         generics = [] if generic_tree is None else generic_tree.children
         return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore
 
-    @v_args(wrapper=inline_and_wrap_user_facing_errors("typedef specialization"))
+    @inline_and_wrap_user_facing_errors("typedef specialization")
     def specialized_typedef(
         self, type_name: Token, specialization_tree: Tree, rhs_tree: Tree
     ) -> None:
@@ -194,62 +187,56 @@ class ParseFunctionSignatures(Interpreter):
     def get_function_body_trees(self) -> list[tuple[cg.Function, Tree]]:
         return self._function_body_trees
 
-    @v_args(inline=True)
-    def named_function(
+    @inline_and_wrap_user_facing_errors("function signature")
+    def specialized_named_function(
         self,
-        name_tree: Tree,
+        function_name_tree: Tree,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        self._parse_function(name_tree, args_tree, return_type_tree, body_tree, False)
+        name, specialization_tree = function_name_tree.children
+        assert isinstance(name, str)
+        self._parse_function(name, args_tree, return_type_tree, body_tree, False)
 
-    @v_args(inline=True)
+    @inline_and_wrap_user_facing_errors("@operator signature")
     def operator_function(
-        self, op_tree: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
+        self, op_name: Token, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ) -> None:
-        self._parse_function(op_tree, args_tree, return_type_tree, body_tree, False)
+        self._parse_function(op_name, args_tree, return_type_tree, body_tree, False)
 
-    @v_args(inline=True)
+    @inline_and_wrap_user_facing_errors("foreign signature")
     def foreign_function(
         self,
-        name_tree: Tree,
+        fn_name: Token,
         args_tree: Tree,
         return_type_tree: Tree,
     ) -> None:
-        self._parse_function(name_tree, args_tree, return_type_tree, None, True)
+        self._parse_function(fn_name, args_tree, return_type_tree, None, True)
 
     def _parse_function(
         self,
-        name_tree: Tree,
+        fn_name: str,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Optional[Tree],
         foreign: bool,
     ) -> None:
-        try:
-            func = self._build_function(name_tree, args_tree, return_type_tree, foreign)
-            self._program.add_function(func)
+        func = self._build_function(fn_name, args_tree, return_type_tree, foreign)
+        self._program.add_function(func)
 
-            # Save the body to parse later (TODO: maybe forward declarations
-            # should be possible?)
-            if body_tree is not None:
-                self._function_body_trees.append((func, body_tree))
-        except GrapheneError as exc:
-            # Not ideal but better than nothing.
-            raise ErrorWithLineInfo(
-                exc.message, name_tree.meta.line, extract_leaf_value(name_tree)
-            ) from exc
+        # Save the body to parse later (TODO: maybe forward declarations
+        # should be possible?)
+        if body_tree is not None:
+            self._function_body_trees.append((func, body_tree))
 
     def _build_function(
         self,
-        name_tree: Tree,
+        fn_name: str,
         args_tree: Tree,
         return_type_tree: Tree,
         foreign: bool,
     ) -> cg.Function:
-        fn_name = extract_leaf_value(name_tree)
-
         fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
         for arg_name, arg_type_tree in in_pairs(fn_arg_trees):
@@ -350,6 +337,7 @@ class ExpressionTransformer(Transformer_InPlace):
 
         call_expr = self._program.lookup_call_expression(
             operator.value,
+            [],  # Don't specialize operators
             [lhs.expression(), rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
@@ -364,12 +352,16 @@ class ExpressionTransformer(Transformer_InPlace):
 
         call_expr = self._program.lookup_call_expression(
             operator.value,
+            [],  # Don't specialize operators
             [rhs.expression()],
         )
         return flattened_expr.add_parent(call_expr)
 
     def _function_call_impl(
-        self, fn_name: str, fn_args: list[FlattenedExpression]
+        self,
+        fn_name: str,
+        specialization_tree: Optional[Tree],
+        fn_args: list[FlattenedExpression],
     ) -> FlattenedExpression:
         flattened_expr = FlattenedExpression([])
         arg_types_for_lookup = []
@@ -380,15 +372,27 @@ class ExpressionTransformer(Transformer_InPlace):
             fn_call_args.append(arg.expression())
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        call_expr = self._program.lookup_call_expression(fn_name, fn_call_args)
+        specialization: list[cg.Type] = []
+        if specialization_tree is not None:
+            for concrete_type_tree in specialization_tree.children:
+                specialization.append(
+                    TypeTransformer.parse(self._program, concrete_type_tree)
+                )
+
+        call_expr = self._program.lookup_call_expression(
+            fn_name, specialization, fn_call_args
+        )
         return flattened_expr.add_parent(call_expr)
 
     @v_args(inline=True)
     def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
-        fn_name = extract_leaf_value(name_tree)
+        fn_name, specialization_tree = name_tree.children
+        assert isinstance(fn_name, str)
         assert is_flattened_expression_list(args_tree.children)
 
-        return self._function_call_impl(fn_name, args_tree.children)
+        return self._function_call_impl(
+            fn_name, specialization_tree, args_tree.children
+        )
 
     @v_args(inline=True)
     def ufcs_call(
@@ -402,13 +406,14 @@ class ExpressionTransformer(Transformer_InPlace):
         assert isinstance(this, FlattenedExpression)
         borrowed_this = this.add_parent(cg.Borrow(this.expression()))
 
-        fn_name = extract_leaf_value(name_tree)
+        fn_name, specialization_tree = name_tree.children
+        assert isinstance(fn_name, str)
 
         fn_args = args_tree.children
         fn_args.insert(0, borrowed_this)
         assert is_flattened_expression_list(fn_args)
 
-        return self._function_call_impl(fn_name, fn_args)
+        return self._function_call_impl(fn_name, specialization_tree, fn_args)
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
