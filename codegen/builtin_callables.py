@@ -86,7 +86,50 @@ class AlignOfExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_alignof(..., ...)`")
+        raise OperandError("Cannot assign to `__builtin_alignof<...>()`")
+
+
+class NarrowExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[Type], arguments: list[TypedExpression]
+    ) -> None:
+        (self._argument,) = arguments
+        (return_type,) = specialization
+
+        self._arg_value_type = self._argument.type.to_value_type()
+
+        assert isinstance(self._arg_value_type, GenericIntType)
+        assert isinstance(return_type, GenericIntType)
+        assert isinstance(self._arg_value_type.definition, IntegerDefinition)
+        assert isinstance(return_type.definition, IntegerDefinition)
+        assert self._arg_value_type.definition.bits > return_type.definition.bits
+
+        super().__init__(return_type)
+
+    def __repr__(self) -> str:
+        return f"Narrow({self._argument} to {self.type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        conv_arg, extra_exprs_arg = do_implicit_conversion(
+            self._argument, self._arg_value_type
+        )
+        ir_lines: list[str] = self.expand_ir(extra_exprs_arg, reg_gen)
+
+        self.result_reg = next(reg_gen)
+        return [
+            *ir_lines,
+            f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation} to {self.type.ir_type}",
+        ]
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_narrow<...>(...)`")
 
 
 def get_builtin_callables() -> dict[
@@ -95,4 +138,5 @@ def get_builtin_callables() -> dict[
     return {
         "__builtin_add": AddExpression,
         "__builtin_alignof": AlignOfExpression,
+        "__builtin_narrow": NarrowExpression,
     }
