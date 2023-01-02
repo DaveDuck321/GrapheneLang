@@ -3,7 +3,7 @@ import traceback
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Any, Iterable, Optional, TypeGuard
 
 from lark import Lark, Token, Tree
 from lark.exceptions import VisitError
@@ -280,6 +280,13 @@ class FlattenedExpression:
         return self.expression().type
 
 
+def is_flattened_expression_list(
+    exprs: list[Any],
+) -> TypeGuard[list[FlattenedExpression]]:
+    # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
+    return all(isinstance(expr, FlattenedExpression) for expr in exprs)
+
+
 @dataclass
 class InitializerList:
     exprs: list[FlattenedExpression]
@@ -361,23 +368,47 @@ class ExpressionTransformer(Transformer_InPlace):
         )
         return flattened_expr.add_parent(call_expr)
 
-    @v_args(inline=True)
-    def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
-        fn_name = extract_leaf_value(name_tree)
-
+    def _function_call_impl(
+        self, fn_name: str, fn_args: list[FlattenedExpression]
+    ) -> FlattenedExpression:
         flattened_expr = FlattenedExpression([])
         arg_types_for_lookup = []
         fn_call_args = []
-        for arg in args_tree.children:
-            assert isinstance(arg, FlattenedExpression)
+
+        for arg in fn_args:
             arg_types_for_lookup.append(arg.type())
-
             fn_call_args.append(arg.expression())
-
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
         call_expr = self._program.lookup_call_expression(fn_name, fn_call_args)
         return flattened_expr.add_parent(call_expr)
+
+    @v_args(inline=True)
+    def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
+        fn_name = extract_leaf_value(name_tree)
+        assert is_flattened_expression_list(args_tree.children)
+
+        return self._function_call_impl(fn_name, args_tree.children)
+
+    @v_args(inline=True)
+    def ufcs_call(
+        self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
+    ) -> FlattenedExpression:
+        # TODO perhaps we shouldn't always borrow this, although this is a bit
+        # tricky as we haven't done overload resolution yet (which depends on
+        # whether we borrow or not). A solution would be to borrow if we can,
+        # otherwise pass an unborrowed/const-reference and let overload
+        # resolution figure it out, although this isn't very explicit.
+        assert isinstance(this, FlattenedExpression)
+        borrowed_this = this.add_parent(cg.Borrow(this.expression()))
+
+        fn_name = extract_leaf_value(name_tree)
+
+        fn_args = args_tree.children
+        fn_args.insert(0, borrowed_this)
+        assert is_flattened_expression_list(fn_args)
+
+        return self._function_call_impl(fn_name, fn_args)
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
