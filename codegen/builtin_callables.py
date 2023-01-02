@@ -2,6 +2,7 @@ from functools import cached_property
 from typing import Callable, Iterator
 
 from .builtin_types import GenericIntType, IntegerDefinition
+from .expressions import ConstantExpression
 from .interfaces import TypedExpression, Type
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
@@ -58,9 +59,40 @@ class AddExpression(TypedExpression):
         raise OperandError("Cannot assign to `__builtin_add(..., ...)`")
 
 
+class AlignOfExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[Type], arguments: list[TypedExpression]
+    ) -> None:
+        assert len(arguments) == 0
+        assert len(specialization) == 1
+        self._argument_type = specialization[0]
+        self._result = ConstantExpression(
+            self._argument_type, str(self._argument_type.alignment)
+        )
+
+        super().__init__(GenericIntType("u64", 64, False))
+
+    def __repr__(self) -> str:
+        return f"AlignOf({self._argument_type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        return self._result.generate_ir(reg_gen)
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        return self._result.ir_ref_without_type_annotation
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_alignof(..., ...)`")
+
+
 def get_builtin_callables() -> dict[
     str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
 ]:
     return {
         "__builtin_add": AddExpression,
+        "__builtin_alignof": AlignOfExpression,
     }
