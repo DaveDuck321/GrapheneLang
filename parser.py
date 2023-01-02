@@ -194,62 +194,58 @@ class ParseFunctionSignatures(Interpreter):
     def get_function_body_trees(self) -> list[tuple[cg.Function, Tree]]:
         return self._function_body_trees
 
-    @v_args(inline=True)
-    def named_function(
+    @v_args(wrapper=inline_and_wrap_user_facing_errors("function signature"))
+    def specialized_named_function(
         self,
-        name_tree: Tree,
+        function_name_tree: Tree,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        self._parse_function(name_tree, args_tree, return_type_tree, body_tree, False)
+        name, specialization_tree = function_name_tree.children
+        assert isinstance(name, str)
+        self._parse_function(name, args_tree, return_type_tree, body_tree, False)
 
-    @v_args(inline=True)
+    @v_args(wrapper=inline_and_wrap_user_facing_errors("@operator signature"))
     def operator_function(
         self, op_tree: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ) -> None:
-        self._parse_function(op_tree, args_tree, return_type_tree, body_tree, False)
+        op = extract_leaf_value(op_tree)
+        self._parse_function(op, args_tree, return_type_tree, body_tree, False)
 
-    @v_args(inline=True)
+    @v_args(wrapper=inline_and_wrap_user_facing_errors("foreign signature"))
     def foreign_function(
         self,
-        name_tree: Tree,
+        fn_name: str,
         args_tree: Tree,
         return_type_tree: Tree,
     ) -> None:
-        self._parse_function(name_tree, args_tree, return_type_tree, None, True)
+
+        self._parse_function(fn_name, args_tree, return_type_tree, None, True)
 
     def _parse_function(
         self,
-        name_tree: Tree,
+        fn_name: str,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Optional[Tree],
         foreign: bool,
     ) -> None:
-        try:
-            func = self._build_function(name_tree, args_tree, return_type_tree, foreign)
-            self._program.add_function(func)
+        func = self._build_function(fn_name, args_tree, return_type_tree, foreign)
+        self._program.add_function(func)
 
-            # Save the body to parse later (TODO: maybe forward declarations
-            # should be possible?)
-            if body_tree is not None:
-                self._function_body_trees.append((func, body_tree))
-        except GrapheneError as exc:
-            # Not ideal but better than nothing.
-            raise ErrorWithLineInfo(
-                exc.message, name_tree.meta.line, extract_leaf_value(name_tree)
-            ) from exc
+        # Save the body to parse later (TODO: maybe forward declarations
+        # should be possible?)
+        if body_tree is not None:
+            self._function_body_trees.append((func, body_tree))
 
     def _build_function(
         self,
-        name_tree: Tree,
+        fn_name: str,
         args_tree: Tree,
         return_type_tree: Tree,
         foreign: bool,
     ) -> cg.Function:
-        fn_name = extract_leaf_value(name_tree)
-
         fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
         for arg_name, arg_type_tree in in_pairs(fn_arg_trees):
@@ -385,7 +381,8 @@ class ExpressionTransformer(Transformer_InPlace):
 
     @v_args(inline=True)
     def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
-        fn_name = extract_leaf_value(name_tree)
+        fn_name, fn_specialization = name_tree.children
+        assert isinstance(fn_name, str)
         assert is_flattened_expression_list(args_tree.children)
 
         return self._function_call_impl(fn_name, args_tree.children)
@@ -394,7 +391,8 @@ class ExpressionTransformer(Transformer_InPlace):
     def ufcs_call(
         self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
     ) -> FlattenedExpression:
-        fn_name = extract_leaf_value(name_tree)
+        fn_name, fn_specialization = name_tree.children
+        assert isinstance(fn_name, str)
 
         fn_args = args_tree.children
         fn_args.insert(0, this)
