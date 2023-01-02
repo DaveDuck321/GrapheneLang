@@ -9,5 +9,5 @@ function add: (this: int&, that: int) -> int& = {
 
 function main: () -> int = {
     let x: int = 2;
-    return (&(&x).add(-1)).add(3);
+    return x:add(-1):add(3);
 };

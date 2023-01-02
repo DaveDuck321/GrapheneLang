@@ -320,7 +320,7 @@ class ExpressionTransformer(Transformer_InPlace):
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)
-    def bool_constant(self, value: str) -> FlattenedExpression:
+    def BOOL_CONSTANT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.BoolType(), value)
         return FlattenedExpression([const_expr])
 
@@ -398,22 +398,22 @@ class ExpressionTransformer(Transformer_InPlace):
     def ufcs_call(
         self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
     ) -> FlattenedExpression:
+        # TODO perhaps we shouldn't always borrow this, although this is a bit
+        # tricky as we haven't done overload resolution yet (which depends on
+        # whether we borrow or not). A solution would be to borrow if we can,
+        # otherwise pass an unborrowed/const-reference and let overload
+        # resolution figure it out, although this isn't very explicit.
+        assert isinstance(this, FlattenedExpression)
+        borrowed_this = this.add_parent(cg.Borrow(this.expression()))
+
         fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
 
         fn_args = args_tree.children
-        fn_args.insert(0, this)
+        fn_args.insert(0, borrowed_this)
         assert is_flattened_expression_list(fn_args)
 
         return self._function_call_impl(fn_name, specialization_tree, fn_args)
-
-    @v_args(inline=True)
-    def ufcs_call_with_borrow(
-        self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
-    ) -> FlattenedExpression:
-        borrowed_this = this.add_parent(cg.Borrow(this.expression()))
-
-        return self.ufcs_call(borrowed_this, name_tree, args_tree)
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
