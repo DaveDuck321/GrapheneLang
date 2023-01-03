@@ -1,79 +1,102 @@
-// Overall program
-program: (_top_level_program_line)*
+%import common.C_COMMENT
+%import common.CNAME -> IDENTIFIER
+%import common.CPP_COMMENT
+%import common.ESCAPED_STRING
+%import common.SIGNED_FLOAT
+%import common.SIGNED_INT
+%import common.WS
 
+%ignore C_COMMENT
+%ignore CPP_COMMENT
+%ignore WS
+
+
+//
 // Types
-_value_type: type_name
-           | struct_type
-           | function_type
-ref_type: _type "&" | "(" _type ")" "&"
+//
+
+type_name: IDENTIFIER [generic_specialization]
+generic_definition_list: "[" IDENTIFIER ("," IDENTIFIER)* "]"
+generic_specialization: "<" type_name ("," type_name)* ">"
+
+_inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)*
+_inner_list_of_types: (type ("," type)*)?  // Can be empty
+
+ref_type: _type "&"
+        | "(" _type ")" "&"
+
+struct_type: "{" _inner_list_of_named_members? "}"
+
 stack_array_type: _type "[" SIGNED_INT ("," SIGNED_INT)* "]"
 heap_array_type: _type "[" "&" ("," SIGNED_INT)* "]"
 
-_type: _value_type | ref_type | stack_array_type | heap_array_type
-type: _type
-
-accessed_variable_name: CNAME
-type_name: CNAME [ generic_specialization ]
-
-_inner_list_of_named_members: CNAME ":" type ("," CNAME ":" type)*
-_inner_list_of_types: (type ("," type)*)?
-struct_type: "{" _inner_list_of_named_members? "}"
-
-_function_type_component: ("(" (_inner_list_of_named_members | _inner_list_of_types) ")") | type
+_function_type_component: "(" (_inner_list_of_named_members | _inner_list_of_types) ")"
+                        | type
 function_type: _function_type_component "->" _function_type_component
 
-// Symbols
-OPERATOR: /[.<>%*$@|&\/=?!+-]+/
+_type: function_type
+     | heap_array_type
+     | ref_type
+     | stack_array_type
+     | struct_type
+     | type_name
+type: _type
+
+
+//
+// Typedef
+//
+
+generic_typedef: "typedef" [generic_definition_list] IDENTIFIER ":" type
+// TODO: allow partial specialization in the future?
+specialized_typedef: "typedef" IDENTIFIER generic_specialization ":" type
+
+
+//
+// Non-operator expresssions
+//
+
 BOOL_CONSTANT.1: "true" | "false"
 
-// Top level
-_top_level_program_line: _top_level_program_feature ";"
-_top_level_program_feature: typedef
-                          | foreign_function
-                          | named_function
-                          | operator_function
-                          | constructor_function
-                          | destructor_function
-                          | variable_declaration
-                          | const_declaration
+_inner_list_without_names: (_expression ("," _expression)*)?
+inner_list_without_names: _inner_list_without_names
+struct_initializer_without_names: _inner_list_without_names
+
+_inner_list_with_names: IDENTIFIER ":" _expression ("," IDENTIFIER ":" _expression)*
+inner_list_with_names: _inner_list_with_names
+struct_initializer_with_names: _inner_list_with_names
+
+accessed_variable_name: IDENTIFIER
+
+struct_member_access: _non_operator_expression "." IDENTIFIER
+array_index_access: _non_operator_expression "["  expression ("," expression)*  "]"
+
+_function_call: function_name "(" inner_list_without_names ")"
+function_call: _function_call
+ufcs_call: _non_operator_expression ":" _function_call
+
+_adhoc_struct_initialization: "{" (struct_initializer_with_names | struct_initializer_without_names) "}"
+adhoc_struct_initialization: _adhoc_struct_initialization
+
+named_struct_initialization: type_name _adhoc_struct_initialization
+
+_non_operator_expression: "(" expression ")"
+                        | accessed_variable_name
+                        | adhoc_struct_initialization
+                        | array_index_access
+                        | function_call
+                        | named_struct_initialization
+                        | struct_member_access
+                        | ufcs_call
+                        | BOOL_CONSTANT
+                        | ESCAPED_STRING
+                        | SIGNED_FLOAT
+                        | SIGNED_INT
 
 
-_typedef_name: CNAME
-generic_specialization: "<" type_name ("," type_name)* ">"
-generic_definition_list: "[" _typedef_name ("," _typedef_name)* "]"
-// TODO: allow partial specialization in the future?
-typedef: "typedef" [ generic_definition_list ] _typedef_name ":" type -> generic_typedef
-       | "typedef" _typedef_name generic_specialization ":" type -> specialized_typedef
-
-function_name: CNAME [generic_specialization]
-function_arguments: "(" (CNAME ":" type ("," CNAME ":" type)*)? ")"
-_function_declaration: ":" function_arguments "->" type
-_function_definition: _function_declaration "=" scope
-foreign_function: "foreign" CNAME _function_declaration
-named_function: "function" generic_definition_list CNAME _function_definition -> generic_named_function
-              | "function" function_name _function_definition -> specialized_named_function
-operator_function: "@operator" OPERATOR _function_definition
-constructor_function: "@constructor" _function_definition
-destructor_function: "@destructor" _function_definition
-
-// Local scope
-scope: "{" (scope | _line_of_code)* "}"
-_control_flow: if_statement
-_line_of_code: _line_of_code_without_semi ";"
-             | _control_flow
-_line_of_code_without_semi: expression
-                          | variable_declaration
-                          | const_declaration
-                          | return_statement
-                          | assignment
-
-variable_declaration: "let" CNAME ":" type ["=" expression]
-const_declaration: "const" CNAME ":" type "=" expression
-return_statement: "return" (_expression)?
-assignment: expression "=" expression
-
-condition: _expression
-if_statement: "if" "(" condition ")" scope
+//
+// Operators
+//
 
 // We just match python's order of operation
 // https://docs.python.org/3/reference/expressions.html#operator-precedence
@@ -84,78 +107,117 @@ MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
 UNARY_OPERATOR_TOKEN: "!" | "-" | "+"
 POWER_TOKEN.1: "**"
 
-// See below for recursive expression defintion
-expression: _expression
-_expression: logical_or
+// TODO: add support for arbitrary operators
+// Alternatively we can prevent user defined operators not in this list
 
 !?logical_or: logical_and
-             | logical_and "||" logical_or -> operator_use
+            | logical_and "||" logical_or -> operator_use
+
 !?logical_and: comparison_op
              | comparison_op "&&" logical_and -> operator_use
+
 ?comparison_op: bitwise_or
-               | bitwise_or COMPARE_TOKEN comparison_op -> operator_use
+              | bitwise_or COMPARE_TOKEN comparison_op -> operator_use
+
 !?bitwise_or: bitwise_xor
             | bitwise_xor "|" bitwise_or -> operator_use
+
 !?bitwise_xor: bitwise_and
              | bitwise_xor "^" bitwise_xor -> operator_use
+
 !?bitwise_and: bit_shift
              | bit_shift "&" bitwise_and -> operator_use
+
 ?bit_shift: add_sub
-           | add_sub SHIFT_TOKEN bit_shift -> operator_use
+          | add_sub SHIFT_TOKEN bit_shift -> operator_use
+
 ?add_sub: mult_div
-         | mult_div ADD_SUB_TOKEN add_sub -> operator_use
+        | mult_div ADD_SUB_TOKEN add_sub -> operator_use
+
 ?mult_div: power
-          | power MULT_DIV_TOKEN mult_div -> operator_use
+         | power MULT_DIV_TOKEN mult_div -> operator_use
+
 ?power: unary_operator
-       | unary_operator POWER_TOKEN power -> operator_use
+      | unary_operator POWER_TOKEN power -> operator_use
+
 ?unary_operator: borrow_operator
-                | UNARY_OPERATOR_TOKEN unary_operator -> unary_operator_use
+               | UNARY_OPERATOR_TOKEN unary_operator -> unary_operator_use
+
 ?borrow_operator: _non_operator_expression
                 | "&" _non_operator_expression -> borrow_operator_use
 
-// TODO: add support for arbitrary operators
-//  Alternatively we can prevent user defined operators not in this list
+//
+// Variable declarations
+//
 
-_non_operator_expression: function_call
-                        | ufcs_call
-                        | accessed_variable_name
-                        | struct_member_access
-                        | array_index_access
-                        | "(" expression ")"
-                        | named_struct_initialization
-                        | adhoc_struct_initialization
-                        | ESCAPED_STRING
-                        | SIGNED_INT
-                        | SIGNED_FLOAT
-                        | BOOL_CONSTANT
+variable_declaration: "let" IDENTIFIER ":" type ["=" expression]
+const_declaration: "const" IDENTIFIER ":" type "=" expression
 
-struct_member_access: _non_operator_expression "." CNAME
-array_index_access: _non_operator_expression "["  expression ("," expression)*  "]"
+//
+// Control flow
+//
 
-_function_call: function_name "(" inner_list_without_names ")"
-function_call: _function_call
-ufcs_call: _non_operator_expression ":" _function_call
+if_statement: "if" "(" expression ")" scope
+return_statement: "return" _expression?
 
-_inner_list_without_names: (_expression ("," _expression)*)?
-inner_list_without_names: _inner_list_without_names
-struct_initializer_without_names: _inner_list_without_names
 
-_inner_list_with_names: CNAME ":" _expression ("," CNAME ":" _expression)*
-inner_list_with_names: _inner_list_with_names
-struct_initializer_with_names: _inner_list_with_names
+//
+// Local scope
+//
 
-_adhoc_struct_initialization: "{" (struct_initializer_with_names | struct_initializer_without_names) "}"
-adhoc_struct_initialization: _adhoc_struct_initialization
+// See operators for recursive expression defintion
+_expression: logical_or
+expression: _expression
 
-named_struct_initialization: type_name _adhoc_struct_initialization
+assignment: expression "=" expression
 
-%ignore C_COMMENT
-%ignore CPP_COMMENT
-%ignore WS
-%import common.C_COMMENT
-%import common.CNAME
-%import common.CPP_COMMENT
-%import common.SIGNED_INT
-%import common.SIGNED_FLOAT
-%import common.ESCAPED_STRING
-%import common.WS
+scope: "{" (scope | _line_of_code)* "}"
+
+_line_of_code_without_semi: assignment
+                          | const_declaration
+                          | expression
+                          | return_statement
+                          | variable_declaration
+
+_line_of_code: _line_of_code_without_semi ";"
+             | if_statement
+
+
+//
+// Functions
+//
+
+function_name: IDENTIFIER [generic_specialization]
+
+function_arguments: "(" _inner_list_of_named_members? ")"
+_function_declaration: ":" function_arguments "->" type
+_function_definition: _function_declaration "=" scope
+
+foreign_function: "foreign" IDENTIFIER _function_declaration
+
+generic_named_function: "function" generic_definition_list IDENTIFIER _function_definition
+specialized_named_function: "function" function_name _function_definition
+
+constructor_function: "@constructor" _function_definition
+destructor_function: "@destructor" _function_definition
+
+OPERATOR: /[.<>%*$@|&\/=?!+-]+/
+operator_function: "@operator" OPERATOR _function_definition
+
+
+//
+// Top level
+//
+
+_top_level_program_feature: const_declaration
+                          | constructor_function
+                          | destructor_function
+                          | foreign_function
+                          | generic_named_function
+                          | generic_typedef
+                          | operator_function
+                          | specialized_named_function
+                          | specialized_typedef
+                          | variable_declaration
+
+program: (_top_level_program_feature ";")*
