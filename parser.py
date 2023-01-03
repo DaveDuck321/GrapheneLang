@@ -541,63 +541,61 @@ def generate_variable_declaration(
     scope: cg.Scope,
     body: Tree,
 ) -> None:
-    def parse_variable_declaration(
-        var_name: Token,
-        type_tree: Tree,
-        rhs: Optional[FlattenedExpression | InitializerList],
-    ) -> None:
-        assert isinstance(var_name, Token)
-        var_type = TypeTransformer.parse(program, type_tree)
-
-        var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
-        scope.add_variable(var)
-
-        # Initialize variable.
-        if isinstance(rhs, FlattenedExpression):
-            scope.add_generatable(rhs.subexpressions)
-            scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
-
-        # Initialize struct.
-        elif isinstance(rhs, InitializerList):
-            if not isinstance(var_type.definition, cg.StructDefinition):
-                raise InvalidInitializerListAssignment(
-                    var_type.get_user_facing_name(False), rhs.user_facing_name
-                )
-
-            if var_type.definition.member_count != len(rhs):
-                raise InvalidInitializerListLength(
-                    len(rhs), var_type.definition.member_count
-                )
-
-            def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
-                scope.add_generatable(expr.subexpressions)
-
-                var_ref = cg.VariableReference(var)
-                scope.add_generatable(var_ref)
-
-                struct_access = cg.StructMemberAccess(var_ref, member_name)
-                scope.add_generatable(struct_access)
-
-                var_assignment = cg.Assignment(struct_access, expr.expression())
-                scope.add_generatable(var_assignment)
-
-            if rhs.names:
-                for name, expr in zip(rhs.names, rhs.exprs):
-                    assign_to_member(expr, name)
-            else:
-                for idx, expr in enumerate(rhs.exprs):
-                    member = var_type.definition.get_member_by_index(idx)
-                    assign_to_member(expr, member.name)
-
-    name_tree, type_tree, value_tree = body.children
-    expression_value = (
-        ExpressionTransformer(program, function, scope).transform(value_tree)
-        if value_tree is not None
+    var_name, type_tree, rhs_tree = body.children
+    rhs: Optional[FlattenedExpression | InitializerList] = (
+        ExpressionTransformer(program, function, scope).transform(rhs_tree)
+        if rhs_tree is not None
         else None
     )
 
-    assert isinstance(name_tree, Token)
-    parse_variable_declaration(name_tree, type_tree, expression_value)
+    assert isinstance(var_name, Token)
+    assert isinstance(type_tree, Tree)
+
+    var_type = TypeTransformer.parse(program, type_tree)
+
+    var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
+    scope.add_variable(var)
+
+    # Initialize variable.
+    if isinstance(rhs, FlattenedExpression):
+        scope.add_generatable(rhs.subexpressions)
+        scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
+
+    # Initialize struct.
+    elif isinstance(rhs, InitializerList):
+        if not isinstance(var_type.definition, cg.StructDefinition):
+            raise InvalidInitializerListAssignment(
+                var_type.get_user_facing_name(False), rhs.user_facing_name
+            )
+
+        if var_type.definition.member_count != len(rhs):
+            raise InvalidInitializerListLength(
+                len(rhs), var_type.definition.member_count
+            )
+
+        def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
+            scope.add_generatable(expr.subexpressions)
+
+            var_ref = cg.VariableReference(var)
+            scope.add_generatable(var_ref)
+
+            struct_access = cg.StructMemberAccess(var_ref, member_name)
+            scope.add_generatable(struct_access)
+
+            var_assignment = cg.Assignment(struct_access, expr.expression())
+            scope.add_generatable(var_assignment)
+
+        if rhs.names:
+            for name, expr in zip(rhs.names, rhs.exprs):
+                assign_to_member(expr, name)
+        else:
+            for idx, expr in enumerate(rhs.exprs):
+                member = var_type.definition.get_member_by_index(idx)
+                assign_to_member(expr, member.name)
+
+    # Unreachable if rhs has a value.
+    else:
+        assert rhs is None
 
 
 def generate_if_statement(
