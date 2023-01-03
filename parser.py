@@ -146,7 +146,11 @@ class ParseTypeDefinitions(Interpreter):
                     type_name, len(concrete_types), len(available_generics)
                 )
 
-            mapping = dict(zip(available_generics, concrete_types))
+            mapping = {
+                str(generic): concrete_type
+                for generic, concrete_type in zip(generics, concrete_types)
+            }
+
             rhs = TypeTransformer.parse(self._program, rhs_tree, mapping)
             return rhs.new_from_typedef(name_prefix, concrete_types)
 
