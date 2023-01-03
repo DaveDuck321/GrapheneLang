@@ -53,7 +53,7 @@ function main: () -> int = {
 
 
     let y: my_i32 = 8;
-    let z : my_struct<i32>; // Note: currently UB (struct uninitialized)
+    const z : my_struct<i32> = {1, 2};
 
     // FIXME return 0;
     return 6 + 1 + z.a;
