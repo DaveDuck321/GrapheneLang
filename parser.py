@@ -267,9 +267,9 @@ class FlattenedExpression:
         return self.expression().type
 
 
-def is_flattened_expression_list(
-    exprs: list[Any],
-) -> TypeGuard[list[FlattenedExpression]]:
+def is_flattened_expression_iterable(
+    exprs: Iterable[Any],
+) -> TypeGuard[Iterable[FlattenedExpression]]:
     # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
     return all(isinstance(expr, FlattenedExpression) for expr in exprs)
 
@@ -361,7 +361,7 @@ class ExpressionTransformer(Transformer_InPlace):
         self,
         fn_name: str,
         specialization_tree: Optional[Tree],
-        fn_args: list[FlattenedExpression],
+        fn_args: Iterable[FlattenedExpression],
     ) -> FlattenedExpression:
         flattened_expr = FlattenedExpression([])
         arg_types_for_lookup = []
@@ -385,18 +385,18 @@ class ExpressionTransformer(Transformer_InPlace):
         return flattened_expr.add_parent(call_expr)
 
     @v_args(inline=True)
-    def function_call(self, name_tree: Tree, args_tree: Tree) -> FlattenedExpression:
+    def function_call(
+        self, name_tree: Tree, *args: FlattenedExpression
+    ) -> FlattenedExpression:
         fn_name, specialization_tree = name_tree.children
-        assert isinstance(fn_name, str)
-        assert is_flattened_expression_list(args_tree.children)
+        assert isinstance(fn_name, Token)
+        assert is_flattened_expression_iterable(args)
 
-        return self._function_call_impl(
-            fn_name, specialization_tree, args_tree.children
-        )
+        return self._function_call_impl(fn_name, specialization_tree, args)
 
     @v_args(inline=True)
     def ufcs_call(
-        self, this: FlattenedExpression, name_tree: Tree, args_tree: Tree
+        self, this: FlattenedExpression, name_tree: Tree, *args: FlattenedExpression
     ) -> FlattenedExpression:
         # TODO perhaps we shouldn't always borrow this, although this is a bit
         # tricky as we haven't done overload resolution yet (which depends on
@@ -409,9 +409,8 @@ class ExpressionTransformer(Transformer_InPlace):
         fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
 
-        fn_args = args_tree.children
-        fn_args.insert(0, borrowed_this)
-        assert is_flattened_expression_list(fn_args)
+        fn_args = (borrowed_this, *args)
+        assert is_flattened_expression_iterable(fn_args)
 
         return self._function_call_impl(fn_name, specialization_tree, fn_args)
 
@@ -447,16 +446,15 @@ class ExpressionTransformer(Transformer_InPlace):
     def array_index_access(
         self, lhs: FlattenedExpression, *index_exprs: FlattenedExpression
     ) -> FlattenedExpression:
-
         lhs = self.ensure_pointer_is_available(lhs)
-        result = FlattenedExpression([*lhs.subexpressions])
+        lhs_expr = lhs.expression()
 
         cg_indices: list[cg.TypedExpression] = []
         for index_expr in index_exprs:
             cg_indices.append(index_expr.expression())
-            result.subexpressions.extend(index_expr.subexpressions)
+            lhs.subexpressions.extend(index_expr.subexpressions)
 
-        return result.add_parent(cg.ArrayIndexAccess(lhs.expression(), cg_indices))
+        return lhs.add_parent(cg.ArrayIndexAccess(lhs_expr, cg_indices))
 
     @v_args(inline=True)
     def struct_member_access(
