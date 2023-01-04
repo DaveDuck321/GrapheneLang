@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Type as PyType
 
 from .builtin_types import SizeType, GenericIntType, IntegerDefinition
 from .expressions import ConstantExpression
@@ -8,12 +8,19 @@ from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
 
-class AddExpression(TypedExpression):
+class ArithmeticExpression(TypedExpression):
+    # TODO: floating point support
+    SIGNED_IR = ""
+    UNSIGNED_IR = ""
+    USER_FACING_NAME = ""
+
     def __init__(
         self, specialization: list[Type], arguments: list[TypedExpression]
     ) -> None:
         lhs, rhs = arguments
         # This is not a user-facing function, we don't need sensible error messages
+        assert self.SIGNED_IR is not None
+        assert self.UNSIGNED_IR is not None
         assert len(specialization) == 0
         assert isinstance(lhs.type, GenericIntType)
         assert isinstance(rhs.type, GenericIntType)
@@ -25,10 +32,10 @@ class AddExpression(TypedExpression):
         self._rhs = rhs
 
     def __repr__(self) -> str:
-        return f"Add({self._lhs} + {self._rhs})"
+        return f"{self.__class__.__name__}({self._lhs}, {self._rhs})"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        # https://llvm.org/docs/LangRef.html#add-instruction
+        # https://llvm.org/docs/LangRef.html#add-instruction (and below)
         conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, self.type)
         conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, self.type)
 
@@ -39,12 +46,13 @@ class AddExpression(TypedExpression):
         self.result_reg = next(reg_gen)
 
         assert isinstance(self.type.definition, IntegerDefinition)
-        overflow_ir = "nsw" if self.type.definition.is_signed else "nuw"
+        ir = self.SIGNED_IR if self.type.definition.is_signed else self.UNSIGNED_IR
 
+        # eg. for addition
         # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
         ir_lines.append(
-            f"%{self.result_reg} = add {overflow_ir} {conv_lhs.ir_ref_with_type_annotation},"
-            f" {conv_rhs.ir_ref_without_type_annotation}"
+            f"%{self.result_reg} = {ir} {conv_lhs.ir_ref_with_type_annotation}, "
+            f"{conv_rhs.ir_ref_without_type_annotation}"
         )
         return ir_lines
 
@@ -56,7 +64,69 @@ class AddExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_add(..., ...)`")
+        raise OperandError(f"Cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
+
+
+class AddExpression(ArithmeticExpression):
+    SIGNED_IR = "add nsw"
+    UNSIGNED_IR = "add nuw"
+    USER_FACING_NAME = "__builtin_add"
+
+
+class SubExpression(ArithmeticExpression):
+    SIGNED_IR = "sub nsw"
+    UNSIGNED_IR = "sub nuw"
+    USER_FACING_NAME = "__builtin_sub"
+
+
+class MultiplyExpression(ArithmeticExpression):
+    SIGNED_IR = "mul nsw"
+    UNSIGNED_IR = "mul nuw"
+    USER_FACING_NAME = "__builtin_multiply"
+
+
+class DivideExpression(ArithmeticExpression):
+    SIGNED_IR = "sdiv"
+    UNSIGNED_IR = "udiv"
+    USER_FACING_NAME = "__builtin_divide"
+
+
+class RemainderExpression(ArithmeticExpression):
+    SIGNED_IR = "srem"
+    UNSIGNED_IR = "urem"
+    USER_FACING_NAME = "__builtin_remainder"
+
+
+class ShiftLeftExpression(ArithmeticExpression):
+    SIGNED_IR = "shl"
+    UNSIGNED_IR = "shl"
+    USER_FACING_NAME = "__builtin_shift_left"
+
+
+class ShiftRightExpression(ArithmeticExpression):
+    # NOTE: this is non-obvious behavior and should be documented
+    #       I've chosen to sign-extend signed bit-shifts
+    SIGNED_IR = "ashr"
+    UNSIGNED_IR = "lshr"
+    USER_FACING_NAME = "__builtin_shift_right"
+
+
+class BitwiseAndExpression(ArithmeticExpression):
+    SIGNED_IR = "and"
+    UNSIGNED_IR = "and"
+    USER_FACING_NAME = "__builtin_bitwise_and"
+
+
+class BitwiseOrExpression(ArithmeticExpression):
+    SIGNED_IR = "or"
+    UNSIGNED_IR = "or"
+    USER_FACING_NAME = "__builtin_bitwise_or"
+
+
+class BitwiseXorExpression(ArithmeticExpression):
+    SIGNED_IR = "xor"
+    UNSIGNED_IR = "xor"
+    USER_FACING_NAME = "__builtin_bitwise_xor"
 
 
 class AlignOfExpression(TypedExpression):
@@ -137,8 +207,29 @@ class NarrowExpression(TypedExpression):
 def get_builtin_callables() -> dict[
     str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
 ]:
+    def get_arithmetic_builtin(expression_class: PyType[ArithmeticExpression]):
+        return (expression_class.USER_FACING_NAME, expression_class)
+
+    arithmetic_instructions = dict(
+        map(
+            get_arithmetic_builtin,
+            [
+                AddExpression,
+                SubExpression,
+                MultiplyExpression,
+                DivideExpression,
+                RemainderExpression,
+                ShiftLeftExpression,
+                ShiftRightExpression,
+                BitwiseAndExpression,
+                BitwiseOrExpression,
+                BitwiseXorExpression,
+            ],
+        )
+    )
+
     return {
-        "__builtin_add": AddExpression,
+        **arithmetic_instructions,
         "__builtin_alignof": AlignOfExpression,
         "__builtin_narrow": NarrowExpression,
     }
