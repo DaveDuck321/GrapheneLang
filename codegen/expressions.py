@@ -1,7 +1,13 @@
 from functools import cached_property
 from typing import Iterator
 
-from .builtin_types import ArrayDefinition, FunctionSignature, IntType, StructDefinition
+from .builtin_types import (
+    ArrayDefinition,
+    FunctionSignature,
+    IntType,
+    SizeType,
+    StructDefinition,
+)
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
@@ -329,9 +335,8 @@ class ArrayIndexAccess(TypedExpression):
         # Now convert all the indices into integers using standard implicit rules
         self._indices: list[TypedExpression] = []
         for index in indices:
-            # FIXME: use size_t or similar
             index_expr, conversions = do_implicit_conversion(
-                index, IntType(), "array index access"
+                index, SizeType(), "array index access"
             )
             self._indices.append(index_expr)
             self._conversion_exprs.extend(conversions)

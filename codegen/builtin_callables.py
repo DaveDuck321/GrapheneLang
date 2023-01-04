@@ -1,7 +1,7 @@
 from functools import cached_property
 from typing import Callable, Iterator
 
-from .builtin_types import GenericIntType, IntegerDefinition
+from .builtin_types import SizeType, GenericIntType, IntegerDefinition
 from .expressions import ConstantExpression
 from .interfaces import TypedExpression, Type
 from .type_conversions import do_implicit_conversion
@@ -70,7 +70,7 @@ class AlignOfExpression(TypedExpression):
             self._argument_type, str(self._argument_type.alignment)
         )
 
-        super().__init__(GenericIntType("u64", 64, False))
+        super().__init__(SizeType())
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
