@@ -200,7 +200,7 @@ specialized_named_function: "function" function_name _function_definition
 constructor_function: "@constructor" _function_definition
 destructor_function: "@destructor" _function_definition
 
-OPERATOR: /[.<>%*$@|&\/=?!+-]+/
+OPERATOR: /[.<>%*$@|&\/=?!+^\-]+/
 operator_function: "@operator" OPERATOR _function_definition
 
 
