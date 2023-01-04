@@ -1,18 +1,24 @@
+from abc import ABC, abstractstaticmethod
 from functools import cached_property
 from typing import Callable, Iterator, Type as PyType
 
-from .builtin_types import SizeType, GenericIntType, IntegerDefinition
+from .builtin_types import BoolType, GenericIntType, IntegerDefinition, SizeType
 from .expressions import ConstantExpression
 from .interfaces import TypedExpression, Type
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
 
-class ArithmeticExpression(TypedExpression):
+class BasicIntegerExpression(TypedExpression, ABC):
     # TODO: floating point support
     SIGNED_IR = ""
     UNSIGNED_IR = ""
     USER_FACING_NAME = ""
+
+    @staticmethod
+    @abstractstaticmethod
+    def get_result_type(arguments: list[TypedExpression]) -> Type:
+        assert False  # The type checker struggles without this
 
     def __init__(
         self, specialization: list[Type], arguments: list[TypedExpression]
@@ -26,8 +32,9 @@ class ArithmeticExpression(TypedExpression):
         assert isinstance(rhs.type, GenericIntType)
         assert lhs.type.definition == rhs.type.definition
 
-        super().__init__(lhs.type.to_value_type())
+        super().__init__(self.get_result_type(arguments))
 
+        self._arg_type = lhs.type.to_value_type()
         self._lhs = lhs
         self._rhs = rhs
 
@@ -36,8 +43,8 @@ class ArithmeticExpression(TypedExpression):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#add-instruction (and below)
-        conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, self.type)
-        conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, self.type)
+        conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, self._arg_type)
+        conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, self._arg_type)
 
         ir_lines: list[str] = []
         ir_lines.extend(self.expand_ir(extra_exprs_lhs, reg_gen))
@@ -45,8 +52,8 @@ class ArithmeticExpression(TypedExpression):
 
         self.result_reg = next(reg_gen)
 
-        assert isinstance(self.type.definition, IntegerDefinition)
-        ir = self.SIGNED_IR if self.type.definition.is_signed else self.UNSIGNED_IR
+        assert isinstance(self._arg_type.definition, IntegerDefinition)
+        ir = self.SIGNED_IR if self._arg_type.definition.is_signed else self.UNSIGNED_IR
 
         # eg. for addition
         # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
@@ -67,6 +74,12 @@ class ArithmeticExpression(TypedExpression):
         raise OperandError(f"Cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
 
 
+class ArithmeticExpression(BasicIntegerExpression):
+    @staticmethod
+    def get_result_type(arguments: list[TypedExpression]) -> Type:
+        return arguments[0].type.to_value_type()
+
+
 class AddExpression(ArithmeticExpression):
     SIGNED_IR = "add nsw"
     UNSIGNED_IR = "add nuw"
@@ -76,7 +89,7 @@ class AddExpression(ArithmeticExpression):
 class SubExpression(ArithmeticExpression):
     SIGNED_IR = "sub nsw"
     UNSIGNED_IR = "sub nuw"
-    USER_FACING_NAME = "__builtin_sub"
+    USER_FACING_NAME = "__builtin_subtract"
 
 
 class MultiplyExpression(ArithmeticExpression):
@@ -127,6 +140,30 @@ class BitwiseXorExpression(ArithmeticExpression):
     SIGNED_IR = "xor"
     UNSIGNED_IR = "xor"
     USER_FACING_NAME = "__builtin_bitwise_xor"
+
+
+class CompareExpression(BasicIntegerExpression):
+    @staticmethod
+    def get_result_type(arguments: list[TypedExpression]) -> Type:
+        return BoolType()
+
+
+class IsEqualExpression(CompareExpression):
+    SIGNED_IR = "icmp eq"
+    UNSIGNED_IR = "icmp eq"
+    USER_FACING_NAME = "__builtin_is_equal"
+
+
+class IsGreaterThanExpression(CompareExpression):
+    SIGNED_IR = "icmp sgt"
+    UNSIGNED_IR = "icmp ugt"
+    USER_FACING_NAME = "__builtin_is_greater_than"
+
+
+class IsLessThanExpression(CompareExpression):
+    SIGNED_IR = "icmp slt"
+    UNSIGNED_IR = "icmp ult"
+    USER_FACING_NAME = "__builtin_is_less_than"
 
 
 class AlignOfExpression(TypedExpression):
@@ -207,12 +244,12 @@ class NarrowExpression(TypedExpression):
 def get_builtin_callables() -> dict[
     str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
 ]:
-    def get_arithmetic_builtin(expression_class: PyType[ArithmeticExpression]):
+    def get_integer_builtin(expression_class: PyType[BasicIntegerExpression]):
         return (expression_class.USER_FACING_NAME, expression_class)
 
-    arithmetic_instructions = dict(
+    integer_instructions = dict(
         map(
-            get_arithmetic_builtin,
+            get_integer_builtin,
             [
                 AddExpression,
                 SubExpression,
@@ -224,12 +261,16 @@ def get_builtin_callables() -> dict[
                 BitwiseAndExpression,
                 BitwiseOrExpression,
                 BitwiseXorExpression,
+                # NOTE: I haven't added the redundant compare equal/ not equal instructions here
+                IsEqualExpression,
+                IsGreaterThanExpression,
+                IsLessThanExpression,
             ],
         )
     )
 
     return {
-        **arithmetic_instructions,
+        **integer_instructions,
         "__builtin_alignof": AlignOfExpression,
         "__builtin_narrow": NarrowExpression,
     }
