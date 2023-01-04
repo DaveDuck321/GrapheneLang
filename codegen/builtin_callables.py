@@ -98,11 +98,13 @@ class NarrowExpression(TypedExpression):
 
         self._arg_value_type = self._argument.type.to_value_type()
 
-        assert isinstance(self._arg_value_type, GenericIntType)
-        assert isinstance(return_type, GenericIntType)
-        assert isinstance(self._arg_value_type.definition, IntegerDefinition)
-        assert isinstance(return_type.definition, IntegerDefinition)
-        assert self._arg_value_type.definition.bits > return_type.definition.bits
+        to_definition = return_type.definition
+        from_definition = self._arg_value_type.definition
+        assert isinstance(to_definition, IntegerDefinition)
+        assert isinstance(from_definition, IntegerDefinition)
+
+        assert from_definition.bits > to_definition.bits
+        assert from_definition.is_signed == to_definition.is_signed
 
         super().__init__(return_type)
 
