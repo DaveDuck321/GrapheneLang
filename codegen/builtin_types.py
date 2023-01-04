@@ -102,6 +102,11 @@ class IntType(GenericIntType):
         super().__init__("int", 32, True)
 
 
+class SizeType(GenericIntType):
+    def __init__(self) -> None:
+        super().__init__("isize", 64, True)
+
+
 class BoolType(Type):
     class Definition(PrimitiveDefinition):
         def __init__(self) -> None:
@@ -331,4 +336,4 @@ def get_builtin_types() -> list[Type]:
         sized_int_types.append(GenericIntType(f"i{size}", size, True))
         sized_int_types.append(GenericIntType(f"u{size}", size, False))
 
-    return sized_int_types + [IntType(), StringType(), BoolType()]
+    return sized_int_types + [IntType(), SizeType(), StringType(), BoolType()]
