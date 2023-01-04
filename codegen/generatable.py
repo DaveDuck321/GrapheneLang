@@ -186,6 +186,9 @@ class ReturnStatement(Generatable):
         # ret <type> <value>; Return a value from a non-void function
         ir_lines.append(f"ret {conv_returned_expr.ir_ref_with_type_annotation}")
 
+        # An implicit basic block is created immediately after a return
+        next(reg_gen)
+
         return ir_lines
 
     def is_return_guaranteed(self) -> bool:
