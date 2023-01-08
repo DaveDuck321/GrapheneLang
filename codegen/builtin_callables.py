@@ -1,4 +1,4 @@
-from abc import ABC, abstractstaticmethod
+from abc import ABC, abstractmethod
 from functools import cached_property
 from typing import Callable, Iterator, Type as PyType
 
@@ -16,9 +16,9 @@ class BasicIntegerExpression(TypedExpression, ABC):
     USER_FACING_NAME = ""
 
     @staticmethod
-    @abstractstaticmethod
+    @abstractmethod
     def get_result_type(arguments: list[TypedExpression]) -> Type:
-        assert False  # The type checker struggles without this
+        pass
 
     def __init__(
         self, specialization: list[Type], arguments: list[TypedExpression]
