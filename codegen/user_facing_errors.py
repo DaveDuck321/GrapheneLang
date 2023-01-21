@@ -1,4 +1,5 @@
 from lark import Token
+from typing import Optional
 
 
 class GrapheneError(ValueError):
@@ -16,10 +17,33 @@ class ErrorWithLineInfo(ValueError):
 
         self.line = line
         self.context = context
+        self.file: Optional[str] = None
 
     @property
     def message(self) -> str:
         return str(self)
+
+    def get_output(self) -> str:
+        assert self.file is not None
+        return (
+            f"File '{self.file}', line {self.line}, in '{self.context}'\n"
+            f"   {self.message}\n"
+        )
+
+
+class IncludeFileErrorTraceback(ErrorWithLineInfo):
+    def __init__(
+        self, previous_error: ErrorWithLineInfo, line: int, context: str
+    ) -> None:
+        super().__init__("", line, context)
+        self.previous_error = previous_error
+
+    def get_output(self) -> str:
+        assert self.file is not None
+        return (
+            self.previous_error.get_output()
+            + f"\nIncluded from file '{self.file}', line {self.line}"
+        )
 
 
 class TypeCheckerError(GrapheneError):

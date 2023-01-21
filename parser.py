@@ -17,6 +17,7 @@ from codegen.user_facing_errors import (
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
+    IncludeFileErrorTraceback,
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
     MissingFunctionReturn,
@@ -276,17 +277,24 @@ class ParseImports(Interpreter):
         self._program = program
         self._include_path = include_path
 
-    @inline_and_wrap_user_facing_errors("require_once")
-    def require_once(self, path_token: Token) -> None:
+    def require_once(self, path_tree: Tree) -> None:
         # TODO: properly handle escape sequences here
         #       We'd need to decouple escape sequences from string encoding
+        path_token = path_tree.children[0]
+        assert isinstance(path_token, Token)
+
         path_str = path_token[1:-1]
         file_path = search_include_path_for_file(path_str, self._include_path)
 
         if file_path is None:
             raise FileDoesNotExistException(path_str)
 
-        append_file_to_program(self._lark, self._program, file_path, self._include_path)
+        try:
+            append_file_to_program(
+                self._lark, self._program, file_path, self._include_path
+            )
+        except ErrorWithLineInfo as exc:
+            raise IncludeFileErrorTraceback(exc, path_tree.meta.line, "@require_once")
 
 
 @dataclass
@@ -724,15 +732,19 @@ def append_file_to_program(
 ) -> None:
     tree = lark.parse(file_path.open().read())
 
-    ParseImports(lark, program, include_path).visit(tree)
-    # TODO: these stages can be combined if we require forward declaration
-    # FIXME: allow recursive types
-    ParseTypeDefinitions(program).visit(tree)
-    fn_pass = ParseFunctionSignatures(program)
-    fn_pass.visit(tree)
+    try:
+        ParseImports(lark, program, include_path).visit(tree)
+        # TODO: these stages can be combined if we require forward declaration
+        # FIXME: allow recursive types
+        ParseTypeDefinitions(program).visit(tree)
+        fn_pass = ParseFunctionSignatures(program)
+        fn_pass.visit(tree)
 
-    for function, body in fn_pass.get_function_body_trees():
-        generate_function_body(program, function, body)
+        for function, body in fn_pass.get_function_body_trees():
+            generate_function_body(program, function, body)
+    except ErrorWithLineInfo as exc:
+        exc.file = str(file_path.absolute())
+        raise exc
 
 
 def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:
@@ -751,11 +763,8 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
             traceback.print_exc()
             print("~~~ User-facing error message ~~~")
 
-        print(
-            f"File '{file_path.absolute()}', line {exc.line}, in '{exc.context}'",
-            file=sys.stderr,
-        )
-        print(f"   {exc.message}", file=sys.stderr)
+        print(exc.get_output(), file=sys.stderr)
+
         sys.exit(1)
 
     return "\n".join(program.generate_ir())
