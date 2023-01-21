@@ -13,6 +13,7 @@ import codegen as cg
 from codegen.user_facing_errors import (
     ErrorWithLineInfo,
     FailedLookupError,
+    FileDoesNotExistException,
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
@@ -43,6 +44,16 @@ def inline_and_wrap_user_facing_errors(context: str):
             ) from exc
 
     return v_args(wrapper=wrapper)
+
+
+def search_include_path_for_file(
+    relative_file_path: str, include_path: list[Path]
+) -> Optional[Path]:
+    for path in include_path:
+        file_path = path / relative_file_path
+        if file_path.exists():
+            return file_path.resolve()
+    return None
 
 
 class TypeTransformer(Transformer):
@@ -253,6 +264,29 @@ class ParseFunctionSignatures(Interpreter):
 
         # Build the function
         return cg.Function(fn_name, fn_args, fn_return_type, foreign)
+
+
+class ParseImports(Interpreter):
+    def __init__(
+        self, lark: Lark, program: cg.Program, include_path: list[Path]
+    ) -> None:
+        super().__init__()
+
+        self._lark = lark
+        self._program = program
+        self._include_path = include_path
+
+    @inline_and_wrap_user_facing_errors("require_once")
+    def require_once(self, path_token: Token) -> None:
+        # TODO: properly handle escape sequences here
+        #       We'd need to decouple escape sequences from string encoding
+        path_str = path_token[1:-1]
+        file_path = search_include_path_for_file(path_str, self._include_path)
+
+        if file_path is None:
+            raise FileDoesNotExistException(path_str)
+
+        append_file_to_program(self._lark, self._program, file_path, self._include_path)
 
 
 @dataclass
@@ -682,26 +716,35 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
         )
 
 
+def append_file_to_program(
+    lark: Lark,
+    program: cg.Program,
+    file_path: Path,
+    include_path: list[Path],
+) -> None:
+    tree = lark.parse(file_path.open().read())
+
+    ParseImports(lark, program, include_path).visit(tree)
+    # TODO: these stages can be combined if we require forward declaration
+    # FIXME: allow recursive types
+    ParseTypeDefinitions(program).visit(tree)
+    fn_pass = ParseFunctionSignatures(program)
+    fn_pass.visit(tree)
+
+    for function, body in fn_pass.get_function_body_trees():
+        generate_function_body(program, function, body)
+
+
 def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:
     grammar_path = Path(__file__).parent / "grammar.lark"
     lark = Lark.open(
         str(grammar_path), parser="lalr", start="program", propagate_positions=True
     )
-    tree = lark.parse(file_path.open().read())
-
-    print(tree.pretty())
 
     program = cg.Program()
 
     try:
-        # TODO: these stages can be combined if we require forward declaration
-        # FIXME: allow recursive types
-        ParseTypeDefinitions(program).visit(tree)
-        fn_pass = ParseFunctionSignatures(program)
-        fn_pass.visit(tree)
-
-        for function, body in fn_pass.get_function_body_trees():
-            generate_function_body(program, function, body)
+        append_file_to_program(lark, program, file_path, [Path()])
 
     except ErrorWithLineInfo as exc:
         if debug_compiler:

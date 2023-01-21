@@ -163,6 +163,11 @@ class InvalidInitializerListAssignment(GrapheneError):
         )
 
 
+class FileDoesNotExistException(GrapheneError):
+    def __init__(self, file_name: str) -> None:
+        super().__init__(f"Error: file '{file_name}' does not exist")
+
+
 class MissingFunctionReturn(ErrorWithLineInfo):
     def __init__(self, function_name: str, line: int) -> None:
         super().__init__(
