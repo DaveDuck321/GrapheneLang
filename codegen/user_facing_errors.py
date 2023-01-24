@@ -1,5 +1,4 @@
 from lark import Token
-from typing import Optional
 
 
 class GrapheneError(ValueError):
@@ -17,7 +16,6 @@ class ErrorWithLineInfo(ValueError):
 
         self.line = line
         self.context = context
-        self.file: Optional[str] = None
 
     @property
     def message(self) -> str:
