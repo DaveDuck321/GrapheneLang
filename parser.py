@@ -279,6 +279,7 @@ class ParseImports(Interpreter):
         program: cg.Program,
         include_path: list[Path],
         included_from: list[ResolvedPath],
+        already_processed: set[ResolvedPath],
     ) -> None:
         super().__init__()
 
@@ -286,6 +287,7 @@ class ParseImports(Interpreter):
         self._program = program
         self._include_path = include_path
         self._included_from = included_from
+        self._already_processed = already_processed
 
     def require_once(self, path_tree: Tree) -> None:
         # TODO: properly handle escape sequences here
@@ -313,12 +315,17 @@ class ParseImports(Interpreter):
                 line, context, file_path, file_with_conflicting_import
             )
 
+        if file_path in self._already_processed:
+            # File is already in translation unit, nothing to do
+            return
+
         append_file_to_program(
             self._lark,
             self._program,
             file_path,
             self._include_path,
             self._included_from,
+            self._already_processed,
         )
 
 
@@ -755,14 +762,16 @@ def append_file_to_program(
     file_path: ResolvedPath,
     include_path: list[Path],
     included_from: list[ResolvedPath],
+    already_processed: set[ResolvedPath],
     debug_compiler: bool = False,
 ) -> None:
     tree = lark.parse(open(file_path).read())
 
+    already_processed.add(file_path)
     try:
-        ParseImports(lark, program, include_path, included_from + [file_path]).visit(
-            tree
-        )
+        ParseImports(
+            lark, program, include_path, included_from + [file_path], already_processed
+        ).visit(tree)
         # TODO: these stages can be combined if we require forward declaration
         # FIXME: allow recursive types
         ParseTypeDefinitions(program).visit(tree)
@@ -781,7 +790,10 @@ def append_file_to_program(
             f"File '{file_path}', line {exc.line}, in '{exc.context}'",
             file=sys.stderr,
         )
-        print(f"    {exc.message}\n", file=sys.stderr)
+        print(f"    {exc.message}", file=sys.stderr)
+
+        if included_from:
+            print(file=sys.stderr)
 
         for file in reversed(included_from):
             print(f"Included from file '{file}'", file=sys.stderr)
@@ -797,7 +809,7 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
 
     program = cg.Program()
     append_file_to_program(
-        lark, program, ResolvedPath(file_path), [Path()], [], debug_compiler
+        lark, program, ResolvedPath(file_path), [Path()], [], set(), debug_compiler
     )
 
     return "\n".join(program.generate_ir())
