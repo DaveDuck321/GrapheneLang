@@ -774,7 +774,8 @@ def append_file_to_program(
     already_processed: set[ResolvedPath],
     debug_compiler: bool = False,
 ) -> None:
-    tree = lark.parse(open(file_path).read())
+    with open(file_path) as source_file:
+        tree = lark.parse(source_file.read())
 
     already_processed.add(file_path)
     try:
