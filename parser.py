@@ -15,6 +15,7 @@ from codegen.user_facing_errors import (
     ErrorWithLineInfo,
     FailedLookupError,
     FileDoesNotExistException,
+    FileIsAmbiguousException,
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
@@ -55,11 +56,19 @@ def inline_and_wrap_user_facing_errors(context: str):
 def search_include_path_for_file(
     relative_file_path: str, include_path: list[Path]
 ) -> Optional[ResolvedPath]:
+    matching_files: set[ResolvedPath] = set()
     for path in include_path:
         file_path = path / relative_file_path
         if file_path.exists():
-            return ResolvedPath(file_path)
-    return None
+            matching_files.add(ResolvedPath(file_path))
+
+    if len(matching_files) == 0:
+        return None
+
+    if len(matching_files) != 1:
+        raise FileIsAmbiguousException(relative_file_path, matching_files)
+
+    return matching_files.pop()
 
 
 class TypeTransformer(Transformer):
@@ -290,19 +299,21 @@ class ParseImports(Interpreter):
         self._already_processed = already_processed
 
     def require_once(self, path_tree: Tree) -> None:
-        # TODO: properly handle escape sequences here
-        #       We'd need to decouple escape sequences from string encoding
         path_token = path_tree.children[0]
         assert isinstance(path_token, Token)
 
-        path_str = path_token[1:-1]
+        try:
+            self._require_once_impl(path_token[1:-1])
+        except GrapheneError as exc:
+            raise ErrorWithLineInfo(
+                exc.message, path_tree.meta.line, f"@require_once {path_token}"
+            )
+
+    def _require_once_impl(self, path_str: str) -> None:
         file_path = search_include_path_for_file(path_str, self._include_path)
 
-        line = path_tree.meta.line
-        context = f'@require "{path_str}"'
-
         if file_path is None:
-            raise FileDoesNotExistException(line, context, path_str)
+            raise FileDoesNotExistException(path_str)
 
         if file_path in self._included_from:
             index = self._included_from.index(file_path)
@@ -311,9 +322,7 @@ class ParseImports(Interpreter):
             else:
                 file_with_conflicting_import = self._included_from[index - 1]
 
-            raise CircularImportException(
-                line, context, file_path, file_with_conflicting_import
-            )
+            raise CircularImportException(file_path, file_with_conflicting_import)
 
         if file_path in self._already_processed:
             # File is already in translation unit, nothing to do

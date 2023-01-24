@@ -1,4 +1,5 @@
 from lark import Token
+from typing import Iterable
 
 
 class GrapheneError(ValueError):
@@ -163,20 +164,28 @@ class InvalidInitializerListAssignment(GrapheneError):
         )
 
 
-class FileDoesNotExistException(ErrorWithLineInfo):
-    def __init__(self, line: int, context: str, file_name: str) -> None:
-        super().__init__(f"Error: file '{file_name}' does not exist", line, context)
+class FileDoesNotExistException(GrapheneError):
+    def __init__(self, file_name: str) -> None:
+        super().__init__(f"Error: file '{file_name}' does not exist")
 
 
-class CircularImportException(ErrorWithLineInfo):
-    def __init__(
-        self, line: int, context: str, import_name: str, conflicting_file_name: str
-    ) -> None:
+class FileIsAmbiguousException(GrapheneError):
+    def __init__(self, relative_path: str, candidates: Iterable[str]) -> None:
+        candidate_output_list = []
+        for candidate in candidates:
+            candidate_output_list.append(f"     - {candidate}")
+
+        super().__init__(
+            f"Error: file '{relative_path}' is ambiguous, possible candidates are:\n"
+            + "\n".join(candidate_output_list)
+        )
+
+
+class CircularImportException(GrapheneError):
+    def __init__(self, import_name: str, conflicting_file_name: str) -> None:
         super().__init__(
             f"Error: cannot import '{import_name}' since this would be a circular dependency: "
-            f"already imported from parent '{conflicting_file_name}'",
-            line,
-            context,
+            f"already imported from parent '{conflicting_file_name}'"
         )
 
 
