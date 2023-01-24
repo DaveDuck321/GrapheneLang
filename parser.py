@@ -17,12 +17,16 @@ from codegen.user_facing_errors import (
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
-    IncludeFileErrorTraceback,
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
     MissingFunctionReturn,
     RepeatedGenericName,
 )
+
+
+class ResolvedPath(str):
+    def __new__(cls, path: Path) -> "ResolvedPath":
+        return str.__new__(cls, str(path.resolve()))
 
 
 def in_pairs(iterable: Iterable) -> Iterable:
@@ -269,13 +273,18 @@ class ParseFunctionSignatures(Interpreter):
 
 class ParseImports(Interpreter):
     def __init__(
-        self, lark: Lark, program: cg.Program, include_path: list[Path]
+        self,
+        lark: Lark,
+        program: cg.Program,
+        include_path: list[Path],
+        included_from: list[ResolvedPath],
     ) -> None:
         super().__init__()
 
         self._lark = lark
         self._program = program
         self._include_path = include_path
+        self._included_from = included_from
 
     def require_once(self, path_tree: Tree) -> None:
         # TODO: properly handle escape sequences here
@@ -289,12 +298,13 @@ class ParseImports(Interpreter):
         if file_path is None:
             raise FileDoesNotExistException(path_str)
 
-        try:
-            append_file_to_program(
-                self._lark, self._program, file_path, self._include_path
-            )
-        except ErrorWithLineInfo as exc:
-            raise IncludeFileErrorTraceback(exc, path_tree.meta.line, "@require_once")
+        append_file_to_program(
+            self._lark,
+            self._program,
+            file_path,
+            self._include_path,
+            self._included_from,
+        )
 
 
 @dataclass
@@ -729,11 +739,15 @@ def append_file_to_program(
     program: cg.Program,
     file_path: Path,
     include_path: list[Path],
+    included_from: list[ResolvedPath],
+    debug_compiler: bool = False,
 ) -> None:
     tree = lark.parse(file_path.open().read())
 
     try:
-        ParseImports(lark, program, include_path).visit(tree)
+        ParseImports(
+            lark, program, include_path, included_from + [ResolvedPath(file_path)]
+        ).visit(tree)
         # TODO: these stages can be combined if we require forward declaration
         # FIXME: allow recursive types
         ParseTypeDefinitions(program).visit(tree)
@@ -742,9 +756,22 @@ def append_file_to_program(
 
         for function, body in fn_pass.get_function_body_trees():
             generate_function_body(program, function, body)
+
     except ErrorWithLineInfo as exc:
-        exc.file = str(file_path.absolute())
-        raise exc
+        if debug_compiler:
+            traceback.print_exc()
+            print("~~~ User-facing error message ~~~")
+
+        print(
+            f"File '{file_path.resolve()}', line {exc.line}, in '{exc.context}'",
+            file=sys.stderr,
+        )
+        print(f"    {exc.message}\n", file=sys.stderr)
+
+        for file in reversed(included_from):
+            print(f"Included from file '{file}'", file=sys.stderr)
+
+        sys.exit(1)
 
 
 def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:
@@ -754,17 +781,6 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
     )
 
     program = cg.Program()
-
-    try:
-        append_file_to_program(lark, program, file_path, [Path()])
-
-    except ErrorWithLineInfo as exc:
-        if debug_compiler:
-            traceback.print_exc()
-            print("~~~ User-facing error message ~~~")
-
-        print(exc.get_output(), file=sys.stderr)
-
-        sys.exit(1)
+    append_file_to_program(lark, program, file_path, [Path()], [], debug_compiler)
 
     return "\n".join(program.generate_ir())
