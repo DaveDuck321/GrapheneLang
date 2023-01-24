@@ -11,6 +11,7 @@ from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
+    CircularImportException,
     ErrorWithLineInfo,
     FailedLookupError,
     FileDoesNotExistException,
@@ -53,11 +54,11 @@ def inline_and_wrap_user_facing_errors(context: str):
 
 def search_include_path_for_file(
     relative_file_path: str, include_path: list[Path]
-) -> Optional[Path]:
+) -> Optional[ResolvedPath]:
     for path in include_path:
         file_path = path / relative_file_path
         if file_path.exists():
-            return file_path.resolve()
+            return ResolvedPath(file_path)
     return None
 
 
@@ -295,8 +296,22 @@ class ParseImports(Interpreter):
         path_str = path_token[1:-1]
         file_path = search_include_path_for_file(path_str, self._include_path)
 
+        line = path_tree.meta.line
+        context = f'@require "{path_str}"'
+
         if file_path is None:
-            raise FileDoesNotExistException(path_str)
+            raise FileDoesNotExistException(line, context, path_str)
+
+        if file_path in self._included_from:
+            index = self._included_from.index(file_path)
+            if index == 0:
+                file_with_conflicting_import = "<compile target>"
+            else:
+                file_with_conflicting_import = self._included_from[index - 1]
+
+            raise CircularImportException(
+                line, context, file_path, file_with_conflicting_import
+            )
 
         append_file_to_program(
             self._lark,
@@ -737,17 +752,17 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
 def append_file_to_program(
     lark: Lark,
     program: cg.Program,
-    file_path: Path,
+    file_path: ResolvedPath,
     include_path: list[Path],
     included_from: list[ResolvedPath],
     debug_compiler: bool = False,
 ) -> None:
-    tree = lark.parse(file_path.open().read())
+    tree = lark.parse(open(file_path).read())
 
     try:
-        ParseImports(
-            lark, program, include_path, included_from + [ResolvedPath(file_path)]
-        ).visit(tree)
+        ParseImports(lark, program, include_path, included_from + [file_path]).visit(
+            tree
+        )
         # TODO: these stages can be combined if we require forward declaration
         # FIXME: allow recursive types
         ParseTypeDefinitions(program).visit(tree)
@@ -763,7 +778,7 @@ def append_file_to_program(
             print("~~~ User-facing error message ~~~")
 
         print(
-            f"File '{file_path.resolve()}', line {exc.line}, in '{exc.context}'",
+            f"File '{file_path}', line {exc.line}, in '{exc.context}'",
             file=sys.stderr,
         )
         print(f"    {exc.message}\n", file=sys.stderr)
@@ -781,6 +796,8 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
     )
 
     program = cg.Program()
-    append_file_to_program(lark, program, file_path, [Path()], [], debug_compiler)
+    append_file_to_program(
+        lark, program, ResolvedPath(file_path), [Path()], [], debug_compiler
+    )
 
     return "\n".join(program.generate_ir())

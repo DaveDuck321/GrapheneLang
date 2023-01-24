@@ -165,9 +165,21 @@ class InvalidInitializerListAssignment(GrapheneError):
         )
 
 
-class FileDoesNotExistException(GrapheneError):
-    def __init__(self, file_name: str) -> None:
-        super().__init__(f"Error: file '{file_name}' does not exist")
+class FileDoesNotExistException(ErrorWithLineInfo):
+    def __init__(self, line: int, context: str, file_name: str) -> None:
+        super().__init__(f"Error: file '{file_name}' does not exist", line, context)
+
+
+class CircularImportException(ErrorWithLineInfo):
+    def __init__(
+        self, line: int, context: str, import_name: str, conflicting_file_name: str
+    ) -> None:
+        super().__init__(
+            f"Error: cannot import '{import_name}' since this would be a circular dependency: "
+            f"already imported from parent '{conflicting_file_name}'",
+            line,
+            context,
+        )
 
 
 class MissingFunctionReturn(ErrorWithLineInfo):
