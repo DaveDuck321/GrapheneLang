@@ -42,6 +42,11 @@ _type: function_type
      | type_name
 type: _type
 
+//
+// Modules
+//
+
+require_once: "@require_once" ESCAPED_STRING
 
 //
 // Typedef
@@ -215,6 +220,7 @@ _top_level_program_feature: const_declaration
                           | generic_named_function
                           | generic_typedef
                           | operator_function
+                          | require_once
                           | specialized_named_function
                           | specialized_typedef
                           | variable_declaration

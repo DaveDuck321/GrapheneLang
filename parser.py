@@ -11,8 +11,11 @@ from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
+    CircularImportException,
     ErrorWithLineInfo,
     FailedLookupError,
+    FileDoesNotExistException,
+    FileIsAmbiguousException,
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
@@ -21,6 +24,11 @@ from codegen.user_facing_errors import (
     MissingFunctionReturn,
     RepeatedGenericName,
 )
+
+
+class ResolvedPath(str):
+    def __new__(cls, path: Path) -> "ResolvedPath":
+        return str.__new__(cls, str(path.resolve()))
 
 
 def in_pairs(iterable: Iterable) -> Iterable:
@@ -43,6 +51,24 @@ def inline_and_wrap_user_facing_errors(context: str):
             ) from exc
 
     return v_args(wrapper=wrapper)
+
+
+def search_include_path_for_file(
+    relative_file_path: str, include_path: list[Path]
+) -> Optional[ResolvedPath]:
+    matching_files: set[ResolvedPath] = set()
+    for path in include_path:
+        file_path = path / relative_file_path
+        if file_path.exists():
+            matching_files.add(ResolvedPath(file_path))
+
+    if len(matching_files) == 0:
+        return None
+
+    if len(matching_files) != 1:
+        raise FileIsAmbiguousException(relative_file_path, matching_files)
+
+    return matching_files.pop()
 
 
 class TypeTransformer(Transformer):
@@ -253,6 +279,63 @@ class ParseFunctionSignatures(Interpreter):
 
         # Build the function
         return cg.Function(fn_name, fn_args, fn_return_type, foreign)
+
+
+class ParseImports(Interpreter):
+    def __init__(
+        self,
+        lark: Lark,
+        program: cg.Program,
+        include_path: list[Path],
+        included_from: list[ResolvedPath],
+        already_processed: set[ResolvedPath],
+    ) -> None:
+        super().__init__()
+
+        self._lark = lark
+        self._program = program
+        self._include_path = include_path
+        self._included_from = included_from
+        self._already_processed = already_processed
+
+    def require_once(self, path_tree: Tree) -> None:
+        path_token = path_tree.children[0]
+        assert isinstance(path_token, Token)
+
+        try:
+            self._require_once_impl(path_token[1:-1])
+        except GrapheneError as exc:
+            raise ErrorWithLineInfo(
+                exc.message, path_tree.meta.line, f"@require_once {path_token}"
+            )
+
+    def _require_once_impl(self, path_str: str) -> None:
+        file_path = search_include_path_for_file(path_str, self._include_path)
+
+        if file_path is None:
+            raise FileDoesNotExistException(path_str)
+
+        if file_path in self._included_from:
+            index = self._included_from.index(file_path)
+            if index == 0:
+                file_with_conflicting_import = "<compile target>"
+            else:
+                file_with_conflicting_import = self._included_from[index - 1]
+
+            raise CircularImportException(file_path, file_with_conflicting_import)
+
+        if file_path in self._already_processed:
+            # File is already in translation unit, nothing to do
+            return
+
+        append_file_to_program(
+            self._lark,
+            self._program,
+            file_path,
+            self._include_path[:-1],  # Last element is always '.'
+            self._included_from,
+            self._already_processed,
+        )
 
 
 @dataclass
@@ -682,18 +765,27 @@ def generate_function_body(program: cg.Program, function: cg.Function, body: Tre
         )
 
 
-def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:
-    grammar_path = Path(__file__).parent / "grammar.lark"
-    lark = Lark.open(
-        str(grammar_path), parser="lalr", start="program", propagate_positions=True
-    )
-    tree = lark.parse(file_path.open().read())
+def append_file_to_program(
+    lark: Lark,
+    program: cg.Program,
+    file_path: ResolvedPath,
+    include_path: list[Path],
+    included_from: list[ResolvedPath],
+    already_processed: set[ResolvedPath],
+    debug_compiler: bool = False,
+) -> None:
+    with open(file_path) as source_file:
+        tree = lark.parse(source_file.read())
 
-    print(tree.pretty())
-
-    program = cg.Program()
-
+    already_processed.add(file_path)
     try:
+        ParseImports(
+            lark,
+            program,
+            include_path + [Path(file_path).parent],
+            included_from + [file_path],
+            already_processed,
+        ).visit(tree)
         # TODO: these stages can be combined if we require forward declaration
         # FIXME: allow recursive types
         ParseTypeDefinitions(program).visit(tree)
@@ -709,10 +801,31 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
             print("~~~ User-facing error message ~~~")
 
         print(
-            f"File '{file_path.absolute()}', line {exc.line}, in '{exc.context}'",
+            f"File '{file_path}', line {exc.line}, in '{exc.context}'",
             file=sys.stderr,
         )
-        print(f"   {exc.message}", file=sys.stderr)
+        print(f"    {exc.message}", file=sys.stderr)
+
+        if included_from:
+            print(file=sys.stderr)
+
+        for file in reversed(included_from):
+            print(f"Included from file '{file}'", file=sys.stderr)
+
         sys.exit(1)
+
+
+def generate_ir_from_source(
+    file_path: Path, include_path: list[Path], debug_compiler: bool = False
+) -> str:
+    grammar_path = Path(__file__).parent / "grammar.lark"
+    lark = Lark.open(
+        str(grammar_path), parser="lalr", start="program", propagate_positions=True
+    )
+
+    program = cg.Program()
+    append_file_to_program(
+        lark, program, ResolvedPath(file_path), include_path, [], set(), debug_compiler
+    )
 
     return "\n".join(program.generate_ir())
