@@ -20,24 +20,42 @@ def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
     return include_path, filtered_args
 
 
+def extract_optimization_level(args: list[str]) -> tuple[str, list[str]]:
+    level = "0"  # Default
+    filtered_args = []
+    for arg in args:
+        if arg.startswith("-O"):
+            level = arg[2:]
+        else:
+            filtered_args.append(arg)
+
+    assert level != "2"  # Coward assert
+    return level, filtered_args
+
+
 if __name__ == "__main__":
     include_path, sys_args = extract_include_paths(sys.argv[1:])
+    opt_level, sys_args = extract_optimization_level(sys_args)
 
     parser = argparse.ArgumentParser("python driver.py")
     # TODO: support multiple source files
     parser.add_argument("input", nargs=1, type=Path)
     parser.add_argument("-o", "--output", required=False, type=Path)
     parser.add_argument("-c", "--compile-to-object", action="store_true")
-    parser.add_argument("-I<include path>", action="store_true")
+    parser.add_argument("-I<include path>", action="store_true")  # Dummy arg
+    parser.add_argument("-O<level>", action="store_true")  # Dummy arg
     parser.add_argument("--emit-llvm", action="store_true")
+    parser.add_argument("--emit-optimized-llvm", action="store_true")
     parser.add_argument("--emit-everything", action="store_true")
     parser.add_argument("--debug-compiler", action="store_true")
     args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
+    will_emit_optimized_llvm: bool = args.emit_optimized_llvm or args.emit_everything
     will_emit_binary: bool = not args.emit_llvm or args.emit_everything
 
     llvm_output: Path = args.input[0].with_suffix(".ll")
+    optimized_llvm_output: Path = llvm_output.with_suffix(".opt.ll")
     binary_output = Path("a.out")
 
     # -o defaults to binary output path
@@ -59,12 +77,34 @@ if __name__ == "__main__":
     if args.compile_to_object:
         extra_flags.append("-c")
 
+    if will_emit_optimized_llvm:
+        # TODO: the llvm optimization pipeline is run twice if we also want a binary
+        subprocess.run(
+            [
+                getenv("GRAPHENE_CLANG_CMD", "clang"),
+                "-Wno-override-module",
+                "-xir",
+                "-S",
+                "-emit-llvm",
+                f"-O{opt_level}",
+                "-o",
+                optimized_llvm_output,
+                *extra_flags,
+                "-",
+            ],
+            input=ir,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+
     if will_emit_binary:
         subprocess.run(
             [
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 "-Wno-override-module",  # Don't complain about the target triple.
                 "-xir",
+                f"-O{opt_level}",
                 "-o",
                 binary_output,
                 *extra_flags,
