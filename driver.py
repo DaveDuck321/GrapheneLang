@@ -1,19 +1,38 @@
 import argparse
 import subprocess
+import sys
+
 from os import getenv
 from parser import generate_ir_from_source
 from pathlib import Path
 
+
+def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
+    include_path = []
+    filtered_args = []
+    for arg in args:
+        if arg.startswith("-I"):
+            path = Path(arg[2:])
+            include_path.append(path)
+        else:
+            filtered_args.append(arg)
+
+    return include_path, filtered_args
+
+
 if __name__ == "__main__":
+    include_path, sys_args = extract_include_paths(sys.argv[1:])
+
     parser = argparse.ArgumentParser("python driver.py")
     # TODO: support multiple source files
     parser.add_argument("input", nargs=1, type=Path)
     parser.add_argument("-o", "--output", required=False, type=Path)
     parser.add_argument("-c", "--compile-to-object", action="store_true")
+    parser.add_argument("-I<include path>", action="store_true")
     parser.add_argument("--emit-llvm", action="store_true")
     parser.add_argument("--emit-everything", action="store_true")
     parser.add_argument("--debug-compiler", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
     will_emit_binary: bool = not args.emit_llvm or args.emit_everything
@@ -29,7 +48,7 @@ if __name__ == "__main__":
             llvm_output = args.output
 
     # Compile to ir
-    ir = generate_ir_from_source(args.input[0], args.debug_compiler)
+    ir = generate_ir_from_source(args.input[0], include_path, args.debug_compiler)
 
     if will_emit_llvm:
         with llvm_output.open("w", encoding="utf-8") as file:

@@ -332,7 +332,7 @@ class ParseImports(Interpreter):
             self._lark,
             self._program,
             file_path,
-            self._include_path,
+            self._include_path[:-1],  # Last element is always '.'
             self._included_from,
             self._already_processed,
         )
@@ -780,7 +780,11 @@ def append_file_to_program(
     already_processed.add(file_path)
     try:
         ParseImports(
-            lark, program, include_path, included_from + [file_path], already_processed
+            lark,
+            program,
+            include_path + [Path(file_path).parent],
+            included_from + [file_path],
+            already_processed,
         ).visit(tree)
         # TODO: these stages can be combined if we require forward declaration
         # FIXME: allow recursive types
@@ -811,7 +815,9 @@ def append_file_to_program(
         sys.exit(1)
 
 
-def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> str:
+def generate_ir_from_source(
+    file_path: Path, include_path: list[Path], debug_compiler: bool = False
+) -> str:
     grammar_path = Path(__file__).parent / "grammar.lark"
     lark = Lark.open(
         str(grammar_path), parser="lalr", start="program", propagate_positions=True
@@ -819,7 +825,7 @@ def generate_ir_from_source(file_path: Path, debug_compiler: bool = False) -> st
 
     program = cg.Program()
     append_file_to_program(
-        lark, program, ResolvedPath(file_path), [Path()], [], set(), debug_compiler
+        lark, program, ResolvedPath(file_path), include_path, [], set(), debug_compiler
     )
 
     return "\n".join(program.generate_ir())
