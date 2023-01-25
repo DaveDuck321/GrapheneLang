@@ -172,7 +172,7 @@ class FileDoesNotExistException(GrapheneError):
 class FileIsAmbiguousException(GrapheneError):
     def __init__(self, relative_path: str, candidates: Iterable[str]) -> None:
         candidate_output_list = []
-        for candidate in candidates:
+        for candidate in sorted(candidates):
             candidate_output_list.append(f"     - {candidate}")
 
         super().__init__(
