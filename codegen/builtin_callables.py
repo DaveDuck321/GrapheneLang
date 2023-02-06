@@ -196,6 +196,34 @@ class AlignOfExpression(TypedExpression):
         raise OperandError("Cannot assign to `__builtin_alignof<...>()`")
 
 
+class SizeOfExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[Type], arguments: list[TypedExpression]
+    ) -> None:
+        assert len(arguments) == 0
+        assert len(specialization) == 1
+        self._argument_type = specialization[0]
+        self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
+
+        super().__init__(self._result.type)
+
+    def __repr__(self) -> str:
+        return f"SizeOf({self._argument_type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        return self._result.generate_ir(reg_gen)
+
+    @cached_property
+    def ir_ref_without_type_annotation(self) -> str:
+        return self._result.ir_ref_without_type_annotation
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_sizeof<...>()`")
+
+
 class NarrowExpression(TypedExpression):
     def __init__(
         self, specialization: list[Type], arguments: list[TypedExpression]
@@ -273,4 +301,5 @@ def get_builtin_callables() -> dict[
         **integer_instructions,
         "__builtin_alignof": AlignOfExpression,
         "__builtin_narrow": NarrowExpression,
+        "__builtin_sizeof": SizeOfExpression,
     }
