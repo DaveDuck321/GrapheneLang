@@ -16,7 +16,7 @@
             "./out/a.out"
         ],
         "output": {
-            "status": 2
+            "status": 0
         }
     }
 }

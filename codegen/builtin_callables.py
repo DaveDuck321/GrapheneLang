@@ -174,10 +174,10 @@ class AlignOfExpression(TypedExpression):
         assert len(specialization) == 1
         self._argument_type = specialization[0]
         self._result = ConstantExpression(
-            self._argument_type, str(self._argument_type.alignment)
+            SizeType(), str(self._argument_type.alignment)
         )
 
-        super().__init__(SizeType())
+        super().__init__(self._result.type)
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
