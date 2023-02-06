@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, reduce
+from operator import mul
 from typing import Any, Callable, Optional
 
 from .interfaces import Parameter, Type, TypeDefinition
@@ -8,20 +9,24 @@ from .user_facing_errors import FailedLookupError, InvalidIntSize
 
 
 class PrimitiveDefinition(TypeDefinition):
-    def __init__(self, align: int, ir_type: str, name: str) -> None:
+    def __init__(self, size: int, ir_type: str, name: str) -> None:
         super().__init__()
 
-        assert align > 0
+        assert size > 0
         assert ir_type
         assert name
 
-        self._align = align
+        self._size = size
         self._ir = ir_type
         self._name = name
 
     @cached_property
     def alignment(self) -> int:
-        return self._align
+        return self._size
+
+    @cached_property
+    def size(self) -> int:
+        return self._size
 
     @cached_property
     def user_facing_name(self) -> str:
@@ -47,7 +52,7 @@ class PrimitiveDefinition(TypeDefinition):
         assert isinstance(other, TypeDefinition)
         if isinstance(other, PrimitiveDefinition):
             # TODO: I'm not sure this is the correct approach
-            return self._align == other._align and self._ir == other._ir
+            return self._size == other._size and self._ir == other._ir
 
         return False
 
@@ -57,7 +62,6 @@ class IntegerDefinition(PrimitiveDefinition):
         super().__init__(size_in_bits // 8, f"i{size_in_bits}", name)
 
         self.is_signed = is_signed
-        # TODO: maybe PrimitiveDefinition should have a size property.
         self.bits = size_in_bits
 
     def to_ir_constant(self, value: str) -> str:
@@ -124,6 +128,8 @@ class BoolType(Type):
 
 
 class StringType(Type):
+    # TODO: string probably shouldn't be a language primitive for much longer...
+    #       we can use u8[*] instead.
     class Definition(PrimitiveDefinition):
         def __init__(self) -> None:
             super().__init__(8, "ptr", "string")
@@ -200,6 +206,25 @@ class StructDefinition(TypeDefinition):
             else 1
         )
 
+    @cached_property
+    def size(self) -> int:
+        # Return this size of the struct with c-style padding (for now)
+        #   TODO: we should manually set the `datalayout` string to match this
+        this_size = 0
+        for member in self._members:
+            # Add padding to ensure each member is aligned
+            while this_size % member.type.alignment != 0:
+                this_size += 1
+
+            # Append member to the struct
+            this_size += member.type.size
+
+        # Add padding to align the final struct
+        while this_size % self.alignment != 0:
+            this_size += 1
+
+        return this_size
+
     def __repr__(self) -> str:
         return f"StructDefinition({', '.join(map(repr, self._members))})"
 
@@ -258,6 +283,11 @@ class ArrayDefinition(TypeDefinition):
     @cached_property
     def alignment(self) -> int:
         return self._element_type.alignment
+
+    @cached_property
+    def size(self) -> int:
+        assert self._dimensions[0] != self.UNKNOWN_DIMENSION
+        return self._element_type.size * reduce(mul, self._dimensions, 1)
 
     def __repr__(self) -> str:
         dimensions = ", ".join(map(str, self._dimensions))
