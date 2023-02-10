@@ -213,15 +213,15 @@ class StructDefinition(TypeDefinition):
         this_size = 0
         for member in self._members:
             # Add padding to ensure each member is aligned
-            while this_size % member.type.alignment != 0:
-                this_size += 1
+            remainder = this_size % member.type.alignment
+            this_size += (member.type.alignment - remainder) % member.type.alignment
 
             # Append member to the struct
             this_size += member.type.size
 
         # Add padding to align the final struct
-        while this_size % self.alignment != 0:
-            this_size += 1
+        remainder = this_size % self.alignment
+        this_size += (self.alignment - remainder) % self.alignment
 
         return this_size
 
