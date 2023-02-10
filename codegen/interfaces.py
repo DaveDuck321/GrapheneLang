@@ -17,6 +17,11 @@ class TypeDefinition(ABC):
 
     @cached_property
     @abstractmethod
+    def size(self) -> int:
+        pass
+
+    @cached_property
+    @abstractmethod
     def user_facing_name(self) -> str:
         pass
 
@@ -160,6 +165,11 @@ class Type:
     def alignment(self) -> int:
         # FIXME replace magic number.
         return 8 if self.is_pointer else self.definition.alignment
+
+    @property
+    def size(self) -> int:
+        # FIXME replace magic number.
+        return 8 if self.is_pointer else self.definition.size
 
     @property
     def ir_definition(self) -> str:
