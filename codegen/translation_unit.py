@@ -290,32 +290,42 @@ class Program:
         self._builtin_callables = get_builtin_callables()
 
         self._function_table = FunctionSymbolTable()
-        self._types: dict[str, Type] = {}
+        self._initialized_types: dict[str, list[Type]] = defaultdict(list)
         self._type_initializers: dict[str, Callable[[str, list[Type]], Type]] = {}
         self._strings: dict[str, StringInfo] = {}
 
         self._has_main: bool = False
 
         for builtin_type in get_builtin_types():
-            self._types[builtin_type.mangled_name] = builtin_type
+            name = builtin_type.get_user_facing_name(False)
+            self._initialized_types[name].append(builtin_type)
 
     def lookup_type(self, name_prefix: str, generic_args: list[Type]) -> Type:
-        this_mangle = Type.mangle_generic_type(name_prefix, generic_args)
-        if this_mangle in self._types:
-            return self._types[this_mangle]
+        if name_prefix in self._initialized_types:
+            # Reuse parsed type if it is already initialized
+            matching_candidates = []
+            for candidate_type in self._initialized_types[name_prefix]:
+                if generic_args == candidate_type.get_specialization():
+                    matching_candidates.append(candidate_type)
 
+            if len(matching_candidates) == 1:
+                return matching_candidates[0]
+
+            assert len(matching_candidates) == 0
+
+        # Type is not already initialized
         if name_prefix not in self._type_initializers:
             specialization = ", ".join(
                 arg.get_user_facing_name(False) for arg in generic_args
             )
-            specialization_prefix = f"<{specialization}>" if specialization else ""
+            specialization_postfix = f"<{specialization}>" if specialization else ""
 
             raise FailedLookupError(
-                "type", f"typedef {name_prefix}{specialization_prefix} : ..."
+                "type", f"typedef {name_prefix}{specialization_postfix} : ..."
             )
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
-        self._types[this_mangle] = this_type
+        self._initialized_types[name_prefix].append(this_type)
         return this_type
 
     def lookup_call_expression(
@@ -368,14 +378,15 @@ class Program:
         specialization: list[Type],
     ) -> None:
         parsed_type = parse_fn(type_prefix, specialization)
-        mangled_name = Type.mangle_generic_type(type_prefix, specialization)
+        existing_type_specializations = self._initialized_types[type_prefix]
 
-        if mangled_name in self._types:
-            raise RedefinitionError(
-                "specialized type", parsed_type.get_user_facing_name(False)
-            )
+        for existing_type in existing_type_specializations:
+            if existing_type.get_specialization() == specialization:
+                raise RedefinitionError(
+                    "specialized type", parsed_type.get_user_facing_name(False)
+                )
 
-        self._types[mangled_name] = parsed_type
+        self._initialized_types[type_prefix].append(parsed_type)
 
     @staticmethod
     def _get_string_identifier(index: int) -> str:
@@ -487,8 +498,9 @@ class Program:
             )
 
         lines.append("")
-        for defined_type in self._types.values():
-            lines.extend(defined_type.get_ir_initial_type_def())
+        for type_family in self._initialized_types.values():
+            for defined_type in type_family:
+                lines.extend(defined_type.get_ir_initial_type_def())
 
         lines.append("")
         for func in self._function_table.foreign_functions:

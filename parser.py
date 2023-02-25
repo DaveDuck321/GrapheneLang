@@ -229,7 +229,7 @@ class ParseFunctionSignatures(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
-    ):
+    ) -> None:
         generic_names = generic_names_tree.children
 
         def try_parse_fn_from_specialization(
@@ -240,9 +240,15 @@ class ParseFunctionSignatures(Interpreter):
                 return
 
             generic_mapping = dict(zip(generic_names, concrete_specializations))
-            function = self._build_function(
-                fn_name, args_tree, return_type_tree, False, generic_mapping
-            )
+
+            try:
+                function = self._build_function(
+                    fn_name, args_tree, return_type_tree, False, generic_mapping
+                )
+            except FailedLookupError as e:
+                # TODO: is this lookup error always for Types?
+                return  # SFINAE
+
             self._function_body_trees.append((function, body_tree, generic_mapping))
             return function
 
