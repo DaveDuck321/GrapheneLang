@@ -166,7 +166,7 @@ class InvalidInitializerListAssignment(GrapheneError):
 
 class CannotAssignToInitializerList(GrapheneError):
     def __init__(self) -> None:
-        super().__init__("Error: assign to an initializer list")
+        super().__init__("Error: cannot assign to an initializer list")
 
 
 class InitializerListTypeDeductionFailure(GrapheneError):
