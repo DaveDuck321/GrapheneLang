@@ -308,6 +308,7 @@ class FunctionSignature:
     name: str
     arguments: list[Type]
     return_type: Type
+    specialization: list[Type]
     foreign: bool = False
 
     def is_main(self) -> bool:
@@ -322,10 +323,13 @@ class FunctionSignature:
         if self.is_main() or self.is_foreign():
             return self.name
 
-        arguments_mangle = [arg.mangled_name for arg in self.arguments]
+        arguments_mangle = "".join(arg.mangled_name for arg in self.arguments)
 
-        # FIXME separator
-        arguments_mangle = "".join(arguments_mangle)
+        specialization_mangle = ""
+        if len(self.specialization) != 0:
+            specialization_mangle = "__SPECIAL_" + "".join(
+                conc_type.mangled_name for conc_type in self.specialization
+            ) + "_SPECIAL__"
 
         # Name mangle operators into digits
         legal_name_mangle = []
@@ -335,7 +339,7 @@ class FunctionSignature:
             else:
                 legal_name_mangle.append(f"__O{ord(char)}")
 
-        return f"{''.join(legal_name_mangle)}{arguments_mangle}"
+        return f"{''.join(legal_name_mangle)}{specialization_mangle}{arguments_mangle}"
 
     def _repr_impl(self, key: Callable[[Type], str]) -> str:
         prefix = "foreign" if self.is_foreign() else "function"

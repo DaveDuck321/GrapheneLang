@@ -137,11 +137,8 @@ class TypeTransformer(Transformer):
         cls,
         program: cg.Program,
         tree: Tree,
-        type_map: Optional[dict[str, cg.Type]] = None,
+        type_map: dict[str, cg.Type],
     ) -> cg.Type:
-        if type_map is None:
-            type_map = {}
-
         try:
             result = cls(program, type_map).transform(tree)
         except VisitError as exc:
@@ -197,13 +194,14 @@ class ParseTypeDefinitions(Interpreter):
     ) -> None:
         specialization = []
         for specialization_type_tree in specialization_tree.children:
+            # Note: partial specializations are not allowed, generic mapping is empty
             specialization.append(
-                TypeTransformer.parse(self._program, specialization_type_tree)
+                TypeTransformer.parse(self._program, specialization_type_tree, {})
             )
 
         def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
             assert concrete_types == specialization
-            rhs = TypeTransformer.parse(self._program, rhs_tree)
+            rhs = TypeTransformer.parse(self._program, rhs_tree, {})
             return rhs.new_from_typedef(name_prefix, concrete_types)
 
         self._program.add_specialized_type(type_name, type_parser, specialization)
@@ -214,10 +212,48 @@ class ParseFunctionSignatures(Interpreter):
         super().__init__()
 
         self._program = program
-        self._function_body_trees: list[tuple[cg.Function, Tree]] = []
+        self._function_body_trees: list[
+            tuple[cg.Function, Tree, dict[str, cg.Type]]
+        ] = []
 
-    def get_function_body_trees(self) -> list[tuple[cg.Function, Tree]]:
+    def get_function_body_trees(
+        self,
+    ) -> list[tuple[cg.Function, Tree, dict[str, cg.Type]]]:
         return self._function_body_trees
+
+    @inline_and_wrap_user_facing_errors("generic function signature")
+    def generic_named_function(
+        self,
+        generic_names_tree: Tree,
+        generic_name: Token,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ):
+        generic_names = generic_names_tree.children
+
+        def try_parse_fn_from_specialization(
+            fn_name: str, concrete_specializations: list[cg.Type]
+        ) -> Optional[cg.Function]:
+            assert generic_name == fn_name
+            if len(generic_names) != len(concrete_specializations):
+                return
+
+            generic_mapping = dict(zip(generic_names, concrete_specializations))
+            function = self._build_function(
+                fn_name, args_tree, return_type_tree, False, generic_mapping
+            )
+            self._function_body_trees.append((function, body_tree, generic_mapping))
+            return function
+
+        def try_parse_fn_from_args(
+            fn_name: str, arguments: list[cg.Type]
+        ) -> Optional[cg.Function]:
+            raise NotImplementedError()
+
+        self._program.add_generic_function(
+            generic_name, try_parse_fn_from_specialization, try_parse_fn_from_args
+        )
 
     @inline_and_wrap_user_facing_errors("function signature")
     def specialized_named_function(
@@ -260,7 +296,7 @@ class ParseFunctionSignatures(Interpreter):
         # Save the body to parse later (TODO: maybe forward declarations
         # should be possible?)
         if body_tree is not None:
-            self._function_body_trees.append((func, body_tree))
+            self._function_body_trees.append((func, body_tree, {}))
 
     def _build_function(
         self,
@@ -268,19 +304,26 @@ class ParseFunctionSignatures(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
         foreign: bool,
+        generic_mapping: dict[str, cg.Type] = {},
     ) -> cg.Function:
         fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
         for arg_name, arg_type_tree in in_pairs(fn_arg_trees):
             assert isinstance(arg_name, Token)
-            arg_type = TypeTransformer.parse(self._program, arg_type_tree)
+            arg_type = TypeTransformer.parse(
+                self._program, arg_type_tree, generic_mapping
+            )
 
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
-        fn_return_type = TypeTransformer.parse(self._program, return_type_tree)
+        fn_return_type = TypeTransformer.parse(
+            self._program, return_type_tree, generic_mapping
+        )
 
         # Build the function
-        return cg.Function(fn_name, fn_args, fn_return_type, foreign)
+        return cg.Function(
+            fn_name, fn_args, fn_return_type, foreign, list(generic_mapping.values())
+        )
 
 
 class ParseImports(Interpreter):
@@ -389,13 +432,18 @@ class InitializerList:
 
 class ExpressionTransformer(Transformer):
     def __init__(
-        self, program: cg.Program, function: cg.Function, scope: cg.Scope
+        self,
+        program: cg.Program,
+        function: cg.Function,
+        scope: cg.Scope,
+        generic_mapping: dict[str, cg.Type],
     ) -> None:
         super().__init__(visit_tokens=True)
 
         self._program = program
         self._function = function
         self._scope = scope
+        self._generic_mapping = generic_mapping
 
     @v_args(inline=True)
     def expression(
@@ -465,7 +513,9 @@ class ExpressionTransformer(Transformer):
         if specialization_tree is not None:
             for concrete_type_tree in specialization_tree.children:
                 specialization.append(
-                    TypeTransformer.parse(self._program, concrete_type_tree)
+                    TypeTransformer.parse(
+                        self._program, concrete_type_tree, self._generic_mapping
+                    )
                 )
 
         call_expr = self._program.lookup_call_expression(
@@ -586,18 +636,30 @@ class ExpressionTransformer(Transformer):
 
     @staticmethod
     def parse(
-        program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+        program: cg.Program,
+        function: cg.Function,
+        scope: cg.Scope,
+        generic_mapping: dict[str, cg.Type],
+        body: Tree,
     ) -> FlattenedExpression | InitializerList:
-        result = ExpressionTransformer(program, function, scope).transform(body)
+        result = ExpressionTransformer(
+            program, function, scope, generic_mapping
+        ).transform(body)
         assert isinstance(result, (FlattenedExpression, InitializerList))
         return result
 
 
 def generate_standalone_expression(
-    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
     assert len(body.children) == 1
-    flattened_expr = ExpressionTransformer.parse(program, function, scope, body)
+    flattened_expr = ExpressionTransformer.parse(
+        program, function, scope, generic_mapping, body
+    )
     if isinstance(flattened_expr, InitializerList):
         raise InitializerListTypeDeductionFailure()
 
@@ -605,7 +667,11 @@ def generate_standalone_expression(
 
 
 def generate_return_statement(
-    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
     if not body.children:
         # FIXME change IntType() to void once we implement that.
@@ -614,7 +680,9 @@ def generate_return_statement(
         return
 
     (expr,) = body.children
-    flattened_expr = ExpressionTransformer.parse(program, function, scope, expr)
+    flattened_expr = ExpressionTransformer.parse(
+        program, function, scope, generic_mapping, expr
+    )
     if isinstance(flattened_expr, InitializerList):
         # TODO: allow initializer lists in return statements
         raise NotImplementedError()
@@ -633,10 +701,11 @@ def generate_variable_declaration(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
     rhs: Optional[FlattenedExpression | InitializerList] = (
-        ExpressionTransformer.parse(program, function, scope, rhs_tree)
+        ExpressionTransformer.parse(program, function, scope, generic_mapping, rhs_tree)
         if rhs_tree is not None
         else None
     )
@@ -644,7 +713,7 @@ def generate_variable_declaration(
     assert isinstance(var_name, Token)
     assert isinstance(type_tree, Tree)
 
-    var_type = TypeTransformer.parse(program, type_tree)
+    var_type = TypeTransformer.parse(program, type_tree, generic_mapping)
 
     var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
     scope.add_variable(var)
@@ -692,13 +761,17 @@ def generate_variable_declaration(
 
 
 def generate_if_statement(
-    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
     condition_tree, scope_tree = body.children
     assert len(condition_tree.children) == 1
 
     condition_expr = ExpressionTransformer.parse(
-        program, function, scope, condition_tree
+        program, function, scope, generic_mapping, condition_tree
     )
     if isinstance(condition_expr, InitializerList):
         raise InitializerListTypeDeductionFailure()
@@ -706,19 +779,27 @@ def generate_if_statement(
     scope.add_generatable(condition_expr.subexpressions)
 
     inner_scope = cg.Scope(function.get_next_scope_id(), scope)
-    generate_body(program, function, inner_scope, scope_tree)
+    generate_body(program, function, inner_scope, scope_tree, generic_mapping)
 
     if_statement = cg.IfStatement(condition_expr.expression(), inner_scope)
     scope.add_generatable(if_statement)
 
 
 def generate_assignment(
-    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
 
     lhs_tree, rhs_tree = body.children
-    lhs = ExpressionTransformer.parse(program, function, scope, lhs_tree)
-    rhs = ExpressionTransformer.parse(program, function, scope, rhs_tree)
+    lhs = ExpressionTransformer.parse(
+        program, function, scope, generic_mapping, lhs_tree
+    )
+    rhs = ExpressionTransformer.parse(
+        program, function, scope, generic_mapping, rhs_tree
+    )
 
     if isinstance(lhs, InitializerList):
         raise CannotAssignToInitializerList()
@@ -732,15 +813,23 @@ def generate_assignment(
 
 
 def generate_scope_body(
-    program: cg.Program, function: cg.Function, outer_scope: cg.Scope, body: Tree
+    program: cg.Program,
+    function: cg.Function,
+    outer_scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
     inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
-    generate_body(program, function, inner_scope, body)
+    generate_body(program, function, inner_scope, body, generic_mapping)
     outer_scope.add_generatable(inner_scope)
 
 
 def generate_body(
-    program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
 ) -> None:
 
     generators = {
@@ -755,7 +844,7 @@ def generate_body(
 
     for line in body.children:
         try:
-            generators[line.data](program, function, scope, line)
+            generators[line.data](program, function, scope, line, generic_mapping)
         except VisitError as exc:
             if isinstance(exc.orig_exc, GrapheneError):
                 raise ErrorWithLineInfo(
@@ -772,8 +861,13 @@ def generate_body(
             ) from exc
 
 
-def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
-    generate_body(program, function, function.top_level_scope, body)
+def generate_function_body(
+    program: cg.Program,
+    function: cg.Function,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
+):
+    generate_body(program, function, function.top_level_scope, body, generic_mapping)
     if not function.top_level_scope.is_return_guaranteed():
         raise MissingFunctionReturn(
             function.get_signature().user_facing_name,
@@ -808,8 +902,8 @@ def append_file_to_program(
         fn_pass = ParseFunctionSignatures(program)
         fn_pass.visit(tree)
 
-        for function, body in fn_pass.get_function_body_trees():
-            generate_function_body(program, function, body)
+        for function, body, generic_mapping in fn_pass.get_function_body_trees():
+            generate_function_body(program, function, body, generic_mapping)
 
     except ErrorWithLineInfo as exc:
         if debug_compiler:

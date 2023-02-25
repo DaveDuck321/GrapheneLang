@@ -1,0 +1,19 @@
+{
+    "compile": {
+        "command": ["python", "../../../driver.py", "main.c3", "-o", "./out/a.out", "--emit-everything"],
+        "output": {
+            "status": 0
+        }
+    },
+    "runtime": {
+        "command": ["./out/a.out"],
+        "output": {
+            "status": 0,
+            "stdout": [
+                "i32",
+                "i8",
+                "i64"
+            ]
+        }
+    }
+}

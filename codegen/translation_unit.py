@@ -26,9 +26,14 @@ class Function:
         parameters: list[Parameter],
         return_type: Type,
         is_foreign: bool,
+        specialization: list[Type],
     ) -> None:
         self._signature = FunctionSignature(
-            name, [var.type for var in parameters], return_type, is_foreign
+            name,
+            [var.type for var in parameters],
+            return_type,
+            specialization,
+            is_foreign,
         )
 
         self.scope_id_iter = count()
@@ -112,7 +117,25 @@ class FunctionSymbolTable:
     def __init__(self) -> None:
         self.foreign_functions: list[Function] = []
         self.graphene_functions: list[Function] = []
+
+        self._generic_specialization_parsers: dict[
+            str, list[Callable[[str, list[Type]], Optional[Function]]]
+        ] = defaultdict(list)
+        self._generic_argument_parsers: dict[
+            str, list[Callable[[str, list[Type]], Optional[Function]]]
+        ] = defaultdict(list)
         self._functions: dict[str, list[Function]] = defaultdict(list)
+
+    def add_generic_function(
+        self,
+        fn_name: str,
+        try_parse_from_specialization: Callable[[str, list[Type]], Optional[Function]],
+        try_parse_from_arguments: Callable[[str, list[Type]], Optional[Function]],
+    ) -> None:
+        self._generic_specialization_parsers[fn_name].append(
+            try_parse_from_specialization
+        )
+        self._generic_argument_parsers[fn_name].append(try_parse_from_arguments)
 
     def add_function(self, fn_to_add: Function) -> None:
         fn_to_add_signature = fn_to_add.get_signature()
@@ -142,7 +165,33 @@ class FunctionSymbolTable:
         else:
             self.graphene_functions.append(fn_to_add)
 
-    def lookup_function(self, fn_name: str, fn_args: list[Type]):
+    def lookup_specialized_function(
+        self, fn_name: str, fn_specialization: list[Type]
+    ) -> Function:
+        candidate_parsers = self._generic_specialization_parsers[fn_name]
+        if len(candidate_parsers) == 0:
+            raise NotImplementedError()
+
+        matching_functions = []
+        for parser in candidate_parsers:
+            parsed_fn = parser(fn_name, fn_specialization)
+            if parsed_fn is not None:
+                matching_functions.append(parsed_fn)
+
+        if len(matching_functions) == 0:
+            raise NotImplementedError()
+
+        if len(matching_functions) > 1:
+            raise NotImplementedError()
+
+        matched_function = matching_functions[0]
+        self.graphene_functions.append(matched_function)
+
+        # TODO: cache parsed generic functions
+        # TODO: do I need to check arguments are valid?
+        return matched_function
+
+    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
         candidate_functions = filter(
             lambda fn: len(fn.get_signature().arguments) == len(fn_args),
             self._functions[fn_name],
@@ -278,9 +327,25 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
-        arg_types = [arg.type for arg in fn_args]
-        function = self._function_table.lookup_function(fn_name, arg_types)
+        if len(fn_specialization) != 0:
+            function = self._function_table.lookup_specialized_function(
+                fn_name, fn_specialization
+            )
+        else:
+            arg_types = [arg.type for arg in fn_args]
+            function = self._function_table.lookup_function(fn_name, arg_types)
+
         return FunctionCallExpression(function.get_signature(), fn_args)
+
+    def add_generic_function(
+        self,
+        fn_name: str,
+        try_parse_from_specialization: Callable[[str, list[Type]], Optional[Function]],
+        try_parse_from_arguments: Callable[[str, list[Type]], Optional[Function]],
+    ):
+        self._function_table.add_generic_function(
+            fn_name, try_parse_from_specialization, try_parse_from_arguments
+        )
 
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
