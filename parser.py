@@ -7,10 +7,11 @@ from typing import Any, Iterable, Optional, TypeGuard
 
 from lark import Lark, Token, Tree
 from lark.exceptions import VisitError
-from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
+from lark.visitors import Interpreter, Transformer, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
+    CannotAssignToInitializerList,
     CircularImportException,
     ErrorWithLineInfo,
     FailedLookupError,
@@ -19,6 +20,7 @@ from codegen.user_facing_errors import (
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
+    InitializerListTypeDeductionFailure,
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
     MissingFunctionReturn,
@@ -385,7 +387,7 @@ class InitializerList:
         return "{" + str.join(", ", members) + "}"
 
 
-class ExpressionTransformer(Transformer_InPlace):
+class ExpressionTransformer(Transformer):
     def __init__(
         self, program: cg.Program, function: cg.Function, scope: cg.Scope
     ) -> None:
@@ -582,15 +584,22 @@ class ExpressionTransformer(Transformer_InPlace):
 
         return init_list
 
+    @staticmethod
+    def parse(
+        program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
+    ) -> FlattenedExpression | InitializerList:
+        result = ExpressionTransformer(program, function, scope).transform(body)
+        assert isinstance(result, (FlattenedExpression, InitializerList))
+        return result
+
 
 def generate_standalone_expression(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     assert len(body.children) == 1
-    ExpressionTransformer(program, function, scope).transform(body)
-
-    flattened_expr = body.children[0]
-    assert isinstance(flattened_expr, FlattenedExpression)
+    flattened_expr = ExpressionTransformer.parse(program, function, scope, body)
+    if isinstance(flattened_expr, InitializerList):
+        raise InitializerListTypeDeductionFailure()
 
     scope.add_generatable(flattened_expr.subexpressions)
 
@@ -604,11 +613,12 @@ def generate_return_statement(
         scope.add_generatable(expr)
         return
 
-    assert len(body.children) == 1
-    ExpressionTransformer(program, function, scope).transform(body)
+    (expr,) = body.children
+    flattened_expr = ExpressionTransformer.parse(program, function, scope, expr)
+    if isinstance(flattened_expr, InitializerList):
+        # TODO: allow initializer lists in return statements
+        raise NotImplementedError()
 
-    flattened_expr = body.children[0]
-    assert isinstance(flattened_expr, FlattenedExpression)
     scope.add_generatable(flattened_expr.subexpressions)
 
     expr = cg.ReturnStatement(
@@ -626,7 +636,7 @@ def generate_variable_declaration(
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
     rhs: Optional[FlattenedExpression | InitializerList] = (
-        ExpressionTransformer(program, function, scope).transform(rhs_tree)
+        ExpressionTransformer.parse(program, function, scope, rhs_tree)
         if rhs_tree is not None
         else None
     )
@@ -685,11 +695,13 @@ def generate_if_statement(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     condition_tree, scope_tree = body.children
-    ExpressionTransformer(program, function, scope).transform(condition_tree)
-
     assert len(condition_tree.children) == 1
-    condition_expr = condition_tree.children[0]
-    assert isinstance(condition_expr, FlattenedExpression)
+
+    condition_expr = ExpressionTransformer.parse(
+        program, function, scope, condition_tree
+    )
+    if isinstance(condition_expr, InitializerList):
+        raise InitializerListTypeDeductionFailure()
 
     scope.add_generatable(condition_expr.subexpressions)
 
@@ -705,10 +717,14 @@ def generate_assignment(
 ) -> None:
 
     lhs_tree, rhs_tree = body.children
-    lhs = ExpressionTransformer(program, function, scope).transform(lhs_tree)
-    rhs = ExpressionTransformer(program, function, scope).transform(rhs_tree)
-    assert isinstance(lhs, FlattenedExpression)
-    assert isinstance(rhs, FlattenedExpression)
+    lhs = ExpressionTransformer.parse(program, function, scope, lhs_tree)
+    rhs = ExpressionTransformer.parse(program, function, scope, rhs_tree)
+
+    if isinstance(lhs, InitializerList):
+        raise CannotAssignToInitializerList()
+    if isinstance(rhs, InitializerList):
+        # TODO: allow initializer list assignment to structs
+        raise NotImplementedError()
 
     scope.add_generatable(lhs.subexpressions)
     scope.add_generatable(rhs.subexpressions)

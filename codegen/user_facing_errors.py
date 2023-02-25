@@ -164,6 +164,16 @@ class InvalidInitializerListAssignment(GrapheneError):
         )
 
 
+class CannotAssignToInitializerList(GrapheneError):
+    def __init__(self) -> None:
+        super().__init__("Error: assign to an initializer list")
+
+
+class InitializerListTypeDeductionFailure(GrapheneError):
+    def __init__(self) -> None:
+        super().__init__("Error: concrete type for initializer list cannot be deduced")
+
+
 class FileDoesNotExistException(GrapheneError):
     def __init__(self, file_name: str) -> None:
         super().__init__(f"Error: file '{file_name}' does not exist")
