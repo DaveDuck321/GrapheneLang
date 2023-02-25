@@ -162,7 +162,7 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 //
 
 if_statement: "if" "(" expression ")" scope
-return_statement: "return" _expression?
+return_statement: "return" expression?
 
 
 //
