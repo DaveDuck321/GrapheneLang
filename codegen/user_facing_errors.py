@@ -42,6 +42,14 @@ class FailedLookupError(GrapheneError):
         )
 
 
+class SubstitutionFailure(GrapheneError):
+    def __init__(self, name_with_specialization: str) -> None:
+        super().__init__(
+            f"Error: no definition exists for Type '{name_with_specialization}', "
+            "it may be incorrectly specialized"
+        )
+
+
 class OverloadResolutionError(GrapheneError):
     def __init__(
         self, fn_name: str, arguments: str, available_overloads: list[str]
@@ -69,6 +77,14 @@ class AmbiguousFunctionCall(GrapheneError):
         super().__init__(
             f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous. "
             f"Equally good candidates are '{candidate_1}' and '{candidate_2}'."
+        )
+
+
+class AmbiguousExplicitFunctionSpecialization(GrapheneError):
+    def __init__(self, fn_name: str, specialization: str) -> None:
+        super().__init__(
+            f"Error: generic function call '{fn_name}<{specialization}>(...)' is ambiguous. "
+            "Multiple candidates exhibit valid substitutions."
         )
 
 

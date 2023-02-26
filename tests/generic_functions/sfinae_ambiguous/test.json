@@ -1,0 +1,12 @@
+{
+    "compile": {
+        "command": ["python", "../../../driver.py", "main.c3", "-o", "./out/a.out", "--emit-everything"],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 17, in 'function main: () -> int'",
+                "    Error: generic function call 'generic_fn<i32>(...)' is ambiguous. Multiple candidates exhibit valid substitutions."
+            ]
+        }
+    }
+}

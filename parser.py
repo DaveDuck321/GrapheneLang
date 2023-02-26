@@ -25,6 +25,7 @@ from codegen.user_facing_errors import (
     InvalidInitializerListLength,
     MissingFunctionReturn,
     RepeatedGenericName,
+    SubstitutionFailure,
 )
 
 
@@ -245,8 +246,7 @@ class ParseFunctionSignatures(Interpreter):
                 function = self._build_function(
                     fn_name, args_tree, return_type_tree, False, generic_mapping
                 )
-            except FailedLookupError as e:
-                # TODO: is this lookup error always for Types?
+            except SubstitutionFailure:
                 return  # SFINAE
 
             self._function_body_trees.append((function, body_tree, generic_mapping))

@@ -11,11 +11,13 @@ from .generatable import Scope, StackVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
 from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
+    AmbiguousExplicitFunctionSpecialization,
     AmbiguousFunctionCall,
     FailedLookupError,
     InvalidEscapeSequence,
     OverloadResolutionError,
     RedefinitionError,
+    SubstitutionFailure,
 )
 
 
@@ -179,7 +181,7 @@ class FunctionSymbolTable:
         else:
             self.graphene_functions.append(fn_to_add)
 
-    def lookup_specialized_function(
+    def lookup_explicitly_specialized_function(
         self, fn_name: str, fn_specialization: list[Type]
     ) -> Function:
         # Have we already parsed this function?
@@ -210,7 +212,11 @@ class FunctionSymbolTable:
             raise NotImplementedError()
 
         if len(matching_functions) > 1:
-            raise NotImplementedError()
+            specialization_str = ", ".join(
+                type_argument.get_user_facing_name(False)
+                for type_argument in fn_specialization
+            )
+            raise AmbiguousExplicitFunctionSpecialization(fn_name, specialization_str)
 
         matched_function = matching_functions[0]
         self.graphene_functions.append(matched_function)
@@ -330,6 +336,20 @@ class Program:
             self._initialized_types[name].append(builtin_type)
 
     def lookup_type(self, name_prefix: str, generic_args: list[Type]) -> Type:
+        specialization_str = ", ".join(
+            arg.get_user_facing_name(False) for arg in generic_args
+        )
+        specialization_postfix = f"<{specialization_str}>" if specialization_str else ""
+
+        if (
+            name_prefix not in self._initialized_types
+            and name_prefix not in self._type_initializers
+        ):
+            # No typedefs or specializations: type always fails SFINAE
+            raise FailedLookupError(
+                "type", f"typedef {name_prefix}{specialization_postfix} : ..."
+            )
+
         if name_prefix in self._initialized_types:
             # Reuse parsed type if it is already initialized
             matching_candidates = []
@@ -344,14 +364,8 @@ class Program:
 
         # Type is not already initialized
         if name_prefix not in self._type_initializers:
-            specialization = ", ".join(
-                arg.get_user_facing_name(False) for arg in generic_args
-            )
-            specialization_postfix = f"<{specialization}>" if specialization else ""
-
-            raise FailedLookupError(
-                "type", f"typedef {name_prefix}{specialization_postfix} : ..."
-            )
+            # Substitution failure is an error here :-D
+            raise SubstitutionFailure(f"{name_prefix}{specialization_postfix}")
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
         self._initialized_types[name_prefix].append(this_type)
@@ -367,7 +381,7 @@ class Program:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
         if len(fn_specialization) != 0:
-            function = self._function_table.lookup_specialized_function(
+            function = self._function_table.lookup_explicitly_specialized_function(
                 fn_name, fn_specialization
             )
         else:
