@@ -22,6 +22,8 @@ function[T] generic_fn : () -> int = {
 
 function main : () -> int = {
     generic_fn<i32>();
+    generic_fn<i32>();
+    generic_fn<i32>();
     generic_fn<i128>();
     return generic_fn<i64>();
 };

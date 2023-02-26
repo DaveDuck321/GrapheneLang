@@ -141,6 +141,7 @@ class FunctionSymbolTable:
         self._generic_parsers: dict[str, list[GenericFunctionParser]] = defaultdict(
             list
         )
+        self._specialized_functions: dict[str, list[Function]] = defaultdict(list)
         self._functions: dict[str, list[Function]] = defaultdict(list)
 
     def add_generic_function(
@@ -181,6 +182,20 @@ class FunctionSymbolTable:
     def lookup_specialized_function(
         self, fn_name: str, fn_specialization: list[Type]
     ) -> Function:
+        # Have we already parsed this function?
+        if fn_name in self._specialized_functions:
+            matched_functions = []
+            for candidate_function in self._specialized_functions[fn_name]:
+                candidate_signature = candidate_function.get_signature()
+                if candidate_signature.specialization == fn_specialization:
+                    matched_functions.append(candidate_function)
+
+            if len(matched_functions) == 1:
+                return matched_functions[0]
+
+            assert len(matched_functions) == 0
+
+        # We have not parsed this function
         candidate_parsers = self._generic_parsers[fn_name]
         if len(candidate_parsers) == 0:
             raise NotImplementedError()
@@ -199,9 +214,9 @@ class FunctionSymbolTable:
 
         matched_function = matching_functions[0]
         self.graphene_functions.append(matched_function)
+        self._specialized_functions[fn_name].append(matched_function)
 
-        # TODO: cache parsed generic functions
-        # TODO: do I need to check arguments are valid?
+        # TODO: do we need to check arguments are valid?
         return matched_function
 
     def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
