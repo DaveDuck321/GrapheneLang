@@ -258,7 +258,10 @@ class ParseFunctionSignatures(Interpreter):
             raise NotImplementedError()
 
         self._program.add_generic_function(
-            generic_name, try_parse_fn_from_specialization, try_parse_fn_from_args
+            generic_name,
+            cg.GenericFunctionParser(
+                generic_name, try_parse_fn_from_args, try_parse_fn_from_specialization
+            ),
         )
 
     @inline_and_wrap_user_facing_errors("function signature")

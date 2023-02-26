@@ -15,4 +15,4 @@ from .expressions import (
 )
 from .generatable import Assignment, IfStatement, ReturnStatement, VariableAssignment
 from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
-from .translation_unit import Function, Program, Scope
+from .translation_unit import Function, GenericFunctionParser, Program, Scope

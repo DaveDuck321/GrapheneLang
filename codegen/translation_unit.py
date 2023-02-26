@@ -113,29 +113,42 @@ class Function:
         return self.generate_definition()
 
 
+class GenericFunctionParser:
+    def __init__(
+        self,
+        name: str,
+        parse_with_args_fn: Callable[[str, list[Type]], Optional[Function]],
+        parse_with_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
+    ) -> None:
+        self.fn_name = name
+        self._parse_with_args_fn = parse_with_args_fn
+        self._parse_with_specialization_fn = parse_with_specialization_fn
+
+    def try_parse_with_args(self, args: list[Type]) -> Optional[Function]:
+        return self._parse_with_args_fn(self.fn_name, args)
+
+    def try_parse_with_specialization(
+        self, specialization: list[Type]
+    ) -> Optional[Function]:
+        return self._parse_with_specialization_fn(self.fn_name, specialization)
+
+
 class FunctionSymbolTable:
     def __init__(self) -> None:
         self.foreign_functions: list[Function] = []
         self.graphene_functions: list[Function] = []
 
-        self._generic_specialization_parsers: dict[
-            str, list[Callable[[str, list[Type]], Optional[Function]]]
-        ] = defaultdict(list)
-        self._generic_argument_parsers: dict[
-            str, list[Callable[[str, list[Type]], Optional[Function]]]
-        ] = defaultdict(list)
+        self._generic_parsers: dict[str, list[GenericFunctionParser]] = defaultdict(
+            list
+        )
         self._functions: dict[str, list[Function]] = defaultdict(list)
 
     def add_generic_function(
         self,
         fn_name: str,
-        try_parse_from_specialization: Callable[[str, list[Type]], Optional[Function]],
-        try_parse_from_arguments: Callable[[str, list[Type]], Optional[Function]],
+        parser: GenericFunctionParser,
     ) -> None:
-        self._generic_specialization_parsers[fn_name].append(
-            try_parse_from_specialization
-        )
-        self._generic_argument_parsers[fn_name].append(try_parse_from_arguments)
+        self._generic_parsers[fn_name].append(parser)
 
     def add_function(self, fn_to_add: Function) -> None:
         fn_to_add_signature = fn_to_add.get_signature()
@@ -168,13 +181,13 @@ class FunctionSymbolTable:
     def lookup_specialized_function(
         self, fn_name: str, fn_specialization: list[Type]
     ) -> Function:
-        candidate_parsers = self._generic_specialization_parsers[fn_name]
+        candidate_parsers = self._generic_parsers[fn_name]
         if len(candidate_parsers) == 0:
             raise NotImplementedError()
 
         matching_functions = []
         for parser in candidate_parsers:
-            parsed_fn = parser(fn_name, fn_specialization)
+            parsed_fn = parser.try_parse_with_specialization(fn_specialization)
             if parsed_fn is not None:
                 matching_functions.append(parsed_fn)
 
@@ -193,7 +206,8 @@ class FunctionSymbolTable:
 
     def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
         candidate_functions = filter(
-            lambda fn: len(fn.get_signature().arguments) == len(fn_args),
+            lambda fn: len(fn.get_signature().arguments) == len(fn_args)
+            and len(fn.get_signature().specialization) == 0,
             self._functions[fn_name],
         )
 
@@ -347,15 +361,8 @@ class Program:
 
         return FunctionCallExpression(function.get_signature(), fn_args)
 
-    def add_generic_function(
-        self,
-        fn_name: str,
-        try_parse_from_specialization: Callable[[str, list[Type]], Optional[Function]],
-        try_parse_from_arguments: Callable[[str, list[Type]], Optional[Function]],
-    ):
-        self._function_table.add_generic_function(
-            fn_name, try_parse_from_specialization, try_parse_from_arguments
-        )
+    def add_generic_function(self, fn_name: str, parser: GenericFunctionParser):
+        self._function_table.add_generic_function(fn_name, parser)
 
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
