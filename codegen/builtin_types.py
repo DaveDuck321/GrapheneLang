@@ -91,6 +91,49 @@ class IntegerDefinition(PrimitiveDefinition):
         return False
 
 
+class VoidDefinition(TypeDefinition):
+    def to_ir_constant(self, value: str) -> str:
+        assert False
+
+    @cached_property
+    def alignment(self) -> int:
+        assert False
+
+    @cached_property
+    def size(self) -> int:
+        assert False
+
+    @cached_property
+    def user_facing_name(self) -> str:
+        return "void"
+
+    def get_ir_type(self, alias: Optional[str]) -> str:
+        return f"%alias.{alias}" if alias else self.ir_definition
+
+    @cached_property
+    def ir_definition(self) -> str:
+        return "void"
+
+    @cached_property
+    def mangled_name(self) -> str:
+        return "void"
+
+    @cached_property
+    def is_void(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return "VoidDefinition"
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, VoidDefinition)
+
+
+class VoidType(Type):
+    def __init__(self) -> None:
+        super().__init__(VoidDefinition())
+
+
 class GenericIntType(Type):
     def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
         is_power_of_2 = ((size_in_bits - 1) & size_in_bits) == 0
@@ -366,4 +409,10 @@ def get_builtin_types() -> list[Type]:
         sized_int_types.append(GenericIntType(f"i{size}", size, True))
         sized_int_types.append(GenericIntType(f"u{size}", size, False))
 
-    return sized_int_types + [IntType(), SizeType(), StringType(), BoolType()]
+    return sized_int_types + [
+        BoolType(),
+        IntType(),
+        SizeType(),
+        StringType(),
+        VoidType(),
+    ]
