@@ -125,9 +125,17 @@ class TypeTransformer(Transformer):
         return underlying_array.to_reference()
 
     def struct_type(self, member_trees: list[Token | cg.Type]) -> cg.Type:
-        members = [
-            cg.Parameter(m_name, m_type) for m_name, m_type in in_pairs(member_trees)
-        ]
+        members = []
+
+        # Yes, this is how you are supposed to annotate unpacking products...
+        m_name: str
+        m_type: cg.Type
+        for m_name, m_type in in_pairs(member_trees):
+            if m_type.is_void:
+                raise VoidVariableDeclaration(
+                    "struct member", m_name, m_type.get_user_facing_name(True)
+                )
+            members.append(cg.Parameter(m_name, m_type))
 
         return cg.Type(cg.StructDefinition(members))
 
