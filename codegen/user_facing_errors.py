@@ -202,7 +202,7 @@ class MissingFunctionReturn(ErrorWithLineInfo):
 class VoidVariableDeclaration(GrapheneError):
     def __init__(
         self,
-        kind: Literal["variable", "argument"],
+        kind: Literal["variable", "argument", "struct member"],
         variable_name: str,
         full_type: str,
     ) -> None:
