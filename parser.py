@@ -23,6 +23,7 @@ from codegen.user_facing_errors import (
     InvalidInitializerListLength,
     MissingFunctionReturn,
     RepeatedGenericName,
+    VoidVariableDeclaration,
 )
 
 
@@ -634,6 +635,8 @@ def generate_variable_declaration(
     assert isinstance(type_tree, Tree)
 
     var_type = TypeTransformer.parse(program, type_tree)
+    if var_type.is_void:
+        raise VoidVariableDeclaration(var_name)
 
     var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
     scope.add_variable(var)

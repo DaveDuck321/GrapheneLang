@@ -2,7 +2,7 @@
     "compile": {
         "command": [
             "python",
-            "../../driver.py",
+            "../../../driver.py",
             "main.c3",
             "-o",
             "./out/a.out"
