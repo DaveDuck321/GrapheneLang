@@ -11,7 +11,7 @@ function normal_overloaded_function : (a : i32) -> int = {
 };
 
 function normal_overloaded_function : (a : i128) -> int = {
-    puts("i8");
+    puts("i128");
     return 0;
 };
 
