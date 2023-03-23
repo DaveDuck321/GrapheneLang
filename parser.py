@@ -275,7 +275,9 @@ class ParseFunctionSignatures(Interpreter):
             arg_type = TypeTransformer.parse(self._program, arg_type_tree)
 
             if arg_type.is_void:
-                raise VoidVariableDeclaration("argument", arg_name)
+                raise VoidVariableDeclaration(
+                    "argument", arg_name, arg_type.get_user_facing_name(True)
+                )
 
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
@@ -639,7 +641,9 @@ def generate_variable_declaration(
 
     var_type = TypeTransformer.parse(program, type_tree)
     if var_type.is_void:
-        raise VoidVariableDeclaration("variable", var_name)
+        raise VoidVariableDeclaration(
+            "variable", var_name, var_type.get_user_facing_name(True)
+        )
 
     var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
     scope.add_variable(var)

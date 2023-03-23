@@ -201,6 +201,11 @@ class MissingFunctionReturn(ErrorWithLineInfo):
 
 class VoidVariableDeclaration(GrapheneError):
     def __init__(
-        self, kind: Literal["variable", "argument"], variable_name: str
+        self,
+        kind: Literal["variable", "argument"],
+        variable_name: str,
+        full_type: str,
     ) -> None:
-        super().__init__(f"Error: {kind} '{variable_name}' cannot have type 'void'")
+        super().__init__(
+            f"Error: {kind} '{variable_name}' cannot have type '{full_type}'"
+        )
