@@ -599,8 +599,7 @@ def generate_return_statement(
     program: cg.Program, function: cg.Function, scope: cg.Scope, body: Tree
 ) -> None:
     if not body.children:
-        # FIXME change IntType() to void once we implement that.
-        expr = cg.ReturnStatement(cg.IntType())
+        expr = cg.ReturnStatement(cg.VoidType())
         scope.add_generatable(expr)
         return
 
@@ -758,11 +757,17 @@ def generate_body(
 
 def generate_function_body(program: cg.Program, function: cg.Function, body: Tree):
     generate_body(program, function, function.top_level_scope, body)
+
+    # We cannot omit the "ret" instruction from LLVM IR. If the function returns
+    # void, then we can add it ourselves, otherwise the user needs to fix it.
     if not function.top_level_scope.is_return_guaranteed():
-        raise MissingFunctionReturn(
-            function.get_signature().user_facing_name,
-            body.meta.end_line,
-        )
+        if function.get_signature().return_type.is_void:
+            function.top_level_scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
+        else:
+            raise MissingFunctionReturn(
+                function.get_signature().user_facing_name,
+                body.meta.end_line,
+            )
 
 
 def append_file_to_program(
