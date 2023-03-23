@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from itertools import count
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from .builtin_callables import get_builtin_callables
 from .builtin_types import FunctionSignature, get_builtin_types
@@ -225,13 +225,9 @@ class FunctionSymbolTable:
         # TODO: do we need to check arguments are valid?
         return matched_function
 
-    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
-        candidate_functions = filter(
-            lambda fn: len(fn.get_signature().arguments) == len(fn_args)
-            and len(fn.get_signature().specialization) == 0,
-            self._functions[fn_name],
-        )
-
+    def select_function_with_least_cost(
+        self, fn_name: str, candidate_functions: Iterable[Function], fn_args: list[Type]
+    ) -> Function:
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
 
         def tuple_add(
@@ -291,6 +287,16 @@ class FunctionSymbolTable:
             )
 
         return first[1]
+
+    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
+        candidate_functions = filter(
+            lambda fn: len(fn.get_signature().arguments) == len(fn_args)
+            and len(fn.get_signature().specialization) == 0,
+            self._functions[fn_name],
+        )
+        return self.select_function_with_least_cost(
+            fn_name, candidate_functions, fn_args
+        )
 
 
 @dataclass
