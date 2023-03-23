@@ -11,7 +11,6 @@ from .generatable import Scope, StackVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
 from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
-    AmbiguousExplicitFunctionSpecialization,
     AmbiguousFunctionCall,
     FailedLookupError,
     InvalidEscapeSequence,
@@ -182,20 +181,20 @@ class FunctionSymbolTable:
             self.graphene_functions.append(fn_to_add)
 
     def lookup_explicitly_specialized_function(
-        self, fn_name: str, fn_specialization: list[Type]
+        self, fn_name: str, fn_specialization: list[Type], fn_args: list[Type]
     ) -> Function:
         # Have we already parsed this function?
         if fn_name in self._specialized_functions:
-            matched_functions = []
+            matching_functions = []
             for candidate_function in self._specialized_functions[fn_name]:
                 candidate_signature = candidate_function.get_signature()
                 if candidate_signature.specialization == fn_specialization:
-                    matched_functions.append(candidate_function)
+                    matching_functions.append(candidate_function)
 
-            if len(matched_functions) == 1:
-                return matched_functions[0]
-
-            assert len(matched_functions) == 0
+            if matching_functions:
+                return self.select_function_with_least_cost(
+                    fn_name, matching_functions, fn_specialization, fn_args
+                )
 
         # We have not parsed this function
         candidate_parsers = self._generic_parsers[fn_name]
@@ -208,25 +207,21 @@ class FunctionSymbolTable:
             if parsed_fn is not None:
                 matching_functions.append(parsed_fn)
 
-        if len(matching_functions) == 0:
-            raise NotImplementedError()
+        for matched_fn in matching_functions:
+            # TODO: we don't actually need to generate all these functions, some might be unused
+            self.graphene_functions.append(matched_fn)
+            self._specialized_functions[fn_name].append(matched_fn)
 
-        if len(matching_functions) > 1:
-            specialization_str = ", ".join(
-                type_argument.get_user_facing_name(False)
-                for type_argument in fn_specialization
-            )
-            raise AmbiguousExplicitFunctionSpecialization(fn_name, specialization_str)
-
-        matched_function = matching_functions[0]
-        self.graphene_functions.append(matched_function)
-        self._specialized_functions[fn_name].append(matched_function)
-
-        # TODO: do we need to check arguments are valid?
-        return matched_function
+        return self.select_function_with_least_cost(
+            fn_name, matching_functions, fn_specialization, fn_args
+        )
 
     def select_function_with_least_cost(
-        self, fn_name: str, candidate_functions: Iterable[Function], fn_args: list[Type]
+        self,
+        fn_name: str,
+        candidate_functions: Iterable[Function],
+        fn_specialization: list[Type],
+        fn_args: list[Type],
     ) -> Function:
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
 
@@ -260,10 +255,15 @@ class FunctionSymbolTable:
         readable_arg_names = ", ".join(
             arg.get_user_facing_name(False) for arg in fn_args
         )
+        readable_specialization = ", ".join(
+            specialization.get_user_facing_name(False)
+            for specialization in fn_specialization
+        )
 
         if not functions_by_cost:
             raise OverloadResolutionError(
                 fn_name,
+                readable_specialization,
                 readable_arg_names,
                 [
                     fn.get_signature().user_facing_name
@@ -295,7 +295,7 @@ class FunctionSymbolTable:
             self._functions[fn_name],
         )
         return self.select_function_with_least_cost(
-            fn_name, candidate_functions, fn_args
+            fn_name, candidate_functions, [], fn_args
         )
 
 
@@ -386,12 +386,12 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
+        arg_types = [arg.type for arg in fn_args]
         if len(fn_specialization) != 0:
             function = self._function_table.lookup_explicitly_specialized_function(
-                fn_name, fn_specialization
+                fn_name, fn_specialization, arg_types
             )
         else:
-            arg_types = [arg.type for arg in fn_args]
             function = self._function_table.lookup_function(fn_name, arg_types)
 
         return FunctionCallExpression(function.get_signature(), fn_args)

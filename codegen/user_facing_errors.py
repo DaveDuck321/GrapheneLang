@@ -52,10 +52,19 @@ class SubstitutionFailure(GrapheneError):
 
 class OverloadResolutionError(GrapheneError):
     def __init__(
-        self, fn_name: str, arguments: str, available_overloads: list[str]
+        self,
+        fn_name: str,
+        specialization: str,
+        arguments: str,
+        available_overloads: list[str],
     ) -> None:
+        if specialization:
+            fn_call_string = f"{fn_name}<{specialization}>({arguments})"
+        else:
+            fn_call_string = f"{fn_name}({arguments})"
+
         msg = [
-            f"Error: overload resolution for function call '{fn_name}({arguments})' failed"
+            f"Error: overload resolution for function call '{fn_call_string}' failed"
         ]
 
         # TODO need a better way to indent these.
@@ -77,14 +86,6 @@ class AmbiguousFunctionCall(GrapheneError):
         super().__init__(
             f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous. "
             f"Equally good candidates are '{candidate_1}' and '{candidate_2}'."
-        )
-
-
-class AmbiguousExplicitFunctionSpecialization(GrapheneError):
-    def __init__(self, fn_name: str, specialization: str) -> None:
-        super().__init__(
-            f"Error: generic function call '{fn_name}<{specialization}>(...)' is ambiguous. "
-            "Multiple candidates exhibit valid substitutions."
         )
 
 
