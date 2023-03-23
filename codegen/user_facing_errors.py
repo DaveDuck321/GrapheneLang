@@ -1,5 +1,6 @@
+from typing import Iterable, Literal
+
 from lark import Token
-from typing import Iterable
 
 
 class GrapheneError(ValueError):
@@ -199,5 +200,7 @@ class MissingFunctionReturn(ErrorWithLineInfo):
 
 
 class VoidVariableDeclaration(GrapheneError):
-    def __init__(self, variable_name: str) -> None:
-        super().__init__(f"Error: variable '{variable_name}' cannot have type 'void'")
+    def __init__(
+        self, kind: Literal["variable", "argument"], variable_name: str
+    ) -> None:
+        super().__init__(f"Error: {kind} '{variable_name}' cannot have type 'void'")
