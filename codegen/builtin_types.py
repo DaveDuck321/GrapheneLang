@@ -277,8 +277,8 @@ class ArrayDefinition(TypeDefinition):
 
     @cached_property
     def mangled_name(self) -> str:
-        dimensions = ", ".join(map(str, self._dimensions))
-        return f"__AR{self._element_type.mangled_name}{dimensions}__AR"
+        dimensions = "_".join(map(str, self._dimensions))
+        return f"__AR{self._element_type.mangled_name}_{dimensions}__AR"
 
     @cached_property
     def alignment(self) -> int:
