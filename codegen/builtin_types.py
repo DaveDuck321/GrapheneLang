@@ -327,9 +327,11 @@ class FunctionSignature:
 
         specialization_mangle = ""
         if len(self.specialization) != 0:
-            specialization_mangle = "__SPECIAL_" + "".join(
-                conc_type.mangled_name for conc_type in self.specialization
-            ) + "_SPECIAL__"
+            specialization_mangle = (
+                "__SPECIAL_"
+                + "".join(conc_type.mangled_name for conc_type in self.specialization)
+                + "_SPECIAL__"
+            )
 
         # Name mangle operators into digits
         legal_name_mangle = []
@@ -344,11 +346,16 @@ class FunctionSignature:
     def _repr_impl(self, key: Callable[[Type], str]) -> str:
         prefix = "foreign" if self.is_foreign() else "function"
 
-        readable_arg_names = str.join(", ", map(key, self.arguments))
+        readable_arg_names = ", ".join(map(key, self.arguments))
+
+        if self.specialization:
+            readable_specialization_types = ", ".join(map(key, self.specialization))
+            fn_name = f"{self.name}<{readable_specialization_types}>"
+        else:
+            fn_name = self.name
 
         return (
-            f"{prefix} {self.name}: ({readable_arg_names}) -> "
-            f"{key(self.return_type)}"
+            f"{prefix} {fn_name}: ({readable_arg_names}) -> " f"{key(self.return_type)}"
         )
 
     def __repr__(self) -> str:
