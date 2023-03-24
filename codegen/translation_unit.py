@@ -118,14 +118,14 @@ class GenericFunctionParser:
     def __init__(
         self,
         name: str,
-        parse_with_args_fn: Callable[[str, list[Type]], Optional[Function]],
+        parse_with_args_fn: Callable[[str, list[Type]], Optional[list[Type]]],
         parse_with_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
     ) -> None:
         self.fn_name = name
         self._parse_with_args_fn = parse_with_args_fn
         self._parse_with_specialization_fn = parse_with_specialization_fn
 
-    def try_parse_with_args(self, args: list[Type]) -> Optional[Function]:
+    def try_deduce_specialization(self, args: list[Type]) -> Optional[list[Type]]:
         return self._parse_with_args_fn(self.fn_name, args)
 
     def try_parse_with_specialization(
@@ -180,9 +180,9 @@ class FunctionSymbolTable:
         else:
             self.graphene_functions.append(fn_to_add)
 
-    def lookup_explicitly_specialized_function(
-        self, fn_name: str, fn_specialization: list[Type], fn_args: list[Type]
-    ) -> Function:
+    def generate_functions_with_specialization(
+        self, fn_name: str, fn_specialization: list[Type]
+    ) -> list[Function]:
         # Have we already parsed this function?
         if fn_name in self._specialized_functions:
             matching_functions = []
@@ -192,9 +192,7 @@ class FunctionSymbolTable:
                     matching_functions.append(candidate_function)
 
             if matching_functions:
-                return self.select_function_with_least_cost(
-                    fn_name, matching_functions, fn_specialization, fn_args
-                )
+                return matching_functions
 
         # We have not parsed this function
         candidate_parsers = self._generic_parsers[fn_name]
@@ -212,8 +210,45 @@ class FunctionSymbolTable:
             self.graphene_functions.append(matched_fn)
             self._specialized_functions[fn_name].append(matched_fn)
 
+        return matching_functions
+
+    def lookup_explicitly_specialized_function(
+        self, fn_name: str, fn_specialization: list[Type], fn_args: list[Type]
+    ) -> Function:
+        matching_functions = self.generate_functions_with_specialization(
+            fn_name, fn_specialization
+        )
         return self.select_function_with_least_cost(
             fn_name, matching_functions, fn_specialization, fn_args
+        )
+
+    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
+        # The normal Graphene functions
+        candidate_functions = [
+            fn
+            for fn in self._functions[fn_name]
+            if len(fn.get_signature().arguments) == len(fn_args)
+            and len(fn.get_signature().specialization) == 0
+        ]
+
+        # Implicit generic instantiation
+        candidate_specializations: list[list[Type]] = []
+        for candidate_generic in self._generic_parsers[fn_name]:
+            fn_specialization = candidate_generic.try_deduce_specialization(fn_args)
+
+            if (
+                fn_specialization is not None
+                and fn_specialization not in candidate_specializations
+            ):
+                candidate_specializations.append(fn_specialization)
+                candidate_functions.extend(
+                    self.generate_functions_with_specialization(
+                        fn_name, fn_specialization
+                    )
+                )
+
+        return self.select_function_with_least_cost(
+            fn_name, candidate_functions, [], fn_args
         )
 
     def select_function_with_least_cost(
@@ -274,6 +309,7 @@ class FunctionSymbolTable:
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
 
+        print("\n".join(list(map(repr, functions_by_cost))))
         first, second, *_ = functions_by_cost
 
         # If there are two or more equally good candidates, then this function
@@ -287,16 +323,6 @@ class FunctionSymbolTable:
             )
 
         return first[1]
-
-    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
-        candidate_functions = filter(
-            lambda fn: len(fn.get_signature().arguments) == len(fn_args)
-            and len(fn.get_signature().specialization) == 0,
-            self._functions[fn_name],
-        )
-        return self.select_function_with_least_cost(
-            fn_name, candidate_functions, [], fn_args
-        )
 
 
 @dataclass

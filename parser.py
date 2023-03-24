@@ -231,7 +231,7 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        generic_names = generic_names_tree.children
+        generic_names: list[str] = generic_names_tree.children  # type: ignore
 
         def try_parse_fn_from_specialization(
             fn_name: str, concrete_specializations: list[cg.Type]
@@ -241,7 +241,6 @@ class ParseFunctionSignatures(Interpreter):
                 return
 
             generic_mapping = dict(zip(generic_names, concrete_specializations))
-
             try:
                 function = self._build_function(
                     fn_name, args_tree, return_type_tree, False, generic_mapping
@@ -252,15 +251,51 @@ class ParseFunctionSignatures(Interpreter):
             self._function_body_trees.append((function, body_tree, generic_mapping))
             return function
 
-        def try_parse_fn_from_args(
+        def try_deduce_specialization(
             fn_name: str, arguments: list[cg.Type]
-        ) -> Optional[cg.Function]:
-            raise NotImplementedError()
+        ) -> Optional[list[cg.Type]]:
+            assert generic_name == fn_name
+            deduced_mapping: dict[str, cg.Type] = {}
+
+            for provided_arg_type, (_, arg_type_tree) in zip(
+                arguments, in_pairs(args_tree.children)
+            ):
+                arg_type_in_generic_definition, _ = arg_type_tree.children[0].children
+
+                # TODO: type pattern matching here
+                #       Atm this is a simple string compare
+                assert isinstance(arg_type_in_generic_definition, Token)
+                if arg_type_in_generic_definition not in generic_names:
+                    # This argument is not a generic
+                    continue
+
+                # The argument is a generic, deduce it's type
+
+                # Have we already deduced a different type?
+                if arg_type_in_generic_definition in deduced_mapping:
+                    if (
+                        deduced_mapping[arg_type_in_generic_definition]
+                        != provided_arg_type
+                    ):
+                        return  # SFINAE
+
+                deduced_mapping[
+                    arg_type_in_generic_definition
+                ] = provided_arg_type.without_borrowing()
+
+            # Convert the deduced mapping into a specialization
+            deduced_specialization: list[cg.Type] = []
+            for generic in generic_names:
+                deduced_specialization.append(deduced_mapping[generic])
+
+            return deduced_specialization
 
         self._program.add_generic_function(
             generic_name,
             cg.GenericFunctionParser(
-                generic_name, try_parse_fn_from_args, try_parse_fn_from_specialization
+                generic_name,
+                try_deduce_specialization,
+                try_parse_fn_from_specialization,
             ),
         )
 
