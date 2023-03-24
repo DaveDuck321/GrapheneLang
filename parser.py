@@ -656,7 +656,7 @@ def initialize_struct_variable(
 ) -> list[cg.Generatable]:
     generatables: list[cg.Generatable] = []
 
-    if not isinstance(var_type.definition, cg.StructDefinition):
+    if not isinstance(var_type.definition, cg.StructDefinition) or var_type.is_pointer:
         raise InvalidInitializerListAssignment(
             var_type.get_user_facing_name(False), rhs.user_facing_name
         )
