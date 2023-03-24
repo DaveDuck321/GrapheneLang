@@ -277,6 +277,13 @@ class Type:
 
         return decayed_type
 
+    def without_borrowing(self) -> "Type":
+        without_borrowing_type = self.copy()
+        without_borrowing_type.is_borrowed = False
+        without_borrowing_type.is_unborrowed_ref = False
+
+        return without_borrowing_type
+
     def new_from_typedef(
         self, typedef_alias: str, specialization: list["Type"]
     ) -> "Type":
