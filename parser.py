@@ -21,6 +21,7 @@ from codegen.user_facing_errors import (
     GrapheneError,
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
+    InvalidMainReturnType,
     MissingFunctionReturn,
     RepeatedGenericName,
     VoidVariableDeclaration,
@@ -292,7 +293,18 @@ class ParseFunctionSignatures(Interpreter):
         fn_return_type = TypeTransformer.parse(self._program, return_type_tree)
 
         # Build the function
-        return cg.Function(fn_name, fn_args, fn_return_type, foreign)
+        fn_obj = cg.Function(fn_name, fn_args, fn_return_type, foreign)
+
+        # main() must always return an int
+        if (
+            fn_obj.get_signature().is_main()
+            and fn_obj.get_signature().return_type != cg.IntType()
+        ):
+            raise InvalidMainReturnType(
+                fn_obj.get_signature().return_type.get_user_facing_name(True)
+            )
+
+        return fn_obj
 
 
 class ParseImports(Interpreter):

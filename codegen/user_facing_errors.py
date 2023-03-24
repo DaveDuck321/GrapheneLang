@@ -209,3 +209,11 @@ class VoidVariableDeclaration(GrapheneError):
         super().__init__(
             f"Error: {kind} '{variable_name}' cannot have type '{full_type}'"
         )
+
+
+class InvalidMainReturnType(GrapheneError):
+    def __init__(self, actual_type: str) -> None:
+        super().__init__(
+            f"Error: type '{actual_type}' is not a valid return type for"
+            " function 'main'; expected 'int'"
+        )
