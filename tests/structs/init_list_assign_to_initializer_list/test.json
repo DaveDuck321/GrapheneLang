@@ -11,7 +11,7 @@
             "status": 1,
             "stderr": [
                 "File '*/main.c3', line 2, in 'function main: () -> i32'",
-                "    Error: cannot assign to an initializer list"
+                "Error: cannot assign to an initializer list"
             ]
         }
     }

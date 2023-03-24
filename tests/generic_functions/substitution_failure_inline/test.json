@@ -5,7 +5,7 @@
             "status": 1,
             "stderr": [
                 "File '*/substitution_failure_inline/main.c3', line 10, in 'function main: () -> int'",
-                "    Error: no definition exists for Type 'EnableIf<IsI32<i8>>', it may be incorrectly specialized"
+                "Error: no definition exists for Type 'EnableIf<IsI32<i8>>', it may be incorrectly specialized"
             ]
         }
     }

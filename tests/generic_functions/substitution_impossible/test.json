@@ -5,7 +5,7 @@
             "status": 1,
             "stderr": [
                 "File '*/main.c3', line 10, in 'function main: () -> int'",
-                "    Error: could not find type definition 'typedef Typo<i8> : ...'"
+                "Error: could not find type definition 'typedef Typo<i8> : ...'"
             ]
         }
     }
