@@ -674,11 +674,11 @@ def initialize_struct_variable(
         ]
     )
 
+    var_ref = cg.VariableReference(var)
+    generatables.append(var_ref)
+
     for name, expr in zip(names, rhs.exprs):
         generatables.extend(expr.subexpressions)
-
-        var_ref = cg.VariableReference(var)
-        generatables.append(var_ref)
 
         struct_access = cg.StructMemberAccess(var_ref, name)
         generatables.append(struct_access)
