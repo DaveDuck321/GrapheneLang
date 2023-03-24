@@ -1,0 +1,18 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../../driver.py",
+            "main.c3",
+            "-o",
+            "./out/a.out"
+        ],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 5, in 'function main: () -> int'",
+                "Error: struct member 'b' cannot have type 'typedef my_void = void'"
+            ]
+        }
+    }
+}

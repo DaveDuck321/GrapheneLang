@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from functools import cached_property
-from typing import Callable, Iterator, Type as PyType
+from typing import Callable, Iterator
+from typing import Type as PyType
 
 from .builtin_types import BoolType, GenericIntType, IntegerDefinition, SizeType
 from .expressions import ConstantExpression
-from .interfaces import TypedExpression, Type
+from .interfaces import Type, TypedExpression
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 

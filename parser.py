@@ -23,9 +23,11 @@ from codegen.user_facing_errors import (
     InitializerListTypeDeductionFailure,
     InvalidInitializerListAssignment,
     InvalidInitializerListLength,
+    InvalidMainReturnType,
     MissingFunctionReturn,
     RepeatedGenericName,
     SubstitutionFailure,
+    VoidVariableDeclaration,
 )
 
 
@@ -127,9 +129,17 @@ class TypeTransformer(Transformer):
         return underlying_array.to_reference()
 
     def struct_type(self, member_trees: list[Token | cg.Type]) -> cg.Type:
-        members = [
-            cg.Parameter(m_name, m_type) for m_name, m_type in in_pairs(member_trees)
-        ]
+        members = []
+
+        # Yes, this is how you are supposed to annotate unpacking products...
+        m_name: str
+        m_type: cg.Type
+        for m_name, m_type in in_pairs(member_trees):
+            if m_type.is_void:
+                raise VoidVariableDeclaration(
+                    "struct member", m_name, m_type.get_user_facing_name(True)
+                )
+            members.append(cg.Parameter(m_name, m_type))
 
         return cg.Type(cg.StructDefinition(members))
 
@@ -358,6 +368,11 @@ class ParseFunctionSignatures(Interpreter):
                 self._program, arg_type_tree, generic_mapping
             )
 
+            if arg_type.is_void:
+                raise VoidVariableDeclaration(
+                    "argument", arg_name, arg_type.get_user_facing_name(True)
+                )
+
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
         fn_return_type = TypeTransformer.parse(
@@ -365,9 +380,18 @@ class ParseFunctionSignatures(Interpreter):
         )
 
         # Build the function
-        return cg.Function(
-            fn_name, fn_args, fn_return_type, foreign, list(generic_mapping.values())
-        )
+        fn_obj = cg.Function(fn_name, fn_args, fn_return_type, foreign, list(generic_mapping.values()))
+
+        # main() must always return an int
+        if (
+            fn_obj.get_signature().is_main()
+            and fn_obj.get_signature().return_type != cg.IntType()
+        ):
+            raise InvalidMainReturnType(
+                fn_obj.get_signature().return_type.get_user_facing_name(True)
+            )
+
+        return fn_obj
 
 
 class ParseImports(Interpreter):
@@ -718,8 +742,7 @@ def generate_return_statement(
     generic_mapping: dict[str, cg.Type],
 ) -> None:
     if not body.children:
-        # FIXME change IntType() to void once we implement that.
-        expr = cg.ReturnStatement(cg.IntType())
+        expr = cg.ReturnStatement(cg.VoidType())
         scope.add_generatable(expr)
         return
 
@@ -758,6 +781,10 @@ def generate_variable_declaration(
     assert isinstance(type_tree, Tree)
 
     var_type = TypeTransformer.parse(program, type_tree, generic_mapping)
+    if var_type.is_void:
+        raise VoidVariableDeclaration(
+            "variable", var_name, var_type.get_user_facing_name(True)
+        )
 
     var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
     scope.add_variable(var)
@@ -912,11 +939,18 @@ def generate_function_body(
     generic_mapping: dict[str, cg.Type],
 ):
     generate_body(program, function, function.top_level_scope, body, generic_mapping)
+
+    # We cannot omit the "ret" instruction from LLVM IR. If the function returns
+    # void, then we can add it ourselves, otherwise the user needs to fix it.
+
     if not function.top_level_scope.is_return_guaranteed():
-        raise MissingFunctionReturn(
-            function.get_signature().user_facing_name,
-            body.meta.end_line,
-        )
+        if function.get_signature().return_type.is_void:
+            function.top_level_scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
+        else:
+            raise MissingFunctionReturn(
+                function.get_signature().user_facing_name,
+                body.meta.end_line,
+            )
 
 
 def append_file_to_program(

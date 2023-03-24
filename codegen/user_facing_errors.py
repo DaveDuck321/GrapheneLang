@@ -1,5 +1,6 @@
+from typing import Iterable, Literal
+
 from lark import Token
-from typing import Iterable
 
 
 class GrapheneError(ValueError):
@@ -222,4 +223,24 @@ class MissingFunctionReturn(ErrorWithLineInfo):
             f"Error: control flow reaches end of non-void function",
             line,
             function_name,
+        )
+
+
+class VoidVariableDeclaration(GrapheneError):
+    def __init__(
+        self,
+        kind: Literal["variable", "argument", "struct member"],
+        variable_name: str,
+        full_type: str,
+    ) -> None:
+        super().__init__(
+            f"Error: {kind} '{variable_name}' cannot have type '{full_type}'"
+        )
+
+
+class InvalidMainReturnType(GrapheneError):
+    def __init__(self, actual_type: str) -> None:
+        super().__init__(
+            f"Error: type '{actual_type}' is not a valid return type for"
+            " function 'main'; expected 'int'"
         )

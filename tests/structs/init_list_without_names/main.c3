@@ -5,7 +5,7 @@ typedef[T] my_struct : {a: T, b: my_i32};
     return __builtin_add(a, b);
 };
 
-function main: () -> i64 = {
+function main: () -> int = {
     let x : int = 1;
     let y : int = 2;
 
@@ -15,5 +15,5 @@ function main: () -> i64 = {
     let s3 : my_struct<i64> = {x, y};
     let s4 : my_struct<i64> = {10, 20};
 
-    return s1.a + s2.b + s3.b + s4.a;
+    return __builtin_narrow<int>(s1.a + s2.b + s3.b + s4.a);
 };

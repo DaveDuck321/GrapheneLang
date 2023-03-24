@@ -81,7 +81,8 @@ class Function:
         ]
 
     def generate_definition(self) -> list[str]:
-        assert self.top_level_scope.is_return_guaranteed()
+        if not self.get_signature().return_type.is_void:
+            assert self.top_level_scope.is_return_guaranteed()
 
         reg_gen = count(0)  # First register is %0
 

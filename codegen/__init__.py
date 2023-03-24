@@ -4,6 +4,7 @@ from .builtin_types import (
     IntType,
     StringType,
     StructDefinition,
+    VoidType,
 )
 from .expressions import (
     ArrayIndexAccess,

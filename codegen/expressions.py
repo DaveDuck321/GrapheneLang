@@ -144,12 +144,16 @@ class FunctionCallExpression(TypedExpression):
             ir_lines += self.expand_ir(extra_exprs, reg_gen)
             conv_args.append(conv_arg)
 
-        self.result_reg = next(reg_gen)
         args_ir = map(lambda arg: arg.ir_ref_with_type_annotation, conv_args)
 
-        ir_lines.append(
-            f"%{self.result_reg} = call {self.signature.ir_ref}({str.join(', ', args_ir)})"
-        )
+        call_expr = f"call {self.signature.ir_ref}({str.join(', ', args_ir)})"
+
+        # We cannot assign `void` to a register.
+        if not self.signature.return_type.is_void:
+            self.result_reg = next(reg_gen)
+            call_expr = f"%{self.result_reg} = {call_expr}"
+
+        ir_lines.append(call_expr)
 
         return ir_lines
 

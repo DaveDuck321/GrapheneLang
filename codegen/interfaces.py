@@ -39,6 +39,10 @@ class TypeDefinition(ABC):
     def mangled_name(self) -> str:
         pass
 
+    @cached_property
+    def is_void(self) -> bool:
+        return False
+
     @abstractmethod
     def __repr__(self) -> str:
         pass
@@ -106,6 +110,10 @@ class Type:
     @property
     def is_pointer(self) -> bool:
         return self.is_unborrowed_ref or self.is_reference
+
+    @property
+    def is_void(self) -> bool:
+        return self.definition.is_void
 
     @property
     def generic_annotation(self) -> str:
