@@ -281,6 +281,9 @@ class StructDefinition(TypeDefinition):
             return False
         return self._uuid == other._uuid
 
+    def __hash__(self) -> int:
+        return self._uuid.__hash__()
+
 
 class ArrayDefinition(TypeDefinition):
     UNKNOWN_DIMENSION = 0
