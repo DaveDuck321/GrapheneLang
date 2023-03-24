@@ -160,12 +160,10 @@ class FunctionSymbolTable:
             return tuple(sum(pair) for pair in zip(lhs, rhs))
 
         for function in candidate_functions:
-            per_arg = list(
-                map(
-                    get_implicit_conversion_cost,
-                    fn_args,
-                    function.get_signature().arguments,
-                )
+            per_arg = map(
+                get_implicit_conversion_cost,
+                fn_args,
+                function.get_signature().arguments,
             )
 
             costs = reduce(tuple_add, per_arg, (0, 0))
