@@ -120,11 +120,11 @@ class GenericFunctionParser:
         self,
         name: str,
         parse_with_args_fn: Callable[[str, list[Type]], Optional[list[Type]]],
-        parse_with_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
+        deduce_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
     ) -> None:
         self.fn_name = name
         self._parse_with_args_fn = parse_with_args_fn
-        self._parse_with_specialization_fn = parse_with_specialization_fn
+        self._deduce_specialization_fn = deduce_specialization_fn
 
     def try_deduce_specialization(self, args: list[Type]) -> Optional[list[Type]]:
         return self._parse_with_args_fn(self.fn_name, args)
@@ -132,7 +132,7 @@ class GenericFunctionParser:
     def try_parse_with_specialization(
         self, specialization: list[Type]
     ) -> Optional[Function]:
-        return self._parse_with_specialization_fn(self.fn_name, specialization)
+        return self._deduce_specialization_fn(self.fn_name, specialization)
 
 
 class FunctionSymbolTable:
