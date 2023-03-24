@@ -193,7 +193,7 @@ class CircularImportException(GrapheneError):
 class MissingFunctionReturn(ErrorWithLineInfo):
     def __init__(self, function_name: str, line: int) -> None:
         super().__init__(
-            f"Error: control flow reaches end of non-void function",
+            "Error: control flow reaches end of non-void function",
             line,
             function_name,
         )

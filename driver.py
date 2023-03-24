@@ -32,7 +32,7 @@ def extract_optimization_level(args: list[str]) -> tuple[str, list[str]]:
     return level, filtered_args
 
 
-if __name__ == "__main__":
+def main() -> None:
     include_path, sys_args = extract_include_paths(sys.argv[1:])
     opt_level, sys_args = extract_optimization_level(sys_args)
 
@@ -114,3 +114,7 @@ if __name__ == "__main__":
             encoding="utf-8",
             check=True,
         )
+
+
+if __name__ == "__main__":
+    main()

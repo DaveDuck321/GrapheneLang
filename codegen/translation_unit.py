@@ -120,7 +120,7 @@ class FunctionSymbolTable:
         matched_functions = self._functions[fn_to_add_signature.name]
 
         if fn_to_add_signature.is_foreign() and len(matched_functions) > 0:
-            RedefinitionError(
+            raise RedefinitionError(
                 "non-overloadable foreign function",
                 fn_to_add_signature.user_facing_name,
             )

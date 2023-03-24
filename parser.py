@@ -42,9 +42,9 @@ def in_pairs(iterable: Iterable) -> Iterable:
 
 
 def inline_and_wrap_user_facing_errors(context: str):
-    def wrapper(f, _, children, meta):
+    def wrapper(func, _, children, meta):
         try:
-            f(*children)
+            func(*children)
         except GrapheneError as exc:
             raise ErrorWithLineInfo(
                 exc.message,
@@ -809,7 +809,7 @@ def append_file_to_program(
     already_processed: set[ResolvedPath],
     debug_compiler: bool = False,
 ) -> None:
-    with open(file_path) as source_file:
+    with open(file_path, encoding="utf-8") as source_file:
         tree = lark.parse(source_file.read())
 
     already_processed.add(file_path)
