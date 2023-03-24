@@ -664,25 +664,27 @@ def initialize_struct_variable(
     if var_type.definition.member_count != len(rhs):
         raise InvalidInitializerListLength(len(rhs), var_type.definition.member_count)
 
-    def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
+    # TODO maybe we should support a nicer way of iterating over struct members.
+    names = (
+        rhs.names
+        if rhs.names
+        else [
+            var_type.definition.get_member_by_index(i).name
+            for i in range(var_type.definition.member_count)
+        ]
+    )
+
+    for name, expr in zip(names, rhs.exprs):
         generatables.extend(expr.subexpressions)
 
         var_ref = cg.VariableReference(var)
         generatables.append(var_ref)
 
-        struct_access = cg.StructMemberAccess(var_ref, member_name)
+        struct_access = cg.StructMemberAccess(var_ref, name)
         generatables.append(struct_access)
 
         var_assignment = cg.Assignment(struct_access, expr.expression())
         generatables.append(var_assignment)
-
-    if rhs.names:
-        for name, expr in zip(rhs.names, rhs.exprs):
-            assign_to_member(expr, name)
-    else:
-        for idx, expr in enumerate(rhs.exprs):
-            member = var_type.definition.get_member_by_index(idx)
-            assign_to_member(expr, member.name)
 
     return generatables
 
