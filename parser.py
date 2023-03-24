@@ -318,13 +318,19 @@ class ParseFunctionSignatures(Interpreter):
         body_tree: Tree,
     ) -> None:
         name, specialization_tree = function_name_tree.children
+        if specialization_tree is not None:
+            raise NotImplementedError()
+
         assert isinstance(name, str)
         self._parse_function(name, args_tree, return_type_tree, body_tree, False)
 
     @inline_and_wrap_user_facing_errors("@operator signature")
-    def operator_function(
-        self, op_name: Token, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
+    def specialized_operator_function(
+        self, op_name: Token, specialization: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ) -> None:
+        if specialization is not None:
+            raise NotImplementedError()
+
         self._parse_function(op_name, args_tree, return_type_tree, body_tree, False)
 
     @inline_and_wrap_user_facing_errors("foreign signature")

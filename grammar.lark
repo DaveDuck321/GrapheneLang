@@ -206,7 +206,8 @@ constructor_function: "@constructor" _function_definition
 destructor_function: "@destructor" _function_definition
 
 OPERATOR: /[.<>%*$@|&\/=?!+^\-]+/
-operator_function: "@operator" OPERATOR _function_definition
+generic_operator_function: "@operator" generic_definition_list OPERATOR _function_definition
+specialized_operator_function: "@operator" OPERATOR [generic_specialization] _function_definition
 
 
 //
@@ -219,7 +220,8 @@ _top_level_program_feature: const_declaration
                           | foreign_function
                           | generic_named_function
                           | generic_typedef
-                          | operator_function
+                          | specialized_operator_function
+                          | generic_operator_function
                           | require_once
                           | specialized_named_function
                           | specialized_typedef
