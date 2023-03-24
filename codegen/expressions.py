@@ -47,8 +47,12 @@ class ConstantExpression(TypedExpression):
 
 
 class VariableReference(TypedExpression):
-    def __init__(self, variable: Variable) -> None:
-        super().__init__(variable.type.to_unborrowed_ref())
+    def __init__(self, variable: Variable, borrow: bool) -> None:
+        var_type = variable.type.to_unborrowed_ref()
+        if borrow:
+            var_type = var_type.to_borrowed_ref()
+
+        super().__init__(var_type)
 
         self.variable = variable
 

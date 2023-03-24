@@ -5,8 +5,8 @@ from itertools import count
 from typing import Callable, Iterator, Optional
 
 from .builtin_callables import get_builtin_callables
-from .builtin_types import FunctionSignature, get_builtin_types
-from .expressions import FunctionCallExpression, FunctionParameter
+from .builtin_types import FunctionSignature, StructDefinition, get_builtin_types
+from .expressions import FunctionCallExpression, FunctionParameter, VariableReference
 from .generatable import Scope, StackVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
 from .type_conversions import get_implicit_conversion_cost
@@ -114,10 +114,45 @@ class FunctionSymbolTable:
         self.foreign_functions: list[Function] = []
         self.graphene_functions: list[Function] = []
         self._functions: dict[str, list[Function]] = defaultdict(list)
+        self._constructors: dict[StructDefinition, list[Function]] = defaultdict(list)
 
     def add_function(self, fn_to_add: Function) -> None:
+        self._add_function_impl(
+            fn_to_add, self._functions[fn_to_add.get_signature().name]
+        )
+
+    def add_constructor(self, ctor_to_add: Function) -> None:
+        ctor_args = ctor_to_add.get_signature().arguments
+
+        assert ctor_args
+        assert ctor_args[0].ref_depth == 1
+        assert isinstance(ctor_args[0].definition, StructDefinition)
+
+        self._add_function_impl(
+            ctor_to_add, self._constructors[ctor_args[0].definition]
+        )
+
+    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
+        return self._lookup_function_impl(fn_name, fn_args, self._functions[fn_name])
+
+    def lookup_constructor(self, ctor_args: list[Type]) -> Function:
+        assert ctor_args
+        assert ctor_args[0].ref_depth == 1
+        assert isinstance(ctor_args[0].definition, StructDefinition)
+
+        return self._lookup_function_impl(
+            "@constructor",
+            ctor_args,
+            self._constructors[ctor_args[0].definition],
+        )
+
+    def have_constructors_for(self, struct_definition: StructDefinition) -> bool:
+        return len(self._constructors[struct_definition]) != 0
+
+    def _add_function_impl(
+        self, fn_to_add: Function, matched_functions: list[Function]
+    ) -> None:
         fn_to_add_signature = fn_to_add.get_signature()
-        matched_functions = self._functions[fn_to_add_signature.name]
 
         if fn_to_add_signature.is_foreign() and len(matched_functions) > 0:
             raise RedefinitionError(
@@ -143,10 +178,12 @@ class FunctionSymbolTable:
         else:
             self.graphene_functions.append(fn_to_add)
 
-    def lookup_function(self, fn_name: str, fn_args: list[Type]):
+    def _lookup_function_impl(
+        self, fn_name: str, fn_args: list[Type], matched_functions: list[Function]
+    ) -> Function:
         candidate_functions = filter(
             lambda fn: len(fn.get_signature().arguments) == len(fn_args),
-            self._functions[fn_name],
+            matched_functions,
         )
 
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
@@ -184,10 +221,7 @@ class FunctionSymbolTable:
             raise OverloadResolutionError(
                 fn_name,
                 readable_arg_names,
-                [
-                    fn.get_signature().user_facing_name
-                    for fn in self._functions[fn_name]
-                ],
+                [fn.get_signature().user_facing_name for fn in matched_functions],
             )
 
         if len(functions_by_cost) == 1:
@@ -281,8 +315,23 @@ class Program:
         function = self._function_table.lookup_function(fn_name, arg_types)
         return FunctionCallExpression(function.get_signature(), fn_args)
 
+    def have_constructors_for(self, struct_definition: StructDefinition) -> bool:
+        return self._function_table.have_constructors_for(struct_definition)
+
+    def lookup_constructor(
+        self, var_ref: VariableReference, remaining_args: list[TypedExpression]
+    ) -> TypedExpression:
+        all_args: list[TypedExpression] = [var_ref, *remaining_args]
+        arg_types = [arg.type for arg in all_args]
+
+        ctor = self._function_table.lookup_constructor(arg_types)
+        return FunctionCallExpression(ctor.get_signature(), all_args)
+
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
+
+    def add_constructor(self, ctor: Function) -> None:
+        self._function_table.add_constructor(ctor)
 
     def add_type(
         self, type_prefix: str, parse_fn: Callable[[str, list[Type]], Type]

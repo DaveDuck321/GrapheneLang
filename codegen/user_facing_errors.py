@@ -217,3 +217,8 @@ class InvalidMainReturnType(GrapheneError):
             f"Error: type '{actual_type}' is not a valid return type for"
             " function 'main'; expected 'int'"
         )
+
+
+class EmptyConstructorError(GrapheneError):
+    def __init__(self) -> None:
+        super().__init__("Error: a constructor must have at least one argument")

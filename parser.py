@@ -12,6 +12,7 @@ from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 import codegen as cg
 from codegen.user_facing_errors import (
     CircularImportException,
+    EmptyConstructorError,
     ErrorWithLineInfo,
     FailedLookupError,
     FileDoesNotExistException,
@@ -235,15 +236,19 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        name, specialization_tree = function_name_tree.children
+        name, _ = function_name_tree.children
         assert isinstance(name, str)
-        self._parse_function(name, args_tree, return_type_tree, body_tree, False)
+        func = self._parse_function(name, args_tree, return_type_tree, body_tree, False)
+        self._program.add_function(func)
 
     @inline_and_wrap_user_facing_errors("@operator signature")
     def operator_function(
         self, op_name: Token, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
     ) -> None:
-        self._parse_function(op_name, args_tree, return_type_tree, body_tree, False)
+        func = self._parse_function(
+            op_name, args_tree, return_type_tree, body_tree, False
+        )
+        self._program.add_function(func)
 
     @inline_and_wrap_user_facing_errors("foreign signature")
     def foreign_function(
@@ -252,7 +257,35 @@ class ParseFunctionSignatures(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
     ) -> None:
-        self._parse_function(fn_name, args_tree, return_type_tree, None, True)
+        func = self._parse_function(fn_name, args_tree, return_type_tree, None, True)
+        self._program.add_function(func)
+
+    @inline_and_wrap_user_facing_errors("@constructor signature")
+    def constructor_function(
+        self,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ) -> None:
+        ctor = self._parse_function(
+            "@constructor", args_tree, return_type_tree, body_tree, False
+        )
+
+        signature = ctor.get_signature()
+
+        if not signature.arguments:
+            raise EmptyConstructorError()
+
+        this_type = signature.arguments[0]
+        if not this_type.is_reference:
+            raise  # TODO
+        if not this_type.is_struct:
+            raise  # TODO
+
+        if not signature.return_type.is_void:
+            raise  # TODO
+
+        self._program.add_constructor(ctor)
 
     def _parse_function(
         self,
@@ -261,14 +294,15 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Optional[Tree],
         foreign: bool,
-    ) -> None:
+    ) -> cg.Function:
         func = self._build_function(fn_name, args_tree, return_type_tree, foreign)
-        self._program.add_function(func)
 
         # Save the body to parse later (TODO: maybe forward declarations
         # should be possible?)
         if body_tree is not None:
             self._function_body_trees.append((func, body_tree))
+
+        return func
 
     def _build_function(
         self,
@@ -541,7 +575,7 @@ class ExpressionTransformer(Transformer_InPlace):
         if var is None:
             raise FailedLookupError("variable", var_name)
 
-        var_ref = cg.VariableReference(var)
+        var_ref = cg.VariableReference(var, False)
         return FlattenedExpression([var_ref])
 
     def ensure_pointer_is_available(self, expr: FlattenedExpression):
@@ -553,7 +587,7 @@ class ExpressionTransformer(Transformer_InPlace):
         self._scope.add_variable(temp_var)
 
         expr.subexpressions.append(cg.VariableAssignment(temp_var, expr.expression()))
-        return expr.add_parent(cg.VariableReference(temp_var))
+        return expr.add_parent(cg.VariableReference(temp_var, False))
 
     @v_args(inline=True)
     def array_index_access(
@@ -644,38 +678,24 @@ def generate_return_statement(
 
 def initialize_non_struct_variable(
     var: cg.StackVariable, rhs: FlattenedExpression
-) -> list[cg.Generatable]:
+) -> Iterable[cg.Generatable]:
     return [
         *rhs.subexpressions,
         cg.VariableAssignment(var, rhs.expression()),
     ]
 
 
-def initialize_struct_variable(
-    var: cg.StackVariable, var_type: cg.Type, rhs: InitializerList
-) -> list[cg.Generatable]:
+def initialize_struct_from_initializer_list(
+    var_ref: cg.VariableReference, var_def: cg.StructDefinition, rhs: InitializerList
+) -> Iterable[cg.Generatable]:
     generatables: list[cg.Generatable] = []
-
-    if not isinstance(var_type.definition, cg.StructDefinition) or var_type.is_pointer:
-        raise InvalidInitializerListAssignment(
-            var_type.get_user_facing_name(False), rhs.user_facing_name
-        )
-
-    if var_type.definition.member_count != len(rhs):
-        raise InvalidInitializerListLength(len(rhs), var_type.definition.member_count)
 
     # TODO maybe we should support a nicer way of iterating over struct members.
     names = (
         rhs.names
         if rhs.names
-        else [
-            var_type.definition.get_member_by_index(i).name
-            for i in range(var_type.definition.member_count)
-        ]
+        else [var_def.get_member_by_index(i).name for i in range(var_def.member_count)]
     )
-
-    var_ref = cg.VariableReference(var)
-    generatables.append(var_ref)
 
     for name, expr in zip(names, rhs.exprs):
         generatables.extend(expr.subexpressions)
@@ -685,6 +705,40 @@ def initialize_struct_variable(
 
         var_assignment = cg.Assignment(struct_access, expr.expression())
         generatables.append(var_assignment)
+
+    return generatables
+
+
+def initialize_struct_variable(
+    program: cg.Program, var: cg.StackVariable, rhs: InitializerList
+) -> Iterable[cg.Generatable]:
+    generatables: list[cg.Generatable] = []
+
+    if not isinstance(var.type.definition, cg.StructDefinition) or var.type.is_pointer:
+        raise InvalidInitializerListAssignment(
+            var.type.get_user_facing_name(False), rhs.user_facing_name
+        )
+
+    # XXX we need to *implicitly* borrow the variable we are initializing.
+    var_ref = cg.VariableReference(var, True)
+    generatables.append(var_ref)
+
+    if program.have_constructors_for(var.type.definition):
+        # TODO specialized/generic constructors.
+        generatables.append(
+            program.lookup_constructor(
+                var_ref, [flattened_expr.expression() for flattened_expr in rhs.exprs]
+            )
+        )
+    else:
+        if var.type.definition.member_count != len(rhs):
+            raise InvalidInitializerListLength(
+                len(rhs), var.type.definition.member_count
+            )
+
+        generatables.extend(
+            initialize_struct_from_initializer_list(var_ref, var.type.definition, rhs)
+        )
 
     return generatables
 
@@ -721,7 +775,7 @@ def generate_variable_declaration(
 
     # Initialize struct.
     elif isinstance(rhs, InitializerList):
-        scope.add_generatable(initialize_struct_variable(var, var_type, rhs))
+        scope.add_generatable(initialize_struct_variable(program, var, rhs))
 
     # Unreachable if rhs has a value.
     else:

@@ -1,0 +1,20 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../../driver.py",
+            "main.c3",
+            "-o",
+            "./out/a.out"
+        ],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 10, in 'function main: () -> int'",
+                "Error: overload resolution for function call '@constructor(my_struct& (borrowed), int, int)' failed",
+                "Available overloads:",
+                "- function @constructor: (my_struct&) -> void"
+            ]
+        }
+    }
+}
