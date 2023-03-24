@@ -344,6 +344,10 @@ class StructDefinition(TypeDefinition):
 
         return this_size
 
+    @cached_property
+    def is_struct(self) -> bool:
+        return True
+
     def __repr__(self) -> str:
         return f"StructDefinition({', '.join(map(repr, self.members))})"
 

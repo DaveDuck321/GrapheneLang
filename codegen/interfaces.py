@@ -56,6 +56,10 @@ class TypeDefinition(ABC):
     def is_void(self) -> bool:
         return False
 
+    @cached_property
+    def is_struct(self) -> bool:
+        return False
+
     @abstractmethod
     def __repr__(self) -> str:
         pass
@@ -110,6 +114,10 @@ class Type:
     @property
     def is_void(self) -> bool:
         return self.definition.is_void
+
+    @property
+    def is_struct(self) -> bool:
+        return self.definition.is_struct
 
     @property
     def generic_annotation(self) -> str:
