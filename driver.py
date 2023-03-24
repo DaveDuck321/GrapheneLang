@@ -1,7 +1,6 @@
 import argparse
 import subprocess
 import sys
-
 from os import getenv
 from parser import generate_ir_from_source
 from pathlib import Path
