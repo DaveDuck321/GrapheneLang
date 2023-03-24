@@ -642,6 +642,51 @@ def generate_return_statement(
     scope.add_generatable(expr)
 
 
+def initialize_non_struct_variable(
+    var: cg.StackVariable, rhs: FlattenedExpression
+) -> list[cg.Generatable]:
+    return [
+        *rhs.subexpressions,
+        cg.VariableAssignment(var, rhs.expression()),
+    ]
+
+
+def initialize_struct_variable(
+    var: cg.StackVariable, var_type: cg.Type, rhs: InitializerList
+) -> list[cg.Generatable]:
+    generatables: list[cg.Generatable] = []
+
+    if not isinstance(var_type.definition, cg.StructDefinition):
+        raise InvalidInitializerListAssignment(
+            var_type.get_user_facing_name(False), rhs.user_facing_name
+        )
+
+    if var_type.definition.member_count != len(rhs):
+        raise InvalidInitializerListLength(len(rhs), var_type.definition.member_count)
+
+    def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
+        generatables.extend(expr.subexpressions)
+
+        var_ref = cg.VariableReference(var)
+        generatables.append(var_ref)
+
+        struct_access = cg.StructMemberAccess(var_ref, member_name)
+        generatables.append(struct_access)
+
+        var_assignment = cg.Assignment(struct_access, expr.expression())
+        generatables.append(var_assignment)
+
+    if rhs.names:
+        for name, expr in zip(rhs.names, rhs.exprs):
+            assign_to_member(expr, name)
+    else:
+        for idx, expr in enumerate(rhs.exprs):
+            member = var_type.definition.get_member_by_index(idx)
+            assign_to_member(expr, member.name)
+
+    return generatables
+
+
 def generate_variable_declaration(
     is_const: bool,
     program: cg.Program,
@@ -670,40 +715,11 @@ def generate_variable_declaration(
 
     # Initialize variable.
     if isinstance(rhs, FlattenedExpression):
-        scope.add_generatable(rhs.subexpressions)
-        scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
+        scope.add_generatable(initialize_non_struct_variable(var, rhs))
 
     # Initialize struct.
     elif isinstance(rhs, InitializerList):
-        if not isinstance(var_type.definition, cg.StructDefinition):
-            raise InvalidInitializerListAssignment(
-                var_type.get_user_facing_name(False), rhs.user_facing_name
-            )
-
-        if var_type.definition.member_count != len(rhs):
-            raise InvalidInitializerListLength(
-                len(rhs), var_type.definition.member_count
-            )
-
-        def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
-            scope.add_generatable(expr.subexpressions)
-
-            var_ref = cg.VariableReference(var)
-            scope.add_generatable(var_ref)
-
-            struct_access = cg.StructMemberAccess(var_ref, member_name)
-            scope.add_generatable(struct_access)
-
-            var_assignment = cg.Assignment(struct_access, expr.expression())
-            scope.add_generatable(var_assignment)
-
-        if rhs.names:
-            for name, expr in zip(rhs.names, rhs.exprs):
-                assign_to_member(expr, name)
-        else:
-            for idx, expr in enumerate(rhs.exprs):
-                member = var_type.definition.get_member_by_index(idx)
-                assign_to_member(expr, member.name)
+        scope.add_generatable(initialize_struct_variable(var, var_type, rhs))
 
     # Unreachable if rhs has a value.
     else:
