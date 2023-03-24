@@ -199,7 +199,7 @@ class ParseTypeDefinitions(Interpreter):
         generics = [] if generic_tree is None else generic_tree.children
         return self._typedef(type_name.value, generics, rhs_tree)  # type: ignore
 
-    @inline_and_wrap_user_facing_errors("typedef specialization")
+    @inline_and_wrap_user_facing_errors("typedef<...>")
     def specialized_typedef(
         self, type_name: Token, specialization_tree: Tree, rhs_tree: Tree
     ) -> None:
@@ -232,7 +232,7 @@ class ParseFunctionSignatures(Interpreter):
     ) -> list[tuple[cg.Function, Tree, dict[str, cg.Type]]]:
         return self._function_body_trees
 
-    @inline_and_wrap_user_facing_errors("generic function signature")
+    @inline_and_wrap_user_facing_errors("function[...] signature")
     def generic_named_function(
         self,
         generic_names_tree: Tree,
@@ -241,8 +241,35 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
+        assert isinstance(generic_name, str)
         generic_names: list[str] = generic_names_tree.children  # type: ignore
+        self._parse_generic_function_impl(
+            generic_name, generic_names, args_tree, return_type_tree, body_tree
+        )
 
+    @inline_and_wrap_user_facing_errors("@operator[...] signature")
+    def generic_operator_function(
+        self,
+        generic_names_tree: Tree,
+        op_name: Token,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ):
+        assert isinstance(op_name, str)
+        generic_names: list[str] = generic_names_tree.children  # type: ignore
+        self._parse_generic_function_impl(
+            op_name, generic_names, args_tree, return_type_tree, body_tree
+        )
+
+    def _parse_generic_function_impl(
+        self,
+        generic_name: str,
+        generic_names: list[str],
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ):
         def try_parse_fn_from_specialization(
             fn_name: str, concrete_specializations: list[cg.Type]
         ) -> Optional[cg.Function]:
@@ -326,7 +353,12 @@ class ParseFunctionSignatures(Interpreter):
 
     @inline_and_wrap_user_facing_errors("@operator signature")
     def specialized_operator_function(
-        self, op_name: Token, specialization: Tree, args_tree: Tree, return_type_tree: Tree, body_tree: Tree
+        self,
+        op_name: Token,
+        specialization: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
     ) -> None:
         if specialization is not None:
             raise NotImplementedError()
@@ -386,7 +418,9 @@ class ParseFunctionSignatures(Interpreter):
         )
 
         # Build the function
-        fn_obj = cg.Function(fn_name, fn_args, fn_return_type, foreign, list(generic_mapping.values()))
+        fn_obj = cg.Function(
+            fn_name, fn_args, fn_return_type, foreign, list(generic_mapping.values())
+        )
 
         # main() must always return an int
         if (

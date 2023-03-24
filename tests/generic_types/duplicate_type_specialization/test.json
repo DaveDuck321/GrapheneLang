@@ -10,7 +10,7 @@
         "output": {
             "status": 1,
             "stderr": [
-                "File */main.c3', line 4, in 'typedef specialization'",
+                "File */main.c3', line 4, in 'typedef<...>'",
                 "Error: multiple definitions of specialized type 'MyType<u8>'"
             ]
         }
