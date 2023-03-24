@@ -12,6 +12,8 @@ from lark.visitors import Interpreter, Transformer, Transformer_InPlace, v_args
 import codegen as cg
 from codegen.user_facing_errors import (
     CircularImportException,
+    ConstructorInvalidReturnType,
+    ConstructorInvalidThisType,
     EmptyConstructorError,
     ErrorWithLineInfo,
     FailedLookupError,
@@ -277,13 +279,18 @@ class ParseFunctionSignatures(Interpreter):
             raise EmptyConstructorError()
 
         this_type = signature.arguments[0]
-        if not this_type.is_reference:
-            raise  # TODO
+        if this_type.ref_depth != 1:
+            raise ConstructorInvalidThisType(
+                this_type.get_user_facing_name(False),
+                this_type.to_value_type().to_reference().get_user_facing_name(False),
+            )
         if not this_type.is_struct:
-            raise  # TODO
+            raise ConstructorInvalidThisType(this_type.get_user_facing_name(False))
 
         if not signature.return_type.is_void:
-            raise  # TODO
+            raise ConstructorInvalidReturnType(
+                signature.return_type.get_user_facing_name(False)
+            )
 
         self._program.add_constructor(ctor)
 

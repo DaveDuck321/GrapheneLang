@@ -1,4 +1,4 @@
-from typing import Iterable, Literal
+from typing import Iterable, Literal, Optional
 
 from lark import Token
 
@@ -222,3 +222,23 @@ class InvalidMainReturnType(GrapheneError):
 class EmptyConstructorError(GrapheneError):
     def __init__(self) -> None:
         super().__init__("Error: a constructor must have at least one argument")
+
+
+class ConstructorInvalidThisType(GrapheneError):
+    def __init__(self, actual_type: str, suggested_type: Optional[str] = None) -> None:
+        msg = (
+            "Error: a constructor's first argument must be a reference to a "
+            f"struct, not '{actual_type}'"
+        )
+
+        if suggested_type:
+            msg += f". Did you mean '{suggested_type}'?"
+
+        super().__init__(msg)
+
+
+class ConstructorInvalidReturnType(GrapheneError):
+    def __init__(self, actual_type: str) -> None:
+        super().__init__(
+            f"Error: a constructor's return type must be 'void', not '{actual_type}'"
+        )

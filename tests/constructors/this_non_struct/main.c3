@@ -1,0 +1,1 @@
+@constructor : (this: int&) -> void = {};
