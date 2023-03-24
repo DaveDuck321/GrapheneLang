@@ -53,12 +53,12 @@ class OverloadResolutionError(GrapheneError):
 
         # TODO need a better way to indent these.
         if available_overloads:
-            msg.append("   Available overloads:")
+            msg.append("    Available overloads:")
 
             for overload in available_overloads:
                 msg.append("     - " + overload)
         else:
-            msg.append("   No overloads available")
+            msg.append("    No overloads available")
 
         super().__init__(str.join("\n", msg))
 
