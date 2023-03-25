@@ -104,7 +104,7 @@ _non_operator_expression: "(" expression ")"
 
 // We just match python's order of operation
 // https://docs.python.org/3/reference/expressions.html#operator-precedence
-COMPARE_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!="
+COMPARE_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!=" | "<=>"
 SHIFT_TOKEN.1: "<<" | ">>"
 ADD_SUB_TOKEN: "+" | "-"
 MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
