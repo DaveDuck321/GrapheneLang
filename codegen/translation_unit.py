@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from itertools import count
-from typing import Callable, Iterator, Optional
+from typing import Callable, Iterable, Iterator, Optional
 
 from .builtin_callables import get_builtin_callables
 from .builtin_types import FunctionSignature, get_builtin_types
@@ -16,6 +16,7 @@ from .user_facing_errors import (
     InvalidEscapeSequence,
     OverloadResolutionError,
     RedefinitionError,
+    SubstitutionFailure,
 )
 
 
@@ -26,9 +27,14 @@ class Function:
         parameters: list[Parameter],
         return_type: Type,
         is_foreign: bool,
+        specialization: list[Type],
     ) -> None:
         self._signature = FunctionSignature(
-            name, [var.type for var in parameters], return_type, is_foreign
+            name,
+            [var.type for var in parameters],
+            return_type,
+            specialization,
+            is_foreign,
         )
 
         self.scope_id_iter = count()
@@ -109,11 +115,43 @@ class Function:
         return self.generate_definition()
 
 
+class GenericFunctionParser:
+    def __init__(
+        self,
+        name: str,
+        parse_with_args_fn: Callable[[str, list[Type]], Optional[list[Type]]],
+        deduce_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
+    ) -> None:
+        self.fn_name = name
+        self._parse_with_args_fn = parse_with_args_fn
+        self._deduce_specialization_fn = deduce_specialization_fn
+
+    def try_deduce_specialization(self, args: list[Type]) -> Optional[list[Type]]:
+        return self._parse_with_args_fn(self.fn_name, args)
+
+    def try_parse_with_specialization(
+        self, specialization: list[Type]
+    ) -> Optional[Function]:
+        return self._deduce_specialization_fn(self.fn_name, specialization)
+
+
 class FunctionSymbolTable:
     def __init__(self) -> None:
         self.foreign_functions: list[Function] = []
         self.graphene_functions: list[Function] = []
+
+        self._generic_parsers: dict[str, list[GenericFunctionParser]] = defaultdict(
+            list
+        )
+        self._specialized_functions: dict[str, list[Function]] = defaultdict(list)
         self._functions: dict[str, list[Function]] = defaultdict(list)
+
+    def add_generic_function(
+        self,
+        fn_name: str,
+        parser: GenericFunctionParser,
+    ) -> None:
+        self._generic_parsers[fn_name].append(parser)
 
     def add_function(self, fn_to_add: Function) -> None:
         fn_to_add_signature = fn_to_add.get_signature()
@@ -143,12 +181,84 @@ class FunctionSymbolTable:
         else:
             self.graphene_functions.append(fn_to_add)
 
-    def lookup_function(self, fn_name: str, fn_args: list[Type]):
-        candidate_functions = filter(
-            lambda fn: len(fn.get_signature().arguments) == len(fn_args),
-            self._functions[fn_name],
+    def generate_functions_with_specialization(
+        self, fn_name: str, fn_specialization: list[Type]
+    ) -> list[Function]:
+        # Have we already parsed this function?
+        if fn_name in self._specialized_functions:
+            matching_functions = []
+            for candidate_function in self._specialized_functions[fn_name]:
+                candidate_signature = candidate_function.get_signature()
+                if candidate_signature.specialization == fn_specialization:
+                    matching_functions.append(candidate_function)
+
+            if matching_functions:
+                return matching_functions
+
+        # We have not parsed this function
+        candidate_parsers = self._generic_parsers[fn_name]
+        if len(candidate_parsers) == 0:
+            raise NotImplementedError()
+
+        matching_functions = []
+        for parser in candidate_parsers:
+            parsed_fn = parser.try_parse_with_specialization(fn_specialization)
+            if parsed_fn is not None:
+                matching_functions.append(parsed_fn)
+
+        for matched_fn in matching_functions:
+            # TODO: we don't actually need to generate all these functions, some might be unused
+            self.graphene_functions.append(matched_fn)
+            self._specialized_functions[fn_name].append(matched_fn)
+
+        return matching_functions
+
+    def lookup_explicitly_specialized_function(
+        self, fn_name: str, fn_specialization: list[Type], fn_args: list[Type]
+    ) -> Function:
+        matching_functions = self.generate_functions_with_specialization(
+            fn_name, fn_specialization
+        )
+        return self.select_function_with_least_cost(
+            fn_name, matching_functions, fn_specialization, fn_args
         )
 
+    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
+        # The normal Graphene functions
+        candidate_functions = [
+            fn
+            for fn in self._functions[fn_name]
+            if len(fn.get_signature().arguments) == len(fn_args)
+            and len(fn.get_signature().specialization) == 0
+        ]
+
+        # Implicit generic instantiation
+        candidate_specializations: list[list[Type]] = []
+        for candidate_generic in self._generic_parsers[fn_name]:
+            fn_specialization = candidate_generic.try_deduce_specialization(fn_args)
+
+            if (
+                fn_specialization is not None
+                and fn_specialization not in candidate_specializations
+            ):
+                candidate_specializations.append(fn_specialization)
+                candidate_functions.extend(
+                    self.generate_functions_with_specialization(
+                        fn_name, fn_specialization
+                    )
+                )
+
+        return self.select_function_with_least_cost(
+            fn_name, candidate_functions, [], fn_args
+        )
+
+    def select_function_with_least_cost(
+        self,
+        fn_name: str,
+        candidate_functions: Iterable[Function],
+        fn_specialization: list[Type],
+        fn_args: list[Type],
+    ) -> Function:
         functions_by_cost: list[tuple[tuple[int, int], Function]] = []
 
         def tuple_add(
@@ -181,10 +291,15 @@ class FunctionSymbolTable:
         readable_arg_names = ", ".join(
             arg.get_user_facing_name(False) for arg in fn_args
         )
+        readable_specialization = ", ".join(
+            specialization.get_user_facing_name(False)
+            for specialization in fn_specialization
+        )
 
         if not functions_by_cost:
             raise OverloadResolutionError(
                 fn_name,
+                readable_specialization,
                 readable_arg_names,
                 [
                     fn.get_signature().user_facing_name
@@ -195,6 +310,7 @@ class FunctionSymbolTable:
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
 
+        print("\n".join(list(map(repr, functions_by_cost))))
         first, second, *_ = functions_by_cost
 
         # If there are two or more equally good candidates, then this function
@@ -242,32 +358,50 @@ class Program:
         self._builtin_callables = get_builtin_callables()
 
         self._function_table = FunctionSymbolTable()
-        self._types: dict[str, Type] = {}
+        self._initialized_types: dict[str, list[Type]] = defaultdict(list)
         self._type_initializers: dict[str, Callable[[str, list[Type]], Type]] = {}
         self._strings: dict[str, StringInfo] = {}
 
         self._has_main: bool = False
 
         for builtin_type in get_builtin_types():
-            self._types[builtin_type.mangled_name] = builtin_type
+            name = builtin_type.get_user_facing_name(False)
+            self._initialized_types[name].append(builtin_type)
 
     def lookup_type(self, name_prefix: str, generic_args: list[Type]) -> Type:
-        this_mangle = Type.mangle_generic_type(name_prefix, generic_args)
-        if this_mangle in self._types:
-            return self._types[this_mangle]
+        specialization_str = ", ".join(
+            arg.get_user_facing_name(False) for arg in generic_args
+        )
+        specialization_postfix = f"<{specialization_str}>" if specialization_str else ""
 
-        if name_prefix not in self._type_initializers:
-            specialization = ", ".join(
-                arg.get_user_facing_name(False) for arg in generic_args
-            )
-            specialization_prefix = f"<{specialization}>" if specialization else ""
-
+        if (
+            name_prefix not in self._initialized_types
+            and name_prefix not in self._type_initializers
+        ):
+            # No typedefs or specializations: type always fails SFINAE
             raise FailedLookupError(
-                "type", f"typedef {name_prefix}{specialization_prefix} : ..."
+                "type", f"typedef {name_prefix}{specialization_postfix} : ..."
             )
+
+        if name_prefix in self._initialized_types:
+            # Reuse parsed type if it is already initialized
+            matching_candidates = []
+            for candidate_type in self._initialized_types[name_prefix]:
+                if generic_args == candidate_type.get_specialization():
+                    matching_candidates.append(candidate_type)
+
+            if len(matching_candidates) == 1:
+                return matching_candidates[0]
+
+            assert len(matching_candidates) == 0
+
+        # Type is not already initialized
+        if name_prefix not in self._type_initializers:
+            # Substitution failure is an error here :-D
+            raise SubstitutionFailure(f"{name_prefix}{specialization_postfix}")
 
         this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
-        self._types[this_mangle] = this_type
+        self._initialized_types[name_prefix].append(this_type)
         return this_type
 
     def lookup_call_expression(
@@ -280,8 +414,17 @@ class Program:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
         arg_types = [arg.type for arg in fn_args]
-        function = self._function_table.lookup_function(fn_name, arg_types)
+        if len(fn_specialization) != 0:
+            function = self._function_table.lookup_explicitly_specialized_function(
+                fn_name, fn_specialization, arg_types
+            )
+        else:
+            function = self._function_table.lookup_function(fn_name, arg_types)
+
         return FunctionCallExpression(function.get_signature(), fn_args)
+
+    def add_generic_function(self, fn_name: str, parser: GenericFunctionParser):
+        self._function_table.add_generic_function(fn_name, parser)
 
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
@@ -304,14 +447,15 @@ class Program:
         specialization: list[Type],
     ) -> None:
         parsed_type = parse_fn(type_prefix, specialization)
-        mangled_name = Type.mangle_generic_type(type_prefix, specialization)
+        existing_type_specializations = self._initialized_types[type_prefix]
 
-        if mangled_name in self._types:
-            raise RedefinitionError(
-                "specialized type", parsed_type.get_user_facing_name(False)
-            )
+        for existing_type in existing_type_specializations:
+            if existing_type.get_specialization() == specialization:
+                raise RedefinitionError(
+                    "specialized type", parsed_type.get_user_facing_name(False)
+                )
 
-        self._types[mangled_name] = parsed_type
+        self._initialized_types[type_prefix].append(parsed_type)
 
     @staticmethod
     def _get_string_identifier(index: int) -> str:
@@ -423,8 +567,9 @@ class Program:
             )
 
         lines.append("")
-        for defined_type in self._types.values():
-            lines.extend(defined_type.get_ir_initial_type_def())
+        for type_family in self._initialized_types.values():
+            for defined_type in type_family:
+                lines.extend(defined_type.get_ir_initial_type_def())
 
         lines.append("")
         for func in self._function_table.foreign_functions:

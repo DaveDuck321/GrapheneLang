@@ -5,7 +5,7 @@
             "status": 1,
             "stderr": [
                 "File '*/main.c3', line 1, in '@require_once \"import.c3\"'",
-                "    Error: file 'import.c3' is ambiguous, possible candidates are:",
+                "Error: file 'import.c3' is ambiguous, possible candidates are:",
                 "     - */import.c3",
                 "     - */included/import.c3"
             ]

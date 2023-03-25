@@ -10,8 +10,8 @@
         "output": {
             "status": 1,
             "stderr": [
-                "File */main.c3', line 4, in 'typedef<...>'",
-                "Error: multiple definitions of specialized type 'MyType<u8>'"
+                "File '*/main.c3', line 2, in 'function main: () -> i32'",
+                "Error: concrete type for initializer list cannot be deduced"
             ]
         }
     }

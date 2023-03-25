@@ -72,10 +72,10 @@ class Type:
         self,
         definition: TypeDefinition,
         typedef_alias: Optional[str] = None,
-        generic_args: Optional[list["Type"]] = None,
+        specialization: list["Type"] = [],
     ) -> None:
         self.definition = definition
-        self._generic_args = generic_args
+        self._specialization = specialization
 
         # TODO explanation.
         self.is_unborrowed_ref: bool = False
@@ -93,6 +93,9 @@ class Type:
     def _set_typedef_alias(self, typedef_alias: str) -> None:
         self._typedef_alias = typedef_alias
         self._typedef_alias_ref_depth = self._ref_depth
+
+    def get_specialization(self) -> list["Type"]:
+        return self._specialization.copy()
 
     @property
     def ref_depth(self) -> int:
@@ -114,11 +117,11 @@ class Type:
 
     @property
     def generic_annotation(self) -> str:
-        if not self._generic_args:
+        if not self._specialization:
             return ""
 
         generic_names = map(
-            lambda arg: arg.get_user_facing_name(True), self._generic_args
+            lambda arg: arg.get_user_facing_name(True), self._specialization
         )
 
         return f"<{', '.join(generic_names)}>"
@@ -216,7 +219,7 @@ class Type:
         assert not self.is_unborrowed_ref
 
         alias = self._typedef_alias or self.definition.mangled_name
-        value_type_mangled = self.mangle_generic_type(alias, self._generic_args)
+        value_type_mangled = self.mangle_generic_type(alias, self._specialization)
 
         return (
             f"__RT{self.ref_depth}{value_type_mangled}__{self.ref_depth}TR"
@@ -282,12 +285,19 @@ class Type:
 
         return decayed_type
 
+    def without_borrowing(self) -> "Type":
+        without_borrowing_type = self.copy()
+        without_borrowing_type.is_borrowed = False
+        without_borrowing_type.is_unborrowed_ref = False
+
+        return without_borrowing_type
+
     def new_from_typedef(
-        self, typedef_alias: str, generic_args: list["Type"]
+        self, typedef_alias: str, specialization: list["Type"]
     ) -> "Type":
         new_type = self.copy()
         new_type._set_typedef_alias(typedef_alias)
-        new_type._generic_args = generic_args
+        new_type._specialization = specialization
 
         return new_type
 

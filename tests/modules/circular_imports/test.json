@@ -5,7 +5,7 @@
             "status": 1,
             "stderr": [
                 "File '*/main.c3', line 1, in '@require_once \"main.c3\"'",
-                "    Error: cannot import '*/main.c3' since this would be a circular dependency: already imported from parent '<compile target>'"
+                "Error: cannot import '*/main.c3' since this would be a circular dependency: already imported from parent '<compile target>'"
             ]
         }
     }

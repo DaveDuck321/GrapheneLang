@@ -43,12 +43,29 @@ class FailedLookupError(GrapheneError):
         )
 
 
+class SubstitutionFailure(GrapheneError):
+    def __init__(self, name_with_specialization: str) -> None:
+        super().__init__(
+            f"Error: no definition exists for Type '{name_with_specialization}', "
+            "it may be incorrectly specialized"
+        )
+
+
 class OverloadResolutionError(GrapheneError):
     def __init__(
-        self, fn_name: str, arguments: str, available_overloads: list[str]
+        self,
+        fn_name: str,
+        specialization: str,
+        arguments: str,
+        available_overloads: list[str],
     ) -> None:
+        if specialization:
+            fn_call_string = f"{fn_name}<{specialization}>({arguments})"
+        else:
+            fn_call_string = f"{fn_name}({arguments})"
+
         msg = [
-            f"Error: overload resolution for function call '{fn_name}({arguments})' failed"
+            f"Error: overload resolution for function call '{fn_call_string}' failed"
         ]
 
         # TODO need a better way to indent these.
@@ -163,6 +180,16 @@ class InvalidInitializerListAssignment(GrapheneError):
             "Error: initializer list cannot be assigned to type "
             f"'{non_struct_type}' (expected a struct type similar to '{init_list_type_name}')"
         )
+
+
+class CannotAssignToInitializerList(GrapheneError):
+    def __init__(self) -> None:
+        super().__init__("Error: cannot assign to an initializer list")
+
+
+class InitializerListTypeDeductionFailure(GrapheneError):
+    def __init__(self) -> None:
+        super().__init__("Error: concrete type for initializer list cannot be deduced")
 
 
 class FileDoesNotExistException(GrapheneError):
