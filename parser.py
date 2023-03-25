@@ -285,7 +285,7 @@ class ParseFunctionSignatures(Interpreter):
             except SubstitutionFailure:
                 return  # SFINAE
 
-            self._function_body_trees.append((function, body_tree, generic_mapping))
+            generate_function_body(self._program, function, body_tree, generic_mapping)
             return function
 
         def try_deduce_specialization(

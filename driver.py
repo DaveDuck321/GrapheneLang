@@ -47,6 +47,7 @@ def main() -> None:
     parser.add_argument("--emit-optimized-llvm", action="store_true")
     parser.add_argument("--emit-everything", action="store_true")
     parser.add_argument("--debug-compiler", action="store_true")
+    parser.add_argument("--nostdlib", action="store_true")
     args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
@@ -56,6 +57,9 @@ def main() -> None:
     llvm_output: Path = args.input[0].with_suffix(".ll")
     optimized_llvm_output: Path = llvm_output.with_suffix(".opt.ll")
     binary_output = Path("a.out")
+
+    if not args.nostdlib:
+        include_path.append(Path(__file__).parent)
 
     # -o defaults to binary output path
     if args.output:

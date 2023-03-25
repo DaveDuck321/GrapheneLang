@@ -16,4 +16,4 @@ typedef Not<TrueType> : FalseType;
 typedef Not<FalseType> : TrueType;
 
 typedef[U, V] SelectFirst : U;
-typedef[Condition, Type] TypeIf : SelectFirst<Type, EnableIf<Condition>>;
+typedef[Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>;
