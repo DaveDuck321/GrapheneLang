@@ -161,18 +161,16 @@ def run_v2_test(file_path: Path, io_harness) -> None:
         validate_command_output_with_harness if io_harness else validate_command_status
     )
 
+    binary_path = V2_OUT_DIR / file_path.relative_to(V2_TESTS_DIR).with_suffix("")
+    if binary_path.parent != V2_OUT_DIR:
+        binary_path.parent.mkdir(exist_ok=True)
+
     # Compile the test
     assert config.compile
     try:
         fn_validate(
             V2_TESTS_DIR,
-            [
-                "python",
-                "../../driver.py",
-                str(file_path),
-                "-o",
-                str(V2_OUT_DIR / file_path.stem),
-            ],
+            ["python", "../../driver.py", str(file_path), "-o", str(binary_path)],
             asdict(config.compile),
         )
     except TestFailure as exc:
@@ -184,7 +182,7 @@ def run_v2_test(file_path: Path, io_harness) -> None:
     try:
         fn_validate(
             V2_TESTS_DIR,
-            [f"{V2_OUT_DIR / file_path.stem}"],
+            [str(binary_path)],
             asdict(config.run),
         )
     except TestFailure as exc:
