@@ -216,13 +216,13 @@ def run_test_print_result(test_path: Path) -> bool:
         return False
 
 
-def run_tests(v1_tests: list[Path], workers: int) -> int:
+def run_tests(tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        passed = sum(executor.map(run_test_print_result, v1_tests))
+        passed = sum(executor.map(run_test_print_result, tests))
 
-    failed = len(v1_tests) - passed
+    failed = len(tests) - passed
     if failed:
-        print(f"FAILED {failed}/{len(v1_tests)} TESTS!")
+        print(f"FAILED {failed}/{len(tests)} TESTS!")
     else:
         print(f"PASSED ALL {passed} TESTS")
 
