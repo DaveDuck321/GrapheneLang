@@ -16,4 +16,4 @@ function main: () -> int = {
 /// @COMPILE
 /// @RUN; EXPECT OUT
 /// val
-/// val
+/// ref

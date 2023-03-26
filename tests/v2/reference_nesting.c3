@@ -9,5 +9,6 @@ function main: () -> int = {
     return d(&c);
 };
 
-/// @COMPILE
-/// @RUN; EXPECT 2
+/// @COMPILE; EXPECT ERR
+/// File '*/reference_nesting.c3', line 3, in 'function signature'
+/// Error: cannot construct reference type since 'typedef int_ref = int&' is already a reference

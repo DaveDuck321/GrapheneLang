@@ -3,16 +3,14 @@
 };
 
 function main : () -> int = {
-    let x : int = 0;
-    let a : int = 0;
+    let x : int = 1;
+    let a : int = 2;
     let b : int& = &a;
-    let c : int&& = &b;
 
-    b = 6;  // Sets `a` to 6
-    c = &x; // Sets `b` to the address of `x`
-    b = 5;  // Sets `x` to 5
-    return a + x + c;
+    x = 3;
+    b = 4;  // Sets `a` to 4
+    return a + x + b;
 };
 
 /// @COMPILE
-/// @RUN; EXPECT 16
+/// @RUN; EXPECT 11

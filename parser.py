@@ -13,6 +13,7 @@ import codegen as cg
 from codegen.user_facing_errors import (
     CannotAssignToInitializerList,
     CircularImportException,
+    DoubleReferenceError,
     ErrorWithLineInfo,
     FailedLookupError,
     FileDoesNotExistException,
@@ -107,7 +108,10 @@ class TypeTransformer(Transformer):
     def ref_type(self, value_type: cg.Type) -> cg.Type:
         assert isinstance(value_type, cg.Type)
 
-        return value_type.to_reference()
+        if value_type.is_reference:
+            raise DoubleReferenceError(value_type.get_user_facing_name(True))
+
+        return value_type.take_reference()
 
     @v_args(inline=True)
     def stack_array_type(
@@ -126,7 +130,7 @@ class TypeTransformer(Transformer):
 
         # A heap array must always be passed by reference
         underlying_array = cg.Type(cg.ArrayDefinition(element_type, dimensions))
-        return underlying_array.to_reference()
+        return underlying_array.take_reference()
 
     def struct_type(self, member_trees: list[Token | cg.Type]) -> cg.Type:
         members = []
@@ -316,9 +320,7 @@ class ParseFunctionSignatures(Interpreter):
                     ):
                         return None  # SFINAE
 
-                deduced_mapping[
-                    arg_type_in_generic_definition
-                ] = provided_arg_type.without_borrowing()
+                deduced_mapping[arg_type_in_generic_definition] = provided_arg_type
 
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.Type] = []
@@ -504,7 +506,7 @@ class FlattenedExpression:
         return self.subexpressions[-1]
 
     def type(self) -> cg.Type:
-        return self.expression().type
+        return self.expression().underlying_type
 
 
 def is_flattened_expression_iterable(
@@ -651,7 +653,7 @@ class ExpressionTransformer(Transformer):
         # otherwise pass an unborrowed/const-reference and let overload
         # resolution figure it out, although this isn't very explicit.
         assert isinstance(this, FlattenedExpression)
-        borrowed_this = this.add_parent(cg.Borrow(this.expression()))
+        borrowed_this = this.add_parent(cg.BorrowExpression(this.expression()))
 
         fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
@@ -680,7 +682,7 @@ class ExpressionTransformer(Transformer):
 
     def ensure_pointer_is_available(self, expr: FlattenedExpression):
         # Copy expression to stack if it is not a pointer
-        if expr.type().is_pointer:
+        if expr.expression().has_address:
             return expr
 
         temp_var = cg.StackVariable("", expr.type(), True, True)
@@ -714,7 +716,7 @@ class ExpressionTransformer(Transformer):
 
     @v_args(inline=True)
     def borrow_operator_use(self, lhs: FlattenedExpression):
-        borrow = cg.Borrow(lhs.expression())
+        borrow = cg.BorrowExpression(lhs.expression())
         return lhs.add_parent(borrow)
 
     def struct_initializer_without_names(

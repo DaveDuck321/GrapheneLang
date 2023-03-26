@@ -6,9 +6,26 @@ from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
+def dereference_double_indirection(
+    reg_gen: Iterator[int], ir: list[str], target_expression: TypedExpression
+) -> int:
+    # Converts a double indirection eg. address of reference into a reference
+    assert target_expression.has_address
+
+    store_at = next(reg_gen)
+    ir.extend(
+        [
+            f"%{store_at} = load ptr, {target_expression.ir_ref_with_type_annotation}, "
+            f"align {target_expression.get_equivalent_pure_type().alignment}"
+        ]
+    )
+    return store_at
+
+
 class Dereference(TypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        super().__init__(ref.type.to_dereferenced_type())
+        # Note: this is sufficient since we cannot have an indirect reference to a reference
+        super().__init__(ref.get_equivalent_pure_type().convert_to_value_type(), False)
 
         self.ref = ref
 
@@ -16,13 +33,13 @@ class Dereference(TypedExpression):
         # https://llvm.org/docs/LangRef.html#load-instruction
 
         self.result_reg = next(reg_gen)
+        return_type_ir = self.ref.underlying_type.ir_type
 
-        # We have a pointer to a value. Now we need to load that value into a
-        # register.
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         return [
-            f"%{self.result_reg} = load {self.type.ir_type}, "
-            f"{self.ref.ir_ref_with_type_annotation}, align {self.type.alignment}"
+            f"%{self.result_reg} = load {return_type_ir}, "
+            f"{self.ref.ir_ref_with_type_annotation}, "
+            f"align {self.get_equivalent_pure_type().alignment}"
         ]
 
     @cached_property
@@ -39,39 +56,21 @@ class Dereference(TypedExpression):
         raise OperandError("Cannot modify a dereferenced value")
 
 
-class Decay(TypedExpression):
-    def __init__(self, expr: TypedExpression) -> None:
-        super().__init__(expr.type.to_decayed_type())
-
-        self.expr = expr
-
-    @cached_property
-    def ir_ref_without_type_annotation(self) -> str:
-        return self.expr.ir_ref_without_type_annotation
-
-    def __repr__(self) -> str:
-        return f"Decay({self.expr})"
-
-    def assert_can_read_from(self) -> None:
-        self.expr.assert_can_read_from()
-
-    def assert_can_write_to(self) -> None:
-        self.expr.assert_can_write_to()
-
-
 class PromoteInteger(TypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
-        assert not src.type.is_pointer
-        assert not dest_type.is_pointer
-        assert isinstance(src.type.definition, IntegerDefinition)
-        assert isinstance(dest_type.definition, IntegerDefinition)
-        assert src.type.definition.is_signed == dest_type.definition.is_signed
-        assert src.type.definition.bits < dest_type.definition.bits
+        src_definition = src.underlying_type.definition
 
-        super().__init__(dest_type)
+        assert not src.has_address
+        assert not dest_type.is_reference
+        assert isinstance(src_definition, IntegerDefinition)
+        assert isinstance(dest_type.definition, IntegerDefinition)
+        assert src_definition.is_signed == dest_type.definition.is_signed
+        assert src_definition.bits < dest_type.definition.bits
+
+        super().__init__(dest_type, False)
 
         self.src = src
-        self.is_signed = src.type.definition.is_signed
+        self.is_signed = src_definition.is_signed
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#sext-to-instruction
@@ -84,15 +83,15 @@ class PromoteInteger(TypedExpression):
         # <result> = {s,z}ext <ty> <value> to <ty2> ; yields ty2
         return [
             f"%{self.result_reg} = {instruction} "
-            f"{self.src.ir_ref_with_type_annotation} to {self.type.ir_type}"
+            f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}"
         ]
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        return f"PromoteInteger({self.src.type} to {self.type})"
+        return f"PromoteInteger({self.src.underlying_type} to {self.underlying_type})"
 
     def assert_can_read_from(self) -> None:
         self.src.assert_can_read_from()
@@ -104,30 +103,35 @@ class PromoteInteger(TypedExpression):
 
 class Reinterpret(TypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
-        super().__init__(dest_type)
+        # Bit cast between anything
+        super().__init__(dest_type, src.has_address)
 
         self._src = src
-        self._no_conversion_needed = self._src.type.ir_type == self.type.ir_type
+        self._no_conversion_needed = (
+            self._src.get_equivalent_pure_type().ir_type
+            == self.get_equivalent_pure_type().ir_type
+        )
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#bitcast-to-instruction
+
         if self._no_conversion_needed:
             return []
 
         self.result_reg = next(reg_gen)
         return [
             f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} "
-            f"to {self.type.ir_type}"
+            f"to {self.get_equivalent_pure_type().ir_type}"
         ]
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         if self._no_conversion_needed:
             return self._src.ir_ref_without_type_annotation
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        return f"Reinterpret({self._src.type} to {self.type})"
+        return f"Reinterpret({self._src.underlying_type} to {self.underlying_type})"
 
     def assert_can_read_from(self) -> None:
         self._src.assert_can_read_from()
@@ -136,27 +140,13 @@ class Reinterpret(TypedExpression):
         self._src.assert_can_write_to()
 
 
-def dereference_to_value(src: TypedExpression) -> list[TypedExpression]:
-    expr_list: list[TypedExpression] = [src]
-    while expr_list[-1].type.is_reference:
-        expr_list.append(Dereference(expr_list[-1]))
-
-    return expr_list[1:]
-
-
-def dereference_to_single_reference(src: TypedExpression) -> list[TypedExpression]:
-    return dereference_to_value(src)[:-1]
-
-
 def implicit_conversion_impl(
     src: TypedExpression, dest_type: Type, context: str = ""
-) -> tuple[tuple[int, int], list[TypedExpression]]:
+) -> tuple[int, list[TypedExpression]]:
     """Attempt to convert expression src to type dest_type.
 
     Only the following conversions are allowed:
-    - decaying an unborrowed reference to a normal reference (without
-      borrowing).
-    - dereferencing any reference type.
+    - dereference an (non-reference) variable with an address to a value
     - integer promotion.
     - float promotion (TODO).
 
@@ -171,10 +161,9 @@ def implicit_conversion_impl(
             Defaults to "".
 
     Returns:
-        tuple[tuple[int, int], list[TypedExpression]]: Tuple contains the
-            promotion cost, followed by the dereferencing cost. The list
-            contains the chain of expressions required to convert the expression
-            to dest_type. The first element of the list is always src.
+        tuple[int, list[TypedExpression]]: Tuple contains the promotion cost,
+            The list contains the chain of expressions required to convert the
+            expression to dest_type. The first element of the list is always src.
     """
     expr_list = [src]
 
@@ -182,40 +171,28 @@ def implicit_conversion_impl(
         return expr_list[-1]
 
     def last_type() -> Type:
-        return expr_list[-1].type
+        return expr_list[-1].get_equivalent_pure_type()
 
     promotion_cost: int = 0
-    dereferencing_cost: int = 0
 
-    # If src hasn't been borrowed, then we are forced to decay the unborrowed
-    # reference into a normal reference, and hope that everything works out.
-    if last_type().is_unborrowed_ref:
-        expr_list.append(Decay(last_expr()))
+    # Always dereference implicit addresses
+    if src.is_indirect_pointer_to_type:
+        expr_list.append(Dereference(src))
 
-    # If src hasn't been borrowed, then we can only read its value.
-    ref_depth_required = dest_type.ref_depth if last_type().is_borrowed else 0
-
-    # We are only allowed to dereference.
-    if last_type().ref_depth < ref_depth_required:
+    # The type-system reference should not be implicitly dereferenced
+    if last_type().is_reference != dest_type.is_reference:
         raise TypeCheckerError(
             context,
-            src.type.get_user_facing_name(False),
+            src.underlying_type.get_user_facing_name(False),
             dest_type.get_user_facing_name(False),
         )
 
-    dereferencing_cost = last_type().ref_depth - ref_depth_required
-    for _ in range(dereferencing_cost):
-        expr_list.append(Dereference(last_expr()))
-
-    last_def = last_type().definition
-    dest_def = dest_type.definition
-
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.
+    last_def = last_type().definition
+    dest_def = dest_type.definition
     if (
-        not last_type().is_pointer
-        and not dest_type.is_pointer
-        and isinstance(last_def, IntegerDefinition)
+        isinstance(last_def, IntegerDefinition)
         and isinstance(dest_def, IntegerDefinition)
         and last_def.is_signed == dest_def.is_signed
         and last_def.bits < dest_def.bits
@@ -225,9 +202,7 @@ def implicit_conversion_impl(
 
     # Array reference equivalence
     if (
-        last_type().is_reference
-        and dest_type.is_reference
-        and isinstance(last_def, ArrayDefinition)
+        isinstance(last_def, ArrayDefinition)
         and isinstance(dest_def, ArrayDefinition)
         and last_def.dimensions[1:] == dest_def.dimensions[1:]
         and last_def.dimensions[0] >= dest_def.dimensions[0]
@@ -240,11 +215,11 @@ def implicit_conversion_impl(
     if last_type() != dest_type:
         raise TypeCheckerError(
             context,
-            src.type.get_user_facing_name(False),
+            src.underlying_type.get_user_facing_name(False),
             dest_type.get_user_facing_name(False),
         )
 
-    return (promotion_cost, dereferencing_cost), expr_list
+    return promotion_cost, expr_list
 
 
 def do_implicit_conversion(
@@ -257,9 +232,9 @@ def do_implicit_conversion(
 
 class Wrapper(TypedExpression):
     def __repr__(self) -> str:
-        return f"Wrapper({repr(self.type)})"
+        return f"Wrapper({repr(self.underlying_type)})"
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         assert False
 
@@ -272,7 +247,7 @@ class Wrapper(TypedExpression):
 
 def is_type_implicitly_convertible(src_type: Type, dest_type: Type) -> bool:
     try:
-        implicit_conversion_impl(Wrapper(src_type), dest_type)
+        implicit_conversion_impl(Wrapper(src_type, False), dest_type)
     except TypeCheckerError:
         return False
 
@@ -287,11 +262,9 @@ def assert_is_implicitly_convertible(
     implicit_conversion_impl(expr, target, context)
 
 
-def get_implicit_conversion_cost(
-    src_type: Type, dest_type: Type
-) -> Optional[tuple[int, int]]:
+def get_implicit_conversion_cost(src_type: Type, dest_type: Type) -> Optional[int]:
     try:
-        costs, _ = implicit_conversion_impl(Wrapper(src_type), dest_type)
-        return costs
+        cost, _ = implicit_conversion_impl(Wrapper(src_type, False), dest_type)
+        return cost
     except TypeCheckerError:
         return None

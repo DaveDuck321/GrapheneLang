@@ -4,9 +4,8 @@ from typing import Iterable, Iterator, Optional
 from .builtin_types import BoolType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import (
-    Decay,
-    Dereference,
     assert_is_implicitly_convertible,
+    Dereference,
     do_implicit_conversion,
 )
 from .user_facing_errors import AssignmentToNonPointerError, RedefinitionError
@@ -20,13 +19,13 @@ class StackVariable(Variable):
 
         self.initialized = initialized
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         assert self.ir_reg is not None
 
         return f"%{self.ir_reg}"
 
-    @cached_property
+    @property
     def ir_ref(self) -> str:
         # alloca returns a pointer.
         return f"ptr {self.ir_ref_without_type_annotation}"
@@ -78,11 +77,11 @@ class Scope(Generatable):
 
         return None
 
-    @cached_property
+    @property
     def start_label(self) -> str:
         return f"scope_{self._id}_begin"
 
-    @cached_property
+    @property
     def end_label(self) -> str:
         return f"scope_{self._id}_end"
 
@@ -218,7 +217,7 @@ class VariableAssignment(Generatable):
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir_lines += [
             f"store {conv_value.ir_ref_with_type_annotation}, {self.variable.ir_ref}, "
-            f"align {conv_value.type.alignment}"
+            f"align {conv_value.get_equivalent_pure_type().alignment}"
         ]
 
         return ir_lines
@@ -240,33 +239,22 @@ class Assignment(Generatable):
         dst.assert_can_write_to()
         src.assert_can_read_from()
 
-        if not dst.type.is_pointer:
-            raise AssignmentToNonPointerError(dst.type.get_user_facing_name(False))
+        if not dst.has_address:
+            raise AssignmentToNonPointerError(
+                dst.underlying_type.get_user_facing_name(False)
+            )
+
+        self._conversion_exprs: list[TypedExpression] = []
 
         self._dst = dst
         self._src = src
 
-        self._conversion_exprs: list[TypedExpression] = []
+        # TODO: maybe memcopy large structs here
+        if src.has_address:
+            self._src = Dereference(src)
+            self._conversion_exprs.append(self._src)
 
-        # Is the destination a reference before Decay?
-        is_reference = self._dst.type.is_reference
-
-        # For consistency between function returns and variable usages, decay
-        #   everything to a plain reference
-        if self._dst.type.is_unborrowed_ref:
-            self._dst = Decay(self._dst)
-            self._conversion_exprs.append(self._dst)
-
-        # We assign to a nested reference by always writing to the address
-        #   pointed to by the topmost reference
-        if is_reference:
-            # Deref once to get the (top level) underlying memory address
-            self._dst = Dereference(self._dst)
-            self._conversion_exprs.append(self._dst)
-
-        assert self._dst.type.is_reference
-
-        self._target_type = self._dst.type.to_dereferenced_type()
+        self._target_type = dst.underlying_type.convert_to_value_type()
         assert_is_implicitly_convertible(self._src, self._target_type, "assignment")
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -276,14 +264,14 @@ class Assignment(Generatable):
         )
 
         conversion_ir: list[str] = []
-        conversion_ir.extend(self.expand_ir(src_conversions, reg_gen))
         conversion_ir.extend(self.expand_ir(self._conversion_exprs, reg_gen))
+        conversion_ir.extend(self.expand_ir(src_conversions, reg_gen))
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         return [
             *conversion_ir,
-            f"store {converted_src.ir_ref_with_type_annotation}, "
-            f"{self._dst.ir_ref_with_type_annotation}, align {self._dst.type.alignment}",
+            f"store {converted_src.ir_ref_with_type_annotation}, {self._dst.ir_ref_with_type_annotation}"
+            f", align {self._dst.get_equivalent_pure_type().alignment}",
         ]
 
     def is_return_guaranteed(self) -> bool:

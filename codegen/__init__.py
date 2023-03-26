@@ -8,7 +8,7 @@ from .builtin_types import (
 )
 from .expressions import (
     ArrayIndexAccess,
-    Borrow,
+    BorrowExpression,
     ConstantExpression,
     StackVariable,
     StructMemberAccess,

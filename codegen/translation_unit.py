@@ -259,31 +259,22 @@ class FunctionSymbolTable:
         fn_specialization: list[Type],
         fn_args: list[Type],
     ) -> Function:
-        functions_by_cost: list[tuple[tuple[int, int], Function]] = []
-
-        def tuple_add(
-            lhs: Optional[tuple[int, int]], rhs: Optional[tuple[int, int]]
-        ) -> Optional[tuple[int, int]]:
-            if lhs is None or rhs is None:
-                return None
-
-            return tuple(sum(pair) for pair in zip(lhs, rhs))
+        functions_by_cost: list[tuple[int, Function]] = []
 
         for function in candidate_functions:
-            per_arg = list(
-                map(
-                    get_implicit_conversion_cost,
-                    fn_args,
-                    function.get_signature().arguments,
-                )
-            )
-
-            costs = reduce(tuple_add, per_arg, (0, 0))
+            total_cost = 0
+            for src_type, dest_type in zip(fn_args, function.get_signature().arguments):
+                cost = get_implicit_conversion_cost(src_type, dest_type)
+                if cost is not None:
+                    total_cost += cost
+                else:
+                    total_cost = None
+                    break
 
             # Conversion might fail for some arguments. In that case, discard
             # this candidate.
-            if costs is not None:
-                functions_by_cost.append((costs, function))
+            if total_cost is not None:
+                functions_by_cost.append((total_cost, function))
 
         # List is sorted by the first element, then by the second.
         functions_by_cost.sort(key=lambda t: t[0])
@@ -412,7 +403,7 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
-        arg_types = [arg.type for arg in fn_args]
+        arg_types = [arg.underlying_type for arg in fn_args]
         if len(fn_specialization) != 0:
             function = self._function_table.lookup_explicitly_specialized_function(
                 fn_name, fn_specialization, arg_types
