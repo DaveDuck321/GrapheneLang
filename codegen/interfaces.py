@@ -72,10 +72,10 @@ class Type:
         self,
         definition: TypeDefinition,
         typedef_alias: Optional[str] = None,
-        specialization: list["Type"] = [],
+        specialization: Optional[list["Type"]] = None,
     ) -> None:
         self.definition = definition
-        self._specialization = specialization
+        self._specialization = specialization if specialization is not None else []
 
         # TODO explanation.
         self.is_unborrowed_ref: bool = False

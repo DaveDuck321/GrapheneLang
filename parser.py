@@ -275,7 +275,7 @@ class ParseFunctionSignatures(Interpreter):
         ) -> Optional[cg.Function]:
             assert generic_name == fn_name
             if len(generic_names) != len(concrete_specializations):
-                return
+                return None
 
             generic_mapping = dict(zip(generic_names, concrete_specializations))
             try:
@@ -283,7 +283,7 @@ class ParseFunctionSignatures(Interpreter):
                     fn_name, args_tree, return_type_tree, False, generic_mapping
                 )
             except SubstitutionFailure:
-                return  # SFINAE
+                return None  # SFINAE
 
             generate_function_body(self._program, function, body_tree, generic_mapping)
             return function
@@ -314,7 +314,7 @@ class ParseFunctionSignatures(Interpreter):
                         deduced_mapping[arg_type_in_generic_definition]
                         != provided_arg_type
                     ):
-                        return  # SFINAE
+                        return None  # SFINAE
 
                 deduced_mapping[
                     arg_type_in_generic_definition
