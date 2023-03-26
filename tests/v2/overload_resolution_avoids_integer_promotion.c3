@@ -12,3 +12,8 @@ function main: () -> int = {
 
     return 0;
 };
+
+/// @COMPILE
+/// @RUN; EXPECT OUT
+/// val
+/// val

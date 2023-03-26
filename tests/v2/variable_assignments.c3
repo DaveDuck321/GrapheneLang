@@ -13,3 +13,6 @@ function main : () -> int = {
     b = 5;  // Sets `x` to 5
     return a + x + c;
 };
+
+/// @COMPILE
+/// @RUN; EXPECT 16

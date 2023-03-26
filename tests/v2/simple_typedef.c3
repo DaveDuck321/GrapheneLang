@@ -8,3 +8,6 @@ function b : (input : my_new_type_2) -> int = {
 function main: () -> int = {
     return b(6);
 };
+
+/// @COMPILE
+/// @RUN; EXPECT 8
