@@ -282,7 +282,7 @@ class StructDefinition(TypeDefinition):
         return self._uuid == other._uuid
 
     def __hash__(self) -> int:
-        return self._uuid.__hash__()
+        return hash(self._uuid)
 
 
 class ArrayDefinition(TypeDefinition):
