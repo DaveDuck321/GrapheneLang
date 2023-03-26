@@ -5,7 +5,7 @@
 
 start: compile_cmd (run_cmd)?
 
-expect_rc: "EXPECT" INT
+expect_status: "EXPECT" INT
 expect_msg: "EXPECT" (/OUT/ | /ERR/) /([^@].*\n?)+/
-compile_cmd: "@COMPILE" [";" expect_rc] [";" expect_msg]
-run_cmd: "@RUN" [";" expect_rc] [";" expect_msg]
+compile_cmd: "@COMPILE" [";" expect_status] [";" expect_msg]
+run_cmd: "@RUN" [";" expect_status] [";" expect_msg]
