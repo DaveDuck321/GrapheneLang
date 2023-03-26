@@ -1,0 +1,14 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../../../driver.py",
+            "main.c3",
+            "-o",
+            "./out/a.out"
+        ],
+        "output": {
+            "status": 0
+        }
+    }
+}

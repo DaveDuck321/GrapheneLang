@@ -1,0 +1,19 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../../../driver.py",
+            "main.c3",
+            "-o",
+            "./out/a.out",
+            "--emit-everything"
+        ],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 17, in 'function main: () -> int'",
+                "Error: overload resolution for function call 'generic_fn()' is ambiguous. Equally good candidates are 'function generic_fn<i32>: () -> EnableIf<typedef TrueType = {}>' and 'function generic_fn<i32>: () -> int'."
+            ]
+        }
+    }
+}

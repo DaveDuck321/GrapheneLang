@@ -1,0 +1,18 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../../../driver.py",
+            "main.c3",
+            "-o",
+            "./out/a.out"
+        ],
+        "output": {
+            "status": 1,
+            "stderr": [
+                "File '*/main.c3', line 2, in 'function main: () -> int'",
+                "Error: initializer list cannot be assigned to type 'int' (expected a struct type similar to '{int, string, bool}')"
+            ]
+        }
+    }
+}
