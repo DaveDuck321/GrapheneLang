@@ -77,39 +77,12 @@ class Type:
         self.definition = definition
         self._specialization = specialization if specialization is not None else []
 
-        # TODO explanation.
-        self.is_unborrowed_ref: bool = False
-        self.is_borrowed: bool = False
-        self._ref_depth: int = 0
-
-        # Name given in typedef, without generics.
-        self._typedef_alias: Optional[str] = None
-        # Reference depth when the alias was set.
-        self._typedef_alias_ref_depth: int = 0
-
-        if typedef_alias is not None:
-            self._set_typedef_alias(typedef_alias)
-
-    def _set_typedef_alias(self, typedef_alias: str) -> None:
         self._typedef_alias = typedef_alias
-        self._typedef_alias_ref_depth = self._ref_depth
-
-    def get_specialization(self) -> list["Type"]:
-        return self._specialization.copy()
-
-    @property
-    def ref_depth(self) -> int:
-        assert self._ref_depth >= 0
-
-        return self._ref_depth
+        self._is_reference = False
 
     @property
     def is_reference(self) -> bool:
-        return self.ref_depth > 0
-
-    @property
-    def is_pointer(self) -> bool:
-        return self.is_unborrowed_ref or self.is_reference
+        return self._is_reference
 
     @property
     def is_void(self) -> bool:
@@ -120,80 +93,66 @@ class Type:
         if not self._specialization:
             return ""
 
-        generic_names = map(
-            lambda arg: arg.get_user_facing_name(True), self._specialization
-        )
-
+        generic_names = [arg.get_user_facing_name(True) for arg in self._specialization]
         return f"<{', '.join(generic_names)}>"
 
     def __repr__(self) -> str:
         name = f"{self._typedef_alias} = " if self._typedef_alias else ""
         name += repr(self.definition)
 
-        return (
-            f"{self.__class__.__name__}({name}, "
-            f"is_unborrowed_ref={self.is_unborrowed_ref}, "
-            f"borrowed={self.is_borrowed}, "
-            f"ref_depth={self._ref_depth})"
-        )
+        return f"{self.__class__.__name__}({name}, is_ref={self._is_reference})"
+
+    def get_specialization(self) -> list["Type"]:
+        return self._specialization.copy()
 
     def get_user_facing_name(self, full: bool) -> str:
-        prefix = "*" * max(self._typedef_alias_ref_depth - self._ref_depth, 0)
-        suffix = self.generic_annotation + (
-            # This works in all cases because self._typedef_alias_ref_depth
-            # is 0 if self._typedef_alias is not set.
-            "&" * max(self._ref_depth - self._typedef_alias_ref_depth, 0)
-            + "#" * self.is_unborrowed_ref
-            + " (borrowed)" * self.is_borrowed
-        )
+        suffix = self.generic_annotation + ("&" * self._is_reference)
 
         # Return everything (that's available).
         # TODO this should return something like "T&&, where typedef T = ...".
-        if full and self._ref_depth == self._typedef_alias_ref_depth:
+        if full:
             name = f"typedef {self._typedef_alias} = " if self._typedef_alias else ""
             name += self.definition.user_facing_name
             name += suffix
-
             return name
 
         # If this is the product of a typedef, return the name given.
         if self._typedef_alias:
-            return prefix + self._typedef_alias + suffix
+            return self._typedef_alias + suffix
 
         # Fall back to the type definition.
-        return prefix + self.definition.user_facing_name + suffix
+        return self.definition.user_facing_name + suffix
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
 
         return (
             self.definition == other.definition
-            and self.is_unborrowed_ref == other.is_unborrowed_ref
-            and self.ref_depth == other.ref_depth
+            and self.is_reference == other.is_reference
         )
 
     @property
     def alignment(self) -> int:
         # FIXME replace magic number.
-        return 8 if self.is_pointer else self.definition.alignment
+        return 8 if self.is_reference else self.definition.alignment
 
     @property
     def size(self) -> int:
         # FIXME replace magic number.
-        return 8 if self.is_pointer else self.definition.size
+        return 8 if self.is_reference else self.definition.size
 
     @property
     def ir_definition(self) -> str:
         # Opaque pointer type.
-        return "ptr" if self.is_pointer else self.definition.ir_definition
+        return "ptr" if self.is_reference else self.definition.ir_definition
 
     @property
     def ir_type(self) -> str:
         # Opaque pointer type.
-        if self.is_pointer:
+        if self.is_reference:
             return "ptr"
 
-        if self._typedef_alias and self._ref_depth == self._typedef_alias_ref_depth:
+        if self._typedef_alias:
             return self.definition.get_ir_type(self.mangled_name)
 
         return self.definition.get_ir_type(None)
@@ -206,30 +165,18 @@ class Type:
         named_ref = self.definition.get_ir_type(self.mangled_name)
         return [f"{named_ref} = type {self.ir_definition}"]
 
-    def to_value_type(self) -> "Type":
-        value_type = self.copy()
-        value_type._ref_depth = 0
-        value_type.is_unborrowed_ref = False
-        value_type.is_borrowed = False
-
-        return value_type
-
     @property
     def mangled_name(self) -> str:
-        assert not self.is_unborrowed_ref
-
         alias = self._typedef_alias or self.definition.mangled_name
         value_type_mangled = self.mangle_generic_type(alias, self._specialization)
 
         return (
-            f"__RT{self.ref_depth}{value_type_mangled}__{self.ref_depth}TR"
-            if self.is_reference
-            else value_type_mangled
+            f"__RT{value_type_mangled}__TR" if self.is_reference else value_type_mangled
         )
 
     def to_ir_constant(self, value: str) -> str:
-        # We shouldn't be able to initialize a pointer type with a constant.
-        assert not self.is_pointer
+        # We shouldn't be able to initialize a reference type with a constant.
+        assert not self.is_reference
 
         return self.definition.to_ir_constant(value)
 
@@ -237,66 +184,23 @@ class Type:
         # FIXME should this be a deepcopy()?
         return copy(self)
 
-    def to_reference(self) -> "Type":
-        assert not self.is_unborrowed_ref
+    def take_reference(self) -> "Type":
+        assert not self.is_reference
 
-        ref_type = self.copy()
-        ref_type._ref_depth += 1
+        new_type = self.copy()
+        new_type._is_reference = True
+        return new_type
 
-        return ref_type
-
-    def to_dereferenced_type(self) -> "Type":
-        assert not self.is_unborrowed_ref
-        assert self.is_reference
-
-        deref_type = self.copy()
-        deref_type._ref_depth -= 1
-
-        return deref_type
-
-    def to_unborrowed_ref(self) -> "Type":
-        assert not self.is_unborrowed_ref
-
-        unborrowed_type = self.copy()
-        unborrowed_type.is_unborrowed_ref = True
-
-        return unborrowed_type
-
-    def to_borrowed_ref(self) -> "Type":
-        # is_unborrowed_ref decays into a reference when borrowed.
-        assert self.is_unborrowed_ref
-        assert not self.is_borrowed
-
-        borrowed_type = self.copy()
-        borrowed_type._ref_depth += 1
-        borrowed_type.is_borrowed = True
-        borrowed_type.is_unborrowed_ref = False
-
-        return borrowed_type
-
-    def to_decayed_type(self) -> "Type":
-        # Decay into a reference without borrowing.
-        assert self.is_unborrowed_ref
-        assert not self.is_borrowed
-
-        decayed_type = self.copy()
-        decayed_type._ref_depth += 1
-        decayed_type.is_unborrowed_ref = False
-
-        return decayed_type
-
-    def without_borrowing(self) -> "Type":
-        without_borrowing_type = self.copy()
-        without_borrowing_type.is_borrowed = False
-        without_borrowing_type.is_unborrowed_ref = False
-
-        return without_borrowing_type
+    def convert_to_value_type(self) -> "Type":
+        new_type = self.copy()
+        new_type._is_reference = False
+        return new_type
 
     def new_from_typedef(
         self, typedef_alias: str, specialization: list["Type"]
     ) -> "Type":
         new_type = self.copy()
-        new_type._set_typedef_alias(typedef_alias)
+        new_type._typedef_alias = typedef_alias
         new_type._specialization = specialization
 
         return new_type
@@ -324,16 +228,16 @@ class Variable(ABC):
 
         self.ir_reg: Optional[int] = None
 
-    @cached_property
+    @property
     def user_facing_name(self) -> str:
         return self._name
 
-    @cached_property
+    @property
     @abstractmethod
     def ir_ref_without_type_annotation(self) -> str:
         pass
 
-    @cached_property
+    @property
     @abstractmethod
     def ir_ref(self) -> str:
         pass
@@ -371,23 +275,59 @@ class Generatable(ABC):
 
 
 class TypedExpression(Generatable):
-    def __init__(self, expr_type: Type) -> None:
+    def __init__(self, expr_type: Type, is_indirect_pointer_to_type: bool) -> None:
         super().__init__()
+        # It is the callers responsibility to escape double indirections
+        if expr_type.is_reference:
+            assert not is_indirect_pointer_to_type
 
-        self.type = expr_type
+        self.underlying_type = expr_type
+        self.is_indirect_pointer_to_type = is_indirect_pointer_to_type
+
         self.result_reg: Optional[int] = None
 
+    def get_equivalent_pure_type(self) -> Type:
+        if self.is_indirect_pointer_to_type:
+            return self.underlying_type.take_reference()
+        return self.underlying_type
+
+    @property
+    def has_address(self) -> bool:
+        return self.underlying_type.is_reference or self.is_indirect_pointer_to_type
+
     def is_return_guaranteed(self) -> bool:
-        # At the moment no TypedExpressions can return
+        # At the moment no TypedExpression can return
         return False
 
-    @cached_property
+    @property
     def ir_ref_with_type_annotation(self) -> str:
-        type_annotation = self.type.ir_type
         reference = self.ir_ref_without_type_annotation
-        return f"{type_annotation} {reference}"
+        assert reference is not None
+        return f"{self.ir_type_annotation} {reference}"
 
-    @cached_property
+    @property
+    def ir_type_annotation(self) -> str:
+        if self.is_indirect_pointer_to_type:
+            return "ptr"
+
+        return self.underlying_type.ir_type
+
+    def dereference_once_in_ir__1(self, reg_gen: Iterator[int], ir: list[str]) -> int:
+        # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
+        pure_type = self.get_equivalent_pure_type()
+        target_type = self.underlying_type
+
+        result_reg = next(reg_gen)
+
+        ir.extend(
+            [
+                f"%{result_reg} = load {target_type.ir_type}, "
+                f"{self.ir_ref_with_type_annotation}, align {pure_type.alignment}"
+            ]
+        )
+        return result_reg
+
+    @property
     @abstractmethod
     def ir_ref_without_type_annotation(self) -> str:
         pass

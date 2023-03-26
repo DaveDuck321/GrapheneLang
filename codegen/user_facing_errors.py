@@ -133,7 +133,21 @@ class ArrayIndexCount(GrapheneError):
 
 class BorrowTypeError(GrapheneError):
     def __init__(self, type_name: str) -> None:
-        super().__init__(f"Error: cannot borrow non-reference type '{type_name}'")
+        super().__init__(f"Error: cannot borrow type '{type_name}' (with no address)")
+
+
+class DoubleBorrowError(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot borrow '{type_name}' because it is already a reference"
+        )
+
+
+class DoubleReferenceError(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot construct reference type since '{type_name}' is already a reference"
+        )
 
 
 class AssignmentToNonPointerError(GrapheneError):

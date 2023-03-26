@@ -11,14 +11,14 @@ from .builtin_types import (
 from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
-    Decay,
     assert_is_implicitly_convertible,
-    dereference_to_single_reference,
+    dereference_double_indirection,
     do_implicit_conversion,
 )
 from .user_facing_errors import (
     ArrayIndexCount,
     BorrowTypeError,
+    DoubleBorrowError,
     OperandError,
     TypeCheckerError,
 )
@@ -26,14 +26,14 @@ from .user_facing_errors import (
 
 class ConstantExpression(TypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
-        super().__init__(cst_type)
+        super().__init__(cst_type, False)
 
         self.value = cst_type.to_ir_constant(value)
 
     def __repr__(self) -> str:
-        return f"ConstantExpression({self.type}, {self.value})"
+        return f"ConstantExpression({self.underlying_type}, {self.value})"
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return self.value
 
@@ -48,7 +48,7 @@ class ConstantExpression(TypedExpression):
 
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
-        super().__init__(variable.type.to_unborrowed_ref())
+        super().__init__(variable.type.convert_to_value_type(), True)
 
         self.variable = variable
 
@@ -57,9 +57,9 @@ class VariableReference(TypedExpression):
             f"VariableReference({self.variable.user_facing_name}: {self.variable.type})"
         )
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
-        return self.variable.ir_ref_without_type_annotation
+        return self._ir_ref
 
     def set_initialized_through_mutable_borrow(self) -> None:
         assert isinstance(self.variable, StackVariable)
@@ -81,24 +81,27 @@ class VariableReference(TypedExpression):
                 f"Cannot modify constant variable '{self.variable.user_facing_name}'"
             )
 
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        self._ir_ref = self.variable.ir_ref_without_type_annotation
+
+        ir = []
+        if self.variable.type.is_reference:
+            self._ir_ref = f"%{dereference_double_indirection(reg_gen, ir, self)}"
+
+        return ir
+
 
 class FunctionParameter(TypedExpression):
     def __init__(self, expr_type: Type) -> None:
-        this_type = expr_type.copy()
-        # Implicit borrow here.
-        # XXX can't use to_borrowed(), since that increments ref_depth. We only
-        # want to flag that the type has been borrowed.
-        this_type.is_borrowed = expr_type.is_reference
-
-        super().__init__(this_type)
+        super().__init__(expr_type, False)
 
     def __repr__(self) -> str:
-        return f"FunctionParameter({self.type})"
+        return f"FunctionParameter({self.underlying_type})"
 
     def set_reg(self, reg: int) -> None:
         self.result_reg = reg
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         assert self.result_reg is not None
         return f"%{self.result_reg}"
@@ -116,12 +119,12 @@ class FunctionCallExpression(TypedExpression):
     def __init__(
         self, signature: FunctionSignature, args: list[TypedExpression]
     ) -> None:
-        super().__init__(
-            # Replace the last reference with an unborrowed reference.
-            signature.return_type.to_dereferenced_type().to_unborrowed_ref()
-            if signature.return_type.is_reference
-            else signature.return_type
-        )
+        if signature.return_type.is_reference:
+            # The user needs to borrow again if they want the actual reference
+            super().__init__(signature.return_type.convert_to_value_type(), True)
+        else:
+            # The function returns a value (not an address), so we can't later borrow it
+            super().__init__(signature.return_type, False)
 
         for arg, arg_type in zip(args, signature.arguments, strict=True):
             arg.assert_can_read_from()
@@ -160,7 +163,7 @@ class FunctionCallExpression(TypedExpression):
     def __repr__(self) -> str:
         return f"FunctionCallExpression({self.signature})"
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
@@ -174,25 +177,22 @@ class FunctionCallExpression(TypedExpression):
         raise OperandError(f"Cannot modify the value returned by {self.signature}")
 
 
-class Borrow(TypedExpression):
+class BorrowExpression(TypedExpression):
     def __init__(self, expr: TypedExpression) -> None:
-        this_type = expr.type
-
-        if not this_type.is_unborrowed_ref:
-            raise BorrowTypeError(this_type.get_user_facing_name(False))
-
-        # FIXME: const borrows should not initialize a variable
-        if isinstance(expr, VariableReference):
-            expr.set_initialized_through_mutable_borrow()
-
         self._expr = expr
 
-        super().__init__(this_type.to_borrowed_ref())
+        if expr.underlying_type.is_reference:
+            raise DoubleBorrowError(expr.underlying_type.get_user_facing_name(True))
+
+        if not expr.is_indirect_pointer_to_type:
+            raise BorrowTypeError(expr.underlying_type.get_user_facing_name(True))
+
+        super().__init__(expr.underlying_type.take_reference(), False)
 
     def __repr__(self) -> str:
         return f"Borrow({repr(self._expr)})"
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return self._expr.ir_ref_without_type_annotation
 
@@ -206,84 +206,74 @@ class Borrow(TypedExpression):
 class StructMemberAccess(TypedExpression):
     def __init__(self, lhs: TypedExpression, member_name: str) -> None:
         self._member_name = member_name
-
-        self._deref_exprs = []
         self._lhs = lhs
 
-        # TODO: this is kinda ugly now
-        if lhs.type.is_pointer:
-            if lhs.type.is_unborrowed_ref:
-                self._lhs = Decay(lhs)
-
-            self._deref_exprs.extend(dereference_to_single_reference(self._lhs))
-            if len(self._deref_exprs) != 0:
-                self._lhs = self._deref_exprs[-1]
-
-        self._struct_type = self._lhs.type.to_value_type()
-
-        struct_definition = self._struct_type.definition
-        if not isinstance(struct_definition, StructDefinition):
+        self._struct_type = lhs.underlying_type
+        underlying_definition = lhs.underlying_type.definition
+        if not isinstance(underlying_definition, StructDefinition):
             raise TypeCheckerError(
                 "struct member access",
-                self._struct_type.get_user_facing_name(False),
+                lhs.underlying_type.get_user_facing_name(False),
                 "{...}",
             )
 
-        self._access_index, member_type = struct_definition.get_member_by_name(
+        self._index, self._member_type = underlying_definition.get_member_by_name(
             member_name
         )
 
-        # FIXME changed this to is_pointer, is that correct?
-        self._source_struct_is_reference = lhs.type.is_pointer
+        # If the member is a reference we can always calculate an address
+        if self._member_type.is_reference:
+            super().__init__(self._member_type.convert_to_value_type(), True)
+        else:
+            # We only know an address if the struct itself has an address
+            super().__init__(self._member_type, lhs.has_address)
 
-        super().__init__(
-            member_type.to_unborrowed_ref()
-            if self._source_struct_is_reference
-            else member_type
-        )
-
-    def generate_ir_for_reference_type(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir_from_known_address(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
-        deref_ir = self.expand_ir(self._deref_exprs, reg_gen)
 
         # In llvm structs behind a pointer are treated like an array
         pointer_offset = ConstantExpression(IntType(), "0")
-        index = ConstantExpression(IntType(), str(self._access_index))
+        index = ConstantExpression(IntType(), str(self._index))
+
+        self.result_reg = next(reg_gen)
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
-        self.result_reg = next(reg_gen)
-        return [
-            *deref_ir,
+        ir = [
             f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type},"
             f" {self._lhs.ir_ref_with_type_annotation}, "
             f"{pointer_offset.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
         ]
 
-    def generate_ir_for_value_type(self, reg_gen: Iterator[int]) -> list[str]:
+        # Prevent double indirection, dereference the element pointer to get the underlying reference
+        if self._member_type.is_reference:
+            self.result_reg = dereference_double_indirection(reg_gen, ir, self)
+
+        return ir
+
+    def generate_ir_without_known_address(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#insertvalue-instruction
-        assert len(self._deref_exprs) == 0
 
         # <result> = extractvalue <aggregate type> <val>, <idx>{, <idx>}*
         self.result_reg = next(reg_gen)
         return [
             f"%{self.result_reg} = extractvalue {self._lhs.ir_ref_with_type_annotation},"
-            f" {self._access_index}"
+            f" {self._index}"
         ]
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        if self._source_struct_is_reference:
-            return self.generate_ir_for_reference_type(reg_gen)
+        if self._lhs.has_address:
+            return self.generate_ir_from_known_address(reg_gen)
+        else:
+            return self.generate_ir_without_known_address(reg_gen)
 
-        return self.generate_ir_for_value_type(reg_gen)
-
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
         return (
-            f"StructMemberAccess({self._struct_type.get_user_facing_name(False)}"
-            f".{self._member_name}: {self.type})"
+            f"StructMemberAccess({self.underlying_type.get_user_facing_name(False)}"
+            f".{self._member_name}: {self.underlying_type})"
         )
 
     def assert_can_read_from(self) -> None:
@@ -292,49 +282,39 @@ class StructMemberAccess(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
-        if not self._source_struct_is_reference:
+        if not self.has_address:
             raise OperandError("Cannot modify temporary struct")
 
-        if self._source_struct_is_reference:
-            # TODO: check if the reference is const
-            pass
+        # TODO: check if the reference is const
 
 
 class ArrayIndexAccess(TypedExpression):
     def __init__(
         self, array_ptr: TypedExpression, indices: list[TypedExpression]
     ) -> None:
-        # NOTE: needs pointer since getelementptr must be used for runtime indexing
-        assert array_ptr.type.is_pointer
+        # NOTE: needs address since getelementptr must be used for runtime indexing
+        assert array_ptr.has_address
 
-        array_definition = array_ptr.type.definition
+        self._underlying_array: Type = array_ptr.underlying_type
+        self._array_ptr = array_ptr
+
+        array_definition = self._underlying_array.definition
         if not isinstance(array_definition, ArrayDefinition):
             raise TypeCheckerError(
                 "array index access",
-                array_ptr.type.get_user_facing_name(False),
+                array_ptr.underlying_type.get_user_facing_name(False),
                 "T[...]",
             )
 
         if len(array_definition._dimensions) != len(indices):
             raise ArrayIndexCount(
-                array_ptr.type.get_user_facing_name(False),
+                self._underlying_array.get_user_facing_name(False),
                 len(indices),
                 len(array_definition._dimensions),
             )
 
-        self._array_ptr = array_ptr
+        self._element_type: Type = array_definition._element_type
         self._conversion_exprs: list[TypedExpression] = []
-
-        # We need to operate on a pure reference type so we can dereference
-        if array_ptr.type.is_unborrowed_ref:
-            self._array_ptr = Decay(array_ptr)
-
-        # Recursively dereference (without any further implicit conversions)
-        self._conversion_exprs.extend(dereference_to_single_reference(self._array_ptr))
-        if len(self._conversion_exprs) != 0:
-            self._array_ptr = self._conversion_exprs[-1]
-
-        self._array_type = array_ptr.type.to_value_type()
 
         # Now convert all the indices into integers using standard implicit rules
         self._indices: list[TypedExpression] = []
@@ -345,7 +325,7 @@ class ArrayIndexAccess(TypedExpression):
             self._indices.append(index_expr)
             self._conversion_exprs.extend(conversions)
 
-        super().__init__(array_definition._element_type.to_unborrowed_ref())
+        super().__init__(self._element_type.convert_to_value_type(), True)
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
@@ -358,19 +338,24 @@ class ArrayIndexAccess(TypedExpression):
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         self.result_reg = next(reg_gen)
-        return [
+        ir = [
             *conversion_ir,
-            f"%{self.result_reg} = getelementptr inbounds {self._array_type.ir_type},"
+            f"%{self.result_reg} = getelementptr inbounds {self._underlying_array.ir_type},"
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
-    @cached_property
+        if self._element_type.is_reference:
+            self.result_reg = dereference_double_indirection(reg_gen, ir, self)
+
+        return ir
+
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
         indices = ", ".join(map(repr, self._indices))
-        return f"ArrayIndexAccess({self._array_type}[{indices}])"
+        return f"ArrayIndexAccess({self._array_ptr}[{indices}])"
 
     def assert_can_read_from(self) -> None:
         # TODO: can we check if the members are initialized?

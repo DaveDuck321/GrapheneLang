@@ -17,3 +17,6 @@ function main : () -> int = {
     let sum : i128 = assertIsI128(a + b + d + e + c);
     return __builtin_narrow<i32>(sum);
 };
+
+/// @COMPILE
+/// @RUN; EXPECT 31

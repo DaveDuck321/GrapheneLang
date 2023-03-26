@@ -6,12 +6,12 @@ typedef MyStruct : {a: int, x: int};
 
 function main : () -> int = {
     let struct : MyStruct;
-
     let b : int& = &struct.a;
-    let c : int&& = &b;
 
-    b = 6;  // Sets `a` to 6
-    c = &struct.x; // Sets `b` to the address of `x`
-    b = 5;  // Sets `x` to 5
-    return struct.a + struct.x + c;
+    b = 6;  // Sets `struct.a` to 6
+    struct.x = 5;  // Sets `struct.x` to 5
+    return struct.a + struct.x + 5;
 };
+
+/// @COMPILE
+/// @RUN; EXPECT 16

@@ -29,13 +29,13 @@ class BasicIntegerExpression(TypedExpression, ABC):
         assert self.SIGNED_IR is not None
         assert self.UNSIGNED_IR is not None
         assert len(specialization) == 0
-        assert isinstance(lhs.type, GenericIntType)
-        assert isinstance(rhs.type, GenericIntType)
-        assert lhs.type.definition == rhs.type.definition
+        assert isinstance(lhs.underlying_type, GenericIntType)
+        assert isinstance(rhs.underlying_type, GenericIntType)
+        assert lhs.underlying_type.definition == rhs.underlying_type.definition
 
-        super().__init__(self.get_result_type(arguments))
+        super().__init__(self.get_result_type(arguments), False)
 
-        self._arg_type = lhs.type.to_value_type()
+        self._arg_type = lhs.underlying_type.convert_to_value_type()
         self._lhs = lhs
         self._rhs = rhs
 
@@ -64,7 +64,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
         )
         return ir_lines
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
@@ -78,7 +78,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
 class ArithmeticExpression(BasicIntegerExpression):
     @staticmethod
     def get_result_type(arguments: list[TypedExpression]) -> Type:
-        return arguments[0].type.to_value_type()
+        return arguments[0].underlying_type.convert_to_value_type()
 
 
 class AddExpression(ArithmeticExpression):
@@ -178,7 +178,7 @@ class AlignOfExpression(TypedExpression):
             SizeType(), str(self._argument_type.alignment)
         )
 
-        super().__init__(self._result.type)
+        super().__init__(self._result.underlying_type, False)
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
@@ -186,7 +186,7 @@ class AlignOfExpression(TypedExpression):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         return self._result.generate_ir(reg_gen)
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return self._result.ir_ref_without_type_annotation
 
@@ -206,7 +206,7 @@ class SizeOfExpression(TypedExpression):
         self._argument_type = specialization[0]
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
-        super().__init__(self._result.type)
+        super().__init__(self._result.underlying_type, False)
 
     def __repr__(self) -> str:
         return f"SizeOf({self._argument_type})"
@@ -214,7 +214,7 @@ class SizeOfExpression(TypedExpression):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         return self._result.generate_ir(reg_gen)
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return self._result.ir_ref_without_type_annotation
 
@@ -232,7 +232,7 @@ class NarrowExpression(TypedExpression):
         (self._argument,) = arguments
         (return_type,) = specialization
 
-        self._arg_value_type = self._argument.type.to_value_type()
+        self._arg_value_type = self._argument.underlying_type.convert_to_value_type()
 
         to_definition = return_type.definition
         from_definition = self._arg_value_type.definition
@@ -242,10 +242,10 @@ class NarrowExpression(TypedExpression):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        super().__init__(return_type)
+        super().__init__(return_type, False)
 
     def __repr__(self) -> str:
-        return f"Narrow({self._argument} to {self.type})"
+        return f"Narrow({self._argument} to {self.underlying_type})"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         conv_arg, extra_exprs_arg = do_implicit_conversion(
@@ -256,10 +256,10 @@ class NarrowExpression(TypedExpression):
         self.result_reg = next(reg_gen)
         return [
             *ir_lines,
-            f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation} to {self.type.ir_type}",
+            f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}",
         ]
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
