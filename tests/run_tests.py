@@ -3,6 +3,7 @@ import json
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from multiprocessing import cpu_count
 from pathlib import Path
 from subprocess import PIPE
@@ -11,7 +12,7 @@ from threading import Lock
 from typing import Optional
 
 import schema
-from v2_parser import ExpectedOutput, parse_file
+from v2_parser import parse_file
 
 PARENT_DIR = Path(__file__).parent
 V2_TESTS_DIR = PARENT_DIR / "v2"
@@ -153,16 +154,6 @@ def run_v1_test(path: Path, io_harness) -> None:
 
 
 def run_v2_test(file_path: Path, io_harness) -> None:
-    def to_dict(expected_output: ExpectedOutput) -> dict:
-        result = {}
-        if expected_output.status:
-            result["status"] = expected_output.status
-        if expected_output.stdout:
-            result["stdout"] = expected_output.stdout
-        if expected_output.stderr:
-            result["stderr"] = expected_output.stderr
-        return result
-
     assert file_path.exists()
     config = parse_file(file_path)
 
@@ -182,7 +173,7 @@ def run_v2_test(file_path: Path, io_harness) -> None:
                 "-o",
                 str(V2_OUT_DIR / file_path.stem),
             ],
-            to_dict(config.compile),
+            asdict(config.compile),
         )
     except TestFailure as exc:
         raise exc.with_stage("compile")
@@ -194,7 +185,7 @@ def run_v2_test(file_path: Path, io_harness) -> None:
         fn_validate(
             V2_TESTS_DIR,
             [f"{V2_OUT_DIR / file_path.stem}"],
-            to_dict(config.run),
+            asdict(config.run),
         )
     except TestFailure as exc:
         raise exc.with_stage("runtime")
