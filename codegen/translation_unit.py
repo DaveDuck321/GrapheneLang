@@ -310,7 +310,6 @@ class FunctionSymbolTable:
         if len(functions_by_cost) == 1:
             return functions_by_cost[0][1]
 
-        print("\n".join(list(map(repr, functions_by_cost))))
         first, second, *_ = functions_by_cost
 
         # If there are two or more equally good candidates, then this function
