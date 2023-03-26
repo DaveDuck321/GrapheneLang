@@ -116,7 +116,7 @@ def validate_command_output_with_harness(
     return True
 
 
-def run_v1_test(path: Path, io_harness) -> None:
+def run_v1_test(path: Path, io_harness: bool) -> None:
     # Load/ validate the test
     config_path = path / "test.json"
     assert config_path.exists()
@@ -153,7 +153,7 @@ def run_v1_test(path: Path, io_harness) -> None:
         raise exc.with_stage("runtime")
 
 
-def run_v2_test(file_path: Path, io_harness) -> None:
+def run_v2_test(file_path: Path, io_harness: bool) -> None:
     assert file_path.exists()
     config = parse_file(file_path)
 
@@ -189,7 +189,7 @@ def run_v2_test(file_path: Path, io_harness) -> None:
         raise exc.with_stage("runtime")
 
 
-def run_test(test_path: Path, io_harness=True) -> None:
+def run_test(test_path: Path, io_harness: bool = True) -> None:
     if test_path.is_dir():
         run_v1_test(test_path, io_harness)
     else:
