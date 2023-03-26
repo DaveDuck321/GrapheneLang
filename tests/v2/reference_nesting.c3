@@ -8,3 +8,6 @@ function main: () -> int = {
     let c: int_ref& = &b;
     return d(&c);
 };
+
+/// @COMPILE
+/// @RUN; EXPECT 2

@@ -7,3 +7,7 @@ function main: () -> int = {
     puts("άβ­ γ");
     return 0;
 };
+
+/// @COMPILE
+/// @RUN; EXPECT OUT
+/// άβ­ γ

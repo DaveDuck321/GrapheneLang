@@ -6,3 +6,6 @@ function main : () -> int = {
     // FIXME call foo() once we support array constants.
     return 0;
 };
+
+/// @COMPILE
+/// @RUN
