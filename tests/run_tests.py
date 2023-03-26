@@ -11,8 +11,11 @@ from threading import Lock
 from typing import Optional
 
 import schema
+from v2_parser import ExpectedOutput, parse_file
 
 PARENT_DIR = Path(__file__).parent
+V2_TESTS_DIR = PARENT_DIR / "v2"
+V2_OUT_DIR = V2_TESTS_DIR / "out"
 
 
 class TestFailure(RuntimeError):
@@ -112,7 +115,7 @@ def validate_command_output_with_harness(
     return True
 
 
-def run_test(path: Path, io_harness=True) -> None:
+def run_v1_test(path: Path, io_harness) -> None:
     # Load/ validate the test
     config_path = path / "test.json"
     assert config_path.exists()
@@ -149,16 +152,70 @@ def run_test(path: Path, io_harness=True) -> None:
         raise exc.with_stage("runtime")
 
 
+def run_v2_test(file_path: Path, io_harness) -> None:
+    def to_dict(expected_output: ExpectedOutput) -> dict:
+        result = {}
+        if expected_output.status:
+            result["status"] = expected_output.status
+        if expected_output.stdout:
+            result["stdout"] = expected_output.stdout
+        if expected_output.stderr:
+            result["stderr"] = expected_output.stderr
+        return result
+
+    assert file_path.exists()
+    config = parse_file(file_path)
+
+    fn_validate = (
+        validate_command_output_with_harness if io_harness else validate_command_status
+    )
+
+    # Compile the test
+    assert config.compile
+    try:
+        fn_validate(
+            V2_TESTS_DIR,
+            [
+                "python",
+                "../../driver.py",
+                str(file_path),
+                "-o",
+                str(V2_OUT_DIR / file_path.stem),
+            ],
+            to_dict(config.compile),
+        )
+    except TestFailure as exc:
+        raise exc.with_stage("compile")
+
+    if config.run is None:
+        return
+
+    try:
+        fn_validate(
+            V2_TESTS_DIR,
+            [f"{V2_OUT_DIR / file_path.stem}"],
+            to_dict(config.run),
+        )
+    except TestFailure as exc:
+        raise exc.with_stage("runtime")
+
+
+def run_test(test_path: Path, io_harness=True) -> None:
+    if test_path.is_dir():
+        run_v1_test(test_path, io_harness)
+    else:
+        run_v2_test(test_path, io_harness)
+
+
 # Mutex to ensure prints remain ordered (within each test)
 io_lock = Lock()
 
 
-def run_test_print_result(test_dir: Path) -> bool:
-    assert test_dir.is_dir()
-    test_name = str(test_dir.relative_to(PARENT_DIR))
+def run_test_print_result(test_path: Path) -> bool:
+    test_name = str(test_path.relative_to(PARENT_DIR))
 
     try:
-        run_test(test_dir)
+        run_test(test_path)
         with io_lock:
             print(f"PASSED '{test_name}'")
         return True
@@ -170,13 +227,13 @@ def run_test_print_result(test_dir: Path) -> bool:
         return False
 
 
-def run_tests(tests: list[Path], workers: int) -> int:
+def run_tests(v1_tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        passed = sum(executor.map(run_test_print_result, tests))
+        passed = sum(executor.map(run_test_print_result, v1_tests))
 
-    failed = len(tests) - passed
+    failed = len(v1_tests) - passed
     if failed:
-        print(f"FAILED {failed}/{len(tests)} TESTS!")
+        print(f"FAILED {failed}/{len(v1_tests)} TESTS!")
     else:
         print(f"PASSED ALL {passed} TESTS")
 
@@ -189,16 +246,24 @@ def main() -> None:
     parser.add_argument("--workers", required=False, type=int, default=cpu_count())
 
     args = parser.parse_args()
+
+    V2_OUT_DIR.mkdir(exist_ok=True)
+
     if args.test is not None:
         run_test(PARENT_DIR / args.test, io_harness=False)
     else:
-        all_test_dirs = [
+        all_v1_test_dirs = [
             test_path.parent
             for test_path in PARENT_DIR.rglob("**/test.json")
             if test_path.is_file()
         ]
+        all_v2_test_files = [
+            test_file
+            for test_file in V2_TESTS_DIR.rglob("**/*.c3")
+            if test_file.is_file()
+        ]
 
-        sys_exit(run_tests(all_test_dirs, args.workers))
+        sys_exit(run_tests(all_v1_test_dirs + all_v2_test_files, args.workers))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,26 @@
+{
+    "compile": {
+        "command": [
+            "python",
+            "../../../../driver.py",
+            "main.c3",
+            "--emit-llvm",
+            "-o",
+            "./out/main.ll"
+        ],
+        "output": {
+            "status": 0
+        }
+    },
+    "runtime": {
+        "command": [
+            "grep",
+            "-Fq",
+            "%struct.__T_my_struct__G___T_i32__T_i16__T_i8 = type {i32, i16, i8}",
+            "out/main.ll"
+        ],
+        "output": {
+            "status": 0
+        }
+    }
+}
