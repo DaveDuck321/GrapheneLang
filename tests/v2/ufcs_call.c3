@@ -11,3 +11,6 @@ function main: () -> int = {
     let x: int = 2;
     return x:add(-1):add(3);
 };
+
+/// @COMPILE
+/// @RUN; EXPECT 4
