@@ -6,10 +6,10 @@ from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
-class Dereference(TypedExpression):
+class SquashIntoUnderlyingType(TypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        # Note: this is sufficient since we cannot have an indirect reference to a reference
-        super().__init__(ref.get_equivalent_pure_type().convert_to_value_type(), False)
+        # Converts a TypedExpression into an underlying type with no indirection
+        super().__init__(ref.underlying_type, False)
 
         self.ref = ref
 
@@ -31,13 +31,13 @@ class Dereference(TypedExpression):
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        return f"Dereference({self.ref})"
+        return f"SquashIntoUnderlyingType({self.ref})"
 
     def assert_can_read_from(self) -> None:
         self.ref.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot modify a dereferenced value")
+        raise OperandError("Cannot modify a squashed value")
 
 
 class PromoteInteger(TypedExpression):
@@ -155,13 +155,13 @@ def implicit_conversion_impl(
         return expr_list[-1]
 
     def last_type() -> Type:
-        return expr_list[-1].get_equivalent_pure_type()
+        return expr_list[-1].underlying_type
 
     promotion_cost: int = 0
 
     # Always dereference implicit addresses
     if src.is_indirect_pointer_to_type:
-        expr_list.append(Dereference(src))
+        expr_list.append(SquashIntoUnderlyingType(src))
 
     # The type-system reference should not be implicitly dereferenced
     if last_type().is_reference != dest_type.is_reference:
