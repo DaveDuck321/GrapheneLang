@@ -5,7 +5,6 @@ from .builtin_types import BoolType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
-    Dereference,
     do_implicit_conversion,
 )
 from .user_facing_errors import AssignmentToNonPointerError, RedefinitionError
@@ -244,15 +243,8 @@ class Assignment(Generatable):
                 dst.underlying_type.get_user_facing_name(False)
             )
 
-        self._conversion_exprs: list[TypedExpression] = []
-
         self._dst = dst
         self._src = src
-
-        # TODO: maybe memcopy large structs here
-        if src.has_address:
-            self._src = Dereference(src)
-            self._conversion_exprs.append(self._src)
 
         self._target_type = dst.underlying_type.convert_to_value_type()
         assert_is_implicitly_convertible(self._src, self._target_type, "assignment")
@@ -264,7 +256,6 @@ class Assignment(Generatable):
         )
 
         conversion_ir: list[str] = []
-        conversion_ir.extend(self.expand_ir(self._conversion_exprs, reg_gen))
         conversion_ir.extend(self.expand_ir(src_conversions, reg_gen))
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
