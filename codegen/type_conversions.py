@@ -6,22 +6,6 @@ from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
-def dereference_double_indirection(
-    reg_gen: Iterator[int], ir: list[str], target_expression: TypedExpression
-) -> int:
-    # Converts a double indirection eg. address of reference into a reference
-    assert target_expression.has_address
-
-    store_at = next(reg_gen)
-    ir.extend(
-        [
-            f"%{store_at} = load ptr, {target_expression.ir_ref_with_type_annotation}, "
-            f"align {target_expression.get_equivalent_pure_type().alignment}"
-        ]
-    )
-    return store_at
-
-
 class Dereference(TypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
         # Note: this is sufficient since we cannot have an indirect reference to a reference

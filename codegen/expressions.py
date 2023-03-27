@@ -12,7 +12,6 @@ from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
-    dereference_double_indirection,
     do_implicit_conversion,
 )
 from .user_facing_errors import (
@@ -86,7 +85,7 @@ class VariableReference(TypedExpression):
 
         ir = []
         if self.variable.type.is_reference:
-            self._ir_ref = f"%{dereference_double_indirection(reg_gen, ir, self)}"
+            self._ir_ref = f"%{self.dereference_double_indirection(reg_gen, ir)}"
 
         return ir
 
@@ -246,7 +245,7 @@ class StructMemberAccess(TypedExpression):
 
         # Prevent double indirection, dereference the element pointer to get the underlying reference
         if self._member_type.is_reference:
-            self.result_reg = dereference_double_indirection(reg_gen, ir, self)
+            self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
 
@@ -345,7 +344,7 @@ class ArrayIndexAccess(TypedExpression):
         ]
 
         if self._element_type.is_reference:
-            self.result_reg = dereference_double_indirection(reg_gen, ir, self)
+            self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
 
