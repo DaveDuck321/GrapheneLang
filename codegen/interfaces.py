@@ -301,9 +301,8 @@ class TypedExpression(Generatable):
 
     @property
     def ir_ref_with_type_annotation(self) -> str:
-        reference = self.ir_ref_without_type_annotation
-        assert reference is not None
-        return f"{self.ir_type_annotation} {reference}"
+        assert self.ir_ref_without_type_annotation is not None
+        return f"{self.ir_type_annotation} {self.ir_ref_without_type_annotation}"
 
     @property
     def ir_type_annotation(self) -> str:
@@ -311,21 +310,6 @@ class TypedExpression(Generatable):
             return "ptr"
 
         return self.underlying_type.ir_type
-
-    def dereference_once_in_ir__1(self, reg_gen: Iterator[int], ir: list[str]) -> int:
-        # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
-        pure_type = self.get_equivalent_pure_type()
-        target_type = self.underlying_type
-
-        result_reg = next(reg_gen)
-
-        ir.extend(
-            [
-                f"%{result_reg} = load {target_type.ir_type}, "
-                f"{self.ir_ref_with_type_annotation}, align {pure_type.alignment}"
-            ]
-        )
-        return result_reg
 
     @property
     @abstractmethod
