@@ -311,6 +311,21 @@ class TypedExpression(Generatable):
 
         return self.underlying_type.ir_type
 
+    def dereference_double_indirection(
+        self, reg_gen: Iterator[int], ir: list[str]
+    ) -> int:
+        # Converts a double indirection eg. address of reference into a reference
+        assert self.has_address
+
+        store_at = next(reg_gen)
+        ir.extend(
+            [
+                f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
+                f"align {self.get_equivalent_pure_type().alignment}"
+            ]
+        )
+        return store_at
+
     @property
     @abstractmethod
     def ir_ref_without_type_annotation(self) -> str:
