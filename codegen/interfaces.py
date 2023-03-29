@@ -318,11 +318,9 @@ class TypedExpression(Generatable):
         assert self.has_address
 
         store_at = next(reg_gen)
-        ir.extend(
-            [
-                f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
-                f"align {self.get_equivalent_pure_type().alignment}"
-            ]
+        ir.append(
+            f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
+            f"align {self.get_equivalent_pure_type().alignment}"
         )
         return store_at
 

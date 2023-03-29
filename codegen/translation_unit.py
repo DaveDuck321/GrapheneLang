@@ -276,7 +276,6 @@ class FunctionSymbolTable:
             if total_cost is not None:
                 functions_by_cost.append((total_cost, function))
 
-        # List is sorted by the first element, then by the second.
         functions_by_cost.sort(key=lambda t: t[0])
 
         readable_arg_names = ", ".join(
