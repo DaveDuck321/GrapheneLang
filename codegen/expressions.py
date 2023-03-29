@@ -171,9 +171,9 @@ class FunctionCallExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        # Can write to any reference return type. TODO we don't have references
-        # yet, so any attempt to write to the return value should fail for now.
-        raise OperandError(f"Cannot modify the value returned by {self.signature}")
+        # TODO: Maybe the error message could be better? Atm we have:
+        #   Error: cannot assign to non-reference 'int' since it does not have an address
+        pass
 
 
 class BorrowExpression(TypedExpression):
