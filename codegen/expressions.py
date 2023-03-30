@@ -84,7 +84,7 @@ class VariableReference(TypedExpression):
         self._ir_ref = self.variable.ir_ref_without_type_annotation
 
         ir = []
-        if self.variable.type.is_reference:
+        if self.variable.type.is_borrowed_reference:
             self._ir_ref = f"%{self.dereference_double_indirection(reg_gen, ir)}"
 
         return ir
@@ -118,7 +118,7 @@ class FunctionCallExpression(TypedExpression):
     def __init__(
         self, signature: FunctionSignature, args: list[TypedExpression]
     ) -> None:
-        if signature.return_type.is_reference:
+        if signature.return_type.is_borrowed_reference:
             # The user needs to borrow again if they want the actual reference
             super().__init__(signature.return_type.convert_to_value_type(), True)
         else:
@@ -180,7 +180,7 @@ class BorrowExpression(TypedExpression):
     def __init__(self, expr: TypedExpression) -> None:
         self._expr = expr
 
-        if expr.underlying_type.is_reference:
+        if expr.underlying_type.is_borrowed_reference:
             raise DoubleBorrowError(expr.underlying_type.get_user_facing_name(True))
 
         if not expr.is_indirect_pointer_to_type:
@@ -221,7 +221,7 @@ class StructMemberAccess(TypedExpression):
         )
 
         # If the member is a reference we can always calculate an address
-        if self._member_type.is_reference:
+        if self._member_type.is_borrowed_reference:
             super().__init__(self._member_type.convert_to_value_type(), True)
         else:
             # We only know an address if the struct itself has an address
@@ -244,7 +244,7 @@ class StructMemberAccess(TypedExpression):
         ]
 
         # Prevent double indirection, dereference the element pointer to get the underlying reference
-        if self._member_type.is_reference:
+        if self._member_type.is_borrowed_reference:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
@@ -343,7 +343,7 @@ class ArrayIndexAccess(TypedExpression):
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
-        if self._element_type.is_reference:
+        if self._element_type.is_borrowed_reference:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
