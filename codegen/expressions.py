@@ -47,6 +47,7 @@ class ConstantExpression(TypedExpression):
 
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
+        # A variable with a reference type needs borrowing before it becomes a true reference
         super().__init__(variable.type.convert_to_value_type(), True)
 
         self.variable = variable
@@ -294,10 +295,10 @@ class ArrayIndexAccess(TypedExpression):
         # NOTE: needs address since getelementptr must be used for runtime indexing
         assert array_ptr.has_address
 
-        self._underlying_array: Type = array_ptr.underlying_type
+        self._type_of_array: Type = array_ptr.underlying_type
         self._array_ptr = array_ptr
 
-        array_definition = self._underlying_array.definition
+        array_definition = self._type_of_array.definition
         if not isinstance(array_definition, ArrayDefinition):
             raise TypeCheckerError(
                 "array index access",
@@ -307,7 +308,7 @@ class ArrayIndexAccess(TypedExpression):
 
         if len(array_definition._dimensions) != len(indices):
             raise ArrayIndexCount(
-                self._underlying_array.get_user_facing_name(False),
+                self._type_of_array.get_user_facing_name(False),
                 len(indices),
                 len(array_definition._dimensions),
             )
@@ -339,7 +340,7 @@ class ArrayIndexAccess(TypedExpression):
         self.result_reg = next(reg_gen)
         ir = [
             *conversion_ir,
-            f"%{self.result_reg} = getelementptr inbounds {self._underlying_array.ir_type},"
+            f"%{self.result_reg} = getelementptr inbounds {self._type_of_array.ir_type},"
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
