@@ -165,10 +165,15 @@ def implicit_conversion_impl(
 
     # The type-system reference should not be implicitly dereferenced
     if last_type().is_borrowed_reference != dest_type.is_borrowed_reference:
+        maybe_missing_borrow = False
+        if src.underlying_type == dest_type.convert_to_value_type():
+            maybe_missing_borrow = src.was_reference_type_at_any_point
+
         raise TypeCheckerError(
             context,
             src.underlying_type.get_user_facing_name(False),
             dest_type.get_user_facing_name(False),
+            maybe_missing_borrow,
         )
 
     # Integer promotion.

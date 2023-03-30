@@ -25,9 +25,24 @@ class ErrorWithLineInfo(ValueError):
 
 
 class TypeCheckerError(GrapheneError):
-    def __init__(self, context: str, actual: str, expected: str) -> None:
+    def __init__(
+        self,
+        context: str,
+        actual: str,
+        expected: str,
+        maybe_missing_borrow: bool = False,
+    ) -> None:
+        extra_context = (
+            "\n    "
+            f"Type '{actual}' is implicitly dereferenced here, "
+            "did you mean to borrow using '&...'?"
+            if maybe_missing_borrow
+            else ""
+        )
+
         super().__init__(
             f"Error in {context}: type '{actual}' does not match expected type '{expected}'"
+            f"{extra_context}"
         )
 
 
