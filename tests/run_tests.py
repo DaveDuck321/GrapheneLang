@@ -63,7 +63,8 @@ def validate_command_status(
     status = subprocess.call(command, cwd=str(directory))
 
     if expected_output.get("status", 0) != status:
-        print("*** ERROR: Actual 'status' does not match expected")
+        # We don't capture stdout and stderr.
+        raise TestFailure("status", status, [], [])
 
 
 def validate_command_output_with_harness(
