@@ -100,7 +100,9 @@ class Type:
         name = f"{self._typedef_alias} = " if self._typedef_alias else ""
         name += repr(self.definition)
 
-        return f"{self.__class__.__name__}({name}, is_ref={self._is_borrowed_reference})"
+        return (
+            f"{self.__class__.__name__}({name}, is_ref={self._is_borrowed_reference})"
+        )
 
     def get_specialization(self) -> list["Type"]:
         return self._specialization.copy()
