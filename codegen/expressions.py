@@ -48,7 +48,11 @@ class ConstantExpression(TypedExpression):
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
         # A variable with a reference type needs borrowing before it becomes a true reference
-        super().__init__(variable.type.convert_to_value_type(), True)
+        super().__init__(
+            variable.type.convert_to_value_type(),
+            True,
+            variable.type.is_borrowed_reference,
+        )
 
         self.variable = variable
 
@@ -121,7 +125,7 @@ class FunctionCallExpression(TypedExpression):
     ) -> None:
         if signature.return_type.is_borrowed_reference:
             # The user needs to borrow again if they want the actual reference
-            super().__init__(signature.return_type.convert_to_value_type(), True)
+            super().__init__(signature.return_type.convert_to_value_type(), True, True)
         else:
             # The function returns a value (not an address), so we can't later borrow it
             super().__init__(signature.return_type, False)
