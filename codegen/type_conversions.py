@@ -45,7 +45,7 @@ class PromoteInteger(TypedExpression):
         src_definition = src.underlying_type.definition
 
         assert not src.has_address
-        assert not dest_type.is_reference
+        assert not dest_type.is_borrowed_reference
         assert isinstance(src_definition, IntegerDefinition)
         assert isinstance(dest_type.definition, IntegerDefinition)
         assert src_definition.is_signed == dest_type.definition.is_signed
@@ -164,7 +164,7 @@ def implicit_conversion_impl(
         expr_list.append(SquashIntoUnderlyingType(src))
 
     # The type-system reference should not be implicitly dereferenced
-    if last_type().is_reference != dest_type.is_reference:
+    if last_type().is_borrowed_reference != dest_type.is_borrowed_reference:
         raise TypeCheckerError(
             context,
             src.underlying_type.get_user_facing_name(False),

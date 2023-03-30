@@ -78,11 +78,11 @@ class Type:
         self._specialization = specialization if specialization is not None else []
 
         self._typedef_alias = typedef_alias
-        self._is_reference = False
+        self._is_borrowed_reference = False
 
     @property
-    def is_reference(self) -> bool:
-        return self._is_reference
+    def is_borrowed_reference(self) -> bool:
+        return self._is_borrowed_reference
 
     @property
     def is_void(self) -> bool:
@@ -100,13 +100,13 @@ class Type:
         name = f"{self._typedef_alias} = " if self._typedef_alias else ""
         name += repr(self.definition)
 
-        return f"{self.__class__.__name__}({name}, is_ref={self._is_reference})"
+        return f"{self.__class__.__name__}({name}, is_ref={self._is_borrowed_reference})"
 
     def get_specialization(self) -> list["Type"]:
         return self._specialization.copy()
 
     def get_user_facing_name(self, full: bool) -> str:
-        suffix = self.generic_annotation + ("&" * self._is_reference)
+        suffix = self.generic_annotation + ("&" * self._is_borrowed_reference)
 
         # Return everything (that's available).
         # TODO this should return something like "T&&, where typedef T = ...".
@@ -128,28 +128,28 @@ class Type:
 
         return (
             self.definition == other.definition
-            and self.is_reference == other.is_reference
+            and self.is_borrowed_reference == other.is_borrowed_reference
         )
 
     @property
     def alignment(self) -> int:
         # FIXME replace magic number.
-        return 8 if self.is_reference else self.definition.alignment
+        return 8 if self.is_borrowed_reference else self.definition.alignment
 
     @property
     def size(self) -> int:
         # FIXME replace magic number.
-        return 8 if self.is_reference else self.definition.size
+        return 8 if self.is_borrowed_reference else self.definition.size
 
     @property
     def ir_definition(self) -> str:
         # Opaque pointer type.
-        return "ptr" if self.is_reference else self.definition.ir_definition
+        return "ptr" if self.is_borrowed_reference else self.definition.ir_definition
 
     @property
     def ir_type(self) -> str:
         # Opaque pointer type.
-        if self.is_reference:
+        if self.is_borrowed_reference:
             return "ptr"
 
         if self._typedef_alias:
@@ -171,12 +171,14 @@ class Type:
         value_type_mangled = self.mangle_generic_type(alias, self._specialization)
 
         return (
-            f"__RT{value_type_mangled}__TR" if self.is_reference else value_type_mangled
+            f"__RT{value_type_mangled}__TR"
+            if self.is_borrowed_reference
+            else value_type_mangled
         )
 
     def to_ir_constant(self, value: str) -> str:
         # We shouldn't be able to initialize a reference type with a constant.
-        assert not self.is_reference
+        assert not self.is_borrowed_reference
 
         return self.definition.to_ir_constant(value)
 
@@ -185,15 +187,15 @@ class Type:
         return copy(self)
 
     def take_reference(self) -> "Type":
-        assert not self.is_reference
+        assert not self.is_borrowed_reference
 
         new_type = self.copy()
-        new_type._is_reference = True
+        new_type._is_borrowed_reference = True
         return new_type
 
     def convert_to_value_type(self) -> "Type":
         new_type = self.copy()
-        new_type._is_reference = False
+        new_type._is_borrowed_reference = False
         return new_type
 
     def new_from_typedef(
@@ -278,7 +280,7 @@ class TypedExpression(Generatable):
     def __init__(self, expr_type: Type, is_indirect_pointer_to_type: bool) -> None:
         super().__init__()
         # It is the callers responsibility to escape double indirections
-        if expr_type.is_reference:
+        if expr_type.is_borrowed_reference:
             assert not is_indirect_pointer_to_type
 
         self.underlying_type = expr_type
@@ -293,7 +295,10 @@ class TypedExpression(Generatable):
 
     @property
     def has_address(self) -> bool:
-        return self.underlying_type.is_reference or self.is_indirect_pointer_to_type
+        return (
+            self.underlying_type.is_borrowed_reference
+            or self.is_indirect_pointer_to_type
+        )
 
     def is_return_guaranteed(self) -> bool:
         # At the moment no TypedExpression can return

@@ -108,7 +108,7 @@ class TypeTransformer(Transformer):
     def ref_type(self, value_type: cg.Type) -> cg.Type:
         assert isinstance(value_type, cg.Type)
 
-        if value_type.is_reference:
+        if value_type.is_borrowed_reference:
             raise DoubleReferenceError(value_type.get_user_facing_name(True))
 
         return value_type.take_reference()
