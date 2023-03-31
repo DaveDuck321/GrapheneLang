@@ -88,7 +88,7 @@ class PromoteInteger(TypedExpression):
 class Reinterpret(TypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
         # Bit cast between anything
-        super().__init__(dest_type, src.has_address)
+        super().__init__(dest_type, False)
 
         self._src = src
         self._no_conversion_needed = (
