@@ -1,4 +1,4 @@
-foreign puts : (str : string) -> int;
+foreign puts : (str : u8[&]) -> int;
 
 function normal_overloaded_function : (a : i64) -> int = {
     puts("i64");

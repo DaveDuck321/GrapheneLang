@@ -1,4 +1,4 @@
-foreign puts: (str : string) -> int;
+foreign puts: (str : u8[&]) -> int;
 
 function f: (x: int, y: int) -> int = { puts("val"); return 0; };
 function f: (x: int&, y: i64) -> int = { puts("ref"); return 0; };

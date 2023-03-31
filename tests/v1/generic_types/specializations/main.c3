@@ -6,7 +6,7 @@ typedef IsIntegral<int> : TrueType;
 typedef IsIntegral<u8> : TrueType;
 typedef IsIntegral<u16> : TrueType;
 
-foreign puts : (str : string) -> int;
+foreign puts : (str : u8[&]) -> int;
 
 function to_value : (_: TrueType) -> bool = {
     return true;
@@ -22,10 +22,10 @@ function main : () -> int = {
         puts("u16 is integral");
     }
 
-    let result2 : IsIntegral<string> = {};
+    let result2 : IsIntegral<u8[&]> = {};
     if (to_value(result2)) {
         // Should not run
-        puts("string is integral");
+        puts("u8[&] is integral");
     }
     return 0;
 };

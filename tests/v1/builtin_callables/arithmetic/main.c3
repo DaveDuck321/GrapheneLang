@@ -53,7 +53,7 @@
     return __builtin_bitwise_xor(lhs, rhs);
 };
 
-foreign puts : (str: string) -> int;
+foreign puts : (str: u8[&]) -> int;
 
 function main : () -> int = {
     if (1 + 1 != 3) {

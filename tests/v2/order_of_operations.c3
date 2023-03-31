@@ -1,4 +1,4 @@
-foreign puts : (str: string) -> int;
+foreign puts : (str: u8[&]) -> int;
 
 @operator + : (rhs: int, lhs: int) -> int = {
     puts("+");
