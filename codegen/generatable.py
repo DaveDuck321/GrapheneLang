@@ -66,7 +66,7 @@ class StaticVariable(Variable):
     @property
     def ir_ref_without_type_annotation(self) -> str:
         assert self.ir_reg is not None
-        if isinstance(self.type, CharArrayDefinition):
+        if isinstance(self.type.definition, CharArrayDefinition):
             return f"@.str.{self.ir_reg}"
         else:
             return f"@.{self.ir_reg}"
