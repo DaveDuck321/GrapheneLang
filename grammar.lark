@@ -17,7 +17,7 @@
 
 type_name: IDENTIFIER [generic_specialization]
 generic_definition_list: "[" IDENTIFIER ("," IDENTIFIER)* "]"
-generic_specialization: "<" type_name ("," type_name)* ">"
+generic_specialization: "<" type ("," type)* ">"
 
 _inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)*
 _inner_list_of_types: (type ("," type)*)?  // Can be empty
