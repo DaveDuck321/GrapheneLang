@@ -7,7 +7,7 @@ from typing import Any, Iterable, Iterator, Optional
 
 class TypeDefinition(ABC):
     @abstractmethod
-    def to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
         pass
 
     @cached_property
@@ -178,11 +178,10 @@ class Type:
             else value_type_mangled
         )
 
-    def to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
         # We shouldn't be able to initialize a reference type with a constant.
         assert not self.is_borrowed_reference
-
-        return self.definition.to_ir_constant(value)
+        return self.definition.graphene_literal_to_ir_constant(value)
 
     def copy(self) -> "Type":
         # FIXME should this be a deepcopy()?
@@ -223,7 +222,7 @@ class Parameter:
 class Variable(ABC):
     # TODO much of this interface is common with TypedExpression. Maybe they
     # should have a shared base class.
-    def __init__(self, name: str, var_type: Type, constant: bool) -> None:
+    def __init__(self, name: Optional[str], var_type: Type, constant: bool) -> None:
         super().__init__()
 
         self._name = name
@@ -234,6 +233,7 @@ class Variable(ABC):
 
     @property
     def user_facing_name(self) -> str:
+        assert self._name is not None
         return self._name
 
     @property
@@ -252,6 +252,14 @@ class Variable(ABC):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._name}: {repr(self.type)})"
+
+    @abstractmethod
+    def assert_can_read_from(self) -> None:
+        pass
+
+    @abstractmethod
+    def assert_can_write_to(self) -> None:
+        pass
 
 
 class Generatable(ABC):

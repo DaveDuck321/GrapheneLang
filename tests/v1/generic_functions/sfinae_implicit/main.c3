@@ -10,7 +10,7 @@ typedef IsLargeIntegral<i32> : TrueType;
 typedef IsLargeIntegral<i64> : TrueType;
 typedef IsLargeIntegral<i128> : TrueType;
 
-foreign puts : (str : string) -> int;
+foreign puts : (str : u8[&]) -> int;
 
 function[T] generic_fn : (a : T) -> EnableIf<IsLargeIntegral<T>> = {
     puts("Large integral type");

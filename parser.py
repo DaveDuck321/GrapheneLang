@@ -665,10 +665,11 @@ class ExpressionTransformer(Transformer):
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
-        identifier = self._program.add_string(string[1:-1])
+        str_static_storage = self._program.add_static_string(string[1:-1])
+        expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
 
-        str_const = cg.ConstantExpression(cg.StringType(), identifier)
-        return FlattenedExpression([str_const])
+        # Implicitly take reference to string literal
+        return expr.add_parent(cg.BorrowExpression(expr.expression()))
 
     @v_args(inline=True)
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:

@@ -1,13 +1,16 @@
-from functools import cached_property
 from typing import Iterable, Iterator, Optional
 
-from .builtin_types import BoolType
+from .builtin_types import BoolType, CharArrayDefinition
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
 )
-from .user_facing_errors import AssignmentToNonPointerError, RedefinitionError
+from .user_facing_errors import (
+    AssignmentToNonPointerError,
+    OperandError,
+    RedefinitionError,
+)
 
 
 class StackVariable(Variable):
@@ -38,6 +41,68 @@ class StackVariable(Variable):
         return [
             f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.alignment}"
         ]
+
+    def assert_can_read_from(self) -> None:
+        # Can ready any initialized variable.
+        if not self.initialized:
+            raise OperandError(
+                f"Cannot use uninitialized variable '{self.user_facing_name}'"
+            )
+
+    def assert_can_write_to(self) -> None:
+        # Can write to any non-constant variable.
+        if self.constant:
+            raise OperandError(
+                f"Cannot modify constant variable '{self.user_facing_name}'"
+            )
+
+
+class StaticVariable(Variable):
+    def __init__(self, var_type: Type, constant: bool, graphene_literal: str) -> None:
+        assert not var_type.is_borrowed_reference
+        self._graphene_literal = graphene_literal
+        super().__init__(None, var_type, constant)
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert self.ir_reg is not None
+        if isinstance(self.type.definition, CharArrayDefinition):
+            return f"@.str.{self.ir_reg}"
+        else:
+            return f"@.{self.ir_reg}"
+
+    @property
+    def ir_ref(self) -> str:
+        return f"{self.type.ir_type} {self.ir_ref_without_type_annotation}"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        additional_prefix = "unnamed_addr constant" if self.constant else "global"
+
+        literal = self.type.graphene_literal_to_ir_constant(self._graphene_literal)
+        # @<GlobalVarName> = [Linkage] [PreemptionSpecifier] [Visibility]
+        #            [DLLStorageClass] [ThreadLocal]
+        #            [(unnamed_addr|local_unnamed_addr)] [AddrSpace]
+        #            [ExternallyInitialized]
+        #            <global | constant> <Type> [<InitializerConstant>]
+        #            [, section "name"] [, partition "name"]
+        #            [, comdat [($name)]] [, align <Alignment>]
+        #            [, no_sanitize_address] [, no_sanitize_hwaddress]
+        #            [, sanitize_address_dyninit] [, sanitize_memtag]
+        #            (, !name !N)*
+        self.ir_reg = next(reg_gen)
+        return [
+            f"{self.ir_ref_without_type_annotation} = private {additional_prefix} "
+            f"{self.type.ir_type} {literal}"
+        ]
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        if self.constant:
+            raise OperandError(
+                f"Cannot modify constant variable '{self.user_facing_name}'"
+            )
 
 
 class Scope(Generatable):

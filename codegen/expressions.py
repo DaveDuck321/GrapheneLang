@@ -8,7 +8,6 @@ from .builtin_types import (
     SizeType,
     StructDefinition,
 )
-from .generatable import StackVariable
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
@@ -27,7 +26,7 @@ class ConstantExpression(TypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
         super().__init__(cst_type, False)
 
-        self.value = cst_type.to_ir_constant(value)
+        self.value = cst_type.graphene_literal_to_ir_constant(value)
 
     def __repr__(self) -> str:
         return f"ConstantExpression({self.underlying_type}, {self.value})"
@@ -65,25 +64,11 @@ class VariableReference(TypedExpression):
     def ir_ref_without_type_annotation(self) -> str:
         return self._ir_ref
 
-    def set_initialized_through_mutable_borrow(self) -> None:
-        assert isinstance(self.variable, StackVariable)
-        self.variable.initialized = True
-
     def assert_can_read_from(self) -> None:
-        assert isinstance(self.variable, StackVariable)
-
-        # Can ready any initialized variable.
-        if not self.variable.initialized:
-            raise OperandError(
-                f"Cannot use uninitialized variable '{self.variable.user_facing_name}'"
-            )
+        self.variable.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        # Can write to any non-constant variable.
-        if self.variable.constant:
-            raise OperandError(
-                f"Cannot modify constant variable '{self.variable.user_facing_name}'"
-            )
+        self.variable.assert_can_write_to()
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         self._ir_ref = self.variable.ir_ref_without_type_annotation

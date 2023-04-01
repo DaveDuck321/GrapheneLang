@@ -64,7 +64,7 @@ class IntegerDefinition(PrimitiveDefinition):
         self.is_signed = is_signed
         self.bits = size_in_bits
 
-    def to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
         if self.is_signed:
             range_lower = -(2 ** (self.bits - 1))
             range_upper = 2 ** (self.bits - 1)
@@ -92,7 +92,7 @@ class IntegerDefinition(PrimitiveDefinition):
 
 
 class VoidDefinition(TypeDefinition):
-    def to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
         assert False
 
     @cached_property
@@ -159,28 +159,9 @@ class BoolType(Type):
         def __init__(self) -> None:
             super().__init__(1, "i1", "bool")
 
-        def to_ir_constant(self, value: str) -> str:
+        def graphene_literal_to_ir_constant(self, value: str) -> str:
             # We happen to be using the same boolean constants as LLVM IR.
             assert value in ("true", "false")
-
-            return value
-
-    def __init__(self) -> None:
-        definition = self.Definition()
-        super().__init__(definition, definition._name)
-
-
-class StringType(Type):
-    # TODO: string probably shouldn't be a language primitive for much longer...
-    #       we can use u8[*] instead.
-    class Definition(PrimitiveDefinition):
-        def __init__(self) -> None:
-            super().__init__(8, "ptr", "string")
-
-        def to_ir_constant(self, value: str) -> str:
-            # String constants are handled at the translation unit level. We
-            # should already have an identifier.
-            assert value.startswith("@.str.")
 
             return value
 
@@ -212,7 +193,7 @@ class StructDefinition(TypeDefinition):
     def member_count(self) -> int:
         return len(self._members)
 
-    def to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
         # TODO support structure constants.
         raise NotImplementedError()
 
@@ -291,7 +272,7 @@ class ArrayDefinition(TypeDefinition):
     def dimensions(self) -> list[int]:
         return self._dimensions
 
-    def to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
         # TODO support array constants.
         raise NotImplementedError()
 
@@ -344,6 +325,16 @@ class ArrayDefinition(TypeDefinition):
             self._dimensions == other._dimensions
             and self._element_type == other._element_type
         )
+
+
+class CharArrayDefinition(ArrayDefinition):
+    def __init__(self, encoded_str: str, length: int) -> None:
+        self._encoded_str = encoded_str
+        super().__init__(GenericIntType("u8", 8, False), [length])
+
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
+        assert self._encoded_str == value
+        return f'c"{value}"'
 
 
 @dataclass
@@ -424,6 +415,5 @@ def get_builtin_types() -> list[Type]:
         BoolType(),
         IntType(),
         SizeType(),
-        StringType(),
         VoidType(),
     ]

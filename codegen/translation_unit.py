@@ -1,19 +1,18 @@
 from collections import defaultdict
-from dataclasses import dataclass
-from functools import cached_property, reduce
+from functools import cached_property
 from itertools import count
-from typing import Callable, Iterable, Iterator, Optional
+from typing import Callable, Iterable, Optional
 
 from .builtin_callables import get_builtin_callables
-from .builtin_types import FunctionSignature, get_builtin_types
+from .builtin_types import CharArrayDefinition, FunctionSignature, get_builtin_types
 from .expressions import FunctionCallExpression, FunctionParameter
-from .generatable import Scope, StackVariable, VariableAssignment
+from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
+from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
     AmbiguousFunctionCall,
     FailedLookupError,
-    InvalidEscapeSequence,
     OverloadResolutionError,
     RedefinitionError,
     SubstitutionFailure,
@@ -315,33 +314,7 @@ class FunctionSymbolTable:
         return first[1]
 
 
-@dataclass
-class StringInfo:
-    identifier: str
-    encoded_string: str
-    encoded_length: int
-
-    def __iter__(self) -> Iterator:
-        # Support for unpack the dataclass.
-        return iter((self.identifier, self.encoded_string, self.encoded_length))
-
-
 class Program:
-    # Based on https://en.cppreference.com/w/cpp/language/escape.
-    # We omit \' because we don't have single-quoted strings, and \? because
-    # we don't have trigraphs.
-    ESCAPE_SEQUENCES_TABLE = {
-        '"': chr(0x22),
-        "\\": chr(0x5C),
-        "a": chr(0x07),
-        "b": chr(0x08),
-        "f": chr(0x0C),
-        "n": chr(0x0A),
-        "r": chr(0x0D),
-        "t": chr(0x09),
-        "v": chr(0x0B),
-    }
-
     def __init__(self) -> None:
         super().__init__()
         self._builtin_callables = get_builtin_callables()
@@ -349,7 +322,9 @@ class Program:
         self._function_table = FunctionSymbolTable()
         self._initialized_types: dict[str, list[Type]] = defaultdict(list)
         self._type_initializers: dict[str, Callable[[str, list[Type]], Type]] = {}
-        self._strings: dict[str, StringInfo] = {}
+
+        self._string_cache: dict[str, StaticVariable] = {}
+        self._static_variables: list[StaticVariable] = []
 
         self._has_main: bool = False
 
@@ -446,102 +421,20 @@ class Program:
 
         self._initialized_types[type_prefix].append(parsed_type)
 
-    @staticmethod
-    def _get_string_identifier(index: int) -> str:
-        assert index >= 0
-        return f"@.str.{index}"
+    def add_static_string(self, string: str) -> StaticVariable:
+        if string in self._string_cache:
+            return self._string_cache[string]
 
-    def add_string(self, string: str) -> str:
-        # Deduplicate string constants.
-        if string in self._strings:
-            return self._strings[string].identifier
+        encoded_str, encoded_length = encode_string(string)
+        str_type = Type(CharArrayDefinition(encoded_str, encoded_length))
+        static_storage = StaticVariable(str_type, True, encoded_str)
+        self.add_static_variable(static_storage)
 
-        # Encoding the string now means that we can provide line information in
-        # case of an error.
-        encoded_string, encoded_length = self.encode_string(string)
-        identifier = self._get_string_identifier(len(self._strings))
+        self._string_cache[string] = static_storage
+        return static_storage
 
-        self._strings[string] = StringInfo(
-            identifier,
-            encoded_string,
-            encoded_length,
-        )
-
-        return identifier
-
-    @classmethod
-    def encode_string(cls, string: str) -> tuple[str, int]:
-        # LLVM is a bit vague on what is acceptable, but we definitely need to
-        # escape non-printable characters and double quotes with "\xx", where
-        # xx is the hexadecimal representation of each byte. We also parse
-        # escape sequences here.
-        # XXX we're using utf-8 for everything.
-
-        first: int = 0
-        byte_len: int = 0
-        buffer: list[str] = []
-
-        def encode_char(char: str) -> None:
-            nonlocal byte_len
-
-            utf8_bytes = char.encode("utf-8")
-
-            for byte in utf8_bytes:
-                # We can't store zeros in a null-terminated string.
-                assert byte != 0
-
-                buffer.append(f"\\{byte:0>2x}")
-
-            byte_len += len(utf8_bytes)
-
-        def consume_substr(last: int) -> None:
-            nonlocal byte_len
-
-            # Append the substr as-is instead of the utf-8 representation, as
-            # python will encode it anyway when we write to the output stream.
-            substr = string[first:last]
-            buffer.append(substr)
-            # FIXME there must be a better way.
-            byte_len += len(substr.encode("utf-8"))
-
-        chars = iter(enumerate(string))
-        for idx, char in chars:
-            if char == "\\":
-                # Consume up to the previous character.
-                consume_substr(idx)
-
-                # Should never raise StopIteration, as the grammar guarantees
-                # that we don't end a screen with a \.
-                _, escaped_char = next(chars)
-
-                if escaped_char not in cls.ESCAPE_SEQUENCES_TABLE:
-                    raise InvalidEscapeSequence(escaped_char)
-
-                # Easier if we always encode the representation of the escape
-                # sequence.
-                encode_char(cls.ESCAPE_SEQUENCES_TABLE[escaped_char])
-
-                # Start from the character after the next one.
-                first = idx + 2
-            elif not char.isprintable():
-                # Consume up to the previous character.
-                consume_substr(idx)
-
-                # Escape current character.
-                encode_char(char)
-
-                # Start from the next character.
-                first = idx + 1
-
-        # Consume any remaining characters.
-        consume_substr(len(string))
-
-        # Append the null terminator.
-        buffer.append("\\00")
-        byte_len += 1
-
-        # Appending to a str in a loop is O(n^2).
-        return str.join("", buffer), byte_len
+    def add_static_variable(self, var: StaticVariable) -> None:
+        self._static_variables.append(var)
 
     def generate_ir(self, target="x86_64-pc-linux-gnu") -> list[str]:
         lines: list[str] = []
@@ -549,11 +442,9 @@ class Program:
         lines.append(f'target triple = "{target}"')
 
         lines.append("")
-        for identifier, encoded_string, encoded_length in self._strings.values():
-            lines.append(
-                f"{identifier} = private unnamed_addr constant"
-                f' [{encoded_length} x i8] c"{encoded_string}"'
-            )
+        var_reg_gen = count(0)
+        for variable in self._static_variables:
+            lines.extend(variable.generate_ir(var_reg_gen))
 
         lines.append("")
         for type_family in self._initialized_types.values():

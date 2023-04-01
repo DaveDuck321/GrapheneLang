@@ -1,6 +1,6 @@
 typedef MyStruct : {a : int};
 
-foreign puts : (str : string) -> int;
+foreign puts : (str : u8[&]) -> int;
 
 function fn : (a: int) -> int = {
     puts("val");

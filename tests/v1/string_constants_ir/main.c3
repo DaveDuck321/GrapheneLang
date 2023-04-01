@@ -1,4 +1,4 @@
-foreign puts: (str: string) -> int;
+foreign puts: (str: u8[&]) -> int;
 
 function main: () -> int = {
     // There are two characters between the β and the γ:
