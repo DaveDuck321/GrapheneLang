@@ -175,7 +175,7 @@ expression: _expression
 
 assignment: expression "=" expression
 
-scope: "{" (scope | _line_of_code)* "}"
+scope: "{" _line_of_code* "}"
 
 _line_of_code_without_semi: assignment
                           | const_declaration
@@ -185,6 +185,7 @@ _line_of_code_without_semi: assignment
 
 _line_of_code: _line_of_code_without_semi ";"
              | if_statement
+             | scope
 
 
 //
