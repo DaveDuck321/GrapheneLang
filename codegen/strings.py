@@ -57,7 +57,7 @@ def encode_string(string: str) -> tuple[str, int]:
             consume_substr(idx)
 
             # Should never raise StopIteration, as the grammar guarantees
-            # that we don't end a screen with a \.
+            # that we don't end a string with a \.
             _, escaped_char = next(chars)
 
             if escaped_char not in _ESCAPE_SEQUENCES_TABLE:
