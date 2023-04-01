@@ -269,6 +269,49 @@ class NarrowExpression(TypedExpression):
         raise OperandError("cannot assign to `__builtin_narrow<...>(...)`")
 
 
+class PtrToIntExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[Type], arguments: list[TypedExpression]
+    ) -> None:
+        assert len(specialization) == 1
+        assert len(arguments) == 1
+
+        (int_type,) = specialization
+        assert not int_type.is_borrowed_reference
+        assert isinstance(int_type, GenericIntType)
+
+        # We don't attempt to dereference this at all. src_expr shouldn't have
+        # more than one layer of indirection.
+        (self._src_expr,) = arguments
+        assert self._src_expr.has_address
+
+        super().__init__(int_type, False)
+
+    def __repr__(self) -> str:
+        return f"PtrToInt({self._src_expr} to {self.underlying_type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # Implicit conversions do not apply.
+
+        self.result_reg = next(reg_gen)
+
+        # <result> = ptrtoint <ty> <value> to <ty2>
+        return [
+            f"%{self.result_reg} = ptrtoint {self._src_expr.ir_ref_with_type_annotation}"
+            f" to {self.underlying_type.ir_type}"
+        ]
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_ptr_to_int<...>()`")
+
+
 def get_builtin_callables() -> dict[
     str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
 ]:
@@ -302,4 +345,5 @@ def get_builtin_callables() -> dict[
         "__builtin_alignof": AlignOfExpression,
         "__builtin_narrow": NarrowExpression,
         "__builtin_sizeof": SizeOfExpression,
+        "__builtin_ptr_to_int": PtrToIntExpression,
     }
