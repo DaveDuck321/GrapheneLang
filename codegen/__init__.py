@@ -1,7 +1,6 @@
 from .builtin_types import (
     ArrayDefinition,
     BoolType,
-    CharArrayDefinition,
     IntType,
     StructDefinition,
     VoidType,
@@ -22,5 +21,4 @@ from .generatable import (
     VariableAssignment,
 )
 from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
-from .strings import encode_string
 from .translation_unit import Function, GenericFunctionParser, Program, Scope

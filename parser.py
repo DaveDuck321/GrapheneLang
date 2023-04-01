@@ -665,13 +665,7 @@ class ExpressionTransformer(Transformer):
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
-
-        encoded_str, encoded_length = cg.encode_string(string[1:-1])
-        str_type = cg.Type(cg.CharArrayDefinition(encoded_str, encoded_length))
-        str_static_storage = cg.StaticVariable(str_type, True, encoded_str)
-
-        self._program.add_static_variable(str_static_storage)
-
+        str_static_storage = self._program.add_static_string(string[1:-1])
         expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
 
         # Implicitly take reference to string literal

@@ -4,10 +4,11 @@ from itertools import count
 from typing import Callable, Iterable, Optional
 
 from .builtin_callables import get_builtin_callables
-from .builtin_types import FunctionSignature, get_builtin_types
+from .builtin_types import CharArrayDefinition, FunctionSignature, get_builtin_types
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
 from .interfaces import Parameter, Type, TypedExpression
+from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
     AmbiguousFunctionCall,
@@ -321,6 +322,8 @@ class Program:
         self._function_table = FunctionSymbolTable()
         self._initialized_types: dict[str, list[Type]] = defaultdict(list)
         self._type_initializers: dict[str, Callable[[str, list[Type]], Type]] = {}
+
+        self._string_cache: dict[str, StaticVariable] = {}
         self._static_variables: list[StaticVariable] = []
 
         self._has_main: bool = False
@@ -417,6 +420,18 @@ class Program:
                 )
 
         self._initialized_types[type_prefix].append(parsed_type)
+
+    def add_static_string(self, string: str) -> StaticVariable:
+        if string in self._string_cache:
+            return self._string_cache[string]
+
+        encoded_str, encoded_length = encode_string(string)
+        str_type = Type(CharArrayDefinition(encoded_str, encoded_length))
+        static_storage = StaticVariable(str_type, True, encoded_str)
+        self.add_static_variable(static_storage)
+
+        self._string_cache[string] = static_storage
+        return static_storage
 
     def add_static_variable(self, var: StaticVariable) -> None:
         self._static_variables.append(var)
