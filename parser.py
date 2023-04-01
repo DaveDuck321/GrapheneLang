@@ -905,6 +905,37 @@ def generate_if_statement(
     scope.add_generatable(if_statement)
 
 
+def generate_while_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
+) -> None:
+    condition_tree, inner_scope_tree = body.children
+    assert len(condition_tree.children) == 1
+
+    condition_expr = ExpressionTransformer.parse(
+        program, function, scope, generic_mapping, condition_tree
+    )
+    if isinstance(condition_expr, InitializerList):
+        raise InitializerListTypeDeductionFailure()
+
+    while_scope_id = function.get_next_scope_id()
+
+    inner_scope = cg.Scope(function.get_next_scope_id(), scope)
+    generate_body(program, function, inner_scope, inner_scope_tree, generic_mapping)
+
+    scope.add_generatable(
+        cg.WhileStatement(
+            while_scope_id,
+            condition_expr.expression(),
+            condition_expr.subexpressions,
+            inner_scope,
+        )
+    )
+
+
 def generate_assignment(
     program: cg.Program,
     function: cg.Function,
@@ -960,6 +991,7 @@ def generate_body(
         "return_statement": generate_return_statement,
         "scope": generate_scope_body,
         "variable_declaration": partial(generate_variable_declaration, False),
+        "while_statement": generate_while_statement,
     }
 
     for line in body.children:

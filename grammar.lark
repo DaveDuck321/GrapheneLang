@@ -162,6 +162,7 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 //
 
 if_statement: "if" "(" expression ")" scope ["else" scope]
+while_statement: "while" "(" expression ")" scope
 return_statement: "return" expression?
 
 
@@ -186,6 +187,7 @@ _line_of_code_without_semi: assignment
 _line_of_code: _line_of_code_without_semi ";"
              | if_statement
              | scope
+             | while_statement
 
 
 //

@@ -139,11 +139,11 @@ class IfElseStatement(Generatable):
                 f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.if_scope.start_label},"
                 f" label %{self.else_scope.start_label}"
             ),
-            # If block
+            # If body
             f"{self.if_scope.start_label}:",
             *self.if_scope.generate_ir(reg_gen),
             f"br label %{self.else_scope.end_label}",
-            # Else block
+            # Else body
             f"{self.else_scope.start_label}:",
             *self.else_scope.generate_ir(reg_gen),
             f"br label %{self.else_scope.end_label}",
@@ -158,6 +158,53 @@ class IfElseStatement(Generatable):
 
     def __repr__(self) -> str:
         return f"IfElseStatement({self.condition} {self.if_scope} {self.else_scope})"
+
+
+class WhileStatement(Generatable):
+    def __init__(
+        self,
+        new_scope_id: int,
+        condition: TypedExpression,
+        condition_generatable: list[Generatable],
+        inner_scope: Scope,
+    ) -> None:
+        super().__init__()
+
+        condition.assert_can_read_from()
+        assert_is_implicitly_convertible(condition, BoolType(), "while condition")
+
+        self.start_label = f"while_{new_scope_id}_begin"
+        self.end_label = f"while_{new_scope_id}_end"
+
+        self.condition = condition
+        self.condition_generatable = condition_generatable
+        self.inner_scope = inner_scope
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#br-instruction
+
+        conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
+
+        # br i1 <cond>, label <iftrue>, label <iffalse>
+        return [
+            f"br label %{self.start_label}",
+            f"{self.start_label}:",
+            # Evaluate condition
+            *self.expand_ir(self.condition_generatable, reg_gen),
+            *self.expand_ir(extra_exprs, reg_gen),
+            f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.inner_scope.start_label}, label %{self.end_label}",
+            # Loop body
+            f"{self.inner_scope.start_label}:",
+            *self.inner_scope.generate_ir(reg_gen),
+            f"br label %{self.start_label}",  # Loop
+            f"{self.end_label}:",
+        ]
+
+    def is_return_guaranteed(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return f"While({self.condition} {self.inner_scope})"
 
 
 class ReturnStatement(Generatable):

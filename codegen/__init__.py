@@ -19,6 +19,7 @@ from .generatable import (
     IfElseStatement,
     ReturnStatement,
     VariableAssignment,
+    WhileStatement,
 )
 from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
