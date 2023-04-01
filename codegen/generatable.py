@@ -111,46 +111,53 @@ class Scope(Generatable):
         return f"{{{','.join(map(repr, self._lines))}}}"
 
 
-class IfStatement(Generatable):
-    def __init__(self, condition: TypedExpression, scope: Scope) -> None:
+class IfElseStatement(Generatable):
+    def __init__(
+        self,
+        condition: TypedExpression,
+        if_scope: Scope,
+        else_scope: Scope,
+    ) -> None:
         super().__init__()
 
         condition.assert_can_read_from()
         assert_is_implicitly_convertible(condition, BoolType(), "if condition")
 
         self.condition = condition
-        self.scope = scope
+        self.if_scope = if_scope
+        self.else_scope = else_scope
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#br-instruction
 
         conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
 
-        ir_lines = self.expand_ir(extra_exprs, reg_gen)
-
-        # TODO: should the if statement also generate condition code?
-        #       atm its added to the parent scope by parser.generate_if_statement
-        # TODO: it also seems kind of strange that we generate the scope here
         # br i1 <cond>, label <iftrue>, label <iffalse>
-        ir_lines += [
+        return [
+            *self.expand_ir(extra_exprs, reg_gen),
             (
-                f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.scope.start_label},"
-                f" label %{self.scope.end_label}"
+                f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.if_scope.start_label},"
+                f" label %{self.else_scope.start_label}"
             ),
-            f"{self.scope.start_label}:",
-            *self.scope.generate_ir(reg_gen),
-            f"br label %{self.scope.end_label}",  # TODO: support `else` jump
-            f"{self.scope.end_label}:",
+            # If block
+            f"{self.if_scope.start_label}:",
+            *self.if_scope.generate_ir(reg_gen),
+            f"br label %{self.else_scope.end_label}",
+            # Else block
+            f"{self.else_scope.start_label}:",
+            *self.else_scope.generate_ir(reg_gen),
+            f"br label %{self.else_scope.end_label}",
+            f"{self.else_scope.end_label}:",
         ]
 
-        return ir_lines
-
     def is_return_guaranteed(self) -> bool:
-        # TODO: if else is present we can return True
-        return False
+        return (
+            self.if_scope.is_return_guaranteed()
+            and self.else_scope.is_return_guaranteed()
+        )
 
     def __repr__(self) -> str:
-        return f"IfStatement({self.condition} {self.scope})"
+        return f"IfElseStatement({self.condition} {self.if_scope} {self.else_scope})"
 
 
 class ReturnStatement(Generatable):

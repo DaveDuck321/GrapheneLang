@@ -161,7 +161,7 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 // Control flow
 //
 
-if_statement: "if" "(" expression ")" scope
+if_statement: "if" "(" expression ")" scope ["else" scope]
 return_statement: "return" expression?
 
 

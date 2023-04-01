@@ -880,7 +880,7 @@ def generate_if_statement(
     body: Tree,
     generic_mapping: dict[str, cg.Type],
 ) -> None:
-    condition_tree, scope_tree = body.children
+    condition_tree, if_scope_tree, else_scope_tree = body.children
     assert len(condition_tree.children) == 1
 
     condition_expr = ExpressionTransformer.parse(
@@ -891,10 +891,17 @@ def generate_if_statement(
 
     scope.add_generatable(condition_expr.subexpressions)
 
-    inner_scope = cg.Scope(function.get_next_scope_id(), scope)
-    generate_body(program, function, inner_scope, scope_tree, generic_mapping)
+    if_scope = cg.Scope(function.get_next_scope_id(), scope)
+    generate_body(program, function, if_scope, if_scope_tree, generic_mapping)
 
-    if_statement = cg.IfStatement(condition_expr.expression(), inner_scope)
+    # Note: this looks like a redundant scope when the else branch is empty but I've
+    #       chosen to explicitly codegen it here so we can generate destructors in
+    #       the else branch (eg. if it was moved in the if)
+    else_scope = cg.Scope(function.get_next_scope_id(), scope)
+    if else_scope_tree is not None:
+        generate_body(program, function, else_scope, else_scope_tree, generic_mapping)
+
+    if_statement = cg.IfElseStatement(condition_expr.expression(), if_scope, else_scope)
     scope.add_generatable(if_statement)
 
 
