@@ -161,7 +161,8 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 // Control flow
 //
 
-if_statement: "if" "(" expression ")" scope
+if_statement: "if" "(" expression ")" scope ["else" scope]
+while_statement: "while" "(" expression ")" scope
 return_statement: "return" expression?
 
 
@@ -175,7 +176,7 @@ expression: _expression
 
 assignment: expression "=" expression
 
-scope: "{" (scope | _line_of_code)* "}"
+scope: "{" _line_of_code* "}"
 
 _line_of_code_without_semi: assignment
                           | const_declaration
@@ -185,6 +186,8 @@ _line_of_code_without_semi: assignment
 
 _line_of_code: _line_of_code_without_semi ";"
              | if_statement
+             | scope
+             | while_statement
 
 
 //

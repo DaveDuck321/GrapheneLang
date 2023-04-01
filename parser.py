@@ -881,7 +881,7 @@ def generate_if_statement(
     body: Tree,
     generic_mapping: dict[str, cg.Type],
 ) -> None:
-    condition_tree, scope_tree = body.children
+    condition_tree, if_scope_tree, else_scope_tree = body.children
     assert len(condition_tree.children) == 1
 
     condition_expr = ExpressionTransformer.parse(
@@ -892,11 +892,49 @@ def generate_if_statement(
 
     scope.add_generatable(condition_expr.subexpressions)
 
-    inner_scope = cg.Scope(function.get_next_scope_id(), scope)
-    generate_body(program, function, inner_scope, scope_tree, generic_mapping)
+    if_scope = cg.Scope(function.get_next_scope_id(), scope)
+    generate_body(program, function, if_scope, if_scope_tree, generic_mapping)
 
-    if_statement = cg.IfStatement(condition_expr.expression(), inner_scope)
+    # Note: this looks like a redundant scope when the else branch is empty but I've
+    #       chosen to explicitly codegen it here so we can generate destructors in
+    #       the else branch (eg. if it was moved in the if)
+    else_scope = cg.Scope(function.get_next_scope_id(), scope)
+    if else_scope_tree is not None:
+        generate_body(program, function, else_scope, else_scope_tree, generic_mapping)
+
+    if_statement = cg.IfElseStatement(condition_expr.expression(), if_scope, else_scope)
     scope.add_generatable(if_statement)
+
+
+def generate_while_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: dict[str, cg.Type],
+) -> None:
+    condition_tree, inner_scope_tree = body.children
+    assert len(condition_tree.children) == 1
+
+    condition_expr = ExpressionTransformer.parse(
+        program, function, scope, generic_mapping, condition_tree
+    )
+    if isinstance(condition_expr, InitializerList):
+        raise InitializerListTypeDeductionFailure()
+
+    while_scope_id = function.get_next_scope_id()
+
+    inner_scope = cg.Scope(function.get_next_scope_id(), scope)
+    generate_body(program, function, inner_scope, inner_scope_tree, generic_mapping)
+
+    scope.add_generatable(
+        cg.WhileStatement(
+            while_scope_id,
+            condition_expr.expression(),
+            condition_expr.subexpressions,
+            inner_scope,
+        )
+    )
 
 
 def generate_assignment(
@@ -954,6 +992,7 @@ def generate_body(
         "return_statement": generate_return_statement,
         "scope": generate_scope_body,
         "variable_declaration": partial(generate_variable_declaration, False),
+        "while_statement": generate_while_statement,
     }
 
     for line in body.children:

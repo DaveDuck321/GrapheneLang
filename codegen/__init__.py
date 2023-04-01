@@ -14,11 +14,12 @@ from .expressions import (
 )
 from .generatable import (
     Assignment,
-    IfStatement,
+    IfElseStatement,
     ReturnStatement,
     StackVariable,
     StaticVariable,
     VariableAssignment,
+    WhileStatement,
 )
 from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
