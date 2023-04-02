@@ -37,7 +37,7 @@ class SquashIntoUnderlyingType(TypedExpression):
         self.ref.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot modify a squashed value")
+        raise OperandError("cannot modify a squashed value")
 
 
 class PromoteInteger(TypedExpression):
@@ -82,7 +82,7 @@ class PromoteInteger(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # TODO this isn't very helpful.
-        raise OperandError("Cannot modify promoted integers")
+        raise OperandError("cannot modify promoted integers")
 
 
 class Reinterpret(TypedExpression):

@@ -72,7 +72,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError(f"Cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
+        raise OperandError(f"cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
 
 
 class ArithmeticExpression(BasicIntegerExpression):
@@ -194,7 +194,7 @@ class AlignOfExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_alignof<...>()`")
+        raise OperandError("cannot assign to `__builtin_alignof<...>()`")
 
 
 class SizeOfExpression(TypedExpression):
@@ -222,7 +222,7 @@ class SizeOfExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_sizeof<...>()`")
+        raise OperandError("cannot assign to `__builtin_sizeof<...>()`")
 
 
 class NarrowExpression(TypedExpression):
@@ -267,7 +267,7 @@ class NarrowExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_narrow<...>(...)`")
+        raise OperandError("cannot assign to `__builtin_narrow<...>(...)`")
 
 
 def get_builtin_callables() -> dict[

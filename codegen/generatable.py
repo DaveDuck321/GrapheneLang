@@ -46,14 +46,14 @@ class StackVariable(Variable):
         # Can ready any initialized variable.
         if not self.initialized:
             raise OperandError(
-                f"Cannot use uninitialized variable '{self.user_facing_name}'"
+                f"cannot use uninitialized variable '{self.user_facing_name}'"
             )
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
         if self.constant:
             raise OperandError(
-                f"Cannot modify constant variable '{self.user_facing_name}'"
+                f"cannot modify constant variable '{self.user_facing_name}'"
             )
 
 
@@ -101,7 +101,7 @@ class StaticVariable(Variable):
     def assert_can_write_to(self) -> None:
         if self.constant:
             raise OperandError(
-                f"Cannot modify constant variable '{self.user_facing_name}'"
+                f"cannot modify constant variable '{self.user_facing_name}'"
             )
 
 

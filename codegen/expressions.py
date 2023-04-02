@@ -41,7 +41,7 @@ class ConstantExpression(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # Can never write to a constant expression (an rvalue).
-        raise OperandError(f"Cannot modify the constant {self.value}")
+        raise OperandError(f"cannot modify the constant {self.value}")
 
 
 class VariableReference(TypedExpression):
@@ -272,7 +272,7 @@ class StructMemberAccess(TypedExpression):
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
         if not self.has_address:
-            raise OperandError("Cannot modify temporary struct")
+            raise OperandError("cannot modify temporary struct")
 
         # TODO: check if the reference is const
 

@@ -106,8 +106,8 @@ class AmbiguousFunctionCall(GrapheneError):
 
 
 class OperandError(GrapheneError):
-    # TODO error message.
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(f"Error: {message}")
 
 
 class InvalidEscapeSequence(GrapheneError):

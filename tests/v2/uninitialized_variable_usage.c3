@@ -5,4 +5,4 @@ function main: () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 3, in 'function main: () -> int'
-/// Cannot use uninitialized variable 'x'
+/// Error: cannot use uninitialized variable 'x'
