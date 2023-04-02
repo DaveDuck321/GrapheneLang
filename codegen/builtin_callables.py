@@ -4,7 +4,7 @@ from typing import Type as PyType
 
 from .builtin_types import BoolType, GenericIntType, IntegerDefinition, SizeType
 from .expressions import ConstantExpression
-from .interfaces import Type, TypedExpression
+from .interfaces import SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
@@ -168,11 +168,15 @@ class IsLessThanExpression(CompareExpression):
 
 class AlignOfExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
-        self._argument_type = specialization[0]
+        (self._argument_type,) = specialization
+        assert isinstance(self._argument_type, Type)
+
         self._result = ConstantExpression(
             SizeType(), str(self._argument_type.alignment)
         )
@@ -198,11 +202,15 @@ class AlignOfExpression(TypedExpression):
 
 class SizeOfExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
-        self._argument_type = specialization[0]
+        (self._argument_type,) = specialization
+        assert isinstance(self._argument_type, Type)
+
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
         super().__init__(self._result.underlying_type, False)
@@ -226,10 +234,13 @@ class SizeOfExpression(TypedExpression):
 
 class NarrowExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
     ) -> None:
         (self._argument,) = arguments
         (return_type,) = specialization
+        assert isinstance(return_type, Type)
 
         self._arg_value_type = self._argument.underlying_type.convert_to_value_type()
 
@@ -271,14 +282,14 @@ class NarrowExpression(TypedExpression):
 
 class PtrToIntExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
         assert len(specialization) == 1
         assert len(arguments) == 1
 
         (int_type,) = specialization
-        assert not int_type.is_borrowed_reference
         assert isinstance(int_type, GenericIntType)
+        assert not int_type.is_borrowed_reference
 
         # We don't attempt to dereference this at all. src_expr shouldn't have
         # more than one layer of indirection.
@@ -313,7 +324,8 @@ class PtrToIntExpression(TypedExpression):
 
 
 def get_builtin_callables() -> dict[
-    str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
+    str,
+    Callable[[list[SpecializationItem], list[TypedExpression]], TypedExpression],
 ]:
     def get_integer_builtin(expression_class: PyType[BasicIntegerExpression]):
         return (expression_class.USER_FACING_NAME, expression_class)

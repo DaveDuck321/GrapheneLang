@@ -41,6 +41,12 @@ def in_pairs(iterable: Iterable) -> Iterable:
     return zip(*chunks, strict=True)
 
 
+def get_optional_children(tree: Optional[Tree]) -> list[Any]:
+    if tree is None:
+        return []
+    return tree.children
+
+
 def inline_and_wrap_user_facing_errors(context: str):
     def wrapper(func, _, children, meta):
         try:
@@ -75,12 +81,26 @@ def search_include_path_for_file(
 
 class TypeTransformer(Transformer):
     def __init__(
-        self, program: cg.Program, generic_mapping: dict[str, cg.Type]
+        self,
+        program: cg.Program,
+        generic_mapping: cg.GenericMapping,
     ) -> None:
-        super().__init__(visit_tokens=False)
+        super().__init__(visit_tokens=True)
 
         self._program = program
         self._generic_mapping = generic_mapping
+
+    @v_args(inline=True)
+    def ARRAY_INDEX(self, token: Token) -> cg.CompileTimeConstant:
+        if token.isdecimal():
+            return cg.CompileTimeConstant(int(token))
+
+        # FIXME need user-facing errors.
+        assert token.value in self._generic_mapping
+        constant = self._generic_mapping[token.value]
+        assert isinstance(constant, cg.CompileTimeConstant)
+
+        return constant
 
     @v_args(inline=True)
     def type(self, child: cg.Type) -> cg.Type:
@@ -95,9 +115,16 @@ class TypeTransformer(Transformer):
             if type_map is not None:
                 raise GenericHasGenericAnnotation(name)
 
-            return self._generic_mapping[name]
+            # FIXME need user-facing error.
+            candidate = self._generic_mapping[name]
+            assert isinstance(candidate, cg.Type)
 
-        generic_args: list[cg.Type] = [] if type_map is None else type_map.children  # type: ignore
+            return candidate
+
+        generic_args = get_optional_children(type_map)
+        # FIXME SIGNED_INT isn't parsed, so this will fail.
+        assert is_specialization_list(generic_args)
+
         return self._program.lookup_type(name, generic_args)
 
     @v_args(inline=True)
@@ -111,19 +138,22 @@ class TypeTransformer(Transformer):
 
     @v_args(inline=True)
     def stack_array_type(
-        self, element_type: cg.Type, *dimension_tokens: Token
+        self, element_type: cg.Type, *dimensions: cg.CompileTimeConstant
     ) -> cg.Type:
-        dimensions: list[int] = [int(dimension.value) for dimension in dimension_tokens]
-        return cg.Type(cg.ArrayDefinition(element_type, dimensions))
+        return cg.Type(
+            cg.ArrayDefinition(
+                element_type, [dimension.value for dimension in dimensions]
+            )
+        )
 
     @v_args(inline=True)
     def heap_array_type(
-        self, element_type: cg.Type, *dimension_tokens: Token
+        self, element_type: cg.Type, *known_dimensions: cg.CompileTimeConstant
     ) -> cg.Type:
-        dimensions: list[int] = [cg.ArrayDefinition.UNKNOWN_DIMENSION]
-        for dimension in dimension_tokens:
-            dimensions.append(int(dimension.value))
-
+        dimensions = [
+            cg.ArrayDefinition.UNKNOWN_DIMENSION,
+            *(dimension.value for dimension in known_dimensions),
+        ]
         # A heap array must always be passed by reference
         underlying_array = cg.Type(cg.ArrayDefinition(element_type, dimensions))
         return underlying_array.take_reference()
@@ -145,10 +175,7 @@ class TypeTransformer(Transformer):
 
     @classmethod
     def parse(
-        cls,
-        program: cg.Program,
-        tree: Tree,
-        type_map: dict[str, cg.Type],
+        cls, program: cg.Program, tree: Tree, type_map: cg.GenericMapping
     ) -> cg.Type:
         try:
             result = cls(program, type_map).transform(tree)
@@ -176,7 +203,9 @@ class ParseTypeDefinitions(Interpreter):
 
             available_generics.append(generic_name.value)
 
-        def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
+        def type_parser(
+            name_prefix: str, concrete_types: list[cg.SpecializationItem]
+        ) -> cg.Type:
             if len(concrete_types) != len(available_generics):
                 raise GenericArgumentCountError(
                     type_name, len(concrete_types), len(available_generics)
@@ -210,7 +239,9 @@ class ParseTypeDefinitions(Interpreter):
                 TypeTransformer.parse(self._program, specialization_type_tree, {})
             )
 
-        def type_parser(name_prefix: str, concrete_types: list[cg.Type]) -> cg.Type:
+        def type_parser(
+            name_prefix: str, concrete_types: list[cg.SpecializationItem]
+        ) -> cg.Type:
             assert concrete_types == specialization
             rhs = TypeTransformer.parse(self._program, rhs_tree, {})
             return rhs.new_from_typedef(name_prefix, concrete_types)
@@ -224,12 +255,12 @@ class ParseFunctionSignatures(Interpreter):
 
         self._program = program
         self._function_body_trees: list[
-            tuple[cg.Function, Tree, dict[str, cg.Type]]
+            tuple[cg.Function, Tree, cg.GenericMapping]
         ] = []
 
     def get_function_body_trees(
         self,
-    ) -> list[tuple[cg.Function, Tree, dict[str, cg.Type]]]:
+    ) -> list[tuple[cg.Function, Tree, cg.GenericMapping]]:
         return self._function_body_trees
 
     @inline_and_wrap_user_facing_errors("function[...] signature")
@@ -271,7 +302,8 @@ class ParseFunctionSignatures(Interpreter):
         body_tree: Tree,
     ):
         def try_parse_fn_from_specialization(
-            fn_name: str, concrete_specializations: list[cg.Type]
+            fn_name: str,
+            concrete_specializations: list[cg.SpecializationItem],
         ) -> Optional[cg.Function]:
             assert generic_name == fn_name
             if len(generic_names) != len(concrete_specializations):
@@ -290,9 +322,9 @@ class ParseFunctionSignatures(Interpreter):
 
         def try_deduce_specialization(
             fn_name: str, arguments: list[cg.TypedExpression]
-        ) -> Optional[list[cg.Type]]:
+        ) -> Optional[list[cg.SpecializationItem]]:
             assert generic_name == fn_name
-            deduced_mapping: dict[str, cg.Type] = {}
+            deduced_mapping: cg.GenericMapping = {}
 
             for provided_arg, (_, arg_type_tree) in zip(
                 arguments, in_pairs(args_tree.children), strict=True
@@ -301,6 +333,7 @@ class ParseFunctionSignatures(Interpreter):
 
                 # TODO: type pattern matching here
                 #       Atm this is a simple string compare
+                # FIXME we can't deduce CompileTimeConstant's
                 assert isinstance(arg_type_in_generic_definition, Token)
                 if arg_type_in_generic_definition not in generic_names:
                     # This argument is not a generic
@@ -321,7 +354,7 @@ class ParseFunctionSignatures(Interpreter):
                 ] = provided_arg.underlying_type
 
             # Convert the deduced mapping into a specialization
-            deduced_specialization: list[cg.Type] = []
+            deduced_specialization: list[cg.SpecializationItem] = []
             for generic in generic_names:
                 deduced_specialization.append(deduced_mapping[generic])
 
@@ -396,7 +429,7 @@ class ParseFunctionSignatures(Interpreter):
         args_tree: Tree,
         return_type_tree: Tree,
         foreign: bool,
-        generic_mapping: dict[str, cg.Type] = {},
+        generic_mapping: cg.GenericMapping = {},
     ) -> cg.Function:
         fn_args: list[cg.Parameter] = []
         fn_arg_trees = args_tree.children
@@ -514,13 +547,22 @@ def is_flattened_expression_iterable(
     return all(isinstance(expr, FlattenedExpression) for expr in exprs)
 
 
+def is_specialization_list(
+    lst: Any,
+) -> TypeGuard[list[cg.SpecializationItem]]:
+    # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
+    if not isinstance(lst, list):
+        return False
+    return all(isinstance(item, cg.SpecializationItem) for item in lst)
+
+
 class ExpressionTransformer(Transformer):
     def __init__(
         self,
         program: cg.Program,
         function: cg.Function,
         scope: cg.Scope,
-        generic_mapping: dict[str, cg.Type],
+        generic_mapping: cg.GenericMapping,
     ) -> None:
         super().__init__(visit_tokens=True)
 
@@ -591,14 +633,26 @@ class ExpressionTransformer(Transformer):
             fn_call_args.append(arg.expression())
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
-        specialization: list[cg.Type] = []
+        specialization: list[cg.SpecializationItem] = []
         if specialization_tree is not None:
-            for concrete_type_tree in specialization_tree.children:
-                specialization.append(
-                    TypeTransformer.parse(
-                        self._program, concrete_type_tree, self._generic_mapping
+            # Concrete type tree or Flattened Expression containing a Constant
+            # Expression.
+            specialization_item: FlattenedExpression | Tree[Any]
+            for specialization_item in specialization_tree.children:
+                if isinstance(specialization_item, FlattenedExpression):
+                    const_expr = specialization_item.expression()
+                    # FIXME this should be parsed as a CompileTimeConstant.
+                    assert isinstance(const_expr, cg.ConstantExpression)
+                    specialization.append(cg.CompileTimeConstant(int(const_expr.value)))
+                else:
+                    assert isinstance(specialization_item, Tree)
+                    specialization.append(
+                        TypeTransformer.parse(
+                            self._program,
+                            specialization_item,
+                            self._generic_mapping,
+                        )
                     )
-                )
 
         call_expr = self._program.lookup_call_expression(
             fn_name, specialization, fn_call_args
@@ -647,11 +701,20 @@ class ExpressionTransformer(Transformer):
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
         var = self._scope.search_for_variable(var_name)
 
-        if var is None:
+        if var is not None:
+            var_ref = cg.VariableReference(var)
+            return FlattenedExpression([var_ref])
+
+        if var_name.value not in self._generic_mapping:
             raise FailedLookupError("variable", var_name)
 
-        var_ref = cg.VariableReference(var)
-        return FlattenedExpression([var_ref])
+        constant = self._generic_mapping[var_name.value]
+        # FIXME need a user-facing error.
+        assert isinstance(constant, cg.CompileTimeConstant)
+
+        # TODO how should we determine the type?
+        const_expr = cg.ConstantExpression(cg.IntType(), str(constant.value))
+        return FlattenedExpression([const_expr])
 
     def ensure_pointer_is_available(self, expr: FlattenedExpression):
         # Copy expression to stack if it is not a pointer
@@ -737,7 +800,7 @@ class ExpressionTransformer(Transformer):
         program: cg.Program,
         function: cg.Function,
         scope: cg.Scope,
-        generic_mapping: dict[str, cg.Type],
+        generic_mapping: cg.GenericMapping,
         body: Tree,
     ) -> FlattenedExpression:
         result = ExpressionTransformer(
@@ -752,7 +815,7 @@ def generate_standalone_expression(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     assert len(body.children) == 1
     flattened_expr = ExpressionTransformer.parse(
@@ -767,7 +830,7 @@ def generate_return_statement(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     if not body.children:
         expr = cg.ReturnStatement(cg.VoidType())
@@ -793,7 +856,7 @@ def generate_variable_declaration(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
     rhs: Optional[FlattenedExpression] = (
@@ -826,7 +889,7 @@ def generate_if_statement(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     condition_tree, if_scope_tree, else_scope_tree = body.children
     assert len(condition_tree.children) == 1
@@ -856,7 +919,7 @@ def generate_while_statement(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     condition_tree, inner_scope_tree = body.children
     assert len(condition_tree.children) == 1
@@ -885,7 +948,7 @@ def generate_assignment(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
 
     lhs_tree, rhs_tree = body.children
@@ -906,7 +969,7 @@ def generate_scope_body(
     function: cg.Function,
     outer_scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
     generate_body(program, function, inner_scope, body, generic_mapping)
@@ -918,7 +981,7 @@ def generate_body(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ) -> None:
 
     generators = {
@@ -955,7 +1018,7 @@ def generate_function_body(
     program: cg.Program,
     function: cg.Function,
     body: Tree,
-    generic_mapping: dict[str, cg.Type],
+    generic_mapping: cg.GenericMapping,
 ):
     generate_body(program, function, function.top_level_scope, body, generic_mapping)
 

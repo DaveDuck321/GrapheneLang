@@ -5,6 +5,14 @@ from functools import cached_property
 from typing import Any, Iterable, Iterator, Optional
 
 
+@dataclass
+class CompileTimeConstant:
+    value: int
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+
 class TypeDefinition(ABC):
     @abstractmethod
     def graphene_literal_to_ir_constant(self, value: str) -> str:
@@ -200,7 +208,7 @@ class Type:
         return new_type
 
     def new_from_typedef(
-        self, typedef_alias: str, specialization: list["Type"]
+        self, typedef_alias: str, specialization: list["Type | CompileTimeConstant"]
     ) -> "Type":
         new_type = self.copy()
         new_type._typedef_alias = typedef_alias
@@ -208,6 +216,8 @@ class Type:
 
         return new_type
 
+SpecializationItem = Type | CompileTimeConstant
+GenericMapping = dict[str, SpecializationItem]
 
 @dataclass
 class Parameter:

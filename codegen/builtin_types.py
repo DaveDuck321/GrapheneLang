@@ -4,7 +4,7 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Any, Callable, Optional
 
-from .interfaces import Parameter, Type, TypeDefinition
+from .interfaces import Parameter, SpecializationItem, Type, TypeDefinition
 from .user_facing_errors import FailedLookupError, InvalidIntSize
 
 
@@ -377,7 +377,7 @@ class FunctionSignature:
     name: str
     arguments: list[Type]
     return_type: Type
-    specialization: list[Type]
+    specialization: list[SpecializationItem]
     foreign: bool = False
 
     def is_main(self) -> bool:
@@ -398,7 +398,12 @@ class FunctionSignature:
         if len(self.specialization) != 0:
             specialization_mangle = (
                 "__SPECIAL_"
-                + "".join(conc_type.mangled_name for conc_type in self.specialization)
+                + "".join(
+                    specialization_item.mangled_name
+                    if isinstance(specialization_item, Type)
+                    else str(specialization_item)
+                    for specialization_item in self.specialization
+                )
                 + "_SPECIAL__"
             )
 
@@ -412,7 +417,7 @@ class FunctionSignature:
 
         return f"{''.join(legal_name_mangle)}{specialization_mangle}{arguments_mangle}"
 
-    def _repr_impl(self, key: Callable[[Type], str]) -> str:
+    def _repr_impl(self, key: Callable[[SpecializationItem], str]) -> str:
         prefix = "foreign" if self.is_foreign() else "function"
 
         readable_arg_names = ", ".join(map(key, self.arguments))
@@ -432,7 +437,9 @@ class FunctionSignature:
 
     @cached_property
     def user_facing_name(self) -> str:
-        return self._repr_impl(lambda t: t.get_user_facing_name(False))
+        return self._repr_impl(
+            lambda t: t.get_user_facing_name(False) if isinstance(t, Type) else str(t)
+        )
 
     @cached_property
     def ir_ref(self) -> str:

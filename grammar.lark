@@ -17,7 +17,8 @@
 
 type_name: IDENTIFIER [generic_specialization]
 generic_definition_list: "[" IDENTIFIER ("," IDENTIFIER)* "]"
-generic_specialization: "<" type ("," type)* ">"
+_generic_specialization_item: type | SIGNED_INT // TODO bool
+generic_specialization: "<" _generic_specialization_item ("," _generic_specialization_item)* ">"
 
 _inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)*
 _inner_list_of_types: (type ("," type)*)?  // Can be empty
@@ -27,8 +28,9 @@ ref_type: _type "&"
 
 struct_type: "{" _inner_list_of_named_members? "}"
 
-stack_array_type: _type "[" SIGNED_INT ("," SIGNED_INT)* "]"
-heap_array_type: _type "[" "&" ("," SIGNED_INT)* "]"
+ARRAY_INDEX: IDENTIFIER | SIGNED_INT
+stack_array_type: _type "[" ARRAY_INDEX ("," ARRAY_INDEX)* "]"
+heap_array_type: _type "[" "&" ("," ARRAY_INDEX)* "]"
 
 _function_type_component: "(" (_inner_list_of_named_members | _inner_list_of_types) ")"
                         | type
