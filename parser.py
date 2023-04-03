@@ -293,13 +293,13 @@ class ParseFunctionSignatures(Interpreter):
             return function
 
         def try_deduce_specialization(
-            fn_name: str, arguments: list[cg.Type]
+            fn_name: str, arguments: list[cg.TypedExpression]
         ) -> Optional[list[cg.Type]]:
             assert generic_name == fn_name
             deduced_mapping: dict[str, cg.Type] = {}
 
-            for provided_arg_type, (_, arg_type_tree) in zip(
-                arguments, in_pairs(args_tree.children)
+            for provided_arg, (_, arg_type_tree) in zip(
+                arguments, in_pairs(args_tree.children), strict=True
             ):
                 arg_type_in_generic_definition, _ = arg_type_tree.children[0].children
 
@@ -316,11 +316,13 @@ class ParseFunctionSignatures(Interpreter):
                 if arg_type_in_generic_definition in deduced_mapping:
                     if (
                         deduced_mapping[arg_type_in_generic_definition]
-                        != provided_arg_type
+                        != provided_arg.underlying_type
                     ):
                         return None  # SFINAE
 
-                deduced_mapping[arg_type_in_generic_definition] = provided_arg_type
+                deduced_mapping[
+                    arg_type_in_generic_definition
+                ] = provided_arg.underlying_type
 
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.Type] = []
@@ -333,8 +335,8 @@ class ParseFunctionSignatures(Interpreter):
             generic_name,
             cg.GenericFunctionParser(
                 generic_name,
-                try_deduce_specialization,
                 try_parse_fn_from_specialization,
+                try_deduce_specialization,
             ),
         )
 

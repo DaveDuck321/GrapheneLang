@@ -219,24 +219,9 @@ def do_implicit_conversion(
     return expr_list[-1], expr_list[1:]
 
 
-class Wrapper(TypedExpression):
-    def __repr__(self) -> str:
-        return f"Wrapper({repr(self.underlying_type)})"
-
-    @property
-    def ir_ref_without_type_annotation(self) -> str:
-        assert False
-
-    def assert_can_read_from(self) -> None:
-        assert False
-
-    def assert_can_write_to(self) -> None:
-        assert False
-
-
-def is_type_implicitly_convertible(src_type: Type, dest_type: Type) -> bool:
+def is_type_implicitly_convertible(src: TypedExpression, dest_type: Type) -> bool:
     try:
-        implicit_conversion_impl(Wrapper(src_type, False), dest_type)
+        implicit_conversion_impl(src, dest_type)
     except TypeCheckerError:
         return False
 
@@ -251,9 +236,11 @@ def assert_is_implicitly_convertible(
     implicit_conversion_impl(expr, target, context)
 
 
-def get_implicit_conversion_cost(src_type: Type, dest_type: Type) -> Optional[int]:
+def get_implicit_conversion_cost(
+    src: TypedExpression, dest_type: Type
+) -> Optional[int]:
     try:
-        cost, _ = implicit_conversion_impl(Wrapper(src_type, False), dest_type)
+        cost, _ = implicit_conversion_impl(src, dest_type)
         return cost
     except TypeCheckerError:
         return None
