@@ -2,6 +2,7 @@
 %import common.CNAME -> IDENTIFIER
 %import common.CPP_COMMENT
 %import common.ESCAPED_STRING
+%import common.INT
 %import common.SIGNED_FLOAT
 %import common.SIGNED_INT
 %import common.WS
@@ -28,7 +29,7 @@ ref_type: _type "&"
 
 struct_type: "{" _inner_list_of_named_members? "}"
 
-ARRAY_INDEX: IDENTIFIER | SIGNED_INT
+ARRAY_INDEX: IDENTIFIER | INT
 stack_array_type: _type "[" ARRAY_INDEX ("," ARRAY_INDEX)* "]"
 heap_array_type: _type "[" "&" ("," ARRAY_INDEX)* "]"
 

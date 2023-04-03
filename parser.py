@@ -103,6 +103,10 @@ class TypeTransformer(Transformer):
         return constant
 
     @v_args(inline=True)
+    def SIGNED_INT(self, token: Token) -> cg.CompileTimeConstant:
+        return cg.CompileTimeConstant(int(token))
+
+    @v_args(inline=True)
     def type(self, child: cg.Type) -> cg.Type:
         assert isinstance(child, cg.Type)
         return child
@@ -122,7 +126,6 @@ class TypeTransformer(Transformer):
             return candidate
 
         generic_args = get_optional_children(type_map)
-        # FIXME SIGNED_INT isn't parsed, so this will fail.
         assert is_specialization_list(generic_args)
 
         return self._program.lookup_type(name, generic_args)

@@ -62,12 +62,16 @@ class TypeDefinition(ABC):
 
 class Type:
     @staticmethod
-    def mangle_list(types: list["Type"]) -> str:
-        generic_mangles = map(lambda t: t.mangled_name, types)
+    def mangle_list(items: list["Type | CompileTimeConstant"]) -> str:
+        generic_mangles = map(
+            lambda i: i.mangled_name if isinstance(i, Type) else str(i), items
+        )
         return str.join("", generic_mangles)
 
     @staticmethod
-    def mangle_generic_type(alias: str, generics: Optional[list["Type"]]) -> str:
+    def mangle_generic_type(
+        alias: str, generics: Optional[list["Type | CompileTimeConstant"]]
+    ) -> str:
         name = f"__T_{alias}"
 
         if generics:
@@ -80,7 +84,7 @@ class Type:
         self,
         definition: TypeDefinition,
         typedef_alias: Optional[str] = None,
-        specialization: Optional[list["Type"]] = None,
+        specialization: Optional[list["Type | CompileTimeConstant"]] = None,
     ) -> None:
         self.definition = definition
         self._specialization = specialization if specialization is not None else []
@@ -101,7 +105,10 @@ class Type:
         if not self._specialization:
             return ""
 
-        generic_names = [arg.get_user_facing_name(True) for arg in self._specialization]
+        generic_names = [
+            arg.get_user_facing_name(True) if isinstance(arg, Type) else str(arg)
+            for arg in self._specialization
+        ]
         return f"<{', '.join(generic_names)}>"
 
     def __repr__(self) -> str:
@@ -112,7 +119,7 @@ class Type:
             f"{self.__class__.__name__}({name}, is_ref={self._is_borrowed_reference})"
         )
 
-    def get_specialization(self) -> list["Type"]:
+    def get_specialization(self) -> list["Type | CompileTimeConstant"]:
         return self._specialization.copy()
 
     def get_user_facing_name(self, full: bool) -> str:
@@ -216,8 +223,10 @@ class Type:
 
         return new_type
 
+
 SpecializationItem = Type | CompileTimeConstant
 GenericMapping = dict[str, SpecializationItem]
+
 
 @dataclass
 class Parameter:
