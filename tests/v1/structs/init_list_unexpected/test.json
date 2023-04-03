@@ -11,7 +11,7 @@
             "status": 1,
             "stderr": [
                 "File '*/main.c3', line 2, in 'function main: () -> i32'",
-                "Error: concrete type for initializer list cannot be deduced"
+                "Error: initializer list cannot be converted to type 'bool' (expected a struct type similar to '{int, int}')"
             ]
         }
     }

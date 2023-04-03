@@ -192,21 +192,21 @@ class GenericHasGenericAnnotation(GrapheneError):
         )
 
 
-class InvalidInitializerListLength(GrapheneError):
+class InvalidInitializerListLength(TypeCheckerError):
     def __init__(self, actual: int, expected: int) -> None:
         objects = "object" if actual == 1 else "objects"
         members = "member" if expected == 1 else "members"
 
-        super().__init__(
+        super(GrapheneError, self).__init__(
             f"Error: initializer list with {actual} {objects} cannot be "
-            f"assigned to a struct with {expected} {members}"
+            f"converted to a struct with {expected} {members}"
         )
 
 
-class InvalidInitializerListAssignment(GrapheneError):
+class InvalidInitializerListConversion(TypeCheckerError):
     def __init__(self, non_struct_type: str, init_list_type_name: str) -> None:
-        super().__init__(
-            "Error: initializer list cannot be assigned to type "
+        super(GrapheneError, self).__init__(
+            "Error: initializer list cannot be converted to type "
             f"'{non_struct_type}' (expected a struct type similar to '{init_list_type_name}')"
         )
 
@@ -214,11 +214,6 @@ class InvalidInitializerListAssignment(GrapheneError):
 class CannotAssignToInitializerList(GrapheneError):
     def __init__(self) -> None:
         super().__init__("Error: cannot assign to an initializer list")
-
-
-class InitializerListTypeDeductionFailure(GrapheneError):
-    def __init__(self) -> None:
-        super().__init__("Error: concrete type for initializer list cannot be deduced")
 
 
 class FileDoesNotExistException(GrapheneError):

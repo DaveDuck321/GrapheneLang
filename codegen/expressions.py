@@ -1,4 +1,3 @@
-from functools import cached_property
 from typing import Iterator
 
 from .builtin_types import (

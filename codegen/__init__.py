@@ -21,5 +21,10 @@ from .generatable import (
     VariableAssignment,
     WhileStatement,
 )
+from .type_conversions import (
+    InitializerList,
+    NamedInitializerList,
+    UnamedInitializerList,
+)
 from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
