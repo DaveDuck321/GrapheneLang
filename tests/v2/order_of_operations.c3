@@ -34,7 +34,7 @@ function main : () -> int = {
     return 0;
 };
 
-/// @COMPILE
+/// @COMPILE --use-crt
 /// @RUN; EXPECT OUT
 /// *
 /// +

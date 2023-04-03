@@ -48,6 +48,7 @@ def main() -> None:
     parser.add_argument("--emit-everything", action="store_true")
     parser.add_argument("--debug-compiler", action="store_true")
     parser.add_argument("--nostdlib", action="store_true")
+    parser.add_argument("--use-crt", action="store_true")
     args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
@@ -58,8 +59,10 @@ def main() -> None:
     optimized_llvm_output: Path = llvm_output.with_suffix(".opt.ll")
     binary_output = Path("a.out")
 
+    parent_dir = Path(__file__).parent.resolve()
+
     if not args.nostdlib:
-        include_path.append(Path(__file__).parent)
+        include_path.append(parent_dir)
 
     # -o defaults to binary output path
     if args.output:
@@ -76,9 +79,6 @@ def main() -> None:
             file.write(ir)
 
     # Use clang to finish compile
-    extra_flags = []
-    if args.compile_to_object:
-        extra_flags.append("-c")
 
     if will_emit_optimized_llvm:
         # TODO: the llvm optimization pipeline is run twice if we also want a binary
@@ -86,13 +86,12 @@ def main() -> None:
             [
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 "-Wno-override-module",
-                "-xir",
                 "-S",
                 "-emit-llvm",
                 f"-O{opt_level}",
                 "-o",
                 optimized_llvm_output,
-                *extra_flags,
+                "-xir",  # Only STDIN is IR, so this should be last.
                 "-",
             ],
             input=ir,
@@ -101,16 +100,24 @@ def main() -> None:
             check=True,
         )
 
+    extra_flags = []
+    if args.compile_to_object:
+        extra_flags.append("-c")
+    if not args.use_crt and not args.compile_to_object:
+        extra_flags.append("-nostartfiles")
+        extra_flags.append("-nostdlib")
+        extra_flags.append(str(parent_dir / "std" / "runtime.S"))
+
     if will_emit_binary:
         subprocess.run(
             [
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 "-Wno-override-module",  # Don't complain about the target triple.
-                "-xir",
                 f"-O{opt_level}",
                 "-o",
                 binary_output,
                 *extra_flags,
+                "-xir",  # Only STDIN is IR, so this should be last.
                 "-",
             ],
             input=ir,

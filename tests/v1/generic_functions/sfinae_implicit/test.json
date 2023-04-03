@@ -6,6 +6,7 @@
             "main.c3",
             "-o",
             "./out/a.out",
+            "--use-crt",
             "--emit-everything"
         ],
         "output": {
