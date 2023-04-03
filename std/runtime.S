@@ -1,4 +1,5 @@
 .global _start
+.global _syscall_0
 .global _syscall_3
 
 # To make a system call in 64-bit Linux, place the system call number in rax,
@@ -33,6 +34,12 @@ _start:
     mov     %eax, %edi              # Program return code.
     mov     $60, %eax
     syscall
+
+_syscall_0:
+    # Syscall with 0 arguments. Syscall number should be in rdi.
+    mov     %rdi, %rax
+    syscall
+    ret
 
 _syscall_3:
     # Syscall with 3 arguments. rdi, rsi, and rdx are passed through to the
