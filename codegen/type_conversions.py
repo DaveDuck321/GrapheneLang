@@ -1,168 +1,12 @@
-from abc import abstractmethod
 from functools import cached_property
 from typing import Iterator, Optional
 
-from .builtin_types import (
-    ArrayDefinition,
-    StructDefinition,
-    IntegerDefinition,
-    UnresolvedType,
-)
+from .builtin_types import ArrayDefinition, IntegerDefinition
 from .interfaces import Type, TypedExpression
 from .user_facing_errors import (
-    CannotAssignToInitializerList,
-    InvalidInitializerListConversion,
-    InvalidInitializerListLength,
     OperandError,
     TypeCheckerError,
 )
-
-
-class StructInitializer(TypedExpression):
-    def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
-        assert not struct_type.is_borrowed_reference
-        assert isinstance(struct_type.definition, StructDefinition)
-        assert len(member_exprs) == len(struct_type.definition.members)
-
-        self._result_ref: Optional[str] = None
-        self._members: list[TypedExpression] = []
-        self._conversion_exprs: list[TypedExpression] = []
-
-        for target_member_type, member_expr in zip(
-            struct_type.definition.members, member_exprs, strict=True
-        ):
-            member, extra_exprs = do_implicit_conversion(
-                member_expr, target_member_type.type
-            )
-            self._members.append(member)
-            self._conversion_exprs.extend(extra_exprs)
-
-        super().__init__(struct_type, False, False)
-
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
-
-        previous_ref = "undef"
-        for index, value in enumerate(self._members):
-            current_ref = f"%{next(reg_gen)}"
-            ir.append(
-                f"{current_ref} = insertvalue {self.underlying_type.ir_type} {previous_ref}, "
-                f"{value.ir_ref_with_type_annotation}, {index}"
-            )
-
-            previous_ref = current_ref
-
-        self.result_ref = previous_ref
-        return ir
-
-    @property
-    def ir_ref_without_type_annotation(self) -> str:
-        return self.result_ref
-
-    def __repr__(self) -> str:
-        return f"StructInitializer({self.underlying_type}, {self._members})"
-
-    def assert_can_read_from(self) -> None:
-        pass
-
-    def assert_can_write_to(self) -> None:
-        raise OperandError("cannot modify temporary struct")
-
-
-class InitializerList(TypedExpression):
-    @abstractmethod
-    def get_user_facing_name(self, full: bool) -> str:
-        pass
-
-    def get_equivalent_pure_type(self) -> Type:
-        assert False
-
-    @property
-    def ir_ref_without_type_annotation(self) -> str:
-        assert False
-
-    def assert_can_read_from(self) -> None:
-        pass
-
-    def assert_can_write_to(self) -> None:
-        raise CannotAssignToInitializerList()
-
-    @abstractmethod
-    def convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
-        pass
-
-
-class NamedInitializerList(InitializerList):
-    def __init__(self, members: list[TypedExpression], names: list[str]) -> None:
-        super().__init__(UnresolvedType(), False, False)
-
-        self._members = dict(zip(names, members, strict=True))
-
-    def get_user_facing_name(self, full: bool) -> str:
-        members = [
-            f"{name}: {type_name.underlying_type.get_user_facing_name(full)}"
-            for name, type_name in self._members.items()
-        ]
-        return f"{{{', '.join(members)}}}"
-
-    def __repr__(self) -> str:
-        return f"InitializerList({list(self._members.items())})"
-
-    def convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
-        error_message = InvalidInitializerListConversion(
-            other.get_user_facing_name(False), self.get_user_facing_name(False)
-        )
-
-        if not isinstance(other.definition, StructDefinition):
-            raise error_message
-
-        if len(other.definition.members) != len(self._members):
-            raise InvalidInitializerListLength(
-                len(self._members), len(other.definition.members)
-            )
-
-        ordered_members: list[TypedExpression] = []
-        for member in other.definition.members:
-            if member.name not in self._members:
-                raise error_message
-
-            ordered_members.append(self._members[member.name])
-
-        # TODO: remember cost during struct conversions
-        return 0, [StructInitializer(other, ordered_members)]
-
-
-class UnnamedInitializerList(InitializerList):
-    def __init__(self, members: list[TypedExpression]) -> None:
-        super().__init__(UnresolvedType(), False, False)
-
-        self._members = members
-
-    def get_user_facing_name(self, full: bool) -> str:
-        type_names = [
-            member.underlying_type.get_user_facing_name(full)
-            for member in self._members
-        ]
-        return f"{{{', '.join(type_names)}}}"
-
-    def __repr__(self) -> str:
-        return f"InitializerList({self._members})"
-
-    def convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
-        error_message = InvalidInitializerListConversion(
-            other.get_user_facing_name(False), self.get_user_facing_name(False)
-        )
-
-        if not isinstance(other.definition, StructDefinition):
-            raise error_message
-
-        if len(other.definition.members) != len(self._members):
-            raise InvalidInitializerListLength(
-                len(self._members), len(other.definition.members)
-            )
-
-        # TODO: remember cost during struct conversions
-        return 0, [StructInitializer(other, self._members)]
 
 
 class SquashIntoUnderlyingType(TypedExpression):
@@ -336,12 +180,10 @@ def implicit_conversion_impl(
             maybe_missing_borrow,
         )
 
-    # Initializer lists
-    if isinstance(src, InitializerList):
-        additional_cost, exprs = src.convert_to_type(dest_type)
-
-        promotion_cost += additional_cost
-        expr_list.extend(exprs)
+    # Initializer lists (+ anything else that depends on the TypedExpression)
+    additional_cost, exprs = src.try_convert_to_type(dest_type)
+    promotion_cost += additional_cost
+    expr_list.extend(exprs)
 
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.

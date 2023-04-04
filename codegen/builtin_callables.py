@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from functools import cached_property
 from typing import Callable, Iterator
 from typing import Type as PyType
 

@@ -9,7 +9,10 @@ from .expressions import (
     ArrayIndexAccess,
     BorrowExpression,
     ConstantExpression,
+    InitializerList,
+    NamedInitializerList,
     StructMemberAccess,
+    UnnamedInitializerList,
     VariableReference,
 )
 from .generatable import (
@@ -20,11 +23,6 @@ from .generatable import (
     StaticVariable,
     VariableAssignment,
     WhileStatement,
-)
-from .type_conversions import (
-    InitializerList,
-    NamedInitializerList,
-    UnnamedInitializerList,
 )
 from .interfaces import Generatable, Parameter, Type, TypedExpression, Variable
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
