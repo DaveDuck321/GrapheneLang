@@ -11,7 +11,6 @@ from lark.visitors import Interpreter, Transformer, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
-    CannotAssignToInitializerList,
     CircularImportException,
     DoubleReferenceError,
     ErrorWithLineInfo,

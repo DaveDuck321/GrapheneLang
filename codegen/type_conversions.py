@@ -291,6 +291,7 @@ def implicit_conversion_impl(
 
     Only the following conversions are allowed:
     - dereference an (non-reference) variable with an address to a value
+    - initializer list -> compatible struct
     - integer promotion.
     - float promotion (TODO).
 

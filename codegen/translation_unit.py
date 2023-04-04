@@ -118,19 +118,19 @@ class GenericFunctionParser:
     def __init__(
         self,
         name: str,
-        parse_with_args_fn: Callable[[str, list[Type]], Optional[Function]],
+        parse_with_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
         deduce_specialization_fn: Callable[
             [str, list[TypedExpression]], Optional[list[Type]]
         ],
     ) -> None:
         self.fn_name = name
-        self._parse_with_args_fn = parse_with_args_fn
+        self._parse_with_specialization_fn = parse_with_specialization_fn
         self._deduce_specialization_fn = deduce_specialization_fn
 
     def try_parse_with_specialization(
         self, specialization: list[Type]
     ) -> Optional[Function]:
-        return self._parse_with_args_fn(self.fn_name, specialization)
+        return self._parse_with_specialization_fn(self.fn_name, specialization)
 
     def try_deduce_specialization(
         self, args: list[TypedExpression]
