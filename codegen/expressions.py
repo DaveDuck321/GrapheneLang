@@ -10,7 +10,11 @@ from .builtin_types import (
     UnresolvedType,
 )
 from .interfaces import Type, TypedExpression, Variable
-from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
+from .type_conversions import (
+    assert_is_implicitly_convertible,
+    do_implicit_conversion,
+    get_implicit_conversion_cost,
+)
 from .user_facing_errors import (
     ArrayIndexCount,
     BorrowTypeError,
@@ -364,15 +368,18 @@ class StructInitializer(TypedExpression):
         self._result_ref: Optional[str] = None
         self._members: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
+        self.implicit_conversion_cost = 0
 
-        for target_member_type, member_expr in zip(
+        for target_member, member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
         ):
-            member, extra_exprs = do_implicit_conversion(
-                member_expr, target_member_type.type
-            )
+            target_type = target_member.type
+
+            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
+            member, extra_exprs = do_implicit_conversion(member_expr, target_type)
             self._members.append(member)
             self._conversion_exprs.extend(extra_exprs)
+            self.implicit_conversion_cost += conversion_cost or 0
 
         super().__init__(struct_type, False, False)
 
@@ -465,8 +472,8 @@ class NamedInitializerList(InitializerList):
 
             ordered_members.append(self._members[member.name])
 
-        # TODO: remember cost during struct conversions
-        return 0, [StructInitializer(other, ordered_members)]
+        struct_initializer = StructInitializer(other, ordered_members)
+        return struct_initializer.implicit_conversion_cost, [struct_initializer]
 
 
 class UnnamedInitializerList(InitializerList):
@@ -498,5 +505,5 @@ class UnnamedInitializerList(InitializerList):
                 len(self._members), len(other.definition.members)
             )
 
-        # TODO: remember cost during struct conversions
-        return 0, [StructInitializer(other, self._members)]
+        struct_initializer = StructInitializer(other, self._members)
+        return struct_initializer.implicit_conversion_cost, [struct_initializer]
