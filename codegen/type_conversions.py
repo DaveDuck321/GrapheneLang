@@ -22,16 +22,17 @@ class StructInitializer(TypedExpression):
     def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
         assert not struct_type.is_borrowed_reference
         assert isinstance(struct_type.definition, StructDefinition)
-        assert len(member_exprs) == struct_type.definition.member_count
+        assert len(member_exprs) == len(struct_type.definition.members)
 
         self._result_ref: Optional[str] = None
         self._members: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
-        for index, member_expr in enumerate(member_exprs):
-            target_member_type = struct_type.definition.get_member_by_index(index).type
 
+        for target_member_type, member_expr in zip(
+            struct_type.definition.members, member_exprs, strict=True
+        ):
             member, extra_exprs = do_implicit_conversion(
-                member_expr, target_member_type
+                member_expr, target_member_type.type
             )
             self._members.append(member)
             self._conversion_exprs.extend(extra_exprs)
@@ -115,15 +116,13 @@ class NamedInitializerList(InitializerList):
         if not isinstance(other.definition, StructDefinition):
             raise error_message
 
-        if other.definition.member_count != len(self._members):
+        if len(other.definition.members) != len(self._members):
             raise InvalidInitializerListLength(
-                len(self._members), other.definition.member_count
+                len(self._members), len(other.definition.members)
             )
 
         ordered_members: list[TypedExpression] = []
-        for struct_member_index in range(other.definition.member_count):
-            member = other.definition.get_member_by_index(struct_member_index)
-
+        for member in other.definition.members:
             if member.name not in self._members:
                 raise error_message
 
@@ -157,9 +156,9 @@ class UnnamedInitializerList(InitializerList):
         if not isinstance(other.definition, StructDefinition):
             raise error_message
 
-        if other.definition.member_count != len(self._members):
+        if len(other.definition.members) != len(self._members):
             raise InvalidInitializerListLength(
-                len(self._members), other.definition.member_count
+                len(self._members), len(other.definition.members)
             )
 
         # TODO: remember cost during struct conversions
