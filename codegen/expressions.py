@@ -1,5 +1,5 @@
-from functools import cached_property
-from typing import Iterator
+from abc import abstractmethod
+from typing import Iterator, Optional
 
 from .builtin_types import (
     ArrayDefinition,
@@ -7,16 +7,21 @@ from .builtin_types import (
     IntType,
     SizeType,
     StructDefinition,
+    UnresolvedType,
 )
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
+    get_implicit_conversion_cost,
 )
 from .user_facing_errors import (
     ArrayIndexCount,
     BorrowTypeError,
+    CannotAssignToInitializerList,
     DoubleBorrowError,
+    InvalidInitializerListConversion,
+    InvalidInitializerListLength,
     OperandError,
     TypeCheckerError,
 )
@@ -352,3 +357,152 @@ class ArrayIndexAccess(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         pass
+
+
+class StructInitializer(TypedExpression):
+    def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
+        assert not struct_type.is_borrowed_reference
+        assert isinstance(struct_type.definition, StructDefinition)
+        assert len(member_exprs) == len(struct_type.definition.members)
+
+        self._result_ref: Optional[str] = None
+        self._members: list[TypedExpression] = []
+        self._conversion_exprs: list[TypedExpression] = []
+        self.implicit_conversion_cost = 0
+
+        for target_member, member_expr in zip(
+            struct_type.definition.members, member_exprs, strict=True
+        ):
+            target_type = target_member.type
+
+            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
+            member, extra_exprs = do_implicit_conversion(member_expr, target_type)
+            self._members.append(member)
+            self._conversion_exprs.extend(extra_exprs)
+            self.implicit_conversion_cost += conversion_cost or 0
+
+        super().__init__(struct_type, False, False)
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
+
+        previous_ref = "undef"
+        for index, value in enumerate(self._members):
+            current_ref = f"%{next(reg_gen)}"
+            ir.append(
+                f"{current_ref} = insertvalue {self.underlying_type.ir_type} {previous_ref}, "
+                f"{value.ir_ref_with_type_annotation}, {index}"
+            )
+
+            previous_ref = current_ref
+
+        self.result_ref = previous_ref
+        return ir
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        return self.result_ref
+
+    def __repr__(self) -> str:
+        return f"StructInitializer({self.underlying_type}, {self._members})"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("cannot modify temporary struct")
+
+
+class InitializerList(TypedExpression):
+    @abstractmethod
+    def get_user_facing_name(self, full: bool) -> str:
+        pass
+
+    def get_equivalent_pure_type(self) -> Type:
+        assert False
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert False
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise CannotAssignToInitializerList()
+
+    @abstractmethod
+    def get_ordered_members(self, other: Type) -> list[TypedExpression]:
+        pass
+
+    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
+        if not isinstance(other.definition, StructDefinition):
+            raise InvalidInitializerListConversion(
+                other.get_user_facing_name(False), self.get_user_facing_name(False)
+            )
+
+        ordered_members = self.get_ordered_members(other)
+        struct_initializer = StructInitializer(other, ordered_members)
+        return struct_initializer.implicit_conversion_cost, [struct_initializer]
+
+
+class NamedInitializerList(InitializerList):
+    def __init__(self, members: list[TypedExpression], names: list[str]) -> None:
+        super().__init__(UnresolvedType(), False, False)
+
+        self._members = dict(zip(names, members, strict=True))
+
+    def get_user_facing_name(self, full: bool) -> str:
+        members = [
+            f"{name}: {type_name.underlying_type.get_user_facing_name(full)}"
+            for name, type_name in self._members.items()
+        ]
+        return f"{{{', '.join(members)}}}"
+
+    def __repr__(self) -> str:
+        return f"InitializerList({list(self._members.items())})"
+
+    def get_ordered_members(self, other: Type) -> list[TypedExpression]:
+        assert isinstance(other.definition, StructDefinition)
+
+        if len(other.definition.members) != len(self._members):
+            raise InvalidInitializerListLength(
+                len(self._members), len(other.definition.members)
+            )
+
+        ordered_members: list[TypedExpression] = []
+        for member in other.definition.members:
+            if member.name not in self._members:
+                raise InvalidInitializerListConversion(
+                    other.get_user_facing_name(True),
+                    self.get_user_facing_name(False),
+                )
+            ordered_members.append(self._members[member.name])
+
+        return ordered_members
+
+
+class UnnamedInitializerList(InitializerList):
+    def __init__(self, members: list[TypedExpression]) -> None:
+        super().__init__(UnresolvedType(), False, False)
+
+        self._members = members
+
+    def get_user_facing_name(self, full: bool) -> str:
+        type_names = [
+            member.underlying_type.get_user_facing_name(full)
+            for member in self._members
+        ]
+        return f"{{{', '.join(type_names)}}}"
+
+    def __repr__(self) -> str:
+        return f"InitializerList({self._members})"
+
+    def get_ordered_members(self, other: Type) -> list[TypedExpression]:
+        assert isinstance(other.definition, StructDefinition)
+        if len(other.definition.members) != len(self._members):
+            raise InvalidInitializerListLength(
+                len(self._members), len(other.definition.members)
+            )
+
+        return self._members

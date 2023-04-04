@@ -11,7 +11,7 @@
             "status": 1,
             "stderr": [
                 "File '*/main.c3', line 4, in 'function main: () -> int'",
-                "Error: could not find struct member definition '{b: ...}'"
+                "Error: initializer list of the form '{b: int}' cannot be converted to 'typedef my_struct = {a : int}'"
             ]
         }
     }

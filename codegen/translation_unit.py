@@ -118,20 +118,24 @@ class GenericFunctionParser:
     def __init__(
         self,
         name: str,
-        parse_with_args_fn: Callable[[str, list[Type]], Optional[list[Type]]],
-        deduce_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
+        parse_with_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
+        deduce_specialization_fn: Callable[
+            [str, list[TypedExpression]], Optional[list[Type]]
+        ],
     ) -> None:
         self.fn_name = name
-        self._parse_with_args_fn = parse_with_args_fn
+        self._parse_with_specialization_fn = parse_with_specialization_fn
         self._deduce_specialization_fn = deduce_specialization_fn
-
-    def try_deduce_specialization(self, args: list[Type]) -> Optional[list[Type]]:
-        return self._parse_with_args_fn(self.fn_name, args)
 
     def try_parse_with_specialization(
         self, specialization: list[Type]
     ) -> Optional[Function]:
-        return self._deduce_specialization_fn(self.fn_name, specialization)
+        return self._parse_with_specialization_fn(self.fn_name, specialization)
+
+    def try_deduce_specialization(
+        self, args: list[TypedExpression]
+    ) -> Optional[list[Type]]:
+        return self._deduce_specialization_fn(self.fn_name, args)
 
 
 class FunctionSymbolTable:
@@ -213,7 +217,10 @@ class FunctionSymbolTable:
         return matching_functions
 
     def lookup_explicitly_specialized_function(
-        self, fn_name: str, fn_specialization: list[Type], fn_args: list[Type]
+        self,
+        fn_name: str,
+        fn_specialization: list[Type],
+        fn_args: list[TypedExpression],
     ) -> Function:
         matching_functions = self.generate_functions_with_specialization(
             fn_name, fn_specialization
@@ -222,7 +229,7 @@ class FunctionSymbolTable:
             fn_name, matching_functions, fn_specialization, fn_args
         )
 
-    def lookup_function(self, fn_name: str, fn_args: list[Type]) -> Function:
+    def lookup_function(self, fn_name: str, fn_args: list[TypedExpression]) -> Function:
         # The normal Graphene functions
         candidate_functions = [
             fn
@@ -256,7 +263,7 @@ class FunctionSymbolTable:
         fn_name: str,
         candidate_functions: Iterable[Function],
         fn_specialization: list[Type],
-        fn_args: list[Type],
+        fn_args: list[TypedExpression],
     ) -> Function:
         functions_by_cost: list[tuple[int, Function]] = []
 
@@ -377,13 +384,12 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
-        arg_types = [arg.underlying_type for arg in fn_args]
         if len(fn_specialization) != 0:
             function = self._function_table.lookup_explicitly_specialized_function(
-                fn_name, fn_specialization, arg_types
+                fn_name, fn_specialization, fn_args
             )
         else:
-            function = self._function_table.lookup_function(fn_name, arg_types)
+            function = self._function_table.lookup_function(fn_name, fn_args)
 
         return FunctionCallExpression(function.get_signature(), fn_args)
 

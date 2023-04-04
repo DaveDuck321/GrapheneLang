@@ -347,6 +347,12 @@ class TypedExpression(Generatable):
         )
         return store_at
 
+    def get_user_facing_name(self, full: bool) -> str:
+        return self.underlying_type.get_user_facing_name(full)
+
+    def try_convert_to_type(self, type: Type) -> tuple[int, list["TypedExpression"]]:
+        return (0, [])
+
     @property
     @abstractmethod
     def ir_ref_without_type_annotation(self) -> str:

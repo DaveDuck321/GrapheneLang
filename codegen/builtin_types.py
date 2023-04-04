@@ -8,6 +8,48 @@ from .interfaces import Parameter, Type, TypeDefinition
 from .user_facing_errors import FailedLookupError, InvalidIntSize
 
 
+class UnresolvedType(Type):
+    class Definition(TypeDefinition):
+        def graphene_literal_to_ir_constant(self, value: str) -> str:
+            assert False
+
+        @cached_property
+        def alignment(self) -> int:
+            assert False
+
+        @cached_property
+        def size(self) -> int:
+            assert False
+
+        @cached_property
+        def user_facing_name(self) -> str:
+            assert False
+
+        def get_ir_type(self, alias: Optional[str]) -> str:
+            assert False
+
+        @cached_property
+        def ir_definition(self) -> str:
+            assert False
+
+        @cached_property
+        def mangled_name(self) -> str:
+            assert False
+
+        @cached_property
+        def is_void(self) -> bool:
+            return False
+
+        def __repr__(self) -> str:
+            return "UnresolvedTypeDefinition()"
+
+        def __eq__(self, other: Any) -> bool:
+            assert False
+
+    def __init__(self) -> None:
+        super().__init__(self.Definition())
+
+
 class PrimitiveDefinition(TypeDefinition):
     def __init__(self, size: int, ir_type: str, name: str) -> None:
         super().__init__()
@@ -175,23 +217,16 @@ class StructDefinition(TypeDefinition):
         super().__init__()
 
         # TODO: assert member names are unique
-        self._members = members
+        self.members = members
 
         # Different structs should compare different even if they have the same body
         self._uuid = uuid.uuid4()
 
     def get_member_by_name(self, name: str) -> tuple[int, Type]:
-        for index, member in enumerate(self._members):
+        for index, member in enumerate(self.members):
             if member.name == name:
                 return index, member.type
         raise FailedLookupError("struct member", f"{{{name}: ...}}")
-
-    def get_member_by_index(self, index: int) -> Parameter:
-        return self._members[index]
-
-    @cached_property
-    def member_count(self) -> int:
-        return len(self._members)
 
     def graphene_literal_to_ir_constant(self, value: str) -> str:
         # TODO support structure constants.
@@ -199,8 +234,10 @@ class StructDefinition(TypeDefinition):
 
     @cached_property
     def user_facing_name(self) -> str:
-        subtypes = map(lambda m: m.type.get_user_facing_name(False), self._members)
-        return "{" + str.join(", ", subtypes) + "}"
+        members = (
+            f"{m.name} : {m.type.get_user_facing_name(False)}" for m in self.members
+        )
+        return f"{{{', '.join(members)}}}"
 
     def get_ir_type(self, alias: Optional[str]) -> str:
         # If this type has an alias, then we've generated a definition for it at
@@ -213,21 +250,19 @@ class StructDefinition(TypeDefinition):
 
     @cached_property
     def ir_definition(self) -> str:
-        member_ir = map(lambda m: m.type.ir_type, self._members)
+        member_ir = map(lambda m: m.type.ir_type, self.members)
         return "{" + str.join(", ", member_ir) + "}"
 
     @cached_property
     def mangled_name(self) -> str:
-        subtypes = map(lambda m: m.type.mangled_name, self._members)
+        subtypes = map(lambda m: m.type.mangled_name, self.members)
         return f"__ST{''.join(subtypes)}__TS"
 
     @cached_property
     def alignment(self) -> int:
         # TODO: can we be less conservative here
         return (
-            max(member.type.alignment for member in self._members)
-            if self._members
-            else 1
+            max(member.type.alignment for member in self.members) if self.members else 1
         )
 
     @cached_property
@@ -235,7 +270,7 @@ class StructDefinition(TypeDefinition):
         # Return this size of the struct with c-style padding (for now)
         #   TODO: we should manually set the `datalayout` string to match this
         this_size = 0
-        for member in self._members:
+        for member in self.members:
             # Add padding to ensure each member is aligned
             remainder = this_size % member.type.alignment
             this_size += (member.type.alignment - remainder) % member.type.alignment
@@ -250,7 +285,7 @@ class StructDefinition(TypeDefinition):
         return this_size
 
     def __repr__(self) -> str:
-        return f"StructDefinition({', '.join(map(repr, self._members))})"
+        return f"StructDefinition({', '.join(map(repr, self.members))})"
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, TypeDefinition)

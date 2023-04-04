@@ -11,7 +11,6 @@ from lark.visitors import Interpreter, Transformer, v_args
 
 import codegen as cg
 from codegen.user_facing_errors import (
-    CannotAssignToInitializerList,
     CircularImportException,
     DoubleReferenceError,
     ErrorWithLineInfo,
@@ -21,9 +20,6 @@ from codegen.user_facing_errors import (
     GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
-    InitializerListTypeDeductionFailure,
-    InvalidInitializerListAssignment,
-    InvalidInitializerListLength,
     InvalidMainReturnType,
     MissingFunctionReturn,
     RepeatedGenericName,
@@ -293,13 +289,13 @@ class ParseFunctionSignatures(Interpreter):
             return function
 
         def try_deduce_specialization(
-            fn_name: str, arguments: list[cg.Type]
+            fn_name: str, arguments: list[cg.TypedExpression]
         ) -> Optional[list[cg.Type]]:
             assert generic_name == fn_name
             deduced_mapping: dict[str, cg.Type] = {}
 
-            for provided_arg_type, (_, arg_type_tree) in zip(
-                arguments, in_pairs(args_tree.children)
+            for provided_arg, (_, arg_type_tree) in zip(
+                arguments, in_pairs(args_tree.children), strict=True
             ):
                 arg_type_in_generic_definition, _ = arg_type_tree.children[0].children
 
@@ -316,11 +312,13 @@ class ParseFunctionSignatures(Interpreter):
                 if arg_type_in_generic_definition in deduced_mapping:
                     if (
                         deduced_mapping[arg_type_in_generic_definition]
-                        != provided_arg_type
+                        != provided_arg.underlying_type
                     ):
                         return None  # SFINAE
 
-                deduced_mapping[arg_type_in_generic_definition] = provided_arg_type
+                deduced_mapping[
+                    arg_type_in_generic_definition
+                ] = provided_arg.underlying_type
 
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.Type] = []
@@ -333,8 +331,8 @@ class ParseFunctionSignatures(Interpreter):
             generic_name,
             cg.GenericFunctionParser(
                 generic_name,
-                try_deduce_specialization,
                 try_parse_fn_from_specialization,
+                try_deduce_specialization,
             ),
         )
 
@@ -516,30 +514,6 @@ def is_flattened_expression_iterable(
     return all(isinstance(expr, FlattenedExpression) for expr in exprs)
 
 
-@dataclass
-class InitializerList:
-    exprs: list[FlattenedExpression]
-    names: Optional[list[str]]
-
-    def __len__(self) -> int:
-        if self.names:
-            assert len(self.exprs) == len(self.names)
-
-        return len(self.exprs)
-
-    @property
-    def user_facing_name(self) -> str:
-        type_names = [expr.type().get_user_facing_name(False) for expr in self.exprs]
-
-        members = (
-            [f"{name}: {type_name}" for name, type_name in zip(self.names, type_names)]
-            if self.names is not None
-            else type_names
-        )
-
-        return "{" + str.join(", ", members) + "}"
-
-
 class ExpressionTransformer(Transformer):
     def __init__(
         self,
@@ -556,10 +530,8 @@ class ExpressionTransformer(Transformer):
         self._generic_mapping = generic_mapping
 
     @v_args(inline=True)
-    def expression(
-        self, value: FlattenedExpression | InitializerList
-    ) -> FlattenedExpression | InitializerList:
-        assert isinstance(value, (FlattenedExpression, InitializerList))
+    def expression(self, value: FlattenedExpression) -> FlattenedExpression:
+        assert isinstance(value, FlattenedExpression)
         return value
 
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
@@ -721,29 +693,44 @@ class ExpressionTransformer(Transformer):
         return lhs.add_parent(borrow)
 
     def struct_initializer_without_names(
-        self, objects: list[FlattenedExpression]
-    ) -> InitializerList:
-        assert isinstance(objects, list)
+        self, members: list[FlattenedExpression]
+    ) -> FlattenedExpression:
+        assert isinstance(members, list)
 
-        return InitializerList(objects, None)
+        member_exprs: list[cg.TypedExpression] = []
+        combined_flattened = FlattenedExpression([])
+
+        for item in members:
+            combined_flattened.subexpressions.extend(item.subexpressions)
+            member_exprs.append(item.expression())
+
+        return combined_flattened.add_parent(cg.UnnamedInitializerList(member_exprs))
 
     def struct_initializer_with_names(
-        self, objects: list[FlattenedExpression | Token]
-    ) -> InitializerList:
-        assert isinstance(objects, list)
+        self, member_with_names: list[FlattenedExpression | Token]
+    ) -> FlattenedExpression:
+        assert isinstance(member_with_names, list)
 
         # Use zip to transpose a list of pairs into a pair of lists.
-        names, exprs = list(map(list, zip(*in_pairs(objects))))
+        names, members = list(map(list, zip(*in_pairs(member_with_names))))
 
-        return InitializerList(exprs, names)
+        member_exprs: list[cg.TypedExpression] = []
+        combined_flattened = FlattenedExpression([])
+
+        for item in members:
+            combined_flattened.subexpressions.extend(item.subexpressions)
+            member_exprs.append(item.expression())
+
+        return combined_flattened.add_parent(
+            cg.NamedInitializerList(member_exprs, names)
+        )
 
     @v_args(inline=True)
     def adhoc_struct_initialization(
-        self, init_list: InitializerList
-    ) -> InitializerList:
-        assert isinstance(init_list, InitializerList)
-
-        return init_list
+        self, expr: FlattenedExpression
+    ) -> FlattenedExpression:
+        assert isinstance(expr.expression(), cg.InitializerList)
+        return expr
 
     @staticmethod
     def parse(
@@ -752,11 +739,11 @@ class ExpressionTransformer(Transformer):
         scope: cg.Scope,
         generic_mapping: dict[str, cg.Type],
         body: Tree,
-    ) -> FlattenedExpression | InitializerList:
+    ) -> FlattenedExpression:
         result = ExpressionTransformer(
             program, function, scope, generic_mapping
         ).transform(body)
-        assert isinstance(result, (FlattenedExpression, InitializerList))
+        assert isinstance(result, FlattenedExpression)
         return result
 
 
@@ -771,8 +758,6 @@ def generate_standalone_expression(
     flattened_expr = ExpressionTransformer.parse(
         program, function, scope, generic_mapping, body
     )
-    if isinstance(flattened_expr, InitializerList):
-        raise InitializerListTypeDeductionFailure()
 
     scope.add_generatable(flattened_expr.subexpressions)
 
@@ -793,9 +778,6 @@ def generate_return_statement(
     flattened_expr = ExpressionTransformer.parse(
         program, function, scope, generic_mapping, expr
     )
-    if isinstance(flattened_expr, InitializerList):
-        # TODO: allow initializer lists in return statements
-        raise NotImplementedError()
 
     scope.add_generatable(flattened_expr.subexpressions)
 
@@ -814,7 +796,7 @@ def generate_variable_declaration(
     generic_mapping: dict[str, cg.Type],
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
-    rhs: Optional[FlattenedExpression | InitializerList] = (
+    rhs: Optional[FlattenedExpression] = (
         ExpressionTransformer.parse(program, function, scope, generic_mapping, rhs_tree)
         if rhs_tree is not None
         else None
@@ -832,46 +814,11 @@ def generate_variable_declaration(
     var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
     scope.add_variable(var)
 
-    # Initialize variable.
-    if isinstance(rhs, FlattenedExpression):
-        scope.add_generatable(rhs.subexpressions)
-        scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
+    if rhs is None:
+        return
 
-    # Initialize struct.
-    elif isinstance(rhs, InitializerList):
-        if not isinstance(var_type.definition, cg.StructDefinition):
-            raise InvalidInitializerListAssignment(
-                var_type.get_user_facing_name(False), rhs.user_facing_name
-            )
-
-        if var_type.definition.member_count != len(rhs):
-            raise InvalidInitializerListLength(
-                len(rhs), var_type.definition.member_count
-            )
-
-        def assign_to_member(expr: FlattenedExpression, member_name: str) -> None:
-            scope.add_generatable(expr.subexpressions)
-
-            var_ref = cg.VariableReference(var)
-            scope.add_generatable(var_ref)
-
-            struct_access = cg.StructMemberAccess(var_ref, member_name)
-            scope.add_generatable(struct_access)
-
-            var_assignment = cg.Assignment(struct_access, expr.expression())
-            scope.add_generatable(var_assignment)
-
-        if rhs.names:
-            for name, expr in zip(rhs.names, rhs.exprs):
-                assign_to_member(expr, name)
-        else:
-            for idx, expr in enumerate(rhs.exprs):
-                member = var_type.definition.get_member_by_index(idx)
-                assign_to_member(expr, member.name)
-
-    # Unreachable if rhs has a value.
-    else:
-        assert rhs is None
+    scope.add_generatable(rhs.subexpressions)
+    scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
 
 
 def generate_if_statement(
@@ -887,8 +834,6 @@ def generate_if_statement(
     condition_expr = ExpressionTransformer.parse(
         program, function, scope, generic_mapping, condition_tree
     )
-    if isinstance(condition_expr, InitializerList):
-        raise InitializerListTypeDeductionFailure()
 
     scope.add_generatable(condition_expr.subexpressions)
 
@@ -919,8 +864,6 @@ def generate_while_statement(
     condition_expr = ExpressionTransformer.parse(
         program, function, scope, generic_mapping, condition_tree
     )
-    if isinstance(condition_expr, InitializerList):
-        raise InitializerListTypeDeductionFailure()
 
     while_scope_id = function.get_next_scope_id()
 
@@ -952,12 +895,6 @@ def generate_assignment(
     rhs = ExpressionTransformer.parse(
         program, function, scope, generic_mapping, rhs_tree
     )
-
-    if isinstance(lhs, InitializerList):
-        raise CannotAssignToInitializerList()
-    if isinstance(rhs, InitializerList):
-        # TODO: allow initializer list assignment to structs
-        raise NotImplementedError()
 
     scope.add_generatable(lhs.subexpressions)
     scope.add_generatable(rhs.subexpressions)

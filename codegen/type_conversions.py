@@ -3,7 +3,10 @@ from typing import Iterator, Optional
 
 from .builtin_types import ArrayDefinition, IntegerDefinition
 from .interfaces import Type, TypedExpression
-from .user_facing_errors import OperandError, TypeCheckerError
+from .user_facing_errors import (
+    OperandError,
+    TypeCheckerError,
+)
 
 
 class SquashIntoUnderlyingType(TypedExpression):
@@ -131,6 +134,7 @@ def implicit_conversion_impl(
 
     Only the following conversions are allowed:
     - dereference an (non-reference) variable with an address to a value
+    - initializer list -> compatible struct
     - integer promotion.
     - float promotion (TODO).
 
@@ -176,6 +180,11 @@ def implicit_conversion_impl(
             maybe_missing_borrow,
         )
 
+    # Initializer lists (+ anything else that depends on the TypedExpression)
+    additional_cost, exprs = src.try_convert_to_type(dest_type)
+    promotion_cost += additional_cost
+    expr_list.extend(exprs)
+
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.
     last_def = last_type().definition
@@ -219,24 +228,9 @@ def do_implicit_conversion(
     return expr_list[-1], expr_list[1:]
 
 
-class Wrapper(TypedExpression):
-    def __repr__(self) -> str:
-        return f"Wrapper({repr(self.underlying_type)})"
-
-    @property
-    def ir_ref_without_type_annotation(self) -> str:
-        assert False
-
-    def assert_can_read_from(self) -> None:
-        assert False
-
-    def assert_can_write_to(self) -> None:
-        assert False
-
-
-def is_type_implicitly_convertible(src_type: Type, dest_type: Type) -> bool:
+def is_type_implicitly_convertible(src: TypedExpression, dest_type: Type) -> bool:
     try:
-        implicit_conversion_impl(Wrapper(src_type, False), dest_type)
+        implicit_conversion_impl(src, dest_type)
     except TypeCheckerError:
         return False
 
@@ -251,9 +245,11 @@ def assert_is_implicitly_convertible(
     implicit_conversion_impl(expr, target, context)
 
 
-def get_implicit_conversion_cost(src_type: Type, dest_type: Type) -> Optional[int]:
+def get_implicit_conversion_cost(
+    src: TypedExpression, dest_type: Type
+) -> Optional[int]:
     try:
-        cost, _ = implicit_conversion_impl(Wrapper(src_type, False), dest_type)
+        cost, _ = implicit_conversion_impl(src, dest_type)
         return cost
     except TypeCheckerError:
         return None

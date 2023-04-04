@@ -9,7 +9,10 @@ from .expressions import (
     ArrayIndexAccess,
     BorrowExpression,
     ConstantExpression,
+    InitializerList,
+    NamedInitializerList,
     StructMemberAccess,
+    UnnamedInitializerList,
     VariableReference,
 )
 from .generatable import (
