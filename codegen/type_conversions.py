@@ -59,7 +59,7 @@ class StructInitializer(TypedExpression):
         return self.result_ref
 
     def __repr__(self) -> str:
-        return f"StructInitializer({self.underlying_type.get_user_facing_name(False)}, {self._members})"
+        return f"StructInitializer({self.underlying_type}, {self._members})"
 
     def assert_can_read_from(self) -> None:
         pass
@@ -133,7 +133,7 @@ class NamedInitializerList(InitializerList):
         return 0, [StructInitializer(other, ordered_members)]
 
 
-class UnamedInitializerList(InitializerList):
+class UnnamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression]) -> None:
         super().__init__(UnresolvedType(), False, False)
 

@@ -705,7 +705,7 @@ class ExpressionTransformer(Transformer):
             combined_flattened.subexpressions.extend(item.subexpressions)
             member_exprs.append(item.expression())
 
-        return combined_flattened.add_parent(cg.UnamedInitializerList(member_exprs))
+        return combined_flattened.add_parent(cg.UnnamedInitializerList(member_exprs))
 
     def struct_initializer_with_names(
         self, member_with_names: list[FlattenedExpression | Token]
