@@ -24,7 +24,7 @@ class StructInitializer(TypedExpression):
         assert isinstance(struct_type.definition, StructDefinition)
         assert len(member_exprs) == struct_type.definition.member_count
 
-        self._result_ref = Optional[str]
+        self._result_ref: Optional[str] = None
         self._members: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
         for index, member_expr in enumerate(member_exprs):
