@@ -432,8 +432,18 @@ class InitializerList(TypedExpression):
         raise CannotAssignToInitializerList()
 
     @abstractmethod
-    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
+    def get_ordered_members(self, other: Type) -> list[TypedExpression]:
         pass
+
+    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
+        if not isinstance(other.definition, StructDefinition):
+            raise InvalidInitializerListConversion(
+                other.get_user_facing_name(False), self.get_user_facing_name(False)
+            )
+
+        ordered_members = self.get_ordered_members(other)
+        struct_initializer = StructInitializer(other, ordered_members)
+        return struct_initializer.implicit_conversion_cost, [struct_initializer]
 
 
 class NamedInitializerList(InitializerList):
@@ -452,13 +462,8 @@ class NamedInitializerList(InitializerList):
     def __repr__(self) -> str:
         return f"InitializerList({list(self._members.items())})"
 
-    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
-        error_message = InvalidInitializerListConversion(
-            other.get_user_facing_name(False), self.get_user_facing_name(False)
-        )
-
-        if not isinstance(other.definition, StructDefinition):
-            raise error_message
+    def get_ordered_members(self, other: Type) -> list[TypedExpression]:
+        assert isinstance(other.definition, StructDefinition)
 
         if len(other.definition.members) != len(self._members):
             raise InvalidInitializerListLength(
@@ -468,12 +473,13 @@ class NamedInitializerList(InitializerList):
         ordered_members: list[TypedExpression] = []
         for member in other.definition.members:
             if member.name not in self._members:
-                raise error_message
-
+                raise InvalidInitializerListConversion(
+                    other.get_user_facing_name(True),
+                    self.get_user_facing_name(False),
+                )
             ordered_members.append(self._members[member.name])
 
-        struct_initializer = StructInitializer(other, ordered_members)
-        return struct_initializer.implicit_conversion_cost, [struct_initializer]
+        return ordered_members
 
 
 class UnnamedInitializerList(InitializerList):
@@ -492,18 +498,11 @@ class UnnamedInitializerList(InitializerList):
     def __repr__(self) -> str:
         return f"InitializerList({self._members})"
 
-    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
-        error_message = InvalidInitializerListConversion(
-            other.get_user_facing_name(False), self.get_user_facing_name(False)
-        )
-
-        if not isinstance(other.definition, StructDefinition):
-            raise error_message
-
+    def get_ordered_members(self, other: Type) -> list[TypedExpression]:
+        assert isinstance(other.definition, StructDefinition)
         if len(other.definition.members) != len(self._members):
             raise InvalidInitializerListLength(
                 len(self._members), len(other.definition.members)
             )
 
-        struct_initializer = StructInitializer(other, self._members)
-        return struct_initializer.implicit_conversion_cost, [struct_initializer]
+        return self._members

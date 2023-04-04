@@ -204,10 +204,10 @@ class InvalidInitializerListLength(TypeCheckerError):
 
 
 class InvalidInitializerListConversion(TypeCheckerError):
-    def __init__(self, non_struct_type: str, init_list_type_name: str) -> None:
+    def __init__(self, struct_type: str, init_list_type_name: str) -> None:
         super(GrapheneError, self).__init__(
-            "Error: initializer list cannot be converted to type "
-            f"'{non_struct_type}' (expected a struct type similar to '{init_list_type_name}')"
+            f"Error: initializer list of the form '{init_list_type_name}' cannot be "
+            f"converted to '{struct_type}'"
         )
 
 

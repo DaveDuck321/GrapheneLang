@@ -234,8 +234,10 @@ class StructDefinition(TypeDefinition):
 
     @cached_property
     def user_facing_name(self) -> str:
-        subtypes = map(lambda m: m.type.get_user_facing_name(False), self.members)
-        return "{" + str.join(", ", subtypes) + "}"
+        members = (
+            f"{m.name} : {m.type.get_user_facing_name(False)}" for m in self.members
+        )
+        return f"{{{', '.join(members)}}}"
 
     def get_ir_type(self, alias: Optional[str]) -> str:
         # If this type has an alias, then we've generated a definition for it at
