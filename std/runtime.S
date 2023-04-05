@@ -1,7 +1,3 @@
-.global _start
-.global _syscall_0
-.global _syscall_3
-
 # To make a system call in 64-bit Linux, place the system call number in rax,
 # and its arguments, in order, in rdi, rsi, rdx, r10, r8, and r9, then invoke
 # syscall. Return values are stored in rax.
@@ -18,6 +14,7 @@
 
 .section .text
 
+.global _start
 _start:
     # Terminate the stack frame linked list; useful when compiling with
     # -fno-omit-frame-pointer.
@@ -35,15 +32,18 @@ _start:
     mov     $60, %eax
     syscall
 
-_syscall_0:
-    # Syscall with 0 arguments. Syscall number should be in rdi.
-    mov     %rdi, %rax
-    syscall
-    ret
+# Define a new syscall helper. Relies on the caller to use the correct calling
+# convention (System V AMD64 ABI) and passes through the first arg_count
+# arguments given to the syscall. It simply moves the last argument passed
+# (defined by syscall_number_reg) to rax. Note that rax is not part of the
+# normal calling convention. The syscall replaces rax with its return code,
+# which is passed through to the caller.
+#define MAKE_SYSCALL(arg_count, syscall_number_reg) \
+    .global _syscall_ ## arg_count;                 \
+    _syscall_ ## arg_count:                         \
+        mov     syscall_number_reg, %rax;           \
+        syscall;                                    \
+        ret
 
-_syscall_3:
-    # Syscall with 3 arguments. rdi, rsi, and rdx are passed through to the
-    # kernel. Syscall number should be in rcx.
-    mov     %rcx, %rax
-    syscall
-    ret
+MAKE_SYSCALL(0, %rdi)
+MAKE_SYSCALL(3, %rcx)
