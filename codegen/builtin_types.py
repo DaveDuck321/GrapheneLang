@@ -4,8 +4,81 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Any, Callable, Optional
 
-from .interfaces import Parameter, SpecializationItem, Type, TypeDefinition
+from .interfaces import (
+    CompileTimeConstant,
+    GenericMapping,
+    Parameter,
+    SpecializationItem,
+    Type,
+    TypeDefinition,
+)
 from .user_facing_errors import FailedLookupError, InvalidIntSize
+
+
+class PlaceholderType(Type):
+    class Definition(TypeDefinition):
+        def __init__(self, generic_name: str) -> None:
+            super().__init__()
+
+            self.generic_name = generic_name
+
+        def graphene_literal_to_ir_constant(self, value: str) -> str:
+            assert False
+
+        @cached_property
+        def alignment(self) -> int:
+            assert False
+
+        @cached_property
+        def size(self) -> int:
+            assert False
+
+        @cached_property
+        def user_facing_name(self) -> str:
+            return f"<placeholder for {self.generic_name}>"
+
+        def get_ir_type(self, alias: Optional[str]) -> str:
+            assert False
+
+        @cached_property
+        def ir_definition(self) -> str:
+            assert False
+
+        @cached_property
+        def mangled_name(self) -> str:
+            assert False
+
+        @cached_property
+        def is_void(self) -> bool:
+            return False
+
+        def __repr__(self) -> str:
+            return f"PlaceholderType.Definition({self.generic_name})"
+
+        def __eq__(self, other: Any) -> bool:
+            assert False
+
+    def __init__(self, generic_name: str) -> None:
+        super().__init__(self.Definition(generic_name))
+
+        self.generic_name = generic_name
+
+    def match_with(self, other: Type, generic_mapping: GenericMapping) -> bool:
+        # We are a placeholder, so we should just copy the other type.
+
+        if (
+            self.generic_name in generic_mapping
+            and generic_mapping[self.generic_name] != other
+        ):
+            return False
+
+        generic_mapping[self.generic_name] = other.copy()
+
+        return True
+
+
+class PlaceholderConstant(CompileTimeConstant):
+    generic_name: str
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -183,11 +256,12 @@ class BoolType(Type):
 
 
 class StructDefinition(TypeDefinition):
-    def __init__(self, members: list[Parameter]) -> None:
+    def __init__(self, members: list[Parameter], is_adhoc: bool = False) -> None:
         super().__init__()
 
         # TODO: assert member names are unique
         self.members = members
+        self.is_adhoc = is_adhoc
 
         # Different structs should compare different even if they have the same body
         self._uuid = uuid.uuid4()
@@ -263,6 +337,29 @@ class StructDefinition(TypeDefinition):
             return False
         return self._uuid == other._uuid
 
+    def match_with(
+        self, other: TypeDefinition, generic_mapping: GenericMapping
+    ) -> bool:
+        if not isinstance(other, StructDefinition):
+            return False
+
+        if not self.is_adhoc and not other.is_adhoc:
+            # UUID equality.
+            return self == other
+
+        # If at least one of the two structs are adhoc, we need to do pattern
+        # matching.
+        if len(self.members) != len(other.members):
+            return False
+
+        return all(
+            map(
+                lambda ours, theirs: ours.type.match_with(theirs.type, generic_mapping),
+                self.members,
+                other.members,
+            )
+        )
+
 
 class ArrayDefinition(TypeDefinition):
     UNKNOWN_DIMENSION = 0
@@ -330,6 +427,19 @@ class ArrayDefinition(TypeDefinition):
             self._dimensions == other._dimensions
             and self._element_type == other._element_type
         )
+
+    def match_with(
+        self, other: TypeDefinition, generic_mapping: GenericMapping
+    ) -> bool:
+        if not isinstance(other, ArrayDefinition):
+            return False
+
+        if not self._element_type.match_with(other._element_type, generic_mapping):
+            return False
+
+        # TODO __init__ should take a list of CompileTimeConstants instead of
+        # ints, so that we can pattern match arrays as well.
+        return all(map(lambda a, b: a == b, self.dimensions, other.dimensions))
 
 
 class CharArrayDefinition(ArrayDefinition):

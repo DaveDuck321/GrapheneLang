@@ -59,6 +59,12 @@ class TypeDefinition(ABC):
     def __eq__(self, other: Any) -> bool:
         pass
 
+    def match_with(
+        self, other: "TypeDefinition", generic_mapping: "GenericMapping"
+    ) -> bool:
+        # Base case for buil-in scalar types; matching just tests for equality.
+        return self == other
+
 
 class Type:
     @staticmethod
@@ -218,6 +224,23 @@ class Type:
         new_type._specialization = specialization
 
         return new_type
+
+    def match_with(self, other: "Type", generic_mapping: "GenericMapping") -> bool:
+        if self.is_borrowed_reference != other.is_borrowed_reference:
+            return False
+
+        # FIXME match specialization as well
+        return self.definition.match_with(other.definition, generic_mapping)
+
+    def strict_match_with(self, other: "Type") -> bool:
+        generic_mapping = {}
+        result = self.match_with(other, generic_mapping)
+
+        # Strict pattern matching should be used for fully resolved types, so
+        # something is very wrong if we managed to infer new generic parameters.
+        assert not generic_mapping
+
+        return result
 
 
 SpecializationItem = Type | CompileTimeConstant

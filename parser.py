@@ -85,11 +85,13 @@ class TypeTransformer(Transformer):
         self,
         program: cg.Program,
         generic_mapping: cg.GenericMapping,
+        structs_are_adhoc: bool = False,
     ) -> None:
         super().__init__(visit_tokens=True)
 
         self._program = program
         self._generic_mapping = generic_mapping
+        self._structs_are_adhoc = structs_are_adhoc
 
     @v_args(inline=True)
     def ARRAY_INDEX(self, token: Token) -> cg.CompileTimeConstant:
@@ -175,20 +177,70 @@ class TypeTransformer(Transformer):
                 )
             members.append(cg.Parameter(m_name, m_type))
 
-        return cg.Type(cg.StructDefinition(members))
+        return cg.Type(cg.StructDefinition(members, self._structs_are_adhoc))
 
     @classmethod
     def parse(
-        cls, program: cg.Program, tree: Tree, type_map: cg.GenericMapping
+        cls,
+        program: cg.Program,
+        tree: Tree,
+        type_map: cg.GenericMapping,
+        structs_are_adhoc: bool = False,
     ) -> cg.Type:
         try:
-            result = cls(program, type_map).transform(tree)
+            result = cls(program, type_map, structs_are_adhoc).transform(tree)
         except VisitError as exc:
             raise exc.orig_exc
 
         assert isinstance(result, cg.Type)
 
         return result
+
+
+class UnresolvedTypeTransformer(TypeTransformer):
+    def __init__(self, program: cg.Program) -> None:
+        super().__init__(program, {}, True)
+
+        self.required_compile_time_constants: set[str] = set()
+        self.required_type_names: set[str] = set()
+        self.found_generics: bool = False
+
+    def parse_next(self, tree: Tree) -> tuple[cg.Type, bool]:
+        self.found_generics = False
+        return self.transform(tree), self.found_generics
+
+    @v_args(inline=True)
+    def ARRAY_INDEX(self, token: Token) -> cg.CompileTimeConstant:
+        if token.isdecimal():
+            return cg.CompileTimeConstant(int(token))
+
+        assert token not in self.required_type_names
+        self.required_compile_time_constants.add(token)
+        self.found_generics = True
+
+        return cg.CompileTimeConstant(-1)
+
+    @v_args(inline=True)
+    def type_name(self, name: Token, type_map: Optional[Tree]) -> cg.Type:
+        assert isinstance(name, Token)
+
+        try:
+            generic_args = get_optional_children(type_map)
+            assert is_specialization_list(generic_args)
+            return self._program.lookup_type(name, generic_args)
+        except:
+            # Don't panic; it's just a generic.
+            pass
+
+        # Can't have generics with generic annotations.
+        # TODO this should be a user-facing error.
+        assert type_map is None
+
+        assert name not in self.required_compile_time_constants
+        self.required_type_names.add(name)
+        self.found_generics = True
+
+        return cg.PlaceholderType(name)
 
 
 class ParseTypeDefinitions(Interpreter):
@@ -330,32 +382,24 @@ class ParseFunctionSignatures(Interpreter):
             assert generic_name == fn_name
             deduced_mapping: cg.GenericMapping = {}
 
+            transformer = UnresolvedTypeTransformer(self._program)
+
             for provided_arg, (_, arg_type_tree) in zip(
                 arguments, in_pairs(args_tree.children), strict=True
             ):
-                arg_type_in_generic_definition, _ = arg_type_tree.children[0].children
+                # TODO we shouldn't parse these lazily (so we can give more
+                # consistent errors).
+                unresolved_type, is_generic = transformer.parse_next(arg_type_tree)
 
-                # TODO: type pattern matching here
-                #       Atm this is a simple string compare
-                # FIXME we can't deduce CompileTimeConstant's
-                assert isinstance(arg_type_in_generic_definition, Token)
-                if arg_type_in_generic_definition not in generic_names:
-                    # This argument is not a generic
+                # This arugment is not a generic.
+                if not is_generic:
                     continue
 
-                # The argument is a generic, deduce it's type
-
-                # Have we already deduced a different type?
-                if arg_type_in_generic_definition in deduced_mapping:
-                    if (
-                        deduced_mapping[arg_type_in_generic_definition]
-                        != provided_arg.underlying_type
-                    ):
-                        return None  # SFINAE
-
-                deduced_mapping[
-                    arg_type_in_generic_definition
-                ] = provided_arg.underlying_type
+                # deduced_mapping updated in-place.
+                if not unresolved_type.match_with(
+                    provided_arg.underlying_type, deduced_mapping
+                ):
+                    return None  # SFINAE
 
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.SpecializationItem] = []
@@ -440,7 +484,7 @@ class ParseFunctionSignatures(Interpreter):
         for arg_name, arg_type_tree in in_pairs(fn_arg_trees):
             assert isinstance(arg_name, Token)
             arg_type = TypeTransformer.parse(
-                self._program, arg_type_tree, generic_mapping
+                self._program, arg_type_tree, generic_mapping, True
             )
 
             if arg_type.is_void:
@@ -451,7 +495,7 @@ class ParseFunctionSignatures(Interpreter):
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
         fn_return_type = TypeTransformer.parse(
-            self._program, return_type_tree, generic_mapping
+            self._program, return_type_tree, generic_mapping, True
         )
 
         # Build the function
@@ -656,6 +700,7 @@ class ExpressionTransformer(Transformer):
                             self._program,
                             specialization_item,
                             self._generic_mapping,
+                            True,
                         )
                     )
 
@@ -878,7 +923,7 @@ def generate_variable_declaration(
     assert isinstance(var_name, Token)
     assert isinstance(type_tree, Tree)
 
-    var_type = TypeTransformer.parse(program, type_tree, generic_mapping)
+    var_type = TypeTransformer.parse(program, type_tree, generic_mapping, True)
     if var_type.is_void:
         raise VoidVariableDeclaration(
             "variable", var_name, var_type.get_user_facing_name(True)
