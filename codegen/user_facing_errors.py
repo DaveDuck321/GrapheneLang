@@ -1,4 +1,4 @@
-from typing import Iterable, Literal
+from typing import Iterable, Literal, Optional
 
 from lark import Token
 
@@ -13,7 +13,7 @@ class GrapheneError(ValueError):
 
 
 class ErrorWithLineInfo(ValueError):
-    def __init__(self, message: str, line: int, context: str) -> None:
+    def __init__(self, message: str, line: int, context: Optional[str] = None) -> None:
         super().__init__(message)
 
         self.line = line
@@ -276,3 +276,10 @@ class InvalidMainReturnType(GrapheneError):
             f"Error: type '{actual_type}' is not a valid return type for"
             " function 'main'; expected 'int'"
         )
+
+
+class InvalidSyntax(ErrorWithLineInfo):
+    def __init__(self, context_lines: list[str], line_number: int) -> None:
+        message = "\n    ".join(context_lines)
+        message += "\nError: invalid syntax, unexpected symbol"
+        super().__init__(message, line_number)

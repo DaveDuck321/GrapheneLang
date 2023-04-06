@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional, TypeGuard
 
 from lark import Lark, Token, Tree
-from lark.exceptions import VisitError
+from lark.exceptions import UnexpectedInput, VisitError
 from lark.visitors import Interpreter, Transformer, v_args
 
 import codegen as cg
@@ -21,6 +21,7 @@ from codegen.user_facing_errors import (
     GenericHasGenericAnnotation,
     GrapheneError,
     InvalidMainReturnType,
+    InvalidSyntax,
     MissingFunctionReturn,
     RepeatedGenericName,
     SubstitutionFailure,
@@ -1045,11 +1046,11 @@ def append_file_to_program(
     already_processed: set[ResolvedPath],
     debug_compiler: bool = False,
 ) -> None:
-    with open(file_path, encoding="utf-8") as source_file:
-        tree = lark.parse(source_file.read())
-
     already_processed.add(file_path)
+
     try:
+        tree = parse_file_into_lark_tree(lark, file_path)
+
         ParseImports(
             lark,
             program,
@@ -1071,10 +1072,8 @@ def append_file_to_program(
             traceback.print_exc()
             print("~~~ User-facing error message ~~~")
 
-        print(
-            f"File '{file_path}', line {exc.line}, in '{exc.context}'",
-            file=sys.stderr,
-        )
+        context_str = f", in '{exc.context}'" if exc.context else ""
+        print(f"File '{file_path}', line {exc.line}{context_str}", file=sys.stderr)
         print(f"    {exc.message}", file=sys.stderr)
 
         if included_from:
@@ -1084,6 +1083,45 @@ def append_file_to_program(
             print(f"Included from file '{file}'", file=sys.stderr)
 
         sys.exit(1)
+
+
+def parse_file_into_lark_tree(lark: Lark, file_path: ResolvedPath) -> Tree:
+    with open(file_path, encoding="utf-8") as source_file:
+        file_content = source_file.read()
+
+    try:
+        return lark.parse(file_content)
+    except UnexpectedInput as exc:
+        assert isinstance(exc.pos_in_stream, int)
+        error_pos = exc.pos_in_stream
+
+        this_line_start_pos = file_content[:error_pos].rfind("\n")
+        this_line_end_pos = error_pos + file_content[error_pos:].find("\n")
+
+        error_message_context = [
+            file_content[this_line_start_pos + 1 : this_line_end_pos]
+        ]
+
+        # Is there only white space on this line before the error message?
+        if file_content[this_line_start_pos:error_pos].isspace():
+            # Then we should also print the previous line (where the error probably occurred)
+            previous_line = " "
+            previous_line_end = error_pos - 1
+            while previous_line.isspace():
+                line_end = file_content[:previous_line_end].rfind("\n")
+                if line_end == -1:
+                    break
+
+                previous_line = file_content[line_end + 1 : previous_line_end]
+                previous_line_end = line_end
+
+            if not previous_line.isspace():
+                error_message_context.insert(0, previous_line)
+
+        caret_pos = error_pos - this_line_start_pos - 1
+        error_message_context.append(caret_pos * " " + "^")
+
+        raise InvalidSyntax(error_message_context, exc.line)
 
 
 def generate_ir_from_source(
