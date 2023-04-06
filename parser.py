@@ -583,11 +583,9 @@ class ExpressionTransformer(Transformer):
         fn_args: Iterable[FlattenedExpression],
     ) -> FlattenedExpression:
         flattened_expr = FlattenedExpression([])
-        arg_types_for_lookup = []
         fn_call_args = []
 
         for arg in fn_args:
-            arg_types_for_lookup.append(arg.type())
             fn_call_args.append(arg.expression())
             flattened_expr.subexpressions.extend(arg.subexpressions)
 

@@ -8,48 +8,6 @@ from .interfaces import Parameter, Type, TypeDefinition
 from .user_facing_errors import FailedLookupError, InvalidIntSize
 
 
-class UnresolvedType(Type):
-    class Definition(TypeDefinition):
-        def graphene_literal_to_ir_constant(self, value: str) -> str:
-            assert False
-
-        @cached_property
-        def alignment(self) -> int:
-            assert False
-
-        @cached_property
-        def size(self) -> int:
-            assert False
-
-        @cached_property
-        def user_facing_name(self) -> str:
-            assert False
-
-        def get_ir_type(self, alias: Optional[str]) -> str:
-            assert False
-
-        @cached_property
-        def ir_definition(self) -> str:
-            assert False
-
-        @cached_property
-        def mangled_name(self) -> str:
-            assert False
-
-        @cached_property
-        def is_void(self) -> bool:
-            return False
-
-        def __repr__(self) -> str:
-            return "UnresolvedTypeDefinition()"
-
-        def __eq__(self, other: Any) -> bool:
-            assert False
-
-    def __init__(self) -> None:
-        super().__init__(self.Definition())
-
-
 class PrimitiveDefinition(TypeDefinition):
     def __init__(self, size: int, ir_type: str, name: str) -> None:
         super().__init__()

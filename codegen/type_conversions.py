@@ -167,6 +167,11 @@ def implicit_conversion_impl(
     if src.is_indirect_pointer_to_type:
         expr_list.append(SquashIntoUnderlyingType(src))
 
+    # Initializer lists (+ anything else that depends on the TypedExpression)
+    additional_cost, exprs = src.try_convert_to_type(dest_type)
+    promotion_cost += additional_cost
+    expr_list.extend(exprs)
+
     # The type-system reference should not be implicitly dereferenced
     if last_type().is_borrowed_reference != dest_type.is_borrowed_reference:
         maybe_missing_borrow = False
@@ -179,11 +184,6 @@ def implicit_conversion_impl(
             dest_type.get_user_facing_name(False),
             maybe_missing_borrow,
         )
-
-    # Initializer lists (+ anything else that depends on the TypedExpression)
-    additional_cost, exprs = src.try_convert_to_type(dest_type)
-    promotion_cost += additional_cost
-    expr_list.extend(exprs)
 
     # Integer promotion.
     # TODO we might want to relax the is_signed == is_signed rule.

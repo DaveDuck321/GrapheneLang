@@ -289,22 +289,27 @@ class Generatable(ABC):
 class TypedExpression(Generatable):
     def __init__(
         self,
-        expr_type: Type,
+        expr_type: Optional[Type],
         is_indirect_pointer_to_type: bool,
         was_reference_type_at_any_point: bool = False,
     ) -> None:
         super().__init__()
         # It is the callers responsibility to escape double indirections
-        if expr_type.is_borrowed_reference:
+        if expr_type is not None and expr_type.is_borrowed_reference:
             assert not is_indirect_pointer_to_type
 
-        self.underlying_type = expr_type
+        self._underlying_type = expr_type
         self.is_indirect_pointer_to_type = is_indirect_pointer_to_type
 
         # Used for better error messages
         self.was_reference_type_at_any_point = was_reference_type_at_any_point
 
         self.result_reg: Optional[int] = None
+
+    @property
+    def underlying_type(self) -> Type:
+        assert self._underlying_type is not None
+        return self._underlying_type
 
     def get_equivalent_pure_type(self) -> Type:
         if self.is_indirect_pointer_to_type:

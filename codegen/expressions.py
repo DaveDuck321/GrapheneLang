@@ -7,7 +7,6 @@ from .builtin_types import (
     IntType,
     SizeType,
     StructDefinition,
-    UnresolvedType,
 )
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
@@ -448,7 +447,7 @@ class InitializerList(TypedExpression):
 
 class NamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression], names: list[str]) -> None:
-        super().__init__(UnresolvedType(), False, False)
+        super().__init__(None, False, False)
 
         self._members = dict(zip(names, members, strict=True))
 
@@ -484,7 +483,7 @@ class NamedInitializerList(InitializerList):
 
 class UnnamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression]) -> None:
-        super().__init__(UnresolvedType(), False, False)
+        super().__init__(None, False, False)
 
         self._members = members
 
