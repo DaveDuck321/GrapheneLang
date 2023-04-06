@@ -75,3 +75,29 @@ typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsInte
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
     return __builtin_is_greater_than(lhs_widen, rhs_widen);
 };
+
+typedef[T] HasSpaceship : FalseType;
+
+@operator [T] == : (lhs: T, rhs: T) -> TypeIf<bool, HasSpaceship<T>> = {
+    return (lhs <=> rhs) == 0;
+};
+
+@operator [T] != : (lhs: T, rhs: T) -> TypeIf<bool, HasSpaceship<T>> = {
+    return (lhs <=> rhs) != 0;
+};
+
+@operator [T] < : (lhs: T, rhs: T) -> TypeIf<bool, HasSpaceship<T>> = {
+    return (lhs <=> rhs) < 0;
+};
+
+@operator [T] > : (lhs: T, rhs: T) -> TypeIf<bool, HasSpaceship<T>> = {
+    return (lhs <=> rhs) > 0;
+};
+
+@operator [T] <= : (lhs: T, rhs: T) -> TypeIf<bool, HasSpaceship<T>> = {
+    return (lhs <=> rhs) <= 0;
+};
+
+@operator [T] >= : (lhs: T, rhs: T) -> TypeIf<bool, HasSpaceship<T>> = {
+    return (lhs <=> rhs) >= 0;
+};
