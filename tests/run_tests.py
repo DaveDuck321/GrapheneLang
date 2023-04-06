@@ -170,7 +170,14 @@ def run_v2_test(file_path: Path, io_harness: bool) -> None:
     try:
         fn_validate(
             V2_TESTS_DIR,
-            ["python", "../../driver.py", str(file_path), "-o", str(binary_path)],
+            [
+                "python",
+                "../../driver.py",
+                *config.compile_args,
+                str(file_path),
+                "-o",
+                str(binary_path),
+            ],
             asdict(config.compile),
         )
     except TestFailure as exc:

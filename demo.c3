@@ -1,9 +1,9 @@
-function[T, U] hello: () -> T = {
-    let a : T = 1;
-    return a;
-};
+@require_once "std/io.c3";
+
+typedef[Len] string : u8[Len];
 
 function main: () -> int = {
-    hello<i64, int>();
-    return 0;
+    // let str: string<3> = "abc";
+
+    return puts<14>("abcdefghijklm\n");
 };

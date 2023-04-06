@@ -7,7 +7,7 @@ from .builtin_callables import get_builtin_callables
 from .builtin_types import CharArrayDefinition, FunctionSignature, get_builtin_types
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
-from .interfaces import Parameter, Type, TypedExpression
+from .interfaces import Parameter, SpecializationItem, Type, TypedExpression
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
@@ -26,7 +26,7 @@ class Function:
         parameters: list[Parameter],
         return_type: Type,
         is_foreign: bool,
-        specialization: list[Type],
+        specialization: list[SpecializationItem],
     ) -> None:
         self._signature = FunctionSignature(
             name,
@@ -118,9 +118,12 @@ class GenericFunctionParser:
     def __init__(
         self,
         name: str,
-        parse_with_specialization_fn: Callable[[str, list[Type]], Optional[Function]],
+        parse_with_specialization_fn: Callable[
+            [str, list[SpecializationItem]],
+            Optional[Function],
+        ],
         deduce_specialization_fn: Callable[
-            [str, list[TypedExpression]], Optional[list[Type]]
+            [str, list[TypedExpression]], Optional[list[SpecializationItem]]
         ],
     ) -> None:
         self.fn_name = name
@@ -128,13 +131,13 @@ class GenericFunctionParser:
         self._deduce_specialization_fn = deduce_specialization_fn
 
     def try_parse_with_specialization(
-        self, specialization: list[Type]
+        self, specialization: list[SpecializationItem]
     ) -> Optional[Function]:
         return self._parse_with_specialization_fn(self.fn_name, specialization)
 
     def try_deduce_specialization(
         self, args: list[TypedExpression]
-    ) -> Optional[list[Type]]:
+    ) -> Optional[list[SpecializationItem]]:
         return self._deduce_specialization_fn(self.fn_name, args)
 
 
@@ -185,7 +188,7 @@ class FunctionSymbolTable:
             self.graphene_functions.append(fn_to_add)
 
     def generate_functions_with_specialization(
-        self, fn_name: str, fn_specialization: list[Type]
+        self, fn_name: str, fn_specialization: list[SpecializationItem]
     ) -> list[Function]:
         # Have we already parsed this function?
         if fn_name in self._specialized_functions:
@@ -219,7 +222,7 @@ class FunctionSymbolTable:
     def lookup_explicitly_specialized_function(
         self,
         fn_name: str,
-        fn_specialization: list[Type],
+        fn_specialization: list[SpecializationItem],
         fn_args: list[TypedExpression],
     ) -> Function:
         matching_functions = self.generate_functions_with_specialization(
@@ -239,7 +242,7 @@ class FunctionSymbolTable:
         ]
 
         # Implicit generic instantiation
-        candidate_specializations: list[list[Type]] = []
+        candidate_specializations: list[list[SpecializationItem]] = []
         for candidate_generic in self._generic_parsers[fn_name]:
             fn_specialization = candidate_generic.try_deduce_specialization(fn_args)
 
@@ -262,7 +265,7 @@ class FunctionSymbolTable:
         self,
         fn_name: str,
         candidate_functions: Iterable[Function],
-        fn_specialization: list[Type],
+        fn_specialization: list[SpecializationItem],
         fn_args: list[TypedExpression],
     ) -> Function:
         functions_by_cost: list[tuple[int, Function]] = []
@@ -289,6 +292,8 @@ class FunctionSymbolTable:
         )
         readable_specialization = ", ".join(
             specialization.get_user_facing_name(False)
+            if isinstance(specialization, Type)
+            else str(specialization)
             for specialization in fn_specialization
         )
 
@@ -328,7 +333,9 @@ class Program:
 
         self._function_table = FunctionSymbolTable()
         self._initialized_types: dict[str, list[Type]] = defaultdict(list)
-        self._type_initializers: dict[str, Callable[[str, list[Type]], Type]] = {}
+        self._type_initializers: dict[
+            str, Callable[[str, list[SpecializationItem]], Type]
+        ] = {}
 
         self._string_cache: dict[str, StaticVariable] = {}
         self._static_variables: list[StaticVariable] = []
@@ -339,9 +346,12 @@ class Program:
             name = builtin_type.get_user_facing_name(False)
             self._initialized_types[name].append(builtin_type)
 
-    def lookup_type(self, name_prefix: str, generic_args: list[Type]) -> Type:
+    def lookup_type(
+        self, name_prefix: str, generic_args: list[SpecializationItem]
+    ) -> Type:
         specialization_str = ", ".join(
-            arg.get_user_facing_name(False) for arg in generic_args
+            arg.get_user_facing_name(False) if isinstance(arg, Type) else str(arg)
+            for arg in generic_args
         )
         specialization_postfix = f"<{specialization_str}>" if specialization_str else ""
 
@@ -378,7 +388,7 @@ class Program:
     def lookup_call_expression(
         self,
         fn_name: str,
-        fn_specialization: list[Type],
+        fn_specialization: list[SpecializationItem],
         fn_args: list[TypedExpression],
     ) -> TypedExpression:
         if fn_name in self._builtin_callables:
@@ -400,7 +410,9 @@ class Program:
         self._function_table.add_function(function)
 
     def add_type(
-        self, type_prefix: str, parse_fn: Callable[[str, list[Type]], Type]
+        self,
+        type_prefix: str,
+        parse_fn: Callable[[str, list[SpecializationItem]], Type],
     ) -> None:
         if type_prefix in self._type_initializers:
             raise RedefinitionError("type", type_prefix)
@@ -413,8 +425,8 @@ class Program:
     def add_specialized_type(
         self,
         type_prefix: str,
-        parse_fn: Callable[[str, list[Type]], Type],
-        specialization: list[Type],
+        parse_fn: Callable[[str, list[SpecializationItem]], Type],
+        specialization: list[SpecializationItem],
     ) -> None:
         parsed_type = parse_fn(type_prefix, specialization)
         existing_type_specializations = self._initialized_types[type_prefix]

@@ -4,6 +4,7 @@
             "python",
             "../../../driver.py",
             "main.c3",
+            "--use-crt",
             "--emit-llvm"
         ]
     },

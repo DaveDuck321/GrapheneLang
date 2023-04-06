@@ -4,7 +4,7 @@ from typing import Type as PyType
 
 from .builtin_types import BoolType, GenericIntType, IntegerDefinition, SizeType
 from .expressions import ConstantExpression
-from .interfaces import Type, TypedExpression
+from .interfaces import SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
@@ -168,11 +168,15 @@ class IsLessThanExpression(CompareExpression):
 
 class AlignOfExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
-        self._argument_type = specialization[0]
+        (self._argument_type,) = specialization
+        assert isinstance(self._argument_type, Type)
+
         self._result = ConstantExpression(
             SizeType(), str(self._argument_type.alignment)
         )
@@ -198,11 +202,15 @@ class AlignOfExpression(TypedExpression):
 
 class SizeOfExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
-        self._argument_type = specialization[0]
+        (self._argument_type,) = specialization
+        assert isinstance(self._argument_type, Type)
+
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
         super().__init__(self._result.underlying_type, False)
@@ -226,10 +234,13 @@ class SizeOfExpression(TypedExpression):
 
 class NarrowExpression(TypedExpression):
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
     ) -> None:
         (self._argument,) = arguments
         (return_type,) = specialization
+        assert isinstance(return_type, Type)
 
         self._arg_value_type = self._argument.underlying_type.convert_to_value_type()
 
@@ -269,8 +280,52 @@ class NarrowExpression(TypedExpression):
         raise OperandError("cannot assign to `__builtin_narrow<...>(...)`")
 
 
+class PtrToIntExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+    ) -> None:
+        assert len(specialization) == 1
+        assert len(arguments) == 1
+
+        (int_type,) = specialization
+        assert isinstance(int_type, GenericIntType)
+        assert not int_type.is_borrowed_reference
+
+        # We don't attempt to dereference this at all. src_expr shouldn't have
+        # more than one layer of indirection.
+        (self._src_expr,) = arguments
+        assert self._src_expr.has_address
+
+        super().__init__(int_type, False)
+
+    def __repr__(self) -> str:
+        return f"PtrToInt({self._src_expr} to {self.underlying_type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # Implicit conversions do not apply.
+
+        self.result_reg = next(reg_gen)
+
+        # <result> = ptrtoint <ty> <value> to <ty2>
+        return [
+            f"%{self.result_reg} = ptrtoint {self._src_expr.ir_ref_with_type_annotation}"
+            f" to {self.underlying_type.ir_type}"
+        ]
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_ptr_to_int<...>()`")
+
+
 def get_builtin_callables() -> dict[
-    str, Callable[[list[Type], list[TypedExpression]], TypedExpression]
+    str,
+    Callable[[list[SpecializationItem], list[TypedExpression]], TypedExpression],
 ]:
     def get_integer_builtin(expression_class: PyType[BasicIntegerExpression]):
         return (expression_class.USER_FACING_NAME, expression_class)
@@ -302,4 +357,5 @@ def get_builtin_callables() -> dict[
         "__builtin_alignof": AlignOfExpression,
         "__builtin_narrow": NarrowExpression,
         "__builtin_sizeof": SizeOfExpression,
+        "__builtin_ptr_to_int": PtrToIntExpression,
     }

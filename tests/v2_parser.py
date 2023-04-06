@@ -1,9 +1,16 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Iterable, Optional, TypeGuard
 
 from lark import Lark, Tree, v_args
 from lark.visitors import Interpreter
+
+
+def is_list_of_str(
+    items: Iterable[Any],
+) -> TypeGuard[Iterable[str]]:
+    # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
+    return all(isinstance(item, str) for item in items)
 
 
 @dataclass
@@ -16,6 +23,7 @@ class ExpectedOutput:
 @dataclass
 class TestConfig:
     compile: Optional[ExpectedOutput]
+    compile_args: list[str]
     run: Optional[ExpectedOutput]
 
 
@@ -27,7 +35,7 @@ class ConfigInterpreter(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.config = TestConfig(None, None)
+        self.config = TestConfig(None, [], None)
 
     @staticmethod
     def _format_msg(msg: str) -> list[str]:
@@ -67,7 +75,12 @@ class ConfigInterpreter(Interpreter):
     @v_args(inline=True)
     def compile_cmd(self, *trees: Tree) -> None:
         assert self.config.compile is None
-        self.config.compile = self._cmd_impl(*trees)
+
+        *arg_tokens, status_tree, msg_tree = trees
+        assert is_list_of_str(arg_tokens)
+
+        self.config.compile = self._cmd_impl(status_tree, msg_tree)
+        self.config.compile_args.extend(arg_tokens)
 
     @v_args(inline=True)
     def run_cmd(self, *trees: Tree) -> None:
