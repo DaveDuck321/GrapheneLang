@@ -202,8 +202,11 @@ class UnresolvedTypeTransformer(TypeTransformer):
         self.found_generics: bool = False
 
     def parse_next(self, tree: Tree) -> tuple[cg.Type, bool]:
-        self.found_generics = False
-        return self.transform(tree), self.found_generics
+        try:
+            self.found_generics = False
+            return self.transform(tree), self.found_generics
+        except VisitError as exc:
+            raise exc.orig_exc
 
     @v_args(inline=True)
     def ARRAY_INDEX(self, token: Token) -> cg.CompileTimeConstant:
@@ -229,8 +232,8 @@ class UnresolvedTypeTransformer(TypeTransformer):
             pass
 
         # Can't have generics with generic annotations.
-        # TODO this should be a user-facing error.
-        assert type_map is None
+        if type_map is not None:
+            raise GenericHasGenericAnnotation(name.value)
 
         assert name not in self.required_compile_time_constants
         self.required_type_names.add(name.value)
