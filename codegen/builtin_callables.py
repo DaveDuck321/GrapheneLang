@@ -28,8 +28,8 @@ class BasicIntegerExpression(TypedExpression, ABC):
         assert self.SIGNED_IR is not None
         assert self.UNSIGNED_IR is not None
         assert len(specialization) == 0
-        assert isinstance(lhs.underlying_type, GenericIntType)
-        assert isinstance(rhs.underlying_type, GenericIntType)
+        assert isinstance(lhs.underlying_type, (GenericIntType, BoolType))
+        assert isinstance(rhs.underlying_type, (GenericIntType, BoolType))
         assert lhs.underlying_type.definition == rhs.underlying_type.definition
 
         super().__init__(self.get_result_type(arguments), False)
@@ -52,8 +52,15 @@ class BasicIntegerExpression(TypedExpression, ABC):
 
         self.result_reg = next(reg_gen)
 
-        assert isinstance(self._arg_type.definition, IntegerDefinition)
-        ir = self.SIGNED_IR if self._arg_type.definition.is_signed else self.UNSIGNED_IR
+        if isinstance(self._arg_type.definition, IntegerDefinition):
+            ir = (
+                self.SIGNED_IR
+                if self._arg_type.definition.is_signed
+                else self.UNSIGNED_IR
+            )
+        else:
+            assert isinstance(self._arg_type.definition, BoolType.Definition)
+            ir = self.UNSIGNED_IR
 
         # eg. for addition
         # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
