@@ -77,8 +77,24 @@ class PlaceholderType(Type):
         return True
 
 
+@dataclass
 class PlaceholderConstant(CompileTimeConstant):
     generic_name: str
+
+    def match_with(
+        self, other: "CompileTimeConstant", generic_mapping: GenericMapping
+    ) -> bool:
+        # TODO this is identical to PlaceholderType.match_with(), see if we can
+        # merge the two definitions.
+        if (
+            self.generic_name in generic_mapping
+            and generic_mapping[self.generic_name] != other
+        ):
+            return False
+
+        generic_mapping[self.generic_name] = other
+
+        return True
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -362,16 +378,18 @@ class StructDefinition(TypeDefinition):
 
 
 class ArrayDefinition(TypeDefinition):
-    UNKNOWN_DIMENSION = 0
+    UNKNOWN_DIMENSION = CompileTimeConstant(0)
 
-    def __init__(self, element_type: Type, dimensions: list[int]) -> None:
+    def __init__(
+        self, element_type: Type, dimensions: list[CompileTimeConstant]
+    ) -> None:
         super().__init__()
 
         self._element_type = element_type
         self._dimensions = dimensions
 
     @cached_property
-    def dimensions(self) -> list[int]:
+    def dimensions(self) -> list[CompileTimeConstant]:
         return self._dimensions
 
     def graphene_literal_to_ir_constant(self, value: str) -> str:
@@ -394,10 +412,10 @@ class ArrayDefinition(TypeDefinition):
 
     @cached_property
     def ir_definition(self) -> str:
-        def ir_sub_definition(dims: list[int]):
+        def ir_sub_definition(dims: list[CompileTimeConstant]):
             if len(dims) == 0:
                 return self._element_type.ir_type
-            return f"[{dims[0]} x {ir_sub_definition(dims[1:])}]"
+            return f"[{dims[0].value} x {ir_sub_definition(dims[1:])}]"
 
         return ir_sub_definition(self._dimensions)
 
@@ -413,7 +431,9 @@ class ArrayDefinition(TypeDefinition):
     @cached_property
     def size(self) -> int:
         assert self._dimensions[0] != self.UNKNOWN_DIMENSION
-        return self._element_type.size * reduce(mul, self._dimensions, 1)
+        return self._element_type.size * reduce(
+            mul, map(lambda d: d.value, self._dimensions), 1
+        )
 
     def __repr__(self) -> str:
         dimensions = ", ".join(map(str, self._dimensions))
@@ -437,15 +457,19 @@ class ArrayDefinition(TypeDefinition):
         if not self._element_type.match_with(other._element_type, generic_mapping):
             return False
 
-        # TODO __init__ should take a list of CompileTimeConstants instead of
-        # ints, so that we can pattern match arrays as well.
-        return all(map(lambda a, b: a == b, self.dimensions, other.dimensions))
+        return all(
+            map(
+                lambda l, r: l.match_with(r, generic_mapping),
+                self.dimensions,
+                other.dimensions,
+            )
+        )
 
 
 class CharArrayDefinition(ArrayDefinition):
     def __init__(self, encoded_str: str, length: int) -> None:
         self._encoded_str = encoded_str
-        super().__init__(GenericIntType("u8", 8, False), [length])
+        super().__init__(GenericIntType("u8", 8, False), [CompileTimeConstant(length)])
 
     def graphene_literal_to_ir_constant(self, value: str) -> str:
         assert self._encoded_str == value

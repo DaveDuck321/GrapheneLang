@@ -146,11 +146,7 @@ class TypeTransformer(Transformer):
     def stack_array_type(
         self, element_type: cg.Type, *dimensions: cg.CompileTimeConstant
     ) -> cg.Type:
-        return cg.Type(
-            cg.ArrayDefinition(
-                element_type, [dimension.value for dimension in dimensions]
-            )
-        )
+        return cg.Type(cg.ArrayDefinition(element_type, list(dimensions)))
 
     @v_args(inline=True)
     def heap_array_type(
@@ -158,7 +154,7 @@ class TypeTransformer(Transformer):
     ) -> cg.Type:
         dimensions = [
             cg.ArrayDefinition.UNKNOWN_DIMENSION,
-            *(dimension.value for dimension in known_dimensions),
+            *known_dimensions,
         ]
         # A heap array must always be passed by reference
         underlying_array = cg.Type(cg.ArrayDefinition(element_type, dimensions))
@@ -215,10 +211,10 @@ class UnresolvedTypeTransformer(TypeTransformer):
             return cg.CompileTimeConstant(int(token))
 
         assert token not in self.required_type_names
-        self.required_compile_time_constants.add(token)
+        self.required_compile_time_constants.add(token.value)
         self.found_generics = True
 
-        return cg.CompileTimeConstant(-1)
+        return cg.PlaceholderConstant(-1, token.value)
 
     @v_args(inline=True)
     def type_name(self, name: Token, type_map: Optional[Tree]) -> cg.Type:
@@ -237,10 +233,10 @@ class UnresolvedTypeTransformer(TypeTransformer):
         assert type_map is None
 
         assert name not in self.required_compile_time_constants
-        self.required_type_names.add(name)
+        self.required_type_names.add(name.value)
         self.found_generics = True
 
-        return cg.PlaceholderType(name)
+        return cg.PlaceholderType(name.value)
 
 
 class ParseTypeDefinitions(Interpreter):
@@ -329,7 +325,7 @@ class ParseFunctionSignatures(Interpreter):
         body_tree: Tree,
     ) -> None:
         assert isinstance(generic_name, str)
-        generic_names: list[str] = generic_names_tree.children  # type: ignore
+        generic_names: list[Token] = generic_names_tree.children  # type: ignore
         self._parse_generic_function_impl(
             generic_name, generic_names, args_tree, return_type_tree, body_tree
         )
@@ -344,7 +340,7 @@ class ParseFunctionSignatures(Interpreter):
         body_tree: Tree,
     ):
         assert isinstance(op_name, str)
-        generic_names: list[str] = generic_names_tree.children  # type: ignore
+        generic_names: list[Token] = generic_names_tree.children  # type: ignore
         self._parse_generic_function_impl(
             op_name, generic_names, args_tree, return_type_tree, body_tree
         )
@@ -352,7 +348,7 @@ class ParseFunctionSignatures(Interpreter):
     def _parse_generic_function_impl(
         self,
         generic_name: str,
-        generic_names: list[str],
+        generic_names: list[Token],
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
@@ -365,7 +361,13 @@ class ParseFunctionSignatures(Interpreter):
             if len(generic_names) != len(concrete_specializations):
                 return None
 
-            generic_mapping = dict(zip(generic_names, concrete_specializations))
+            generic_mapping = {
+                generic_name.value: concrete_specialization
+                for generic_name, concrete_specialization in zip(
+                    generic_names, concrete_specializations, strict=True
+                )
+            }
+
             try:
                 function = self._build_function(
                     fn_name, args_tree, return_type_tree, False, generic_mapping

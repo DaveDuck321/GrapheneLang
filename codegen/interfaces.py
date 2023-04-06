@@ -12,6 +12,11 @@ class CompileTimeConstant:
     def __str__(self) -> str:
         return str(self.value)
 
+    def match_with(
+        self, other: "CompileTimeConstant", generic_mapping: "GenericMapping"
+    ) -> bool:
+        return self.value == other.value
+
 
 class TypeDefinition(ABC):
     @abstractmethod

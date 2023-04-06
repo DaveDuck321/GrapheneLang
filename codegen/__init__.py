@@ -2,6 +2,7 @@ from .builtin_types import (
     ArrayDefinition,
     BoolType,
     IntType,
+    PlaceholderConstant,
     PlaceholderType,
     StructDefinition,
     UIntType,

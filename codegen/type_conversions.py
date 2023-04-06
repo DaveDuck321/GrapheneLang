@@ -203,7 +203,7 @@ def implicit_conversion_impl(
         isinstance(last_def, ArrayDefinition)
         and isinstance(dest_def, ArrayDefinition)
         and last_def.dimensions[1:] == dest_def.dimensions[1:]
-        and last_def.dimensions[0] >= dest_def.dimensions[0]
+        and last_def.dimensions[0].value >= dest_def.dimensions[0].value
     ):
         # TODO: promotion cost going from known size to smaller/ unknown size
         expr_list.append(Reinterpret(last_expr(), dest_type))
