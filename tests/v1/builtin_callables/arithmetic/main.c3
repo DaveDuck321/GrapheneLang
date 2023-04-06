@@ -1,3 +1,5 @@
+@require_once "std/io.c3";
+
 @operator == : (lhs: int, rhs: int) -> bool = {
     return __builtin_is_equal(lhs, rhs);
 };
@@ -52,8 +54,6 @@
 @operator ^ : (lhs: int, rhs: int) -> int = {
     return __builtin_bitwise_xor(lhs, rhs);
 };
-
-foreign puts : (str: u8[&]) -> int;
 
 function main : () -> int = {
     if (1 + 1 != 3) {

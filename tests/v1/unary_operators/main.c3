@@ -1,4 +1,4 @@
-foreign puts : (str: u8[&]) -> int;
+@require_once "std/io.c3";
 
 function a : () -> int = {
     puts("a");

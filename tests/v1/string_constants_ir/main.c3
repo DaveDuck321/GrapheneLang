@@ -1,4 +1,4 @@
-foreign puts: (str: u8[&]) -> int;
+@require_once "std/io.c3";
 
 function main: () -> int = {
     // There are two characters between the β and the γ:

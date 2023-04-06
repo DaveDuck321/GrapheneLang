@@ -1,4 +1,4 @@
-foreign puts : (str : u8[&]) -> void;
+@require_once "std/io.c3";
 
 typedef MyStruct1 : {a: int, z: int};
 typedef MyStruct2 : {a: int, y: int};
@@ -25,6 +25,6 @@ function main : () -> int = {
     return 0;
 };
 
-/// @COMPILE --use-crt
+/// @COMPILE
 /// @RUN; EXPECT OUT
 /// MyStruct2

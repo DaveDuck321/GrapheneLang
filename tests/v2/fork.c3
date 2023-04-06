@@ -6,9 +6,9 @@ function main : () -> int = {
     const pid : pid_t = fork();
 
     if (pid != 0) {
-        puts<6>("Parent");
+        puts("Parent");
     } else {
-        puts<5>("Child");
+        puts("Child");
     }
 
     return 0;

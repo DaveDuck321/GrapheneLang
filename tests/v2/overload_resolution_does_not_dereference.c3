@@ -1,4 +1,4 @@
-foreign puts: (str : u8[&]) -> int;
+@require_once "std/io.c3";
 
 function f: (x: int, y: int) -> int = { puts("val"); return 0; };
 function f: (x: int&, y: i64) -> int = { puts("ref"); return 0; };
@@ -13,7 +13,7 @@ function main: () -> int = {
     return 0;
 };
 
-/// @COMPILE --use-crt
+/// @COMPILE
 /// @RUN; EXPECT OUT
 /// val
 /// ref

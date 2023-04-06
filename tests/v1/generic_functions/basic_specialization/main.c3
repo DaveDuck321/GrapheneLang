@@ -1,4 +1,4 @@
-foreign puts : (str : u8[&]) -> int;
+@require_once "std/io.c3";
 
 function normal_overloaded_function : (a : i64) -> int = {
     puts("i64");

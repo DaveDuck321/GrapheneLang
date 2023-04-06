@@ -82,8 +82,4 @@ def encode_string(string: str) -> tuple[str, int]:
     # Consume any remaining characters.
     consume_substr(len(string))
 
-    # Append the null terminator.
-    buffer.append("\\00")
-    byte_len += 1
-
     return "".join(buffer), byte_len

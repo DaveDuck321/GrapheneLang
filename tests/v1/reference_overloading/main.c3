@@ -1,6 +1,6 @@
-typedef MyStruct : {a : int};
+@require_once "std/io.c3";
 
-foreign puts : (str : u8[&]) -> int;
+typedef MyStruct : {a : int};
 
 function fn : (a: int) -> int = {
     puts("val");

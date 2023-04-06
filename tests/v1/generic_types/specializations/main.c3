@@ -1,3 +1,5 @@
+@require_once "std/io.c3";
+
 typedef TrueType : {};
 typedef FalseType : {};
 
@@ -5,8 +7,6 @@ typedef[T] IsIntegral : FalseType;
 typedef IsIntegral<int> : TrueType;
 typedef IsIntegral<u8> : TrueType;
 typedef IsIntegral<u16> : TrueType;
-
-foreign puts : (str : u8[&]) -> int;
 
 function to_value : (_: TrueType) -> bool = {
     return true;

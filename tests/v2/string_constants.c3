@@ -1,4 +1,4 @@
-foreign puts: (str: u8[&]) -> int;
+@require_once "std/io.c3";
 
 function main: () -> int = {
     // There are two characters between the β and the γ:
@@ -8,6 +8,6 @@ function main: () -> int = {
     return 0;
 };
 
-/// @COMPILE --use-crt
+/// @COMPILE
 /// @RUN; EXPECT OUT
 /// άβ­ γ

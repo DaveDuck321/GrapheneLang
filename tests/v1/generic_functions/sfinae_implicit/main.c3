@@ -1,3 +1,5 @@
+@require_once "std/io.c3";
+
 typedef TrueType : {};
 typedef FalseType : {};
 typedef EnableIf<TrueType> : int;
@@ -9,8 +11,6 @@ typedef[T] IsLargeIntegral : FalseType;
 typedef IsLargeIntegral<i32> : TrueType;
 typedef IsLargeIntegral<i64> : TrueType;
 typedef IsLargeIntegral<i128> : TrueType;
-
-foreign puts : (str : u8[&]) -> int;
 
 function[T] generic_fn : (a : T) -> EnableIf<IsLargeIntegral<T>> = {
     puts("Large integral type");

@@ -3,7 +3,6 @@
         "command": [
             "python",
             "../../../../driver.py",
-            "--use-crt",
             "main.c3",
             "-o",
             "./out/a.out"

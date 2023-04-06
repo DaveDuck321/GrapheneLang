@@ -4,7 +4,6 @@
             "python",
             "../../../driver.py",
             "main.c3",
-            "--use-crt",
             "--emit-llvm"
         ]
     },
@@ -12,7 +11,7 @@
         "command": [
             "grep",
             "-Fq",
-            "[12 x i8] c\"άβ\\c2\\ad\\e2\\80\\80γ\\00\"",
+            "[11 x i8] c\"άβ\\c2\\ad\\e2\\80\\80γ\"",
             "main.ll"
         ],
         "output": {

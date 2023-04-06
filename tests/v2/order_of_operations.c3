@@ -1,4 +1,4 @@
-foreign puts : (str: u8[&]) -> int;
+@require_once "std/io.c3";
 
 @operator + : (rhs: int, lhs: int) -> int = {
     puts("+");
@@ -34,7 +34,7 @@ function main : () -> int = {
     return 0;
 };
 
-/// @COMPILE --use-crt
+/// @COMPILE
 /// @RUN; EXPECT OUT
 /// *
 /// +
