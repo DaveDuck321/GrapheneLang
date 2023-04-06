@@ -20,6 +20,7 @@ from .user_facing_errors import (
     CannotAssignToInitializerList,
     DoubleBorrowError,
     InvalidInitializerListConversion,
+    InvalidInitializerListDeduction,
     InvalidInitializerListLength,
     OperandError,
     TypeCheckerError,
@@ -419,6 +420,10 @@ class InitializerList(TypedExpression):
 
     def get_equivalent_pure_type(self) -> Type:
         assert False
+
+    @property
+    def underlying_type(self) -> Type:
+        raise InvalidInitializerListDeduction(self.get_user_facing_name(False))
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
