@@ -20,4 +20,7 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 17, in 'function main: () -> int'
-/// Error: overload resolution for function call 'generic_fn()' is ambiguous. Equally good candidates are 'function generic_fn<i32>: () -> EnableIf<TrueType>' and 'function generic_fn<i32>: () -> int'.
+/// Error: overload resolution for function call 'generic_fn()' is ambiguous.
+/// Equally good candidates are
+/// - function generic_fn<i32>: () -> EnableIf<TrueType>
+/// - function generic_fn<i32>: () -> int
