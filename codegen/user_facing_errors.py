@@ -85,12 +85,12 @@ class OverloadResolutionError(GrapheneError):
 
         # TODO need a better way to indent these.
         if available_overloads:
-            msg.append("   Available overloads:")
+            msg.append("    Available overloads:")
 
             for overload in available_overloads:
                 msg.append("     - " + overload)
         else:
-            msg.append("   No overloads available")
+            msg.append("    No overloads available")
 
         super().__init__(str.join("\n", msg))
 
@@ -100,8 +100,10 @@ class AmbiguousFunctionCall(GrapheneError):
         self, fn_name: str, arguments: str, candidate_1: str, candidate_2: str
     ) -> None:
         super().__init__(
-            f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous. "
-            f"Equally good candidates are '{candidate_1}' and '{candidate_2}'."
+            f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous.\n"
+            "    Equally good candidates are\n"
+            f"     - {candidate_1}\n"
+            f"     - {candidate_2}"
         )
 
 

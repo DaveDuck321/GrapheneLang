@@ -13,4 +13,7 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 9, in 'function main: () -> int'
-/// Error: overload resolution for function call 'get(S)' is ambiguous. Equally good candidates are 'function get<int>: ({a : int, b : int}) -> void' and 'function get<S>: (S) -> void'.
+/// Error: overload resolution for function call 'get(S)' is ambiguous.
+/// Equally good candidates are
+/// - function get<int>: ({a : int, b : int}) -> void
+/// - function get<S>: (S) -> void
