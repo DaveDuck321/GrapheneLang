@@ -381,21 +381,26 @@ class ParseFunctionSignatures(Interpreter):
             generate_function_body(self._program, function, body_tree, generic_mapping)
             return function
 
+        # Eager evaluation: parse these as soon as they are encountered, so that
+        # we always emit errors if the argument types are malformed. If we do
+        # this lazily, then errors will only occur during overload resolution.
+        # That also makes it harder to attach the correct line numbers to the
+        # error message.
+        transformer = UnresolvedTypeTransformer(self._program)
+        unresolved_arg_types = [
+            transformer.parse_next(arg_type_tree)
+            for _, arg_type_tree in in_pairs(args_tree.children)
+        ]
+
         def try_deduce_specialization(
             fn_name: str, arguments: list[cg.TypedExpression]
         ) -> Optional[list[cg.SpecializationItem]]:
             assert generic_name == fn_name
             deduced_mapping: cg.GenericMapping = {}
 
-            transformer = UnresolvedTypeTransformer(self._program)
-
-            for provided_arg, (_, arg_type_tree) in zip(
-                arguments, in_pairs(args_tree.children), strict=True
+            for provided_arg, (unresolved_type, is_generic) in zip(
+                arguments, unresolved_arg_types, strict=True
             ):
-                # TODO we shouldn't parse these lazily (so we can give more
-                # consistent errors).
-                unresolved_type, is_generic = transformer.parse_next(arg_type_tree)
-
                 # This arugment is not a generic.
                 if not is_generic:
                     continue
