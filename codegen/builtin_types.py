@@ -1,4 +1,3 @@
-import uuid
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
@@ -58,21 +57,46 @@ class PlaceholderType(Type):
         def __eq__(self, other: Any) -> bool:
             assert False
 
-    def __init__(self, generic_name: str) -> None:
-        super().__init__(self.Definition(generic_name))
+    def __init__(
+        self, type_name: str, specialization: Optional[list[SpecializationItem]] = None
+    ) -> None:
+        super().__init__(self.Definition(type_name), specialization=specialization)
 
-        self.generic_name = generic_name
+        # This is not always equivalent to typedef_alias, as it could also be
+        # the name of a generic parameter (e.g. T).
+        self.type_name = type_name
+
+    @property
+    def is_placeholder(self) -> bool:
+        return True
 
     def match_with(self, other: Type, generic_mapping: GenericMapping) -> bool:
-        # We are a placeholder, so we should just copy the other type.
+        # If we are a placeholder for:
+        # T                => copy other
+        # T<Y>             => we explicitly prohibit generics on generics
+        # Typedef<T, U, V> => match type name and specialization list
+
+        if self._specialization:
+            # Match type name.
+            if self.type_name != other._typedef_alias:
+                return False
+
+            if self.is_borrowed_reference != other.is_borrowed_reference:
+                return False
+
+            # Match specialization list.
+            return self._match_specialization_lists(
+                self._specialization, other._specialization, generic_mapping
+            )
 
         if (
-            self.generic_name in generic_mapping
-            and generic_mapping[self.generic_name] != other
+            self.type_name in generic_mapping
+            and generic_mapping[self.type_name] != other
         ):
             return False
 
-        generic_mapping[self.generic_name] = other.copy()
+        # Copy other.
+        generic_mapping[self.type_name] = other.copy()
 
         return True
 
@@ -81,8 +105,12 @@ class PlaceholderType(Type):
 class PlaceholderConstant(CompileTimeConstant):
     generic_name: str
 
+    @property
+    def is_placeholder(self) -> bool:
+        return True
+
     def match_with(
-        self, other: "CompileTimeConstant", generic_mapping: GenericMapping
+        self, other: CompileTimeConstant, generic_mapping: GenericMapping
     ) -> bool:
         # TODO this is identical to PlaceholderType.match_with(), see if we can
         # merge the two definitions.
@@ -272,15 +300,11 @@ class BoolType(Type):
 
 
 class StructDefinition(TypeDefinition):
-    def __init__(self, members: list[Parameter], is_adhoc: bool = False) -> None:
+    def __init__(self, members: list[Parameter]) -> None:
         super().__init__()
 
         # TODO: assert member names are unique
         self.members = members
-        self.is_adhoc = is_adhoc
-
-        # Different structs should compare different even if they have the same body
-        self._uuid = uuid.uuid4()
 
     def get_member_by_name(self, name: str) -> tuple[int, Type]:
         for index, member in enumerate(self.members):
@@ -355,7 +379,8 @@ class StructDefinition(TypeDefinition):
         assert isinstance(other, TypeDefinition)
         if not isinstance(other, StructDefinition):
             return False
-        return self._uuid == other._uuid
+        # FIXME is this the right thing to do?
+        return self.match_with(other, {})
 
     def match_with(
         self, other: TypeDefinition, generic_mapping: GenericMapping
@@ -363,12 +388,6 @@ class StructDefinition(TypeDefinition):
         if not isinstance(other, StructDefinition):
             return False
 
-        if not self.is_adhoc and not other.is_adhoc:
-            # UUID equality.
-            return self == other
-
-        # If at least one of the two structs are adhoc, we need to do pattern
-        # matching.
         if len(self.members) != len(other.members):
             return False
 

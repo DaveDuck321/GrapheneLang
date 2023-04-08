@@ -3,6 +3,7 @@ from copy import copy
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Iterable, Iterator, Optional
+from uuid import UUID, uuid4
 
 
 @dataclass
@@ -11,6 +12,10 @@ class CompileTimeConstant:
 
     def __str__(self) -> str:
         return str(self.value)
+
+    @property
+    def is_placeholder(self) -> bool:
+        return True
 
     def match_with(
         self, other: "CompileTimeConstant", generic_mapping: "GenericMapping"
@@ -71,7 +76,7 @@ class TypeDefinition(ABC):
     def match_with(
         self, other: "TypeDefinition", generic_mapping: "GenericMapping"
     ) -> bool:
-        # Base case for buil-in scalar types; matching just tests for equality.
+        # Base case for built-in scalar types; matching just tests for equality.
         return self == other
 
 
@@ -107,6 +112,12 @@ class Type:
         self._typedef_alias = typedef_alias
         self._is_borrowed_reference = False
 
+        # Set by new_from_typedef *only*. This ensures that typedef'd types that
+        # are otherwise identical compare different. This includes
+        # specializations of the same generic type. If a struct is simply
+        # renamed though it keeps its old UUID.
+        self._uuid: Optional[UUID] = None
+
     @property
     def is_borrowed_reference(self) -> bool:
         return self._is_borrowed_reference
@@ -118,6 +129,10 @@ class Type:
     @property
     def is_struct(self) -> bool:
         return self.definition.is_struct
+
+    @property
+    def is_placeholder(self) -> bool:
+        return False
 
     @property
     def generic_annotation(self) -> str:
@@ -157,6 +172,9 @@ class Type:
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
+
+        if self._uuid and other._uuid:
+            return self._uuid == other._uuid
 
         return (
             self.definition == other.definition
@@ -236,24 +254,53 @@ class Type:
         new_type._typedef_alias = typedef_alias
         new_type._specialization = specialization
 
+        # Structs with identical layouts that have been typedef'd separately
+        # compare different. If the specialization contains a generic
+        # placeholder though, don't assign a UUID as we want to pattern match
+        # the placeholder.
+        if (
+            new_type.is_struct
+            and not new_type._uuid  # Renamed structs compare the same.
+            and not any(map(lambda item: item.is_placeholder, specialization))
+        ):
+            new_type._uuid = uuid4()
+
         return new_type
+
+    @staticmethod
+    def _match_specialization_lists(
+        left: list["SpecializationItem"],
+        right: list["SpecializationItem"],
+        generic_mapping: "GenericMapping",
+    ) -> bool:
+        if len(left) != len(right):
+            return False
+
+        def match_item(l: SpecializationItem, r: SpecializationItem) -> bool:
+            if isinstance(l, Type):
+                return isinstance(r, Type) and l.match_with(r, generic_mapping)
+
+            return isinstance(r, CompileTimeConstant) and l.match_with(
+                r, generic_mapping
+            )
+
+        return all(map(match_item, left, right))
 
     def match_with(self, other: "Type", generic_mapping: "GenericMapping") -> bool:
         if self.is_borrowed_reference != other.is_borrowed_reference:
             return False
 
-        # FIXME match specialization as well
-        return self.definition.match_with(other.definition, generic_mapping)
+        # If both structs have been typedef'd differently, then they should
+        # compare different even if they have the same definition.
+        if self._uuid and other._uuid and self._uuid != other._uuid:
+            return False
 
-    def strict_match_with(self, other: "Type") -> bool:
-        generic_mapping = {}
-        result = self.match_with(other, generic_mapping)
+        if not self.definition.match_with(other.definition, generic_mapping):
+            return False
 
-        # Strict pattern matching should be used for fully resolved types, so
-        # something is very wrong if we managed to infer new generic parameters.
-        assert not generic_mapping
-
-        return result
+        return self._match_specialization_lists(
+            self._specialization, other._specialization, generic_mapping
+        )
 
 
 SpecializationItem = Type | CompileTimeConstant

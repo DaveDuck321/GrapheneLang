@@ -81,17 +81,11 @@ def search_include_path_for_file(
 
 
 class TypeTransformer(Transformer):
-    def __init__(
-        self,
-        program: cg.Program,
-        generic_mapping: cg.GenericMapping,
-        structs_are_adhoc: bool = False,
-    ) -> None:
+    def __init__(self, program: cg.Program, generic_mapping: cg.GenericMapping) -> None:
         super().__init__(visit_tokens=True)
 
         self._program = program
         self._generic_mapping = generic_mapping
-        self._structs_are_adhoc = structs_are_adhoc
 
     @v_args(inline=True)
     def ARRAY_INDEX(self, token: Token) -> cg.CompileTimeConstant:
@@ -173,18 +167,14 @@ class TypeTransformer(Transformer):
                 )
             members.append(cg.Parameter(m_name, m_type))
 
-        return cg.Type(cg.StructDefinition(members, self._structs_are_adhoc))
+        return cg.Type(cg.StructDefinition(members))
 
     @classmethod
     def parse(
-        cls,
-        program: cg.Program,
-        tree: Tree,
-        type_map: cg.GenericMapping,
-        structs_are_adhoc: bool = False,
+        cls, program: cg.Program, tree: Tree, type_map: cg.GenericMapping
     ) -> cg.Type:
         try:
-            result = cls(program, type_map, structs_are_adhoc).transform(tree)
+            result = cls(program, type_map).transform(tree)
         except VisitError as exc:
             raise exc.orig_exc
 
@@ -194,8 +184,11 @@ class TypeTransformer(Transformer):
 
 
 class UnresolvedTypeTransformer(TypeTransformer):
-    def __init__(self, program: cg.Program) -> None:
-        super().__init__(program, {}, True)
+    def __init__(self, program: cg.Program, generic_names: set[str]) -> None:
+        super().__init__(program, {})
+
+        assert generic_names
+        self.generic_names = generic_names
 
         self.required_compile_time_constants: set[str] = set()
         self.required_type_names: set[str] = set()
@@ -213,7 +206,9 @@ class UnresolvedTypeTransformer(TypeTransformer):
         if token.isdecimal():
             return cg.CompileTimeConstant(int(token))
 
-        assert token not in self.required_type_names
+        # FIXME user-facing errors
+        assert token.value in self.generic_names
+        assert token.value not in self.required_type_names
         self.required_compile_time_constants.add(token.value)
         self.found_generics = True
 
@@ -223,23 +218,27 @@ class UnresolvedTypeTransformer(TypeTransformer):
     def type_name(self, name: Token, type_map: Optional[Tree]) -> cg.Type:
         assert isinstance(name, Token)
 
-        try:
-            generic_args = get_optional_children(type_map)
-            assert is_specialization_list(generic_args)
-            return self._program.lookup_type(name, generic_args)
-        except:
-            # Don't panic; it's just a generic.
-            pass
+        if name.value in self.generic_names:
+            # Can't have generics with generic annotations.
+            if type_map is not None:
+                raise GenericHasGenericAnnotation(name.value)
 
-        # Can't have generics with generic annotations.
-        if type_map is not None:
-            raise GenericHasGenericAnnotation(name.value)
+            # FIXME user-facing error
+            assert name.value not in self.required_compile_time_constants
+            self.required_type_names.add(name.value)
+            self.found_generics = True
 
-        assert name not in self.required_compile_time_constants
-        self.required_type_names.add(name.value)
-        self.found_generics = True
+            return cg.PlaceholderType(name.value)
 
-        return cg.PlaceholderType(name.value)
+        generic_args = get_optional_children(type_map)
+        assert is_specialization_list(generic_args)
+
+        # Check if the specialization list contains any placeholders.
+        if any(map(lambda item: item.is_placeholder, generic_args)):
+            # TODO still need to check that the type exists
+            return cg.PlaceholderType(name.value, generic_args)
+
+        return self._program.lookup_type(name, generic_args)
 
 
 class ParseTypeDefinitions(Interpreter):
@@ -261,6 +260,8 @@ class ParseTypeDefinitions(Interpreter):
         def type_parser(
             name_prefix: str, concrete_types: list[cg.SpecializationItem]
         ) -> cg.Type:
+            # FIXME "generic 'S' expects 0 arguments but received 1" is not a
+            # great error ('S' is not a generic)
             if len(concrete_types) != len(available_generics):
                 raise GenericArgumentCountError(
                     type_name, len(concrete_types), len(available_generics)
@@ -386,7 +387,7 @@ class ParseFunctionSignatures(Interpreter):
         # this lazily, then errors will only occur during overload resolution.
         # That also makes it harder to attach the correct line numbers to the
         # error message.
-        transformer = UnresolvedTypeTransformer(self._program)
+        transformer = UnresolvedTypeTransformer(self._program, set(generic_names))
         unresolved_arg_types = [
             transformer.parse_next(arg_type_tree)
             for _, arg_type_tree in in_pairs(args_tree.children)
@@ -414,6 +415,7 @@ class ParseFunctionSignatures(Interpreter):
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.SpecializationItem] = []
             for generic in generic_names:
+                # FIXME This throws if a generic is unused.
                 deduced_specialization.append(deduced_mapping[generic])
 
             return deduced_specialization
@@ -494,7 +496,7 @@ class ParseFunctionSignatures(Interpreter):
         for arg_name, arg_type_tree in in_pairs(fn_arg_trees):
             assert isinstance(arg_name, Token)
             arg_type = TypeTransformer.parse(
-                self._program, arg_type_tree, generic_mapping, True
+                self._program, arg_type_tree, generic_mapping
             )
 
             if arg_type.is_void:
@@ -505,7 +507,7 @@ class ParseFunctionSignatures(Interpreter):
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
         fn_return_type = TypeTransformer.parse(
-            self._program, return_type_tree, generic_mapping, True
+            self._program, return_type_tree, generic_mapping
         )
 
         # Build the function
@@ -707,10 +709,7 @@ class ExpressionTransformer(Transformer):
                     assert isinstance(specialization_item, Tree)
                     specialization.append(
                         TypeTransformer.parse(
-                            self._program,
-                            specialization_item,
-                            self._generic_mapping,
-                            True,
+                            self._program, specialization_item, self._generic_mapping
                         )
                     )
 
@@ -933,7 +932,7 @@ def generate_variable_declaration(
     assert isinstance(var_name, Token)
     assert isinstance(type_tree, Tree)
 
-    var_type = TypeTransformer.parse(program, type_tree, generic_mapping, True)
+    var_type = TypeTransformer.parse(program, type_tree, generic_mapping)
     if var_type.is_void:
         raise VoidVariableDeclaration(
             "variable", var_name, var_type.get_user_facing_name(True)

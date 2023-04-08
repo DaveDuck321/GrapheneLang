@@ -210,8 +210,7 @@ def implicit_conversion_impl(
 
     # TODO float promotion.
 
-    # XXX use pattern matching instead of equality.
-    if not last_type().strict_match_with(dest_type):
+    if last_type() != dest_type:
         raise TypeCheckerError(
             context,
             src.underlying_type.get_user_facing_name(False),
