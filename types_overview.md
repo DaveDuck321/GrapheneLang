@@ -1,0 +1,114 @@
+# Types
+
+## Aliased Type
+
+The syntax for aliasing types is:
+
+```c
+typedef Name1 : TypeThatWeWantToAlias;
+typedef Name2 : TypeThatWeWantToAlias;
+```
+`Name1`, `Name2`, and `TypeThatWeWantToAlias` can be used interchangeably in any context (implying equivalence).
+
+## Reference Type
+
+The syntax for creating a new reference type is:
+```
+DereferencedType&
+```
+Two reference types are equivalent as long as each `DereferencedType` is also equivalent
+
+
+## Array Type
+The syntax for creating a new array type is:
+```
+MemberType[(Dimension 0 length or & for an unknown size), (Dimension 1 length), ... (Dimension N length)]
+```
+
+- Two array types are equivalent if all of their dimensions are the same and each `MemberType` is also equivalent.
+
+- We can implicitly convert from an array reference of type `T1&` to an array reference of type `T2&` if:
+  - The `MemberType` of `T1` is equivalent to the `MemberType` of `T2` and:
+    - The first dimension of `T2` is smaller than the first dimension of `T1` or:
+    - The first dimension of `T2` is an unknown size.
+
+## Struct Types
+
+The syntax for creating a new struct type is:
+```
+{member_name: MemberType, ...}
+```
+- Two struct types are NEVER equivalent
+- Structs support NO implicit conversions
+
+
+# Using Types
+
+## Initializer Lists
+
+An initializer list has the following syntax:
+
+```
+<as an expression>
+{member1: value1, ..., memberN, valueN} or {value1, ..., valueN}
+```
+
+
+An initializer list has NO type but it may be implicitly converted to a compatible struct (TODO definition of compatible).
+
+If the initializer list is used in a context where its type is needed (eg. no implicit conversion was requested), a new struct type is created and the initializer list is used to instantiate this new type.
+
+## Generic deduction
+
+A function that can deduce its generic parameter takes one of the following syntaxes:
+```
+function [T] name : (argument : T) -> ReturnType;
+function [T] name : (argument : GenericType<T>) -> ReturnType;
+function [T] name : (argument : T&) -> ReturnType;
+function [T] name : (argument : {member : T, ...}) -> ReturnType;
+function [T, N] name : (argument : T[N]) -> ReturnType;
+```
+NOTE: pattern matching can be nested.
+
+- A generic type deduction can never require an implicit conversion: the deduced type must be equivalent to the types of the provided expressions.
+- If a type deduction is successful, the function is indistinguishable from a non-generic function with the deduced types manually substituted into the arguments
+
+
+# Consequences
+
+```rust
+let a : ... = ...;
+
+// Is exactly the same as:
+
+typedef __TYPE_OF_A = ...;
+let a : __TYPE_OF_A = ...;
+// NOTE: any type at any point in the program can be replaced with a unique typedef alias to that type.
+```
+
+```c
+typedef A : {};
+typedef B : {};
+typedef C : A;
+
+function takes_A(arg : A) -> void = {};
+
+takes_A(b_obj); // Error: B is a different struct types are never equivalent
+takes_A(c_obj); // Good: A and C are the same struct due to the alias
+```
+
+```c
+function function_with_temp_type : (arg: {a : int, b : int} /* Makes a new struct type */) -> void = {};
+
+let object_1 : {a : int, b : int} /* Makes a new struct type */ = {a : 1, b : 2};
+let object_2 = {a : 1, b : 2}; // Initializer list is not implicitly converted to another type and therefore makes a new compatible struct type
+
+function_with_temp_type(object_1); // Error: different struct types are never equivalent
+function_with_temp_type(object_2); // Error: different struct types are never equivalent
+function_with_temp_type({a : 1, b : 2}); // Good: initializer list implicitly converts to struct type
+```
+
+```rust
+function[T] function_with_generic_type : (arg: {a : T, b : int}) -> void = {};
+// function_with_generic_type can only match against an initializer list since any struct would be a different type (after we substitute `T`)
+```
