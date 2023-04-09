@@ -10,6 +10,23 @@ typedef Name2 : TypeThatWeWantToAlias;
 ```
 `Name1`, `Name2`, and `TypeThatWeWantToAlias` can be used interchangeably in any context – they are equivalent.
 
+### Generic aliases
+
+The syntax for adding a generic parameter is:
+```c
+typedef [T] Generic : TypeThatWeWantToAlias;
+```
+- The specialized type `Generic<GenericArgumentType>`, is equivalent to `TypeThatWeWantToAlias`, `Name1`, and `Name2`.
+- If the specialization is successful, the type `Generic<OtherType>` is indistinguishable from a non-generic typedef with the specialization `OtherType` manually substituted into the aliased type.
+
+The syntax for overriding the alias for a specific specialization is:
+```c
+typedef Generic<SpecializationType> : OtherType;
+```
+
+- When specialized with a type equivalent to `SpecializationType`, `Generic<SpecializationType>` is equivalent to `OtherType`.
+- A specifically specialized alias is used in preference to the generic alias when both are available.
+
 ## Reference Type
 
 The syntax for creating a new reference type is:
@@ -28,7 +45,8 @@ MemberType[(Dimension 0 length or & for an unknown size), (Dimension 1 length), 
 - Two array types are equivalent if all of their dimensions are the same and each `MemberType` is also equivalent.
 
 - We can implicitly convert from an array reference of type `T1&` to an array reference of type `T2&` if:
-  - The `MemberType` of `T1` is equivalent to the `MemberType` of `T2` and:
+  - The `MemberType` of `T1` is equivalent to the `MemberType` of `T2` and
+  - All dimensions of `T1`, except the first, are equal to the corresponding dimensions of `T2` and:
     - The first dimension of `T2` is smaller than the first dimension of `T1` or:
     - The first dimension of `T2` is an unknown size.
 
@@ -56,7 +74,7 @@ An initializer list has the following syntax:
 
 An initializer list has NO type but it may be implicitly converted to a compatible struct (TODO definition of compatible).
 
-If the initializer list is used in a context where its type is needed (eg. no implicit conversion was requested), a new struct type is created and the initializer list is used to instantiate this new type.
+If the initializer list is used in a context where its type is needed (eg. no implicit conversion was requested), a new, compatible struct type is created and the initializer list is used to initialize this new type.
 
 ## Generic deduction
 
