@@ -151,5 +151,5 @@ typedef[Len] string : u8[Len];
 function[Len] puts : (str: u8[Len]&) -> int = {...};
 
 const str: string<2>& = "abXX";
-puts(&str);  // Good: pattern mach succeeds since `string<2>` aliases `u8[2]&`
+puts(&str);  // Good: pattern match succeeds since `string<2>` aliases `u8[2]`
 ```
