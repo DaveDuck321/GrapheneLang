@@ -8,7 +8,7 @@ The syntax for aliasing types is:
 typedef Name1 : TypeThatWeWantToAlias;
 typedef Name2 : TypeThatWeWantToAlias;
 ```
-`Name1`, `Name2`, and `TypeThatWeWantToAlias` can be used interchangeably in any context – they are equivalent.
+`Name1`, `Name2`, and `TypeThatWeWantToAlias` are equivalent and can be used interchangeably in any context.
 
 ### Generic aliases
 
@@ -84,11 +84,15 @@ function [T] name : (argument : T) -> ReturnType;
 function [T] name : (argument : GenericType<T>) -> ReturnType;
 function [T] name : (argument : T&) -> ReturnType;
 function [T] name : (argument : {member : T, ...}) -> ReturnType;
-function [T, N] name : (argument : T[N]) -> ReturnType;
+function [T, N, M] name : (argument : T[N, M]) -> ReturnType;
 ```
 NOTE: pattern matching can be nested.
 
 - A generic type deduction can never require an implicit conversion: the deduced type must be equivalent to the types of the provided expressions.
+- When pattern matching, even if two types would be equivalent, type deduction will fail if the provided expression has a type which:
+  - Does not at some point alias a `GenericType` specialization and
+  - Is not itself a specialization of `GenericType`
+
 - If a type deduction is successful, the function is indistinguishable from a non-generic function with the deduced types manually substituted into the arguments
 
 
@@ -129,4 +133,23 @@ function_with_temp_type({a : 1, b : 2}); // Good: initializer list implicitly co
 ```rust
 function[T] function_with_generic_type : (arg: {a : T, b : int}) -> void = {};
 // function_with_generic_type can only match against an initializer list since after substituting `T`, any struct would have a different type to the argument (since we create a NEW struct type as the argument's type).
+```
+
+
+```c
+typedef Type1<i16> : int;
+
+function[T] foo : (x: Type1<T>) -> T = {...};
+
+const val : int = 2;
+foo(val);  // Error: pattern match fails since `int` does not alias a `Type1` specialization at any point -- even though they are equivalent for `Type1<i16>`
+```
+
+```c
+typedef[Len] string : u8[Len];
+
+function[Len] puts : (str: u8[Len]&) -> int = {...};
+
+const str: string<2>& = "abXX";
+puts(&str);  // Good: pattern mach succeeds since `string<2>` aliases `u8[2]&`
 ```
