@@ -8,7 +8,7 @@ The syntax for aliasing types is:
 typedef Name1 : TypeThatWeWantToAlias;
 typedef Name2 : TypeThatWeWantToAlias;
 ```
-`Name1`, `Name2`, and `TypeThatWeWantToAlias` can be used interchangeably in any context (implying equivalence).
+`Name1`, `Name2`, and `TypeThatWeWantToAlias` can be used interchangeably in any context – they are equivalent.
 
 ## Reference Type
 
@@ -93,7 +93,7 @@ typedef C : A;
 
 function takes_A(arg : A) -> void = {};
 
-takes_A(b_obj); // Error: B is a different struct types are never equivalent
+takes_A(b_obj); // Error: B is a different struct, struct types are never equivalent
 takes_A(c_obj); // Good: A and C are the same struct due to the alias
 ```
 
@@ -110,5 +110,5 @@ function_with_temp_type({a : 1, b : 2}); // Good: initializer list implicitly co
 
 ```rust
 function[T] function_with_generic_type : (arg: {a : T, b : int}) -> void = {};
-// function_with_generic_type can only match against an initializer list since any struct would be a different type (after we substitute `T`)
+// function_with_generic_type can only match against an initializer list since after substituting `T`, any struct would have a different type to the argument (since we create a NEW struct type as the argument's type).
 ```
