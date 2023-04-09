@@ -78,7 +78,7 @@ If the initializer list is used in a context where its type is needed (eg. no im
 
 ## Generic deduction
 
-A function that can deduce its generic parameter takes one of the following syntaxes:
+A function that can deduce its generic parameters takes one of the following syntaxes:
 ```
 function [T] name : (argument : T) -> ReturnType;
 function [T] name : (argument : GenericType<T>) -> ReturnType;
