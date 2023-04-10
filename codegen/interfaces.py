@@ -123,22 +123,18 @@ class Type:
         return self._specialization.copy()
 
     def get_user_facing_name(self, full: bool) -> str:
-        suffix = self.generic_annotation + ("&" * self._is_borrowed_reference)
+        reference_annotation = "&" if self._is_borrowed_reference else ""
 
-        # Return everything (that's available).
-        # TODO this should return something like "T&&, where typedef T = ...".
-        if full:
-            name = f"typedef {self._typedef_alias} = " if self._typedef_alias else ""
-            name += self.definition.user_facing_name
-            name += suffix
-            return name
-
-        # If this is the product of a typedef, return the name given.
+        # Do we have a typedefed name?
         if self._typedef_alias:
-            return self._typedef_alias + suffix
+            typename = f"{self._typedef_alias}{self.generic_annotation}"
+            if full:
+                return f"typedef {typename} = {self.definition.user_facing_name}{reference_annotation}"
 
-        # Fall back to the type definition.
-        return self.definition.user_facing_name + suffix
+            return f"{typename}{reference_annotation}"
+
+        #  If not, we fall back to the type definition.
+        return f"{self.definition.user_facing_name}{reference_annotation}"
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
