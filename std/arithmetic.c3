@@ -1,11 +1,5 @@
+@require_once "logical.c3";
 @require_once "type_traits.c3";
-
-typedef[T] IsIntegral : FalseType;
-typedef IsIntegral<i8> : TrueType;
-typedef IsIntegral<i16> : TrueType;
-typedef IsIntegral<i32> : TrueType;
-typedef IsIntegral<i64> : TrueType;
-typedef IsIntegral<i128> : TrueType;
 
 typedef [U, V] CommonArithmeticType: TypeIf<U, Both<IsIntegral<U>, IsIntegral<V>>>;
 typedef CommonArithmeticType<i8, i16> : i16;
@@ -58,10 +52,7 @@ typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsInte
 };
 
 @operator [U, V] != : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
-    if (lhs == rhs) {
-        return false;
-    }
-    return true;
+    return !(lhs == rhs);
 };
 
 @operator [U, V] < : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
@@ -74,6 +65,15 @@ typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsInte
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
     return __builtin_is_greater_than(lhs_widen, rhs_widen);
+};
+
+@operator [U, V] <= : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
+    return !(lhs > rhs);
+};
+
+@operator [U, V] >= : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
+    // TODO: should be `return !(lhs < rhs)`;
+    return !(rhs > lhs);
 };
 
 typedef[T] HasSpaceship : FalseType;
