@@ -2,6 +2,7 @@
 %import common.CNAME -> IDENTIFIER
 %import common.CPP_COMMENT
 %import common.ESCAPED_STRING
+%import common.HEXDIGIT
 %import common.INT
 %import common.SIGNED_FLOAT
 %import common.SIGNED_INT
@@ -65,6 +66,7 @@ specialized_typedef: "typedef" IDENTIFIER generic_specialization ":" type
 //
 
 BOOL_CONSTANT.1: "true" | "false"
+UNSIGNED_HEX_CONSTANT: "0x" HEXDIGIT+
 
 _inner_list_without_names: _expression ("," _expression)*
 struct_initializer_without_names: _inner_list_without_names?
@@ -91,14 +93,15 @@ _non_operator_expression: "(" expression ")"
                         | accessed_variable_name
                         | adhoc_struct_initialization
                         | array_index_access
-                        | function_call
-                        | named_struct_initialization
-                        | struct_member_access
-                        | ufcs_call
                         | BOOL_CONSTANT
                         | ESCAPED_STRING
+                        | function_call
+                        | named_struct_initialization
                         | SIGNED_FLOAT
                         | SIGNED_INT
+                        | struct_member_access
+                        | ufcs_call
+                        | UNSIGNED_HEX_CONSTANT
 
 
 //

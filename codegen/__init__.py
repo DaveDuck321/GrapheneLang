@@ -3,6 +3,7 @@ from .builtin_types import (
     BoolType,
     IntType,
     StructDefinition,
+    UIntType,
     VoidType,
 )
 from .expressions import (

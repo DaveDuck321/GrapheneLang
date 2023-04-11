@@ -64,18 +64,20 @@ class IntegerDefinition(PrimitiveDefinition):
         self.is_signed = is_signed
         self.bits = size_in_bits
 
-    def graphene_literal_to_ir_constant(self, value: str) -> str:
+    def graphene_literal_to_ir_constant(self, value_str: str) -> str:
         if self.is_signed:
             range_lower = -(2 ** (self.bits - 1))
             range_upper = 2 ** (self.bits - 1)
+            value = int(value_str)
         else:
             range_lower = 0
             range_upper = 2**self.bits
+            value = int(value_str, 16)  # Unsigned ints are given in hex
 
-        if not range_lower <= int(value) < range_upper:
-            raise InvalidIntSize(self._name, int(value), range_lower, range_upper)
+        if not range_lower <= value < range_upper:
+            raise InvalidIntSize(self._name, value, range_lower, range_upper)
 
-        return value
+        return str(value)
 
     @cached_property
     def mangled_name(self) -> str:
@@ -147,6 +149,11 @@ class GenericIntType(Type):
 class IntType(GenericIntType):
     def __init__(self) -> None:
         super().__init__("int", 32, True)
+
+
+class UIntType(GenericIntType):
+    def __init__(self) -> None:
+        super().__init__("u32", 32, False)
 
 
 class SizeType(GenericIntType):

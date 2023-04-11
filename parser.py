@@ -580,11 +580,14 @@ class ExpressionTransformer(Transformer):
         assert isinstance(value, FlattenedExpression)
         return value
 
+    def UNSIGNED_HEX_CONSTANT(self, value: Token) -> FlattenedExpression:
+        const_expr = cg.ConstantExpression(cg.UIntType(), value)
+        return FlattenedExpression([const_expr])
+
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.IntType(), value)
         return FlattenedExpression([const_expr])
 
-    @v_args(inline=True)
     def BOOL_CONSTANT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.BoolType(), value)
         return FlattenedExpression([const_expr])
