@@ -87,8 +87,6 @@ ufcs_call: _non_operator_expression ":" _function_call
 _adhoc_struct_initialization: "{" (struct_initializer_with_names | struct_initializer_without_names) "}"
 adhoc_struct_initialization: _adhoc_struct_initialization
 
-named_struct_initialization: type_name _adhoc_struct_initialization
-
 _non_operator_expression: "(" expression ")"
                         | accessed_variable_name
                         | adhoc_struct_initialization
@@ -96,7 +94,6 @@ _non_operator_expression: "(" expression ")"
                         | BOOL_CONSTANT
                         | ESCAPED_STRING
                         | function_call
-                        | named_struct_initialization
                         | SIGNED_FLOAT
                         | SIGNED_INT
                         | struct_member_access
