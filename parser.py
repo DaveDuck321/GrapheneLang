@@ -684,7 +684,7 @@ class ExpressionTransformer(Transformer):
         # otherwise pass an unborrowed/const-reference and let overload
         # resolution figure it out, although this isn't very explicit.
         assert isinstance(this, FlattenedExpression)
-        borrowed_this = this.add_parent(cg.BorrowExpression(this.expression()))
+        borrowed_this = this.add_parent(cg.BorrowExpression(this.expression(), False))
 
         fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
@@ -700,7 +700,7 @@ class ExpressionTransformer(Transformer):
         expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
 
         # Implicitly take reference to string literal
-        return expr.add_parent(cg.BorrowExpression(expr.expression()))
+        return expr.add_parent(cg.BorrowExpression(expr.expression(), True))
 
     @v_args(inline=True)
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
@@ -757,7 +757,12 @@ class ExpressionTransformer(Transformer):
 
     @v_args(inline=True)
     def borrow_operator_use(self, lhs: FlattenedExpression):
-        borrow = cg.BorrowExpression(lhs.expression())
+        borrow = cg.BorrowExpression(lhs.expression(), False)
+        return lhs.add_parent(borrow)
+
+    @v_args(inline=True)
+    def const_borrow_operator_use(self, lhs: FlattenedExpression):
+        borrow = cg.BorrowExpression(lhs.expression(), True)
         return lhs.add_parent(borrow)
 
     def struct_initializer_without_names(

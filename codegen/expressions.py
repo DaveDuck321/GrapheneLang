@@ -172,7 +172,7 @@ class FunctionCallExpression(TypedExpression):
 
 
 class BorrowExpression(TypedExpression):
-    def __init__(self, expr: TypedExpression) -> None:
+    def __init__(self, expr: TypedExpression, is_explicitly_constant: bool) -> None:
         self._expr = expr
 
         if expr.underlying_type.is_borrowed_reference:
@@ -181,10 +181,18 @@ class BorrowExpression(TypedExpression):
         if not expr.is_indirect_pointer_to_type:
             raise BorrowTypeError(expr.underlying_type.get_user_facing_name(True))
 
+        # TODO: test if the expression is constant, if it is fall back to a constant borrow
+        self._is_constant = is_explicitly_constant
+
+        # TODO: this is a bit more permissive that I'd like, but we (need)? to support
+        #       indirect initialization by first assigning to a reference
+        if not self._is_constant:
+            expr.assert_can_write_to()
+
         super().__init__(expr.underlying_type.take_reference(), False)
 
     def __repr__(self) -> str:
-        return f"Borrow({repr(self._expr)})"
+        return f"BorrowExpression({repr(self._expr)})"
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -194,6 +202,8 @@ class BorrowExpression(TypedExpression):
         self._expr.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
+        # TODO: can this assert be reached by a user?
+        assert not self._is_constant
         self._expr.assert_can_write_to()
 
 

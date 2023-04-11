@@ -18,7 +18,7 @@ function main: () -> int = {
     fn(x);
     fn(&x);
     fn(0);
-    fn(my_struct.a);
     fn(&my_struct.a);
+    fn(my_struct.a);
     return 0;
 };

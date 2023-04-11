@@ -152,6 +152,7 @@ POWER_TOKEN.1: "**"
 
 ?borrow_operator: _non_operator_expression
                 | "&" _non_operator_expression -> borrow_operator_use
+                | "&const" _non_operator_expression -> const_borrow_operator_use
 
 //
 // Variable declarations

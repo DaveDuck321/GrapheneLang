@@ -6,7 +6,7 @@ function main: () -> int = {
     // XXX we truncate array types.
     const str: string<2>& = "abXX";
 
-    puts<2>(&str);
+    puts<2>(&const str);
 
     return 0;
 };
