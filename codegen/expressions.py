@@ -272,13 +272,14 @@ class StructMemberAccess(TypedExpression):
 
     def assert_can_read_from(self) -> None:
         # TODO: can we check if the members are initialized?
-        pass
+        self._lhs.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
         # Can write to any non-constant variable.
         if not self.has_address:
             raise OperandError("cannot modify temporary struct")
 
+        self._lhs.assert_can_write_to()
         # TODO: check if the reference is const
 
 
@@ -352,11 +353,11 @@ class ArrayIndexAccess(TypedExpression):
         return f"ArrayIndexAccess({self._array_ptr}[{indices}])"
 
     def assert_can_read_from(self) -> None:
-        # TODO: can we check if the members are initialized?
-        pass
+        # TODO: can we check if the individual members are initialized?
+        self._array_ptr.assert_can_read_from()
 
     def assert_can_write_to(self) -> None:
-        pass
+        self._array_ptr.assert_can_write_to()
 
 
 class StructInitializer(TypedExpression):

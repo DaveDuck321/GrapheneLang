@@ -56,6 +56,10 @@ class StackVariable(Variable):
                 f"cannot modify constant variable '{self.user_facing_name}'"
             )
 
+        # TODO: this is kinda hacky, we aught to rename this function to
+        # something like: `promise_will_write_to()``
+        self.initialized = True
+
 
 class StaticVariable(Variable):
     def __init__(self, var_type: Type, constant: bool, graphene_literal: str) -> None:
