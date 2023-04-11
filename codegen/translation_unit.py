@@ -237,8 +237,7 @@ class FunctionSymbolTable:
         candidate_functions = [
             fn
             for fn in self._functions[fn_name]
-            if len(fn.get_signature().arguments) == len(fn_args)
-            and len(fn.get_signature().specialization) == 0
+            if len(fn.get_signature().specialization) == 0
         ]
 
         # Implicit generic instantiation
@@ -272,6 +271,9 @@ class FunctionSymbolTable:
 
         for function in candidate_functions:
             total_cost = 0
+            if len(fn_args) != len(function.get_signature().arguments):
+                continue
+
             for src_type, dest_type in zip(fn_args, function.get_signature().arguments):
                 cost = get_implicit_conversion_cost(src_type, dest_type)
                 if cost is not None:
