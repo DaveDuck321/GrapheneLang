@@ -19,11 +19,11 @@
     return __builtin_bitwise_xor(lhs, rhs);
 };
 
-@operator [U, V] << : (value: U, shift_amount: V) -> TypeIf<U, Both<IsLogical<U>, IsIntegral<V>>> = {
+@operator [T] << : (value: T, shift_amount: T) -> TypeIf<T, IsLogical<T>> = {
     return __builtin_shift_left(value, shift_amount);
 };
 
-@operator [T] >> : (value: U, shift_amount: V) -> TypeIf<U, Both<IsLogical<U>, IsIntegral<V>>> = {
+@operator [T] >> : (value: T, shift_amount: T) -> TypeIf<T, IsLogical<T>> = {
     return __builtin_shift_right(value, shift_amount);
 };
 
