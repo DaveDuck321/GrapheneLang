@@ -427,7 +427,7 @@ class BitcastExpression(TypedExpression):
         # <result> = bitcast <ty> <value> to <ty2>
         return ir + [
             f"{self.result_ref} = bitcast {conv_src_expr.ir_ref_with_type_annotation}"
-            f" to {self.ir_ref_without_type_annotation}",
+            f" to {self.ir_type_annotation}",
         ]
 
     @property
