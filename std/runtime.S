@@ -32,18 +32,24 @@ _start:
     mov     $60, %eax
     syscall
 
-# Define a new syscall helper. Relies on the caller to use the correct calling
-# convention (System V AMD64 ABI) and passes through the first arg_count
-# arguments given to the syscall. It simply moves the last argument passed
-# (defined by syscall_number_reg) to rax. Note that rax is not part of the
-# normal calling convention. The syscall replaces rax with its return code,
-# which is passed through to the caller.
+# https://refspecs.linuxfoundation.org/elf/x86_64-abi-0.99.pdf
+# Userspace application use the following register sequence
+#   %rdi, %rsi, %rdx, %rcx, %r8 and %r9  (then stack)
+# The kernel uses the following register sequence (clobbering %rcx and %r11)
+#   %rdi, %rsi, %rdx, %r10, %r8 and %r9  (with %rax as the syscall number)
+#
+# Helper exposing `syscall` as a foreign function
+# Relies on the caller to use the System V AMD64 ABI calling convention
+# We clobber %rcx, %r10, %r11 (ok since we don't need to preserve them)
+
 #define MAKE_SYSCALL(arg_count, syscall_number_reg) \
     .global _syscall_ ## arg_count;                 \
     _syscall_ ## arg_count:                         \
+        mov %rcx, %r10;                             \
         mov     syscall_number_reg, %rax;           \
         syscall;                                    \
         ret
 
 MAKE_SYSCALL(0, %rdi)
 MAKE_SYSCALL(3, %rcx)
+MAKE_SYSCALL(6, 8(%rsp))
