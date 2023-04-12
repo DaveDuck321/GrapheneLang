@@ -347,7 +347,7 @@ class IntToPtrExpression(TypedExpression):
         super().__init__(self._ptr_type.convert_to_value_type(), True)
 
     def __repr__(self) -> str:
-        return f"PtrToInt({self._src_expr} to {self.underlying_type})"
+        return f"IntToPtr({self._src_expr} to {self.underlying_type})"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # Remove any indirect references
