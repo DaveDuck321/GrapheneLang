@@ -1,5 +1,4 @@
 @require_once "arithmetic.c3";
-@require_once "arrays.c3";
 @require_once "assert.c3";
 @require_once "logical.c3";
 @require_once "syscalls.c3";
