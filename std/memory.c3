@@ -71,11 +71,10 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
     // Normal happy path
     let integrity_check : u64 = allocator.integrity_checks[bin];
 
-    // FIXME: lots of broken UFCS
-    // TODO: need template arguments deduction for function calls
-    if (has_value<Ptr<AllocatorNode>>(&allocator.bins[bin])) {
-        let node_to_pop_ptr : Ptr<AllocatorNode> = data<Ptr<AllocatorNode>>(&allocator.bins[bin]);
-        let node_to_pop : AllocatorNode& = &data<AllocatorNode>(&node_to_pop_ptr);
+    // TODO: need template arguments deduction for function calls (especially the UFCS)
+    if (allocator.bins[bin]:has_value<Ptr<AllocatorNode>>()) {
+        let node_to_pop_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data<Ptr<AllocatorNode>>();
+        let node_to_pop : AllocatorNode& = &node_to_pop_ptr:data<AllocatorNode>();
 
         runtime_assert(node_to_pop.integrity_check == integrity_check);
 
