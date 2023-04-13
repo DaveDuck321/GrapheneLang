@@ -1,4 +1,5 @@
 @require_once "type_traits.c3";
+@require_once "util.c3";
 
 @operator ! : (value : bool) -> bool = {
     if (value) {
@@ -19,12 +20,14 @@
     return __builtin_bitwise_xor(lhs, rhs);
 };
 
-@operator [T] << : (value: T, shift_amount: T) -> TypeIf<T, IsLogical<T>> = {
-    return __builtin_shift_left(value, shift_amount);
+@operator [L, A] << : (value: L, shift_amount: A) -> TypeIf<L, Both<IsLogical<L>, IsIntegral<A>>> = {
+    let ushift : L = as_logical(shift_amount);
+    return __builtin_shift_left(value, ushift);
 };
 
-@operator [T] >> : (value: T, shift_amount: T) -> TypeIf<T, IsLogical<T>> = {
-    return __builtin_shift_right(value, shift_amount);
+@operator [L, A] >> : (value: L, shift_amount: A) -> TypeIf<L, Both<IsLogical<T>, IsIntegral<A>>> = {
+    let ushift : L = as_logical(shift_amount);
+    return __builtin_shift_right(value, ushift);
 };
 
 @operator [T] == : (lhs: T, rhs: T) -> TypeIf<bool, IsLogical<T>> = {

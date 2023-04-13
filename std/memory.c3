@@ -43,8 +43,7 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
 
 function get_block_size_from_bin_index : (bin : isize) -> isize = {
     let bin0_size: u64 = 0x8;
-    // TODO: this signed/ unsigned conversion is ugly
-    return as_arithmetic(bin0_size << as_logical(bin));
+    return as_arithmetic(bin0_size << bin);
 };
 
 function [T] allocate : (allocator : Allocator&) -> T& = {
