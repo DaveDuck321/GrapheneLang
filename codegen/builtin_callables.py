@@ -2,7 +2,13 @@ from abc import ABC, abstractmethod
 from typing import Callable, Iterator
 from typing import Type as PyType
 
-from .builtin_types import BoolType, GenericIntType, IntegerDefinition, SizeType
+from .builtin_types import (
+    BoolType,
+    GenericIntType,
+    IntegerDefinition,
+    SizeType,
+    IPtrType,
+)
 from .expressions import ConstantExpression
 from .interfaces import SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
@@ -291,19 +297,15 @@ class PtrToIntExpression(TypedExpression):
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
-        assert len(specialization) == 1
+        assert len(specialization) == 0
         assert len(arguments) == 1
-
-        (int_type,) = specialization
-        assert isinstance(int_type, GenericIntType)
-        assert not int_type.is_borrowed_reference
 
         # We don't attempt to dereference this at all. src_expr shouldn't have
         # more than one layer of indirection.
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        super().__init__(int_type, False)
+        super().__init__(IPtrType(), False)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -327,7 +329,7 @@ class PtrToIntExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_ptr_to_int<...>()`")
+        raise OperandError("Cannot assign to `__builtin_ptr_to_int()`")
 
 
 class IntToPtrExpression(TypedExpression):

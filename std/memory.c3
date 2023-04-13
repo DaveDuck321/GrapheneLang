@@ -5,7 +5,7 @@
 @require_once "util.c3";
 @require_once "wrappers.c3";
 
-function allocate_page_and_return_address : (length : isize) -> isize = {
+function allocate_page_and_return_address : (length : isize) -> iptr = {
     let prot : u32 = SYS_PROT_READ() | SYS_PROT_WRITE();
     let flags : u32 = SYS_MAP_PRIVATE() | SYS_MAP_ANONYMOUS();
 
@@ -18,7 +18,7 @@ function PAGE_SIZE : () -> isize = {
 
 typedef AllocatorNode : {
     integrity_check : u64,
-    next_node : isize // TODO use: Optional<Ptr<AllocatorNode>> (recursive type)
+    next_node : iptr // TODO use: Optional<Ptr<AllocatorNode>> (recursive type)
 };
 
 typedef Allocator : {
@@ -48,7 +48,7 @@ function get_block_size_from_bin_index : (bin : isize) -> isize = {
 };
 
 function [T] allocate : (allocator : Allocator&) -> T& = {
-    let memory_address : isize;
+    let memory_address : iptr;
     if (sizeof<T>() > PAGE_SIZE()) {
         // We just pass large allocations straight to the kernel
         memory_address = allocate_page_and_return_address(sizeof<T>());
@@ -61,7 +61,7 @@ function [T] allocate : (allocator : Allocator&) -> T& = {
     return &__builtin_int_to_ptr<T&>(memory_address);
 };
 
-function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> isize = {
+function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
     // No bins available, lets allocate more memory
     // TODO: hacky magic number
     if (bin == 9) {
@@ -81,7 +81,7 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
 
         // TODO: we should eventually just copy the optional without the branch
         if (node_to_pop.next_node != 0) {
-            let next_node_but_fixme_address : isize = node_to_pop.next_node;
+            let next_node_but_fixme_address : iptr = node_to_pop.next_node;
             let next_node : Ptr<AllocatorNode>& = &__builtin_int_to_ptr<Ptr<AllocatorNode>&>(next_node_but_fixme_address);
 
             allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>(next_node);
@@ -90,14 +90,14 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
             allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>();
         }
 
-        return __builtin_ptr_to_int<isize>(node_to_pop);
+        return __builtin_ptr_to_int(node_to_pop);
 
     } else {
         // We don't have any bins left, split one from the bin above us
         let this_size : isize = get_block_size_from_bin_index(bin);
 
-        let new_bin_location_1 : isize = allocate_from_bin_and_return_address(&allocator, bin + 1);
-        let new_bin_location_2 : isize = new_bin_location_1 + this_size;
+        let new_bin_location_1 : iptr  = allocate_from_bin_and_return_address(&allocator, bin + 1);
+        let new_bin_location_2 : iptr = new_bin_location_1 + this_size;
 
         // We give the memory in bin1 to the user immediately, but we save bin2 for ourselves
         let new_node : AllocatorNode& = &__builtin_int_to_ptr<AllocatorNode&>(new_bin_location_2);

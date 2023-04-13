@@ -4,7 +4,7 @@ foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64;
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i64) -> i64;
 
 function sys_write : (fd: i32, buffer: u8[&], count: isize) -> isize = {
-    const buffer_addr : i64 = __builtin_ptr_to_int<i64>(buffer);
+    const buffer_addr : iptr = __builtin_ptr_to_int(buffer);
 
     return _syscall_3(fd, buffer_addr, count, /* write */ 1);
 };
@@ -33,7 +33,7 @@ function SYS_MAP_ANONYMOUS : () -> u32 = {
     return 0x20;
 };
 
-function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> isize = {
+function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
     let prot_ : i32 = __builtin_bitcast<i32>(prot);
     let flags_ : i32 = __builtin_bitcast<i32>(flags);
     return _syscall_6(addr, length, prot_, flags_, fd, offset, 9);
