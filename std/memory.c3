@@ -22,9 +22,9 @@ typedef AllocatorNode : {
 };
 
 typedef Allocator : {
-    // TODO: parameterize `9` as a generic argument
-    integrity_checks : u64[9],
-    bins : Optional<Ptr<AllocatorNode>>[9]
+    // TODO: parameterize `8` as a generic argument
+    integrity_checks : u64[8],
+    bins : Optional<Ptr<AllocatorNode>>[8]
 };
 
 function get_allocator_bin_index : (size_required : isize) -> isize = {
@@ -37,7 +37,7 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
         size_over_current_bin = size_over_current_bin / 2;
     }
 
-    runtime_assert(9 > bin_index);
+    runtime_assert(8 > bin_index);
     return bin_index;
 };
 
@@ -48,7 +48,7 @@ function get_block_size_from_bin_index : (bin : isize) -> isize = {
 
 function [T] allocate : (allocator : Allocator&) -> T& = {
     let memory_address : iptr;
-    if (sizeof<T>() > PAGE_SIZE()) {
+    if (sizeof<T>() > PAGE_SIZE() / 2) {
         // We just pass large allocations straight to the kernel
         memory_address = allocate_page_and_return_address(sizeof<T>());
     } else {
@@ -63,7 +63,8 @@ function [T] allocate : (allocator : Allocator&) -> T& = {
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
     // No bins available, lets allocate more memory
     // TODO: hacky magic number
-    if (bin == 9) {
+    if (bin == 8) {
+        runtime_assert(get_block_size_from_bin_index(bin) == PAGE_SIZE());
         return allocate_page_and_return_address(PAGE_SIZE());
     }
 
@@ -119,9 +120,9 @@ function initialize_allocator : () -> Allocator = {
     // TODO: use variable initialized inside for loop
     let i : int = 0;
 
-    // TODO: use i < 9
+    // TODO: use i < 8
     // TODO: use i < allocator:len() (fails since it cannot dedude arg types)
-    while (9 >= i) {
+    while (8 >= i) {
         // TODO: use a true random number
         // TODO: allow 64 bit constants
         allocator.integrity_checks[i] = 0xd2f4bd5b;
