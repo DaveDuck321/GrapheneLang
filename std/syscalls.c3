@@ -1,3 +1,5 @@
+@require_once "util.c3";
+
 foreign _syscall_0 : (syscall_number: i64) -> i64;
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64;
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64;
@@ -34,9 +36,7 @@ function SYS_MAP_ANONYMOUS : () -> u32 = {
 };
 
 function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
-    let prot_ : i32 = __builtin_bitcast<i32>(prot);
-    let flags_ : i32 = __builtin_bitcast<i32>(flags);
-    return _syscall_6(addr, length, prot_, flags_, fd, offset, 9);
+    return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, 9);
 };
 
 function sys_exit : (code : int) -> void = {

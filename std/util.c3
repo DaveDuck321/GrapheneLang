@@ -1,13 +1,3 @@
-@require_once "io.c3";
-@require_once "logical.c3";
-
-function runtime_assert : (condition : bool) -> void = {
-    if (!condition) {
-        puts<17>("Assertion Failed!");
-        sys_exit(1);
-    }
-};
-
 function [T] sizeof : () -> isize = {
     return __builtin_sizeof<T>();
 };
@@ -28,3 +18,15 @@ function [T] addr_to_ref : (bad_address : i32) -> T& = {
 function [T] addr_to_ref : (address : iptr) -> T& = {
     return &__builtin_int_to_ptr<T&>(address);
 };
+
+function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); };
+function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); };
+function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); };
+function as_arithmetic : (value : u64)  -> i64  = { return __builtin_bitcast<i64>(value); };
+function as_arithmetic : (value : u128) -> i128 = { return __builtin_bitcast<i128>(value); };
+
+function as_logical : (value : i8)   -> u8   = { return __builtin_bitcast<u8>(value); };
+function as_logical : (value : i16)  -> u16  = { return __builtin_bitcast<u16>(value); };
+function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(value); };
+function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); };
+function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); };

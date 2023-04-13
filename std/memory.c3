@@ -1,5 +1,6 @@
 @require_once "arithmetic.c3";
 @require_once "arrays.c3";
+@require_once "assert.c3";
 @require_once "logical.c3";
 @require_once "syscalls.c3";
 @require_once "util.c3";
@@ -44,7 +45,7 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
 function get_block_size_from_bin_index : (bin : isize) -> isize = {
     let bin0_size: u64 = 0x8;
     // TODO: this signed/ unsigned conversion is ugly
-    return __builtin_bitcast<isize>(bin0_size << __builtin_bitcast<u64>(bin));
+    return as_arithmetic(bin0_size << as_logical(bin));
 };
 
 function [T] allocate : (allocator : Allocator&) -> T& = {
