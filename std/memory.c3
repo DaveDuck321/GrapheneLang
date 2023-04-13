@@ -58,7 +58,7 @@ function [T] allocate : (allocator : Allocator&) -> T& = {
         memory_address = allocate_from_bin_and_return_address(&allocator, bin_index);
     }
 
-    return &__builtin_int_to_ptr<T&>(memory_address);
+    return &addr_to_ref<T>(memory_address);
 };
 
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
@@ -82,7 +82,7 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
         // TODO: we should eventually just copy the optional without the branch
         if (node_to_pop.next_node != 0) {
             let next_node_but_fixme_address : iptr = node_to_pop.next_node;
-            let next_node : Ptr<AllocatorNode>& = &__builtin_int_to_ptr<Ptr<AllocatorNode>&>(next_node_but_fixme_address);
+            let next_node : Ptr<AllocatorNode>& = &addr_to_ref<Ptr<AllocatorNode>>(next_node_but_fixme_address);
 
             allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>(next_node);
         } else {
@@ -100,7 +100,7 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
         let new_bin_location_2 : iptr = new_bin_location_1 + this_size;
 
         // We give the memory in bin1 to the user immediately, but we save bin2 for ourselves
-        let new_node : AllocatorNode& = &__builtin_int_to_ptr<AllocatorNode&>(new_bin_location_2);
+        let new_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(new_bin_location_2);
         new_node.integrity_check = integrity_check;
         new_node.next_node = 0;
         allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>({&new_node});
@@ -133,15 +133,4 @@ function initialize_allocator : () -> Allocator = {
         i = i + 1;
     }
     return allocator;
-};
-
-
-
-
-function[T] sizeof : () -> isize = {
-    return __builtin_sizeof<T>();
-};
-
-function[T] alignof : () -> isize = {
-    return __builtin_alignof<T>();
 };

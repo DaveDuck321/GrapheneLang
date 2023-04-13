@@ -344,7 +344,7 @@ class IntToPtrExpression(TypedExpression):
         assert self._ptr_type.is_borrowed_reference
 
         (self._src_expr,) = arguments
-        assert self._src_expr.has_address
+        assert isinstance(self._src_expr.underlying_type, GenericIntType)
 
         super().__init__(self._ptr_type.convert_to_value_type(), True)
 
