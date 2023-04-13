@@ -29,7 +29,7 @@ typedef Allocator : {
 
 function get_allocator_bin_index : (size_required : isize) -> isize = {
     let bin_index : int = 0;
-    let size_over_current_bin : isize = size_required / 8;  // TODO: bin0 is 8 bytes (this should be cleaner)
+    let size_over_current_bin : isize = size_required / sizeof<AllocatorNode>();
 
     while (size_over_current_bin != 0) {
         bin_index = bin_index + 1;
@@ -42,7 +42,7 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
 };
 
 function get_block_size_from_bin_index : (bin : isize) -> isize = {
-    let bin0_size: u64 = 0x8;
+    let bin0_size: u64 = as_logical(sizeof<AllocatorNode>());
     return as_arithmetic(bin0_size << bin);
 };
 
@@ -111,6 +111,9 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
 };
 
 function initialize_allocator : () -> Allocator = {
+    // TODO: should actually check that the bin is a power of 2 bytes
+    runtime_assert(sizeof<AllocatorNode>() == 16);
+
     let allocator : Allocator;
 
     // TODO: use variable initialized inside for loop
