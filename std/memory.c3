@@ -1,8 +1,9 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/arrays.c3";
-@require_once "std/logical.c3";
-@require_once "std/syscalls.c3";
-@require_once "std/wrappers.c3";
+@require_once "arithmetic.c3";
+@require_once "arrays.c3";
+@require_once "logical.c3";
+@require_once "syscalls.c3";
+@require_once "util.c3";
+@require_once "wrappers.c3";
 
 function allocate_page_and_return_address : (length : isize) -> isize = {
     let prot : u32 = SYS_PROT_READ() | SYS_PROT_WRITE();
@@ -36,7 +37,7 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
         size_over_current_bin = size_over_current_bin / 2;
     }
 
-    // TODO: assert(bin_index < 9)
+    runtime_assert(9 > bin_index);
     return bin_index;
 };
 
@@ -73,13 +74,14 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
     // FIXME: lots of broken UFCS
     // TODO: need template arguments deduction for function calls
     if (has_value<Ptr<AllocatorNode>>(&allocator.bins[bin])) {
-        let node_to_pop : Ptr<AllocatorNode> = data<Ptr<AllocatorNode>>(&allocator.bins[bin]);
+        let node_to_pop_ptr : Ptr<AllocatorNode> = data<Ptr<AllocatorNode>>(&allocator.bins[bin]);
+        let node_to_pop : AllocatorNode& = &data<AllocatorNode>(&node_to_pop_ptr);
 
-        // FIXME: crash and burn if node_to_pop.integrity_check != integrity_check
+        runtime_assert(node_to_pop.integrity_check == integrity_check);
+
         // TODO: we should eventually just copy the optional without the branch
-        // TODO: UFCS doesn't work here!!
-        if (data<AllocatorNode>(&node_to_pop).next_node != 0) {
-            let next_node_but_fixme_address : isize = data<AllocatorNode>(&node_to_pop).next_node;
+        if (node_to_pop.next_node != 0) {
+            let next_node_but_fixme_address : isize = node_to_pop.next_node;
             let next_node : Ptr<AllocatorNode>& = &__builtin_int_to_ptr<Ptr<AllocatorNode>&>(next_node_but_fixme_address);
 
             allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>(next_node);
@@ -88,7 +90,7 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
             allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>();
         }
 
-        return __builtin_ptr_to_int<isize>(&data<AllocatorNode>(&node_to_pop));
+        return __builtin_ptr_to_int<isize>(node_to_pop);
 
     } else {
         // We don't have any bins left, split one from the bin above us
