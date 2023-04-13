@@ -6,8 +6,8 @@ from .builtin_types import (
     BoolType,
     GenericIntType,
     IntegerDefinition,
-    SizeType,
     IPtrType,
+    SizeType,
 )
 from .expressions import ConstantExpression
 from .interfaces import SpecializationItem, Type, TypedExpression
