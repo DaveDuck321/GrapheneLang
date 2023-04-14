@@ -33,7 +33,7 @@ _start:
     syscall
 
 # https://refspecs.linuxfoundation.org/elf/x86_64-abi-0.99.pdf
-# Userspace application use the following register sequence
+# Userspace applications use the following register sequence
 #   %rdi, %rsi, %rdx, %rcx, %r8 and %r9  (then stack)
 # The kernel uses the following register sequence (clobbering %rcx and %r11)
 #   %rdi, %rsi, %rdx, %r10, %r8 and %r9  (with %rax as the syscall number)
