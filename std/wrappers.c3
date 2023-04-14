@@ -6,6 +6,15 @@ function [T] data : (self : Ptr<T>&) -> T& = {
 
 typedef [T] Optional : { _value : T, _has_value : bool};
 
+function [T] store : (self : Optional<T>&, value : T) -> void = {
+    self._value = value;
+    self._has_value = true;
+};
+
+function [T] erase : (self : Optional<T>&) -> void = {
+    self._has_value = false;
+};
+
 // TODO: this should be a constructor
 function [T] make_optional : () -> Optional<T> = {
     let result : Optional<T>;

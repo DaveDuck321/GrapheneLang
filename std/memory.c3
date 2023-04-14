@@ -91,7 +91,7 @@ function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) 
     } else {
         new_node.next_node = 0;
     }
-    allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>({&new_node});
+    allocator.bins[bin]:store<Ptr<AllocatorNode>>({&new_node});
 };
 
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
@@ -116,10 +116,9 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
             let next_node_but_fixme_address : iptr = node_to_pop.next_node;
             let next_node : Ptr<AllocatorNode>& = &addr_to_ref<Ptr<AllocatorNode>>(next_node_but_fixme_address);
 
-            allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>(next_node);
+            allocator.bins[bin]:store<Ptr<AllocatorNode>>(next_node);
         } else {
-            // TODO: this deduction should work
-            allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>();
+            allocator.bins[bin]:erase<Ptr<AllocatorNode>>();
         }
 
         return __builtin_ptr_to_int(node_to_pop);
@@ -135,7 +134,7 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
         let new_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(new_bin_location_2);
         new_node.integrity_check = integrity_check;
         new_node.next_node = 0;
-        allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>({&new_node});
+        allocator.bins[bin]:store<Ptr<AllocatorNode>>({&new_node});
 
         return new_bin_location_1;
     }
@@ -163,7 +162,7 @@ function initialize_allocator : () -> Allocator = {
 
 
         // TODO: use constructor
-        allocator.bins[i] = make_optional<Ptr<AllocatorNode>>();
+        allocator.bins[i]:erase<Ptr<AllocatorNode>>();
 
         // TODO: i += 1
         i = i + 1;
