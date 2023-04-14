@@ -52,5 +52,6 @@ _start:
 
 MAKE_SYSCALL(0, %rdi)
 MAKE_SYSCALL(1, %rsi)
+MAKE_SYSCALL(2, %rdx)
 MAKE_SYSCALL(3, %rcx)
 MAKE_SYSCALL(6, 8(%rsp))

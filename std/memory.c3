@@ -12,6 +12,10 @@ function allocate_page_and_return_address : (length : isize) -> iptr = {
     return sys_mmap(0, length, prot, flags, -1, 0);
 };
 
+function deallocate_page : (addr: iptr, length : isize) -> void = {
+    sys_munmap(addr, length);
+};
+
 function PAGE_SIZE : () -> isize = {
     return 4096;  // TODO: this should be a compile time constant
 };
@@ -59,6 +63,35 @@ function [T] allocate : (allocator : Allocator&) -> T& = {
     }
 
     return &addr_to_ref<T>(memory_address);
+};
+
+function [T] deallocate : (allocator : Allocator&, ref : T&) -> void = {
+    let memory_address : iptr = __builtin_ptr_to_int(&ref);
+
+    let bin_index : isize = get_allocator_bin_index(sizeof<T>());
+    if (bin_index >= allocator.bin_count) {
+        deallocate_page(memory_address, sizeof<T>());
+    } else {
+        deallocate_to_bin(&allocator, bin_index, memory_address);
+    }
+};
+
+function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) -> void = {
+    let integrity_check : u64 = allocator.integrity_checks[bin];
+
+    let new_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(addr);
+    new_node.integrity_check = integrity_check;
+
+    if (allocator.bins[bin]:has_value<Ptr<AllocatorNode>>()) {
+        let next_node_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data<Ptr<AllocatorNode>>();
+        let next_node : AllocatorNode& = &next_node_ptr:data<AllocatorNode>();
+        runtime_assert(next_node.integrity_check == integrity_check);
+
+        new_node.next_node = __builtin_ptr_to_int(next_node);
+    } else {
+        new_node.next_node = 0;
+    }
+    allocator.bins[bin] = make_optional<Ptr<AllocatorNode>>({&new_node});
 };
 
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {

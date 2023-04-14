@@ -2,6 +2,7 @@
 
 foreign _syscall_0 : (syscall_number: i64) -> i64;
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64;
+foreign _syscall_2 : (a: i64, b: i64, syscall_number: i64) -> i64;
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64;
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i64) -> i64;
 
@@ -37,6 +38,10 @@ function SYS_MAP_ANONYMOUS : () -> u32 = {
 
 function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
     return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, 9);
+};
+
+function sys_munmap : (addr: isize, length : isize) -> void = {
+    _syscall_2(addr, length, 11);
 };
 
 function sys_exit : (code : int) -> void = {
