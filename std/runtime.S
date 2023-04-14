@@ -45,7 +45,7 @@ _start:
 #define MAKE_SYSCALL(arg_count, syscall_number_reg) \
     .global _syscall_ ## arg_count;                 \
     _syscall_ ## arg_count:                         \
-        mov %rcx, %r10;                             \
+        mov     %rcx,               %r10;           \
         mov     syscall_number_reg, %rax;           \
         syscall;                                    \
         ret
