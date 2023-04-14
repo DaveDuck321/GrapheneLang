@@ -416,8 +416,7 @@ class BitcastExpression(TypedExpression):
             self._src_expr, self._src_expr.underlying_type
         )
 
-        ir = []
-        ir.extend(self.expand_ir(extra_exprs, reg_gen))
+        ir = self.expand_ir(extra_exprs, reg_gen)
 
         if self.ir_type_annotation == conv_src_expr.ir_type_annotation:
             # Type is already correct, nothing to do
