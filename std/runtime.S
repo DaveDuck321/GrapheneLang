@@ -1,7 +1,3 @@
-# To make a system call in 64-bit Linux, place the system call number in rax,
-# and its arguments, in order, in rdi, rsi, rdx, r10, r8, and r9, then invoke
-# syscall. Return values are stored in rax.
-
 # If the callee wishes to use registers rbx, rsp, rbp, and r12–r15, it must
 # restore their original values before returning control to the caller. All
 # other registers must be saved by the caller if it wishes to preserve their
