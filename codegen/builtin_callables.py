@@ -2,7 +2,13 @@ from abc import ABC, abstractmethod
 from typing import Callable, Iterator
 from typing import Type as PyType
 
-from .builtin_types import BoolType, GenericIntType, IntegerDefinition, SizeType
+from .builtin_types import (
+    BoolType,
+    GenericIntType,
+    IntegerDefinition,
+    IPtrType,
+    SizeType,
+)
 from .expressions import ConstantExpression
 from .interfaces import SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
@@ -291,19 +297,15 @@ class PtrToIntExpression(TypedExpression):
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
-        assert len(specialization) == 1
+        assert len(specialization) == 0
         assert len(arguments) == 1
-
-        (int_type,) = specialization
-        assert isinstance(int_type, GenericIntType)
-        assert not int_type.is_borrowed_reference
 
         # We don't attempt to dereference this at all. src_expr shouldn't have
         # more than one layer of indirection.
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        super().__init__(int_type, False)
+        super().__init__(IPtrType(), False)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -327,7 +329,118 @@ class PtrToIntExpression(TypedExpression):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_ptr_to_int<...>()`")
+        raise OperandError("Cannot assign to `__builtin_ptr_to_int()`")
+
+
+class IntToPtrExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+    ) -> None:
+        assert len(specialization) == 1
+        assert len(arguments) == 1
+
+        (self._ptr_type,) = specialization
+        assert isinstance(self._ptr_type, Type)
+        assert self._ptr_type.is_borrowed_reference
+
+        (self._src_expr,) = arguments
+        assert isinstance(self._src_expr.underlying_type, GenericIntType)
+
+        super().__init__(self._ptr_type.convert_to_value_type(), True)
+
+    def __repr__(self) -> str:
+        return f"IntToPtr({self._src_expr} to {self.underlying_type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # Remove any indirect references
+        conv_src_expr, extra_exprs = do_implicit_conversion(
+            self._src_expr, self._src_expr.underlying_type
+        )
+
+        ir = self.expand_ir(extra_exprs, reg_gen)
+
+        self.result_reg = next(reg_gen)
+
+        # <result> = inttoptr <ty> <value> to <ty2>
+        return ir + [
+            f"%{self.result_reg} = inttoptr {conv_src_expr.ir_ref_with_type_annotation}"
+            f" to {self.ir_type_annotation}",
+        ]
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        pass
+
+
+class BitcastExpression(TypedExpression):
+    def __init__(
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+    ) -> None:
+        assert len(specialization) == 1
+        assert len(arguments) == 1
+
+        self.result_ref = None
+
+        (self._src_expr,) = arguments
+        (self._target_type,) = specialization
+        assert isinstance(self._target_type, Type)
+
+        src_type = self._src_expr.underlying_type
+
+        # We can bitcast from ptr->ptr or non-aggregate-> non-aggregate
+        assert self._target_type.is_borrowed_reference == src_type.is_borrowed_reference
+
+        # TODO: support floats
+        assert isinstance(self._target_type, GenericIntType)
+        assert isinstance(src_type, GenericIntType)
+
+        assert self._target_type.size == src_type.size
+
+        super().__init__(
+            self._target_type.convert_to_value_type(),
+            self._target_type.is_borrowed_reference,
+        )
+
+    def __repr__(self) -> str:
+        return f"Bitcast({self._src_expr} to {self.underlying_type})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # Remove any indirect references
+        conv_src_expr, extra_exprs = do_implicit_conversion(
+            self._src_expr, self._src_expr.underlying_type
+        )
+
+        ir = self.expand_ir(extra_exprs, reg_gen)
+
+        if self.ir_type_annotation == conv_src_expr.ir_type_annotation:
+            # Type is already correct, nothing to do
+            self.result_ref = conv_src_expr.ir_ref_without_type_annotation
+            return ir
+
+        self.result_ref = f"%{next(reg_gen)}"
+
+        # <result> = bitcast <ty> <value> to <ty2>
+        return ir + [
+            f"{self.result_ref} = bitcast {conv_src_expr.ir_ref_with_type_annotation}"
+            f" to {self.ir_type_annotation}",
+        ]
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert self.result_ref is not None
+        return self.result_ref
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        self._src_expr.assert_can_write_to()
 
 
 def get_builtin_callables() -> dict[
@@ -362,7 +475,9 @@ def get_builtin_callables() -> dict[
     return {
         **integer_instructions,
         "__builtin_alignof": AlignOfExpression,
+        "__builtin_bitcast": BitcastExpression,
+        "__builtin_int_to_ptr": IntToPtrExpression,
         "__builtin_narrow": NarrowExpression,
-        "__builtin_sizeof": SizeOfExpression,
         "__builtin_ptr_to_int": PtrToIntExpression,
+        "__builtin_sizeof": SizeOfExpression,
     }

@@ -161,6 +161,11 @@ class SizeType(GenericIntType):
         super().__init__("isize", 64, True)
 
 
+class IPtrType(GenericIntType):
+    def __init__(self) -> None:
+        super().__init__("iptr", 64, True)
+
+
 class BoolType(Type):
     class Definition(PrimitiveDefinition):
         def __init__(self) -> None:
@@ -421,6 +426,7 @@ def get_builtin_types() -> list[Type]:
     return sized_int_types + [
         BoolType(),
         IntType(),
+        IPtrType(),
         SizeType(),
         VoidType(),
     ]

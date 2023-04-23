@@ -24,19 +24,19 @@ typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsInte
 @operator [U, V] - : (lhs: U, rhs : V) -> CommonArithmeticType<U, V> = {
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
-    return __builtin_sub(lhs_widen, rhs_widen);
+    return __builtin_subtract(lhs_widen, rhs_widen);
 };
 
 @operator [U, V] * : (lhs: U, rhs : V) -> CommonArithmeticType<U, V> = {
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
-    return __builtin_mul(lhs_widen, rhs_widen);
+    return __builtin_multiply(lhs_widen, rhs_widen);
 };
 
 @operator [U, V] / : (lhs: U, rhs : V) -> CommonArithmeticType<U, V> = {
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
-    return __builtin_div(lhs_widen, rhs_widen);
+    return __builtin_divide(lhs_widen, rhs_widen);
 };
 
 @operator [U, V] % : (lhs: U, rhs : V) -> CommonArithmeticType<U, V> = {
@@ -65,6 +65,11 @@ typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsInte
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
     return __builtin_is_greater_than(lhs_widen, rhs_widen);
+};
+
+// TODO: remove unnecessary widening by allowing partial specialization
+function [T] Narrow : (value : i128) -> TypeIf<T, IsIntegral<T>> = {
+    return __builtin_narrow<T>(value);
 };
 
 @operator [U, V] <= : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
