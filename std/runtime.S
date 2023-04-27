@@ -8,6 +8,10 @@
 # possible. Note that 32-bit values are zero-extended before they are written to
 # a register (although that's not the case with 8-bit and 16-bit values).
 
+# Object files built from raw assembly, have an executable stack by default.
+# See https://www.redhat.com/en/blog/linkers-warnings-about-executable-stacks-and-segments.
+.section .note.GNU-stack, "", %progbits
+
 .section .text
 
 .global _start
