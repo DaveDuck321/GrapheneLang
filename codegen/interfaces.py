@@ -312,10 +312,6 @@ class Parameter:
     name: str
     type: Type
 
-    def __eq__(self, _: Any) -> bool:
-        # No one was using this :).
-        assert False
-
 
 class Variable(ABC):
     # TODO much of this interface is common with TypedExpression. Maybe they
