@@ -37,3 +37,15 @@
 @operator [T] != : (lhs: T, rhs: T) -> TypeIf<bool, IsLogical<T>> = {
     return !(lhs == rhs);
 };
+
+@operator && : (lhs: bool, rhs: bool) -> bool = {
+    if (__builtin_is_equal(lhs, false)) {
+        return false;
+    }
+
+    if (__builtin_is_equal(rhs, false)) {
+        return false;
+    }
+
+    return true;
+};
