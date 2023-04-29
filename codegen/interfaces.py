@@ -15,7 +15,7 @@ class CompileTimeConstant:
 
     @property
     def is_placeholder(self) -> bool:
-        return True
+        return False
 
     def match_with(
         self, other: "CompileTimeConstant", generic_mapping: "GenericMapping"
