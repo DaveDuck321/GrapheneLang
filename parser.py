@@ -399,6 +399,11 @@ class ParseFunctionSignatures(Interpreter):
             assert generic_name == fn_name
             deduced_mapping: cg.GenericMapping = {}
 
+            # There's no way for the caller to check if they're supplying the
+            # correct number of arguments, so we need to check for them.
+            if len(arguments) != len(unresolved_arg_types):
+                return None  # SFINAE
+
             for provided_arg, (unresolved_type, is_generic) in zip(
                 arguments, unresolved_arg_types, strict=True
             ):
