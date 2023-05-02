@@ -44,6 +44,7 @@ def main() -> None:
     parser.add_argument("-I<include path>", action="store_true")  # Dummy arg
     parser.add_argument("-O<level>", action="store_true")  # Dummy arg
     parser.add_argument("--emit-llvm", action="store_true")
+    parser.add_argument("--emit-llvm-to-stdout", action="store_true")
     parser.add_argument("--emit-optimized-llvm", action="store_true")
     parser.add_argument("--emit-everything", action="store_true")
     parser.add_argument("--debug-compiler", action="store_true")
@@ -52,8 +53,11 @@ def main() -> None:
     args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
+    will_emit_llvm_to_stdout: bool = args.emit_llvm_to_stdout
     will_emit_optimized_llvm: bool = args.emit_optimized_llvm or args.emit_everything
-    will_emit_binary: bool = not args.emit_llvm or args.emit_everything
+    will_emit_binary: bool = (
+        not (args.emit_llvm or args.emit_llvm_to_stdout) or args.emit_everything
+    )
 
     llvm_output: Path = args.input[0].with_suffix(".ll")
     optimized_llvm_output: Path = llvm_output.with_suffix(".opt.ll")
@@ -77,6 +81,9 @@ def main() -> None:
     if will_emit_llvm:
         with llvm_output.open("w", encoding="utf-8") as file:
             file.write(ir)
+
+    if will_emit_llvm_to_stdout:
+        sys.stdout.write(ir)
 
     # Use clang to finish compile
 
