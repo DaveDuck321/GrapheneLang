@@ -33,6 +33,7 @@ jobs:
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh 15
+        sudo apt-get install -y llvm-15-runtime
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
