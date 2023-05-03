@@ -59,6 +59,7 @@ class VariableReference(TypedExpression):
         )
 
         self.variable = variable
+        self._ir_ref: Optional[str] = None
 
     def __repr__(self) -> str:
         return (
@@ -67,6 +68,7 @@ class VariableReference(TypedExpression):
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
+        assert self._ir_ref
         return self._ir_ref
 
     def assert_can_read_from(self) -> None:
@@ -248,7 +250,8 @@ class StructMemberAccess(TypedExpression):
             f"{pointer_offset.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
         ]
 
-        # Prevent double indirection, dereference the element pointer to get the underlying reference
+        # Prevent double indirection, dereference the element pointer to get the
+        # underlying reference
         if self._member_type.is_borrowed_reference:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
@@ -380,6 +383,7 @@ class StructInitializer(TypedExpression):
         self._members: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
         self.implicit_conversion_cost = 0
+        self.result_ref: Optional[str] = None
 
         for target_member, member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
@@ -412,6 +416,7 @@ class StructInitializer(TypedExpression):
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
+        assert self.result_ref
         return self.result_ref
 
     def __repr__(self) -> str:

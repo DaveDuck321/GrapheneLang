@@ -64,13 +64,14 @@ def run_command(
     directory: Path,
     command: list[str],
     expected_output: dict[str, list[str]],
-    input: Optional[str] = None,
+    stdin: Optional[str] = None,
 ) -> str:
     result = subprocess.run(
         command,
         capture_output=True,
+        check=False,
         cwd=str(directory),
-        input=input,
+        input=stdin,
         text=True,
     )
     status = result.returncode

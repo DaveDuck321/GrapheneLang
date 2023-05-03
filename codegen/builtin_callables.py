@@ -279,7 +279,8 @@ class NarrowExpression(TypedExpression):
         self.result_reg = next(reg_gen)
         return [
             *ir_lines,
-            f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}",
+            f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation}"
+            f" to {self.underlying_type.ir_type}",
         ]
 
     @property

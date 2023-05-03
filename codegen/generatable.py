@@ -205,8 +205,8 @@ class IfElseStatement(Generatable):
         return [
             *self.expand_ir(extra_exprs, reg_gen),
             (
-                f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.if_scope.start_label},"
-                f" label %{self.else_scope.start_label}"
+                f"br {conv_condition.ir_ref_with_type_annotation}, label "
+                f"%{self.if_scope.start_label}, label %{self.else_scope.start_label}"
             ),
             # If body
             f"{self.if_scope.start_label}:",
@@ -261,7 +261,10 @@ class WhileStatement(Generatable):
             # Evaluate condition
             *self.expand_ir(self.condition_generatable, reg_gen),
             *self.expand_ir(extra_exprs, reg_gen),
-            f"br {conv_condition.ir_ref_with_type_annotation}, label %{self.inner_scope.start_label}, label %{self.end_label}",
+            (
+                f"br {conv_condition.ir_ref_with_type_annotation}, label "
+                f"%{self.inner_scope.start_label}, label %{self.end_label}"
+            ),
             # Loop body
             f"{self.inner_scope.start_label}:",
             *self.inner_scope.generate_ir(reg_gen),
