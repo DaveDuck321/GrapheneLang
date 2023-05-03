@@ -17,6 +17,10 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        llvm-version: [15, 16]
+
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python 3.11
@@ -28,12 +32,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-    - name: Install clang-15
+    - name: Install clang and lli
       run: |
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
-        sudo ./llvm.sh 15
-        sudo apt-get install -y llvm-15-runtime
+        sudo ./llvm.sh ${{ matrix.llvm-version }}
+        sudo apt-get install -y llvm-${{ matrix.llvm-version }}-runtime
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
@@ -42,4 +46,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Run tests
       run: |
-        GRAPHENE_CLANG_CMD=clang-15 GRAPHENE_LLI_CMD=lli-15 python tests/run_tests.py
+        GRAPHENE_CLANG_CMD=clang-${{ matrix.llvm-version }} GRAPHENE_LLI_CMD=lli-${{ matrix.llvm-version }} python tests/run_tests.py
