@@ -65,7 +65,7 @@ specialized_typedef: "typedef" IDENTIFIER generic_specialization ":" type
 // Non-operator expresssions
 //
 
-BOOL_CONSTANT.1: "true" | "false"
+BOOL_CONSTANT: "true" | "false"
 UNSIGNED_HEX_CONSTANT: "0x" HEXDIGIT+
 
 _inner_list_without_names: _expression ("," _expression)*
@@ -108,11 +108,11 @@ _non_operator_expression: "(" expression ")"
 // We just match python's order of operation
 // https://docs.python.org/3/reference/expressions.html#operator-precedence
 COMPARE_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!=" | "<=>"
-SHIFT_TOKEN.1: "<<" | ">>"
+SHIFT_TOKEN: "<<" | ">>"
 ADD_SUB_TOKEN: "+" | "-"
 MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
 UNARY_OPERATOR_TOKEN: "!" | "-" | "+"
-POWER_TOKEN.1: "**"
+POWER_TOKEN: "**"
 
 // TODO: add support for arbitrary operators
 // Alternatively we can prevent user defined operators not in this list
@@ -167,7 +167,9 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 
 if_statement: "if" "(" expression ")" scope ["else" scope]
 while_statement: "while" "(" expression ")" scope
-return_statement: "return" expression?
+// This needs a higher priority, otherwise `return -1` is parsed as an
+// operator_use with a variable called `return`.
+return_statement.1: "return" expression?
 
 
 //
