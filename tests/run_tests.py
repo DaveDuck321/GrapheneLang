@@ -7,7 +7,6 @@ from dataclasses import asdict
 from multiprocessing import cpu_count
 from os import getenv
 from pathlib import Path
-from subprocess import PIPE
 from sys import exit as sys_exit
 from threading import Lock
 from typing import Optional
