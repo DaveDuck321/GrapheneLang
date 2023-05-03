@@ -4,12 +4,26 @@ from itertools import count
 from typing import Callable, Iterable, Optional
 
 from .builtin_callables import get_builtin_callables
-from .builtin_types import CharArrayDefinition, FunctionSignature, get_builtin_types
+from .builtin_types import (
+    AnonymousType,
+    CharArrayDefinition,
+    FunctionSignature,
+    get_builtin_types,
+)
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
 from .interfaces import Parameter, SpecializationItem, Type, TypedExpression
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
+from .type_resolution import (
+    CompileTimeConstant,
+    GenericArgument,
+    GenericTypedef,
+    SpecializedTypedef,
+    TypeSymbolTable,
+    UnresolvedSpecializationItem,
+    UnresolvedType,
+)
 from .user_facing_errors import (
     AmbiguousFunctionCall,
     FailedLookupError,
@@ -80,7 +94,7 @@ class Function:
         ]
 
     def generate_definition(self) -> list[str]:
-        if not self.get_signature().return_type.is_void:
+        if not self.get_signature().return_type.definition.is_void:
             assert self.top_level_scope.is_return_guaranteed()
 
         reg_gen = count(0)  # First register is %0
@@ -293,7 +307,7 @@ class FunctionSymbolTable:
             arg.get_user_facing_name(False) for arg in fn_args
         )
         readable_specialization = ", ".join(
-            specialization.get_user_facing_name(False)
+            specialization.format_for_output_to_user()
             if isinstance(specialization, Type)
             else str(specialization)
             for specialization in fn_specialization
@@ -334,58 +348,20 @@ class Program:
         self._builtin_callables = get_builtin_callables()
 
         self._function_table = FunctionSymbolTable()
-        self._initialized_types: dict[str, list[Type]] = defaultdict(list)
-        self._type_initializers: dict[
-            str, Callable[[str, list[SpecializationItem]], Type]
-        ] = {}
+        self._type_table = TypeSymbolTable()
 
         self._string_cache: dict[str, StaticVariable] = {}
         self._static_variables: list[StaticVariable] = []
 
         self._has_main: bool = False
 
+        self._builtin_type_names: set[str] = set()
         for builtin_type in get_builtin_types():
-            name = builtin_type.get_user_facing_name(False)
-            self._initialized_types[name].append(builtin_type)
+            self._type_table.add_resolved_type(builtin_type)
+            self._builtin_type_names.add(builtin_type.name)
 
-    def lookup_type(
-        self, name_prefix: str, generic_args: list[SpecializationItem]
-    ) -> Type:
-        specialization_str = ", ".join(
-            arg.get_user_facing_name(False) if isinstance(arg, Type) else str(arg)
-            for arg in generic_args
-        )
-        specialization_postfix = f"<{specialization_str}>" if specialization_str else ""
-
-        if (
-            name_prefix not in self._initialized_types
-            and name_prefix not in self._type_initializers
-        ):
-            # No typedefs or specializations: type always fails SFINAE
-            raise FailedLookupError(
-                "type", f"typedef {name_prefix}{specialization_postfix} : ..."
-            )
-
-        if name_prefix in self._initialized_types:
-            # Reuse parsed type if it is already initialized
-            matching_candidates = []
-            for candidate_type in self._initialized_types[name_prefix]:
-                if generic_args == candidate_type.get_specialization():
-                    matching_candidates.append(candidate_type)
-
-            if len(matching_candidates) == 1:
-                return matching_candidates[0]
-
-            assert len(matching_candidates) == 0
-
-        # Type is not already initialized
-        if name_prefix not in self._type_initializers:
-            # Substitution failure is an error here :-D
-            raise SubstitutionFailure(f"{name_prefix}{specialization_postfix}")
-
-        this_type = self._type_initializers[name_prefix](name_prefix, generic_args)
-        self._initialized_types[name_prefix].append(this_type)
-        return this_type
+    def resolve_type(self, unresolved: UnresolvedType) -> Type:
+        return self._type_table.resolve_type(unresolved)
 
     def lookup_call_expression(
         self,
@@ -411,42 +387,35 @@ class Program:
     def add_function(self, function: Function) -> None:
         self._function_table.add_function(function)
 
-    def add_type(
+    def resolve_all_types(self) -> None:
+        self._type_table.resolve_all_types()
+
+    def add_type_alias(
         self,
-        type_prefix: str,
-        parse_fn: Callable[[str, list[SpecializationItem]], Type],
+        prefix: str,
+        specialization: list[UnresolvedSpecializationItem],
+        aliased: UnresolvedType,
     ) -> None:
-        if type_prefix in self._type_initializers:
-            raise RedefinitionError("type", type_prefix)
+        self._type_table.add_unresolved_type(
+            SpecializedTypedef(prefix, specialization, aliased)
+        )
 
-        if Type.mangle_generic_type(type_prefix, []) in self._type_initializers:
-            raise RedefinitionError("builtin type", type_prefix)
-
-        self._type_initializers[type_prefix] = parse_fn
-
-    def add_specialized_type(
+    def add_generic_type_alias(
         self,
-        type_prefix: str,
-        parse_fn: Callable[[str, list[SpecializationItem]], Type],
-        specialization: list[SpecializationItem],
+        prefix: str,
+        generics: list[GenericArgument],
+        aliased: UnresolvedType,
     ) -> None:
-        parsed_type = parse_fn(type_prefix, specialization)
-        existing_type_specializations = self._initialized_types[type_prefix]
-
-        for existing_type in existing_type_specializations:
-            if existing_type.get_specialization() == specialization:
-                raise RedefinitionError(
-                    "specialized type", parsed_type.get_user_facing_name(False)
-                )
-
-        self._initialized_types[type_prefix].append(parsed_type)
+        self._type_table.add_generic_unresolved_type(
+            GenericTypedef(prefix, generics, aliased)
+        )
 
     def add_static_string(self, string: str) -> StaticVariable:
         if string in self._string_cache:
             return self._string_cache[string]
 
         encoded_str, encoded_length = encode_string(string)
-        str_type = Type(CharArrayDefinition(encoded_str, encoded_length))
+        str_type = AnonymousType(CharArrayDefinition(encoded_str, encoded_length))
         static_storage = StaticVariable(str_type, True, encoded_str)
         self.add_static_variable(static_storage)
 
@@ -467,9 +436,7 @@ class Program:
             lines.extend(variable.generate_ir(var_reg_gen))
 
         lines.append("")
-        for type_family in self._initialized_types.values():
-            for defined_type in type_family:
-                lines.extend(defined_type.get_ir_initial_type_def())
+        lines.extend(self._type_table.get_ir_for_initialization())
 
         lines.append("")
         for func in self._function_table.foreign_functions:

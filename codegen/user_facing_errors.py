@@ -66,6 +66,13 @@ class SubstitutionFailure(GrapheneError):
         )
 
 
+class PatternMatchFailed(SubstitutionFailure):
+    def __init__(self, target: str, actual: str) -> None:
+        super(GrapheneError).__init__(
+            f"Error: cannot pattern match '{actual}' to '{target}'"
+        )
+
+
 class OverloadResolutionError(GrapheneError):
     def __init__(
         self,

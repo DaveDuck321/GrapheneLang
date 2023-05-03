@@ -17,9 +17,14 @@
 // Types
 //
 
+NUMERIC_IDENTIFIER: "@" IDENTIFIER
+GENERIC_IDENTIFIER: NUMERIC_IDENTIFIER | IDENTIFIER
+COMPILE_TIME_CONSTANT: SIGNED_INT | NUMERIC_IDENTIFIER // TODO bool
+
 type_name: IDENTIFIER [generic_specialization]
-generic_definition_list: "[" IDENTIFIER ("," IDENTIFIER)* "]"
-_generic_specialization_item: type | SIGNED_INT // TODO bool
+
+generic_definition_list: "[" GENERIC_IDENTIFIER ("," GENERIC_IDENTIFIER)* "]"
+_generic_specialization_item: type
 generic_specialization: "<" _generic_specialization_item ("," _generic_specialization_item)* ">"
 
 _inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)*
@@ -30,9 +35,8 @@ ref_type: _type "&"
 
 struct_type: "{" _inner_list_of_named_members? "}"
 
-ARRAY_INDEX: IDENTIFIER | INT
-stack_array_type: _type "[" ARRAY_INDEX ("," ARRAY_INDEX)* "]"
-heap_array_type: _type "[" "&" ("," ARRAY_INDEX)* "]"
+stack_array_type: _type "[" COMPILE_TIME_CONSTANT ("," COMPILE_TIME_CONSTANT)* "]"
+heap_array_type: _type "[" "&" ("," COMPILE_TIME_CONSTANT)* "]"
 
 _function_type_component: "(" (_inner_list_of_named_members | _inner_list_of_types) ")"
                         | type

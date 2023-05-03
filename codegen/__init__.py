@@ -1,5 +1,4 @@
 from .builtin_types import (
-    ArrayDefinition,
     BoolType,
     IntType,
     StructDefinition,
@@ -26,13 +25,28 @@ from .generatable import (
     WhileStatement,
 )
 from .interfaces import (
-    CompileTimeConstant,
     Generatable,
-    GenericMapping,
     Parameter,
-    SpecializationItem,
     Type,
     TypedExpression,
     Variable,
+    SpecializationItem,
 )
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
+
+from .type_resolution import (
+    CompileTimeConstant,
+    GenericArgument,
+    GenericValueReference,
+    NumericLiteralConstant,
+    UnresolvedGenericMapping,
+    UnresolvedGenericType,
+    UnresolvedHeapArrayType,
+    UnresolvedNamedType,
+    UnresolvedReferenceType,
+    UnresolvedSpecializationItem,
+    UnresolvedStackArrayType,
+    UnresolvedStructType,
+    UnresolvedType,
+    UnresolvedTypeWrapper,
+)

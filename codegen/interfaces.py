@@ -1,237 +1,92 @@
 from abc import ABC, abstractmethod
 from copy import copy
 from dataclasses import dataclass
-from functools import cached_property
 from typing import Any, Iterable, Iterator, Optional
 
 
-@dataclass
-class CompileTimeConstant:
-    value: int
-
-    def __str__(self) -> str:
-        return str(self.value)
-
-
 class TypeDefinition(ABC):
-    @abstractmethod
     def graphene_literal_to_ir_constant(self, value: str) -> str:
-        pass
+        assert False
 
-    @cached_property
     @abstractmethod
-    def alignment(self) -> int:
+    def are_equivalent(self, other: "TypeDefinition") -> bool:
         pass
 
-    @cached_property
+    @abstractmethod
+    def format_for_output_to_user(self) -> str:
+        pass
+
+    @abstractmethod
+    def mangle_for_ir(self) -> str:
+        pass
+
+    @property
+    @abstractmethod
+    def ir_type(self) -> str:
+        pass
+
+    @property
     @abstractmethod
     def size(self) -> int:
         pass
 
-    @cached_property
+    @property
     @abstractmethod
-    def user_facing_name(self) -> str:
+    def alignment(self) -> int:
         pass
 
-    @abstractmethod
-    def get_ir_type(self, alias: Optional[str]) -> str:
-        pass
-
-    @cached_property
-    @abstractmethod
-    def ir_definition(self) -> str:
-        pass
-
-    @cached_property
-    @abstractmethod
-    def mangled_name(self) -> str:
-        pass
-
-    @cached_property
+    @property
     def is_void(self) -> bool:
         return False
 
-    @abstractmethod
-    def __repr__(self) -> str:
-        pass
 
-    @abstractmethod
-    def __eq__(self, other: Any) -> bool:
-        pass
-
-
-class Type:
-    @staticmethod
-    def mangle_list(items: list["Type | CompileTimeConstant"]) -> str:
-        generic_mangles = map(
-            lambda i: i.mangled_name if isinstance(i, Type) else str(i), items
-        )
-        return str.join("", generic_mangles)
-
-    @staticmethod
-    def mangle_generic_type(
-        alias: str, generics: Optional[list["Type | CompileTimeConstant"]]
-    ) -> str:
-        name = f"__T_{alias}"
-
-        if generics:
-            generic_mangle = Type.mangle_list(generics)
-            name += f"__G_{generic_mangle}"
-
-        return name
-
-    def __init__(
-        self,
-        definition: TypeDefinition,
-        typedef_alias: Optional[str] = None,
-        specialization: Optional[list["Type | CompileTimeConstant"]] = None,
-    ) -> None:
+class Type(ABC):
+    def __init__(self, definition: TypeDefinition, is_reference: bool) -> None:
         self.definition = definition
-        self._specialization = specialization if specialization is not None else []
-
-        self._typedef_alias = typedef_alias
-        self._is_borrowed_reference = False
-
-    @property
-    def is_borrowed_reference(self) -> bool:
-        return self._is_borrowed_reference
-
-    @property
-    def is_void(self) -> bool:
-        return self.definition.is_void
-
-    @property
-    def generic_annotation(self) -> str:
-        if not self._specialization:
-            return ""
-
-        generic_names = [
-            arg.get_user_facing_name(True) if isinstance(arg, Type) else str(arg)
-            for arg in self._specialization
-        ]
-        return f"<{', '.join(generic_names)}>"
-
-    def __repr__(self) -> str:
-        name = f"{self._typedef_alias} = " if self._typedef_alias else ""
-        name += repr(self.definition)
-
-        return (
-            f"{self.__class__.__name__}({name}, is_ref={self._is_borrowed_reference})"
-        )
-
-    def get_specialization(self) -> list["Type | CompileTimeConstant"]:
-        return self._specialization.copy()
-
-    def get_user_facing_name(self, full: bool) -> str:
-        reference_annotation = "&" if self._is_borrowed_reference else ""
-
-        # Do we have a typedefed name?
-        if self._typedef_alias:
-            typename = f"{self._typedef_alias}{self.generic_annotation}"
-            if full:
-                return f"typedef {typename} = {self.definition.user_facing_name}{reference_annotation}"
-
-            return f"{typename}{reference_annotation}"
-
-        #  If not, we fall back to the type definition.
-        return f"{self.definition.user_facing_name}{reference_annotation}"
+        self.is_reference = is_reference
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
-
         return (
-            self.definition == other.definition
-            and self.is_borrowed_reference == other.is_borrowed_reference
+            other.is_reference == self.is_reference
+            and self.definition.are_equivalent(other.definition)
         )
-
-    @property
-    def alignment(self) -> int:
-        # FIXME replace magic number.
-        return 8 if self.is_borrowed_reference else self.definition.alignment
 
     @property
     def size(self) -> int:
-        # FIXME replace magic number.
-        return 8 if self.is_borrowed_reference else self.definition.size
+        if self.is_reference:
+            return 8  # TODO: respect the datalayout string
+        return self.definition.size
 
     @property
-    def ir_definition(self) -> str:
-        # Opaque pointer type.
-        return "ptr" if self.is_borrowed_reference else self.definition.ir_definition
-
-    @property
-    def ir_type(self) -> str:
-        # Opaque pointer type.
-        if self.is_borrowed_reference:
-            return "ptr"
-
-        if self._typedef_alias:
-            return self.definition.get_ir_type(self.mangled_name)
-
-        return self.definition.get_ir_type(None)
-
-    def get_ir_initial_type_def(self) -> list[str]:
-        # Not a typedef, nothing to do.
-        if not self._typedef_alias:
-            return []
-
-        named_ref = self.definition.get_ir_type(self.mangled_name)
-        return [f"{named_ref} = type {self.ir_definition}"]
-
-    @property
-    def mangled_name(self) -> str:
-        alias = self._typedef_alias or self.definition.mangled_name
-        value_type_mangled = self.mangle_generic_type(alias, self._specialization)
-
-        return (
-            f"__RT{value_type_mangled}__TR"
-            if self.is_borrowed_reference
-            else value_type_mangled
-        )
-
-    def graphene_literal_to_ir_constant(self, value: str) -> str:
-        # We shouldn't be able to initialize a reference type with a constant.
-        assert not self.is_borrowed_reference
-        return self.definition.graphene_literal_to_ir_constant(value)
-
-    def copy(self) -> "Type":
-        # FIXME should this be a deepcopy()?
-        return copy(self)
-
-    def take_reference(self) -> "Type":
-        assert not self.is_borrowed_reference
-
-        new_type = self.copy()
-        new_type._is_borrowed_reference = True
-        return new_type
+    def alignment(self) -> int:
+        if self.is_reference:
+            return 8  # TODO: respect the datalayout string
+        return self.definition.alignment
 
     def convert_to_value_type(self) -> "Type":
-        new_type = self.copy()
-        new_type._is_borrowed_reference = False
-        return new_type
+        result = copy(self)
+        result.is_reference = False
+        return result
 
-    def new_from_typedef(
-        self, typedef_alias: str, specialization: list["Type | CompileTimeConstant"]
-    ) -> "Type":
-        new_type = self.copy()
-        new_type._typedef_alias = typedef_alias
-        new_type._specialization = specialization
+    def convert_to_reference_type(self) -> "Type":
+        result = copy(self)
+        result.is_reference = True
+        return result
 
-        return new_type
+    @abstractmethod
+    def format_for_output_to_user(self) -> str:
+        pass
 
+    @property
+    @abstractmethod
+    def ir_mangle(self) -> str:
+        pass
 
-SpecializationItem = Type | CompileTimeConstant
-GenericMapping = dict[str, SpecializationItem]
-
-
-@dataclass
-class Parameter:
-    name: str
-    type: Type
-
-    def __eq__(self, _: Any) -> bool:
-        # No one was using this :).
-        assert False
+    @property
+    @abstractmethod
+    def ir_type(self) -> str:
+        pass
 
 
 class Variable(ABC):
@@ -310,7 +165,7 @@ class TypedExpression(Generatable):
     ) -> None:
         super().__init__()
         # It is the callers responsibility to escape double indirections
-        if expr_type is not None and expr_type.is_borrowed_reference:
+        if expr_type is not None and expr_type.is_reference:
             assert not is_indirect_pointer_to_type
 
         self._underlying_type = expr_type
@@ -328,15 +183,12 @@ class TypedExpression(Generatable):
 
     def get_equivalent_pure_type(self) -> Type:
         if self.is_indirect_pointer_to_type:
-            return self.underlying_type.take_reference()
+            return self.underlying_type.convert_to_reference_type()
         return self.underlying_type
 
     @property
     def has_address(self) -> bool:
-        return (
-            self.underlying_type.is_borrowed_reference
-            or self.is_indirect_pointer_to_type
-        )
+        return self.underlying_type.is_reference or self.is_indirect_pointer_to_type
 
     def is_return_guaranteed(self) -> bool:
         # At the moment no TypedExpression can return
@@ -368,7 +220,8 @@ class TypedExpression(Generatable):
         return store_at
 
     def get_user_facing_name(self, full: bool) -> str:
-        return self.underlying_type.get_user_facing_name(full)
+        assert not full  # TODO
+        return self.underlying_type.format_for_output_to_user()
 
     def try_convert_to_type(self, type: Type) -> tuple[int, list["TypedExpression"]]:
         return (0, [])
@@ -385,3 +238,16 @@ class TypedExpression(Generatable):
     @abstractmethod
     def assert_can_write_to(self) -> None:
         pass
+
+
+SpecializationItem = Type | int
+
+
+@dataclass
+class Parameter:
+    name: str
+    type: Type
+
+    def __eq__(self, _: Any) -> bool:
+        # No one was using this :).
+        assert False

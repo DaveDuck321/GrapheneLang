@@ -63,7 +63,7 @@ class StackVariable(Variable):
 
 class StaticVariable(Variable):
     def __init__(self, var_type: Type, constant: bool, graphene_literal: str) -> None:
-        assert not var_type.is_borrowed_reference
+        assert not var_type.is_reference
         self._graphene_literal = graphene_literal
         super().__init__(None, var_type, constant)
 
@@ -82,7 +82,9 @@ class StaticVariable(Variable):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         additional_prefix = "unnamed_addr constant" if self.constant else "global"
 
-        literal = self.type.graphene_literal_to_ir_constant(self._graphene_literal)
+        literal = self.type.definition.graphene_literal_to_ir_constant(
+            self._graphene_literal
+        )
         # @<GlobalVarName> = [Linkage] [PreemptionSpecifier] [Visibility]
         #            [DLLStorageClass] [ThreadLocal]
         #            [(unnamed_addr|local_unnamed_addr)] [AddrSpace]
@@ -363,7 +365,7 @@ class Assignment(Generatable):
 
         if not dst.has_address:
             raise AssignmentToNonPointerError(
-                dst.underlying_type.get_user_facing_name(False)
+                dst.underlying_type.format_for_output_to_user()
             )
 
         self._dst = dst

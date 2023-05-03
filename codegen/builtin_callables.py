@@ -3,6 +3,7 @@ from typing import Callable, Iterator
 from typing import Type as PyType
 
 from .builtin_types import (
+    BoolDefinition,
     BoolType,
     GenericIntType,
     IntegerDefinition,
@@ -34,8 +35,10 @@ class BasicIntegerExpression(TypedExpression, ABC):
         assert self.SIGNED_IR is not None
         assert self.UNSIGNED_IR is not None
         assert len(specialization) == 0
-        assert isinstance(lhs.underlying_type, (GenericIntType, BoolType))
-        assert isinstance(rhs.underlying_type, (GenericIntType, BoolType))
+        lhs_definition = lhs.underlying_type.definition
+        rhs_definition = rhs.underlying_type.definition
+        assert isinstance(lhs_definition, (IntegerDefinition, BoolDefinition))
+        assert isinstance(rhs_definition, (IntegerDefinition, BoolDefinition))
         assert lhs.underlying_type.definition == rhs.underlying_type.definition
 
         super().__init__(self.get_result_type(arguments), False)
@@ -65,7 +68,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
                 else self.UNSIGNED_IR
             )
         else:
-            assert isinstance(self._arg_type.definition, BoolType.Definition)
+            assert isinstance(self._arg_type.definition, BoolDefinition)
             ir = self.UNSIGNED_IR
 
         # eg. for addition
@@ -341,7 +344,7 @@ class IntToPtrExpression(TypedExpression):
 
         (self._ptr_type,) = specialization
         assert isinstance(self._ptr_type, Type)
-        assert self._ptr_type.is_borrowed_reference
+        assert self._ptr_type.is_reference
 
         (self._src_expr,) = arguments
         assert isinstance(self._src_expr.underlying_type, GenericIntType)
@@ -393,10 +396,10 @@ class BitcastExpression(TypedExpression):
 
         src_type = self._src_expr.underlying_type
 
-        # We can bitcast from ptr->ptr or non-aggregate-> non-aggregate
-        assert self._target_type.is_borrowed_reference == src_type.is_borrowed_reference
+        # We can bitcast from ptr->ptr or non-aggregate->non-aggregate
+        assert self._target_type.is_reference == src_type.is_reference
 
-        # TODO: support floats
+        # TODO: support floats, support references
         assert isinstance(self._target_type, GenericIntType)
         assert isinstance(src_type, GenericIntType)
 
@@ -404,7 +407,7 @@ class BitcastExpression(TypedExpression):
 
         super().__init__(
             self._target_type.convert_to_value_type(),
-            self._target_type.is_borrowed_reference,
+            self._target_type.is_reference,
         )
 
     def __repr__(self) -> str:
