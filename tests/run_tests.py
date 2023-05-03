@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from multiprocessing import cpu_count
+from os import getenv
 from pathlib import Path
 from subprocess import PIPE
 from sys import exit as sys_exit
@@ -13,6 +14,8 @@ from typing import Optional
 
 import schema
 from v2_parser import parse_file
+
+LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
 PARENT_DIR = Path(__file__).parent
 V2_TESTS_DIR = PARENT_DIR / "v2"
@@ -168,7 +171,7 @@ def run_v2_test(file_path: Path) -> None:
     try:
         run_command(
             V2_TESTS_DIR,
-            ["lli", "--extra-object", str(RUNTIME_OBJ_PATH), "-"],
+            [LLI_CMD, "--extra-object", str(RUNTIME_OBJ_PATH), "-"],
             asdict(config.run),
             ir_output,
         )
