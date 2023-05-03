@@ -17,6 +17,7 @@ from v2_parser import parse_file
 PARENT_DIR = Path(__file__).parent
 V2_TESTS_DIR = PARENT_DIR / "v2"
 V2_OUT_DIR = V2_TESTS_DIR / "out"
+RUNTIME_OBJ_PATH = V2_OUT_DIR / "runtime.o"
 
 
 class TestFailure(RuntimeError):
@@ -57,27 +58,17 @@ class TestFailure(RuntimeError):
         )
 
 
-def validate_command_status(
-    directory: Path, command: list[str], expected_output
-) -> None:
-    status = subprocess.call(command, cwd=str(directory))
-
-    if expected_output.get("status", 0) != status:
-        print("*** ERROR: Actual 'status' does not match expected")
-
-
-def validate_command_output_with_harness(
+def run_command(
     directory: Path,
     command: list[str],
     expected_output: dict[str, list[str]],
-):
+    input: Optional[str] = None,
+) -> str:
     result = subprocess.run(
         command,
-        check=False,
+        capture_output=True,
         cwd=str(directory),
-        stdin=PIPE,
-        stdout=PIPE,
-        stderr=PIPE,
+        input=input,
         text=True,
     )
     status = result.returncode
@@ -113,10 +104,11 @@ def validate_command_output_with_harness(
     if not match_output(stderr, expected_output.get("stderr")):
         raise TestFailure("stderr", status, stdout, stderr)
 
-    return True
+    # Return the unsplit output.
+    return result.stdout
 
 
-def run_v1_test(path: Path, io_harness: bool) -> None:
+def run_v1_test(path: Path) -> None:
     # Load/ validate the test
     config_path = path / "test.json"
     assert config_path.exists()
@@ -126,13 +118,9 @@ def run_v1_test(path: Path, io_harness: bool) -> None:
     config: dict[str, dict] = json.load(config_path.open())
     schema.validate_config_follows_schema(config)
 
-    fn_validate = (
-        validate_command_output_with_harness if io_harness else validate_command_status
-    )
-
     # Run the test
     try:
-        fn_validate(
+        run_command(
             path,
             config["compile"].get("command", []),
             config["compile"].get("output", {}),
@@ -144,7 +132,7 @@ def run_v1_test(path: Path, io_harness: bool) -> None:
         return
 
     try:
-        fn_validate(
+        run_command(
             path,
             config["runtime"].get("command", []),
             config["runtime"].get("output", {}),
@@ -153,30 +141,21 @@ def run_v1_test(path: Path, io_harness: bool) -> None:
         raise exc.with_stage("runtime")
 
 
-def run_v2_test(file_path: Path, io_harness: bool) -> None:
+def run_v2_test(file_path: Path) -> None:
     assert file_path.exists()
     config = parse_file(file_path)
-
-    fn_validate = (
-        validate_command_output_with_harness if io_harness else validate_command_status
-    )
-
-    binary_path = V2_OUT_DIR / file_path.relative_to(V2_TESTS_DIR).with_suffix("")
-    if binary_path.parent != V2_OUT_DIR:
-        binary_path.parent.mkdir(exist_ok=True)
 
     # Compile the test
     assert config.compile
     try:
-        fn_validate(
+        ir_output = run_command(
             V2_TESTS_DIR,
             [
                 "python",
                 "../../driver.py",
+                "--emit-llvm-to-stdout",
                 *config.compile_args,
                 str(file_path),
-                "-o",
-                str(binary_path),
             ],
             asdict(config.compile),
         )
@@ -187,20 +166,18 @@ def run_v2_test(file_path: Path, io_harness: bool) -> None:
         return
 
     try:
-        fn_validate(
+        run_command(
             V2_TESTS_DIR,
-            [str(binary_path)],
+            ["lli", "--extra-object", str(RUNTIME_OBJ_PATH), "-"],
             asdict(config.run),
+            ir_output,
         )
     except TestFailure as exc:
         raise exc.with_stage("runtime")
 
 
-def run_test(test_path: Path, io_harness: bool = True) -> None:
-    if test_path.is_dir():
-        run_v1_test(test_path, io_harness)
-    else:
-        run_v2_test(test_path, io_harness)
+def is_v2_test(path: Path) -> bool:
+    return not path.is_dir()
 
 
 # Mutex to ensure prints remain ordered (within each test)
@@ -211,7 +188,11 @@ def run_test_print_result(test_path: Path) -> bool:
     test_name = str(test_path.relative_to(PARENT_DIR))
 
     try:
-        run_test(test_path)
+        if is_v2_test(test_path):
+            run_v2_test(test_path)
+        else:
+            run_v1_test(test_path)
+
         with io_lock:
             print(f"PASSED '{test_name}'")
         return True
@@ -236,6 +217,23 @@ def run_tests(tests: list[Path], workers: int) -> int:
     return failed
 
 
+def build_jit_dependencies() -> None:
+    runtime_src_path = PARENT_DIR.parent / "std" / "runtime.S"
+    assert runtime_src_path.is_file()
+
+    # Don't compile the runtime again if it's up-to-date.
+    if (
+        not RUNTIME_OBJ_PATH.is_file()
+        or runtime_src_path.stat().st_mtime > RUNTIME_OBJ_PATH.stat().st_mtime
+    ):
+        # Need to use `cc` because `as` doesn't run the C preprocessor.
+        subprocess.run(
+            ["cc", "-c", str(runtime_src_path), "-o", str(RUNTIME_OBJ_PATH)], check=True
+        )
+
+    assert RUNTIME_OBJ_PATH.is_file()
+
+
 def main() -> None:
     parser = ArgumentParser("run_tests.py")
     parser.add_argument("--test", required=False)
@@ -246,7 +244,12 @@ def main() -> None:
     V2_OUT_DIR.mkdir(exist_ok=True)
 
     if args.test is not None:
-        run_test(PARENT_DIR / args.test, io_harness=False)
+        test_path = PARENT_DIR / args.test
+
+        if is_v2_test(test_path):
+            build_jit_dependencies()
+
+        run_test_print_result(test_path)
     else:
         all_v1_test_dirs = [
             test_path.parent
@@ -258,6 +261,9 @@ def main() -> None:
             for test_file in V2_TESTS_DIR.rglob("**/*.c3")
             if test_file.is_file()
         ]
+
+        if all_v2_test_files:
+            build_jit_dependencies()
 
         sys_exit(run_tests(all_v1_test_dirs + all_v2_test_files, args.workers))
 
