@@ -245,11 +245,10 @@ def main() -> None:
 
     V2_OUT_DIR.mkdir(exist_ok=True)
 
+    build_jit_dependencies()
+
     if args.test is not None:
         test_path = PARENT_DIR / args.test
-
-        if is_v2_test(test_path):
-            build_jit_dependencies()
 
         run_test_print_result(test_path)
     else:
@@ -263,9 +262,6 @@ def main() -> None:
             for test_file in V2_TESTS_DIR.rglob("**/*.c3")
             if test_file.is_file()
         ]
-
-        if all_v2_test_files:
-            build_jit_dependencies()
 
         sys_exit(run_tests(all_v1_test_dirs + all_v2_test_files, args.workers))
 
