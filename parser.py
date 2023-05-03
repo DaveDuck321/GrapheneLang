@@ -1137,7 +1137,11 @@ def generate_ir_from_source(
 ) -> str:
     grammar_path = Path(__file__).parent / "grammar.lark"
     lark = Lark.open(
-        str(grammar_path), parser="lalr", start="program", propagate_positions=True
+        str(grammar_path),
+        parser="earley",
+        ambiguity="resolve",
+        start="program",
+        propagate_positions=True,
     )
 
     program = cg.Program()
