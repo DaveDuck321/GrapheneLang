@@ -224,7 +224,7 @@ def implicit_conversion_impl(
         if (
             isinstance(last_def, StackArrayDefinition)
             and isinstance(dest_def, StackArrayDefinition)
-            and last_def.dimensions[1:] == dest_def.dimensions[1]
+            and last_def.dimensions[1:] == dest_def.dimensions[1:]
             and last_def.dimensions[0] >= dest_def.dimensions[0]
         ):
             # TODO: promotion cost going from known size to smaller/ unknown size
