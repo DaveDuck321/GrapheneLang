@@ -472,7 +472,7 @@ class TypeSymbolTable:
                 # TODO: proper user-facing error
                 assert generic_arg.is_value_arg
             else:
-                assert isinstance(specialization, Type)
+                assert isinstance(specialization_item, Type)
                 # TODO: proper user-facing error
                 assert not generic_arg.is_value_arg
 

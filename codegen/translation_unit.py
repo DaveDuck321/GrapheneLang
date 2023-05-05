@@ -12,15 +12,16 @@ from .builtin_types import (
 )
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
-from .interfaces import Parameter, SpecializationItem, Type, TypedExpression
+from .interfaces import Parameter, SpecializationItem, Type, TypedExpression, GenericMapping
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .type_resolution import (
-    CompileTimeConstant,
     GenericArgument,
     GenericTypedef,
+    NumericLiteralConstant,
     SpecializedTypedef,
     TypeSymbolTable,
+    UnresolvedGenericMapping,
     UnresolvedSpecializationItem,
     UnresolvedType,
 )
@@ -362,6 +363,17 @@ class Program:
 
     def resolve_type(self, unresolved: UnresolvedType) -> Type:
         return self._type_table.resolve_type(unresolved)
+
+    def resolve_generic_mapping(self, unresolved: UnresolvedGenericMapping) -> GenericMapping:
+        resolved: GenericMapping = {}
+        for item_name, item in unresolved.items():
+            if isinstance(item, NumericLiteralConstant):
+                resolved[item_name] = item.value
+            else:
+                assert isinstance(item, UnresolvedType)
+                resolved[item_name] = self._type_table.resolve_type(item)
+
+        return resolved
 
     def lookup_call_expression(
         self,

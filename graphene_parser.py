@@ -171,10 +171,18 @@ class TypeTransformer(Transformer):
         cls,
         program: cg.Program,
         tree: Tree,
-        generic_mapping: cg.UnresolvedGenericMapping,
+        generic_mapping: cg.GenericMapping,
     ) -> cg.Type:
+        unresolved_mapping: cg.UnresolvedGenericMapping = {}
+        for name, item in generic_mapping.items():
+            if isinstance(item, cg.Type):
+                unresolved_mapping[name] = cg.UnresolvedTypeWrapper(item)
+            else:
+                assert isinstance(item, int)
+                unresolved_mapping[name] = cg.NumericLiteralConstant(item)
+
         try:
-            result = cls(generic_mapping).transform(tree)
+            result = cls(unresolved_mapping).transform(tree)
         except VisitError as exc:
             raise exc.orig_exc
 
@@ -269,14 +277,21 @@ class ParseFunctionSignatures(Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
+        self.current_file = None
+
         self._program = program
         self._function_body_trees: list[
-            tuple[cg.Function, Tree, cg.UnresolvedGenericMapping]
+            tuple[str, cg.Function, Tree, cg.UnresolvedGenericMapping]
         ] = []
+
+    def parse_file(self, file_name: str, tree: Tree) -> None:
+        self.current_file = file_name
+        self.visit(tree)
+        self.current_file = None
 
     def get_function_body_trees(
         self,
-    ) -> list[tuple[cg.Function, Tree, cg.UnresolvedGenericMapping]]:
+    ) -> list[tuple[str, cg.Function, Tree, cg.UnresolvedGenericMapping]]:
         return self._function_body_trees
 
     @inline_and_wrap_user_facing_errors("function[...] signature")
@@ -340,6 +355,9 @@ class ParseFunctionSignatures(Interpreter):
             unresolved_args.append(TypeTransformer.parse(type_tree, generic_mapping))
             arg_names.append(name.value)
 
+        assert self.current_file is not None
+        file_name = self.current_file
+
         def try_parse_fn_from_specialization(
             fn_name: str,
             specializations: list[cg.SpecializationItem],
@@ -373,7 +391,9 @@ class ParseFunctionSignatures(Interpreter):
             except SubstitutionFailure:
                 return None  # SFINAE
 
-            generate_function_body(self._program, function, body_tree, generic_mapping)
+            self._function_body_trees.append(
+                (file_name, function, body_tree, generic_mapping)
+            )
             return function
 
         def try_deduce_specialization(
@@ -475,7 +495,8 @@ class ParseFunctionSignatures(Interpreter):
         # Save the body to parse later (TODO: maybe forward declarations
         # should be possible?)
         if body_tree is not None:
-            self._function_body_trees.append((func, body_tree, {}))
+            assert self.current_file is not None
+            self._function_body_trees.append((self.current_file, func, body_tree, {}))
 
     def _build_function(
         self,
@@ -516,6 +537,7 @@ class ParseImports(Interpreter):
         self,
         lark: Lark,
         program: cg.Program,
+        fn_parser: ParseFunctionSignatures,
         include_path: list[Path],
         included_from: list[ResolvedPath],
         already_processed: set[ResolvedPath],
@@ -524,6 +546,7 @@ class ParseImports(Interpreter):
 
         self._lark = lark
         self._program = program
+        self._fn_parser = fn_parser
         self._include_path = include_path
         self._included_from = included_from
         self._already_processed = already_processed
@@ -561,6 +584,7 @@ class ParseImports(Interpreter):
         append_file_to_program(
             self._lark,
             self._program,
+            self._fn_parser,
             file_path,
             self._include_path[:-1],  # Last element is always '.'
             self._included_from,
@@ -1085,6 +1109,7 @@ def generate_function_body(
 def append_file_to_program(
     lark: Lark,
     program: cg.Program,
+    function_parser: ParseFunctionSignatures,
     file_path: ResolvedPath,
     include_path: list[Path],
     included_from: list[ResolvedPath],
@@ -1099,6 +1124,7 @@ def append_file_to_program(
         ParseImports(
             lark,
             program,
+            function_parser,
             include_path + [Path(file_path).parent],
             included_from + [file_path],
             already_processed,
@@ -1108,12 +1134,7 @@ def append_file_to_program(
         ParseTypeDefinitions(program).visit(tree)
         program.resolve_all_types()
 
-        fn_pass = ParseFunctionSignatures(program)
-        fn_pass.visit(tree)
-
-        for function, body, generic_mapping in fn_pass.get_function_body_trees():
-            generate_function_body(program, function, body, generic_mapping)
-
+        function_parser.parse_file(file_path, tree)
     except ErrorWithLineInfo as exc:
         if debug_compiler:
             traceback.print_exc()
@@ -1180,8 +1201,20 @@ def generate_ir_from_source(
     )
 
     program = cg.Program()
+    fn_parser = ParseFunctionSignatures(program)
     append_file_to_program(
-        lark, program, ResolvedPath(file_path), include_path, [], set(), debug_compiler
+        lark,
+        program,
+        fn_parser,
+        ResolvedPath(file_path),
+        include_path,
+        [],
+        set(),
+        debug_compiler,
     )
+
+    for file_name, fn, body, generic_mapping in fn_parser.get_function_body_trees():
+        mapping = program.resolve_generic_mapping(generic_mapping)
+        generate_function_body(program, fn, body, mapping)
 
     return "\n".join(program.generate_ir())
