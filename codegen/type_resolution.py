@@ -216,8 +216,8 @@ class UnresolvedGenericType(UnresolvedType):
     def format_for_output_to_user(self) -> str:
         return self.name
 
-    def get_typedef_dependencies(self) -> list[UnresolvedType]:
-        assert False
+    def get_typedef_dependencies(self) -> list[str]:
+        return [self.name]
 
     def produce_specialized_copy(
         self, specialization_map: dict[str, SpecializationItem]
@@ -492,7 +492,7 @@ class TypeSymbolTable:
         for unresolved_type_name in self._unresolved_types:
             self.sort_dependencies_topologically(unresolved_type_name, resolution_order)
 
-        for type_name in resolution_order[::-1]:
+        for type_name in resolution_order:
             resolved_specialization: list[SpecializationItem] = []
             # TODO: further sort this list to parse a single type in the correct order
             for unresolved_type in self._unresolved_types[type_name]:
@@ -555,6 +555,9 @@ class TypeSymbolTable:
         ir: list[str] = []
         for type_name in self._resolved_types:
             for defined_type in self._resolved_types[type_name]:
+                if defined_type.alias is None:
+                    continue  # Skip over primitive types
+
                 ir.append(
                     f"{defined_type.ir_type} = type {defined_type.definition.ir_type}"
                 )
