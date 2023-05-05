@@ -8,13 +8,13 @@ function EOF : () -> int = {
     return -1;
 };
 
-function[Len] puts : (str: u8[Len]&) -> int = {
+function[@Len] puts : (str: u8[@Len]&) -> int = {
     // puts - put a string on standard output
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/puts.html
     let iov : iovec[2];
 
     // FIXME: we should be able to initialise iov directly.
-    iov[0] = {&str, Len};
+    iov[0] = {&str, @Len};
     iov[1] = {"\n", 1};
 
     const ret : isize = sys_writev(/* stdout */ 1, &iov, 2);
