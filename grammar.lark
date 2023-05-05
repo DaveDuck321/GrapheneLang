@@ -3,7 +3,6 @@
 %import common.CPP_COMMENT
 %import common.ESCAPED_STRING
 %import common.HEXDIGIT
-%import common.INT
 %import common.SIGNED_FLOAT
 %import common.SIGNED_INT
 %import common.WS
@@ -19,12 +18,12 @@
 
 NUMERIC_IDENTIFIER: "@" IDENTIFIER
 GENERIC_IDENTIFIER: NUMERIC_IDENTIFIER | IDENTIFIER
-COMPILE_TIME_CONSTANT: SIGNED_INT | NUMERIC_IDENTIFIER // TODO bool
+compile_time_constant: SIGNED_INT | NUMERIC_IDENTIFIER // TODO bool
 
 type_name: IDENTIFIER [generic_specialization]
 
 generic_definition_list: "[" GENERIC_IDENTIFIER ("," GENERIC_IDENTIFIER)* "]"
-_generic_specialization_item: type
+_generic_specialization_item: type | compile_time_constant
 generic_specialization: "<" _generic_specialization_item ("," _generic_specialization_item)* ">"
 
 _inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)*
@@ -35,8 +34,8 @@ ref_type: _type "&"
 
 struct_type: "{" _inner_list_of_named_members? "}"
 
-stack_array_type: _type "[" COMPILE_TIME_CONSTANT ("," COMPILE_TIME_CONSTANT)* "]"
-heap_array_type: _type "[" "&" ("," COMPILE_TIME_CONSTANT)* "]"
+stack_array_type: _type "[" compile_time_constant ("," compile_time_constant)* "]"
+heap_array_type: _type "[" "&" ("," compile_time_constant)* "]"
 
 _function_type_component: "(" (_inner_list_of_named_members | _inner_list_of_types) ")"
                         | type

@@ -80,33 +80,27 @@ def search_include_path_for_file(
     return matching_files.pop()
 
 
-class GenericDefinitionTransformer(Transformer):
-    def __init__(self) -> None:
-        super().__init__(visit_tokens=True)
-
-    @v_args(inline=True)
-    def GENERIC_IDENTIFIER(self, argument: Token) -> cg.GenericArgument:
-        return cg.GenericArgument(argument.value, False)
-
-    @v_args(inline=True)
-    def NUMERIC_IDENTIFIER(self, argument: Token) -> cg.GenericArgument:
-        return cg.GenericArgument(argument.value, True)
-
-    @classmethod
-    def parse(cls, tree: Tree) -> cg.GenericArgument:
-        try:
-            result = cls().transform(tree)
-        except VisitError as exc:
-            raise exc.orig_exc
-
-        assert isinstance(result, cg.GenericArgument)
-        return result
+def parse_generic_definition(definition: Any) -> cg.GenericArgument:
+    print(definition)
+    assert isinstance(definition, Token)
+    if definition.type == "GENERIC_IDENTIFIER":
+        return cg.GenericArgument(definition.value, False)
+    if definition.title == "NUMERIC_IDENTIFIER":
+        return cg.GenericArgument(definition.value, True)
+    assert False
 
 
 class TypeTransformer(Transformer):
     def __init__(self, generic_args: cg.UnresolvedGenericMapping) -> None:
         super().__init__(visit_tokens=True)
         self._generic_args = generic_args
+
+    @v_args(inline=True)
+    def compile_time_constant(
+        self, constant: cg.CompileTimeConstant
+    ) -> cg.CompileTimeConstant:
+        assert isinstance(constant, cg.CompileTimeConstant)
+        return constant
 
     @v_args(inline=True)
     def SIGNED_INT(self, token: Token) -> cg.CompileTimeConstant:
@@ -223,17 +217,19 @@ class ParseTypeDefinitions(Interpreter):
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions = []
 
-        for generic_tree in get_optional_children(generic_definitions_tree):
-            definition = GenericDefinitionTransformer.parse(generic_tree)
+        for generic_tree in generic_definitions_tree.children:
+            assert isinstance(generic_tree, Token)
+            definition = parse_generic_definition(generic_tree)
             generic_definitions.append(definition)
 
-            if definition in generic_mapping:
-                raise RepeatedGenericName(generic_tree, prefix)
+            if definition.name in generic_mapping:
+                raise RepeatedGenericName(generic_tree.value, prefix)
 
-            if definition.is_value_arg:
-                generic_mapping[prefix] = cg.GenericValueReference(prefix)
-            else:
-                generic_mapping[prefix] = cg.UnresolvedGenericType(prefix)
+            generic_mapping[definition.name] = (
+                cg.GenericValueReference(definition.name)
+                if definition.is_value_arg
+                else cg.UnresolvedGenericType(definition.name)
+            )
 
         rhs_type = TypeTransformer.parse(rhs_tree, generic_mapping)
         self._program.add_generic_type_alias(prefix, generic_definitions, rhs_type)
@@ -329,7 +325,7 @@ class ParseFunctionSignatures(Interpreter):
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions: list[cg.GenericArgument] = []
         for generic_tree in generic_definitions_tree.children:
-            generic = GenericDefinitionTransformer.parse(generic_tree)
+            generic = parse_generic_definition(generic_tree)
             generic_definitions.append(generic)
 
             if generic.is_value_arg:
@@ -610,7 +606,7 @@ class ExpressionTransformer(Transformer):
         program: cg.Program,
         function: cg.Function,
         scope: cg.Scope,
-        generic_mapping: cg.UnresolvedGenericMapping,
+        generic_mapping: cg.GenericMapping,
     ) -> None:
         super().__init__(visit_tokens=True)
 
@@ -635,6 +631,18 @@ class ExpressionTransformer(Transformer):
     def BOOL_CONSTANT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.BoolType(), value)
         return FlattenedExpression([const_expr])
+
+    def compile_time_constant(self, constant: Token | FlattenedExpression) -> int:
+        # TODO: this should be parsed correctly to begin with
+        if isinstance(constant, FlattenedExpression):
+            assert isinstance(constant, cg.ConstantExpression)
+            return int(constant.value)
+        if isinstance(constant, Token):
+            # TODO: user facing errors
+            assert constant.value in self._generic_mapping
+            mapped_value = self._generic_mapping[constant.value]
+            assert isinstance(mapped_value, int)
+            return mapped_value
 
     @v_args(inline=True)
     def operator_use(
@@ -684,17 +692,9 @@ class ExpressionTransformer(Transformer):
 
         specialization: list[cg.SpecializationItem] = []
         if specialization_tree is not None:
-            # Concrete type tree or Flattened Expression containing a Constant
-            # Expression.
-            specialization_item: FlattenedExpression | Tree[Any]
             for specialization_item in specialization_tree.children:
-                if isinstance(specialization_item, FlattenedExpression):
-                    const_expr = specialization_item.expression()
-                    # FIXME this should be parsed as a cg.CompileTimeConstant.
-                    assert isinstance(const_expr, cg.ConstantExpression)
-                    specialization.append(int(const_expr.value))
-                else:
-                    assert isinstance(specialization_item, Tree)
+                if isinstance(specialization_item, Tree):
+                    assert specialization_item.data == "type"
                     specialization.append(
                         TypeTransformer.parse_and_resolve(
                             self._program,
@@ -702,6 +702,9 @@ class ExpressionTransformer(Transformer):
                             self._generic_mapping,
                         )
                     )
+                else:
+                    assert isinstance(specialization_item, int)
+                    specialization.append(specialization_item)
 
         call_expr = self._program.lookup_call_expression(
             fn_name, specialization, fn_call_args
@@ -844,7 +847,7 @@ class ExpressionTransformer(Transformer):
         program: cg.Program,
         function: cg.Function,
         scope: cg.Scope,
-        generic_mapping: cg.UnresolvedGenericMapping,
+        generic_mapping: cg.GenericMapping,
         body: Tree,
     ) -> FlattenedExpression:
         result = ExpressionTransformer(
@@ -859,7 +862,7 @@ def generate_standalone_expression(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     assert len(body.children) == 1
     flattened_expr = ExpressionTransformer.parse(
@@ -874,7 +877,7 @@ def generate_return_statement(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     if not body.children:
         expr = cg.ReturnStatement(cg.VoidType())
@@ -900,7 +903,7 @@ def generate_variable_declaration(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
     rhs: Optional[FlattenedExpression] = (
@@ -933,7 +936,7 @@ def generate_if_statement(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     condition_tree, if_scope_tree, else_scope_tree = body.children
     assert len(condition_tree.children) == 1
@@ -963,7 +966,7 @@ def generate_while_statement(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     condition_tree, inner_scope_tree = body.children
     assert len(condition_tree.children) == 1
@@ -992,7 +995,7 @@ def generate_assignment(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
 
     lhs_tree, rhs_tree = body.children
@@ -1013,7 +1016,7 @@ def generate_scope_body(
     function: cg.Function,
     outer_scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
     inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
     generate_body(program, function, inner_scope, body, generic_mapping)
@@ -1025,7 +1028,7 @@ def generate_body(
     function: cg.Function,
     scope: cg.Scope,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ) -> None:
 
     generators = {
@@ -1062,7 +1065,7 @@ def generate_function_body(
     program: cg.Program,
     function: cg.Function,
     body: Tree,
-    generic_mapping: cg.UnresolvedGenericMapping,
+    generic_mapping: cg.GenericMapping,
 ):
     generate_body(program, function, function.top_level_scope, body, generic_mapping)
 
