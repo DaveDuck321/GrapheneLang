@@ -23,8 +23,15 @@ class NamedType(Type):
         self.alias = alias
 
     def format_for_output_to_user(self) -> str:
+        reference_suffix = (
+            "&"
+            if self.is_reference
+            and not isinstance(self.definition, HeapArrayDefinition)
+            else ""
+        )
+
         if len(self.specialization) != 0:
-            return self.name
+            return self.name + reference_suffix
 
         specializations = []
         for argument in self.specialization:
@@ -36,7 +43,7 @@ class NamedType(Type):
                 assert False
 
         specialization_format = ", ".join(specializations)
-        return f"{self.name}<{specialization_format}>"
+        return f"{self.name}<{specialization_format}>{reference_suffix}"
 
     @property
     def ir_mangle(self) -> str:
@@ -70,7 +77,13 @@ class AnonymousType(Type):
         super().__init__(definition, False)
 
     def format_for_output_to_user(self) -> str:
-        return self.definition.format_for_output_to_user()
+        reference_suffix = (
+            "&"
+            if self.is_reference
+            and not isinstance(self.definition, HeapArrayDefinition)
+            else ""
+        )
+        return self.definition.format_for_output_to_user() + reference_suffix
 
     @property
     def ir_mangle(self) -> str:
