@@ -16,9 +16,9 @@
 // Types
 //
 
-NUMERIC_IDENTIFIER: "@" IDENTIFIER
-GENERIC_IDENTIFIER: NUMERIC_IDENTIFIER | IDENTIFIER
-compile_time_constant: SIGNED_INT | NUMERIC_IDENTIFIER // TODO bool
+NUMERIC_GENERIC_IDENTIFIER: "@" IDENTIFIER
+GENERIC_IDENTIFIER: NUMERIC_GENERIC_IDENTIFIER | IDENTIFIER
+compile_time_constant: SIGNED_INT | NUMERIC_GENERIC_IDENTIFIER // TODO bool
 
 type_name: IDENTIFIER [generic_specialization]
 
@@ -97,6 +97,7 @@ _non_operator_expression: "(" expression ")"
                         | BOOL_CONSTANT
                         | ESCAPED_STRING
                         | function_call
+                        | NUMERIC_GENERIC_IDENTIFIER
                         | SIGNED_FLOAT
                         | SIGNED_INT
                         | struct_member_access

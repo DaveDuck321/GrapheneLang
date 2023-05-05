@@ -103,7 +103,7 @@ class TypeTransformer(Transformer):
         return cg.NumericLiteralConstant(int(token))
 
     @v_args(inline=True)
-    def NUMERIC_IDENTIFIER(self, token: Token) -> cg.CompileTimeConstant:
+    def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> cg.CompileTimeConstant:
         if not token.value in self._generic_args:
             assert False  # TODO: user facing error
 
@@ -642,6 +642,15 @@ class ExpressionTransformer(Transformer):
 
     def UNSIGNED_HEX_CONSTANT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.UIntType(), value)
+        return FlattenedExpression([const_expr])
+
+    def NUMERIC_GENERIC_IDENTIFIER(self, value: Token) -> FlattenedExpression:
+        # TODO: user facing error
+        assert value in self._generic_mapping
+
+        mapped_value = self._generic_mapping[value]
+        assert isinstance(mapped_value, int)  # TODO: user facing error
+        const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value))
         return FlattenedExpression([const_expr])
 
     def SIGNED_INT(self, value: Token) -> FlattenedExpression:
@@ -1215,7 +1224,20 @@ def generate_ir_from_source(
         debug_compiler,
     )
 
-    for file_name, fn, body, specialization in fn_parser.get_function_body_trees():
-        generate_function_body(program, fn, body, specialization)
+    file_name = file_path
+    try:
+        for file_name, fn, body, specialization in fn_parser.get_function_body_trees():
+            generate_function_body(program, fn, body, specialization)
+
+    except ErrorWithLineInfo as exc:
+        if debug_compiler:
+            traceback.print_exc()
+            print("~~~ User-facing error message ~~~")
+
+        context_str = f", in '{exc.context}'" if exc.context else ""
+        print(f"File '{file_name}', line {exc.line}{context_str}", file=sys.stderr)
+        print(f"    {exc.message}", file=sys.stderr)
+
+        sys.exit(1)
 
     return "\n".join(program.generate_ir())
