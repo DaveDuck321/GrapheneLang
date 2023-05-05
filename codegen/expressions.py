@@ -424,7 +424,7 @@ class StructInitializer(TypedExpression):
 
 class InitializerList(TypedExpression):
     @abstractmethod
-    def get_user_facing_name(self, full: bool) -> str:
+    def format_for_output_to_user(self) -> str:
         pass
 
     def get_equivalent_pure_type(self) -> Type:
@@ -432,7 +432,7 @@ class InitializerList(TypedExpression):
 
     @property
     def underlying_type(self) -> Type:
-        raise InvalidInitializerListDeduction(self.get_user_facing_name(False))
+        raise InvalidInitializerListDeduction(self.format_for_output_to_user())
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -451,7 +451,7 @@ class InitializerList(TypedExpression):
     def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
         if not isinstance(other.definition, StructDefinition):
             raise InvalidInitializerListConversion(
-                other.format_for_output_to_user(), self.get_user_facing_name(False)
+                other.format_for_output_to_user(), self.format_for_output_to_user()
             )
 
         ordered_members = self.get_ordered_members(other)
@@ -465,12 +465,12 @@ class NamedInitializerList(InitializerList):
 
         self._members = dict(zip(names, members, strict=True))
 
-    def get_user_facing_name(self, full: bool) -> str:
+    def format_for_output_to_user(self) -> str:
         members = [
             f"{name}: {type_name.underlying_type.format_for_output_to_user()}"
             for name, type_name in self._members.items()
         ]
-        return f"{{{', '.join(members)}}}"
+        return "{" + ", ".join(members) + "}"
 
     def __repr__(self) -> str:
         return f"InitializerList({list(self._members.items())})"
@@ -488,7 +488,7 @@ class NamedInitializerList(InitializerList):
             if member_name not in self._members:
                 raise InvalidInitializerListConversion(
                     other.format_for_output_to_user(),
-                    self.get_user_facing_name(False),
+                    self.format_for_output_to_user(),
                 )
             ordered_members.append(self._members[member_name])
 
@@ -501,12 +501,12 @@ class UnnamedInitializerList(InitializerList):
 
         self._members = members
 
-    def get_user_facing_name(self, full: bool) -> str:
+    def format_for_output_to_user(self) -> str:
         type_names = [
             member.underlying_type.format_for_output_to_user()
             for member in self._members
         ]
-        return f"{{{', '.join(type_names)}}}"
+        return "{" + ", ".join(type_names) + "}"
 
     def __repr__(self) -> str:
         return f"InitializerList({self._members})"

@@ -26,11 +26,12 @@ from .generatable import (
 )
 from .interfaces import (
     Generatable,
+    GenericMapping,
     Parameter,
+    SpecializationItem,
     Type,
     TypedExpression,
     Variable,
-    SpecializationItem,
 )
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
 

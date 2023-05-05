@@ -304,7 +304,7 @@ class FunctionSymbolTable:
         functions_by_cost.sort(key=lambda t: t[0])
 
         readable_arg_names = ", ".join(
-            arg.get_user_facing_name(False) for arg in fn_args
+            arg.format_for_output_to_user() for arg in fn_args
         )
         readable_specialization = ", ".join(
             specialization.format_for_output_to_user()

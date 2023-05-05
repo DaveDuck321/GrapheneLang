@@ -75,7 +75,7 @@ class AnonymousType(Type):
     @property
     def ir_mangle(self) -> str:
         prefix = "__R_" if self.is_reference else "__ANON_"
-        return prefix + self.definition.mangle_for_ir()
+        return prefix + self.definition.ir_mangle
 
     @property
     def ir_type(self) -> str:
@@ -103,7 +103,8 @@ class PrimitiveDefinition(TypeDefinition):
     def ir_type(self) -> str:
         return self._ir
 
-    def mangle_for_ir(self) -> str:
+    @property
+    def ir_mangle(self) -> str:
         return self._ir
 
     @property
@@ -124,7 +125,7 @@ class PrimitiveType(NamedType):
 
     @property
     def ir_mangle(self) -> str:
-        return self.definition.mangle_for_ir()
+        return self.definition.ir_mangle
 
     @property
     def ir_type(self) -> str:
@@ -144,7 +145,8 @@ class VoidDefinition(TypeDefinition):
     def ir_type(self) -> str:
         return "void"
 
-    def mangle_for_ir(self) -> str:
+    @property
+    def ir_mangle(self) -> str:
         return "void"
 
     def size(self) -> int:
@@ -262,11 +264,13 @@ class StructDefinition(TypeDefinition):
 
     @property
     def ir_type(self) -> str:
-        member_ir = ", ".join(member_type.ir_type for _, member_type in self.members)
+        member_ir = ", ".join(member.ir_type for _, member in self.members)
         return "{" + member_ir + "}"
 
-    def mangle_for_ir(self) -> str:
-        return self._uuid.hex
+    @property
+    def ir_mangle(self) -> str:
+        member_mangle = "".join(member.ir_mangle for _, member in self.members)
+        return f"__S{member_mangle}"
 
     @property
     def size(self) -> int:
@@ -330,7 +334,8 @@ class StackArrayDefinition(TypeDefinition):
 
         return ir_sub_definition(self.dimensions)
 
-    def mangle_for_ir(self) -> str:
+    @property
+    def ir_mangle(self) -> str:
         dimensions = "_".join(map(str, self.dimensions))
         return f"__A_{self.member.ir_mangle}__{dimensions}"
 
@@ -370,7 +375,8 @@ class HeapArrayDefinition(TypeDefinition):
     def ir_type(self) -> str:
         assert False  # The containing type should always be a reference
 
-    def mangle_for_ir(self) -> str:
+    @property
+    def ir_mangle(self) -> str:
         dimensions = "_".join(map(str, self.known_dimensions))
         return f"__UA_{self.member.ir_mangle}__{dimensions}"
 

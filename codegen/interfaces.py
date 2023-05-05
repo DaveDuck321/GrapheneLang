@@ -16,8 +16,9 @@ class TypeDefinition(ABC):
     def format_for_output_to_user(self) -> str:
         pass
 
+    @property
     @abstractmethod
-    def mangle_for_ir(self) -> str:
+    def ir_mangle(self) -> str:
         pass
 
     @property
@@ -219,8 +220,7 @@ class TypedExpression(Generatable):
         )
         return store_at
 
-    def get_user_facing_name(self, full: bool) -> str:
-        assert not full  # TODO
+    def format_for_output_to_user(self) -> str:
         return self.underlying_type.format_for_output_to_user()
 
     def try_convert_to_type(self, type: Type) -> tuple[int, list["TypedExpression"]]:
@@ -241,6 +241,7 @@ class TypedExpression(Generatable):
 
 
 SpecializationItem = Type | int
+GenericMapping = dict[str, SpecializationItem]
 
 
 @dataclass

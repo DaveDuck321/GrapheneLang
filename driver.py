@@ -6,6 +6,7 @@ from pathlib import Path
 
 from graphene_parser import generate_ir_from_source
 
+
 def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
     include_path = []
     filtered_args = []
