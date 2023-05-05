@@ -81,13 +81,9 @@ def search_include_path_for_file(
 
 
 def parse_generic_definition(definition: Any) -> cg.GenericArgument:
-    print(definition)
     assert isinstance(definition, Token)
-    if definition.type == "GENERIC_IDENTIFIER":
-        return cg.GenericArgument(definition.value, False)
-    if definition.title == "NUMERIC_IDENTIFIER":
-        return cg.GenericArgument(definition.value, True)
-    assert False
+    assert definition.type == "GENERIC_IDENTIFIER"
+    return cg.GenericArgument(definition.value, definition.value[0] == "@")
 
 
 class TypeTransformer(Transformer):
@@ -281,7 +277,7 @@ class ParseFunctionSignatures(Interpreter):
 
         self._program = program
         self._function_body_trees: list[
-            tuple[str, cg.Function, Tree, cg.UnresolvedGenericMapping]
+            tuple[str, cg.Function, Tree, cg.GenericMapping]
         ] = []
 
     def parse_file(self, file_name: str, tree: Tree) -> None:
@@ -291,7 +287,7 @@ class ParseFunctionSignatures(Interpreter):
 
     def get_function_body_trees(
         self,
-    ) -> list[tuple[str, cg.Function, Tree, cg.UnresolvedGenericMapping]]:
+    ) -> list[tuple[str, cg.Function, Tree, cg.GenericMapping]]:
         return self._function_body_trees
 
     @inline_and_wrap_user_facing_errors("function[...] signature")
@@ -392,7 +388,7 @@ class ParseFunctionSignatures(Interpreter):
                 return None  # SFINAE
 
             self._function_body_trees.append(
-                (file_name, function, body_tree, generic_mapping)
+                (file_name, function, body_tree, specialization_map)
             )
             return function
 
@@ -656,17 +652,23 @@ class ExpressionTransformer(Transformer):
         const_expr = cg.ConstantExpression(cg.BoolType(), value)
         return FlattenedExpression([const_expr])
 
+    @v_args(inline=True)
     def compile_time_constant(self, constant: Token | FlattenedExpression) -> int:
         # TODO: this should be parsed correctly to begin with
         if isinstance(constant, FlattenedExpression):
-            assert isinstance(constant, cg.ConstantExpression)
-            return int(constant.value)
+            # TODO: this should be parsed correctly
+            expression = constant.expression()
+            assert len(constant.subexpressions) == 1
+            assert isinstance(expression, cg.ConstantExpression)
+            return int(expression.value)
         if isinstance(constant, Token):
             # TODO: user facing errors
             assert constant.value in self._generic_mapping
             mapped_value = self._generic_mapping[constant.value]
             assert isinstance(mapped_value, int)
             return mapped_value
+
+        assert False
 
     @v_args(inline=True)
     def operator_use(
@@ -1213,8 +1215,7 @@ def generate_ir_from_source(
         debug_compiler,
     )
 
-    for file_name, fn, body, generic_mapping in fn_parser.get_function_body_trees():
-        mapping = program.resolve_generic_mapping(generic_mapping)
-        generate_function_body(program, fn, body, mapping)
+    for file_name, fn, body, specialization in fn_parser.get_function_body_trees():
+        generate_function_body(program, fn, body, specialization)
 
     return "\n".join(program.generate_ir())
