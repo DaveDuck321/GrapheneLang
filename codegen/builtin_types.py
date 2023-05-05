@@ -16,7 +16,7 @@ class NamedType(Type):
         definition: TypeDefinition,
         alias: Optional[Type],
     ) -> None:
-        super().__init__(definition, False)
+        super().__init__(definition, definition.is_always_a_reference)
 
         self.name = name
         self.specialization = specialization
@@ -25,8 +25,7 @@ class NamedType(Type):
     def format_for_output_to_user(self) -> str:
         reference_suffix = (
             "&"
-            if self.is_reference
-            and not isinstance(self.definition, HeapArrayDefinition)
+            if self.is_reference and not self.definition.is_always_a_reference
             else ""
         )
 
@@ -74,13 +73,12 @@ class NamedType(Type):
 
 class AnonymousType(Type):
     def __init__(self, definition: TypeDefinition) -> None:
-        super().__init__(definition, False)
+        super().__init__(definition, definition.is_always_a_reference)
 
     def format_for_output_to_user(self) -> str:
         reference_suffix = (
             "&"
-            if self.is_reference
-            and not isinstance(self.definition, HeapArrayDefinition)
+            if self.is_reference and not self.definition.is_always_a_reference
             else ""
         )
         return self.definition.format_for_output_to_user() + reference_suffix
@@ -400,6 +398,10 @@ class HeapArrayDefinition(TypeDefinition):
     @property
     def alignment(self) -> int:
         assert False
+
+    @property
+    def is_always_a_reference(self) -> bool:
+        return True
 
 
 class CharArrayDefinition(StackArrayDefinition):

@@ -216,7 +216,7 @@ def implicit_conversion_impl(
         if (
             isinstance(last_def, StackArrayDefinition)
             and isinstance(dest_def, HeapArrayDefinition)
-            and last_type.dimensions[1:] == dest_def.known_dimensions
+            and last_def.dimensions[1:] == dest_def.known_dimensions
         ):
             # TODO: promotion cost going from known size to smaller/ unknown size
             expr_list.append(Reinterpret(last_expr(), dest_type))

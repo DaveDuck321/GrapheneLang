@@ -40,6 +40,10 @@ class TypeDefinition(ABC):
     def is_void(self) -> bool:
         return False
 
+    @property
+    def is_always_a_reference(self) -> bool:
+        return False
+
 
 class Type(ABC):
     def __init__(self, definition: TypeDefinition, is_reference: bool) -> None:
