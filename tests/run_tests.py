@@ -21,6 +21,8 @@ V2_TESTS_DIR = PARENT_DIR / "v2"
 V2_OUT_DIR = V2_TESTS_DIR / "out"
 RUNTIME_OBJ_PATH = V2_OUT_DIR / "runtime.o"
 
+DRIVER_RESOLVED_PATH = str((PARENT_DIR.parent / "driver.py").resolve())
+
 
 class TestFailure(RuntimeError):
     pass
@@ -166,10 +168,10 @@ def run_v2_test(file_path: Path) -> None:
     assert config.compile
     try:
         ir_output = run_command(
-            V2_TESTS_DIR,
+            file_path.parent,
             [
                 "python",
-                "../../driver.py",
+                DRIVER_RESOLVED_PATH,
                 "--emit-llvm-to-stdout",
                 *config.compile_args,
                 str(file_path),
