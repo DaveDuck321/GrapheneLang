@@ -1,7 +1,5 @@
 from typing import Iterable, Literal, Optional
 
-from lark import Token
-
 
 class GrapheneError(ValueError):
     def __init__(self, message: str) -> None:
@@ -180,13 +178,11 @@ class AssignmentToNonPointerError(GrapheneError):
 
 
 class RepeatedGenericName(ErrorWithLineInfo):
-    def __init__(self, generic_name: Token, type_name: str) -> None:
-        assert generic_name.line is not None
-
+    def __init__(self, generic_name: str, line_number: int, type_name: str) -> None:
         super().__init__(
             f"Error: generic '{generic_name}' appears more than once in "
             f"the declaration of '{type_name}'",
-            generic_name.line,
+            line_number,
             f"typedef {type_name} : ...",
         )
 

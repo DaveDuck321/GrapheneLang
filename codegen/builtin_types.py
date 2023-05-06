@@ -4,7 +4,7 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Optional
 
-from .interfaces import SpecializationItem, Type, TypeDefinition
+from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import InvalidIntSize
 
 
@@ -28,21 +28,8 @@ class NamedType(Type):
             if self.is_reference and not self.definition.is_always_a_reference
             else ""
         )
-
-        if len(self.specialization) == 0:
-            return self.name + reference_suffix
-
-        specializations = []
-        for argument in self.specialization:
-            if isinstance(argument, int):
-                specializations.append(str(argument))
-            elif isinstance(argument, Type):
-                specializations.append(argument.format_for_output_to_user())
-            else:
-                assert False
-
-        specialization_format = ", ".join(specializations)
-        return f"{self.name}<{specialization_format}>{reference_suffix}"
+        specialization = format_specialization(self.specialization)
+        return f"{self.name}{specialization}{reference_suffix}"
 
     def format_for_output_to_user(self, full=False) -> str:
         if not full:
@@ -69,14 +56,14 @@ class NamedType(Type):
             else:
                 assert False
 
-        specialization_format = "__".join(specializations)
+        specialization_format = "".join(specializations)
         return f"{prefix}{self.name}__S{specialization_format}"
 
     @property
     def ir_type(self) -> str:
         if self.is_reference:
             return "ptr"
-        return f"%alias.{self.ir_mangle}"
+        return f"%type.{self.ir_mangle}"
 
 
 class AnonymousType(Type):

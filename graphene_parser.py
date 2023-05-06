@@ -227,7 +227,8 @@ class ParseTypeDefinitions(Interpreter):
             generic_definitions.append(definition)
 
             if definition.name in generic_mapping:
-                raise RepeatedGenericName(generic_tree.value, prefix)
+                assert generic_tree.line is not None
+                raise RepeatedGenericName(generic_tree.value, generic_tree.line, prefix)
 
             generic_mapping[definition.name] = (
                 cg.GenericValueReference(definition.name)
