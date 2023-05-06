@@ -14,7 +14,7 @@ from test_config_parser import ExpectedOutput, parse_file
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
 PARENT_DIR = Path(__file__).parent
-TESTS_DIR = PARENT_DIR / "v2"
+TESTS_DIR = PARENT_DIR
 OUT_DIR = TESTS_DIR / "out"
 RUNTIME_OBJ_PATH = OUT_DIR / "runtime.o"
 DRIVER_PATH = PARENT_DIR.parent / "driver.py"
