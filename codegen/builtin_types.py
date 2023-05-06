@@ -131,13 +131,6 @@ class PrimitiveType(NamedType):
     def __init__(self, name: str, definition: TypeDefinition) -> None:
         super().__init__(name, [], definition, None)
 
-    def format_for_output_to_user(self) -> str:
-        return self.definition.format_for_output_to_user()
-
-    @property
-    def ir_mangle(self) -> str:
-        return self.definition.ir_mangle
-
     @property
     def ir_type(self) -> str:
         if self.is_reference:
