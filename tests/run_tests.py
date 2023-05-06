@@ -281,7 +281,7 @@ def main() -> None:
         all_v2_test_files = [
             test_file
             for test_file in V2_TESTS_DIR.rglob("**/*.c3")
-            if test_file.is_file()
+            if not test_file.stem.startswith("_") and test_file.is_file()
         ]
 
         sys_exit(run_tests(all_v1_test_dirs + all_v2_test_files, args.workers))
