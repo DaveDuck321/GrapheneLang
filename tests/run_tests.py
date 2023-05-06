@@ -1,5 +1,4 @@
 import fnmatch
-import json
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
@@ -11,15 +10,14 @@ from sys import exit as sys_exit
 from threading import Lock
 from typing import Optional
 
-import schema
-from v2_parser import parse_file
+from test_config_parser import parse_file
 
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
 PARENT_DIR = Path(__file__).parent
-V2_TESTS_DIR = PARENT_DIR / "v2"
-V2_OUT_DIR = V2_TESTS_DIR / "out"
-RUNTIME_OBJ_PATH = V2_OUT_DIR / "runtime.o"
+TESTS_DIR = PARENT_DIR / "v2"
+OUT_DIR = TESTS_DIR / "out"
+RUNTIME_OBJ_PATH = OUT_DIR / "runtime.o"
 DRIVER_PATH = PARENT_DIR.parent / "driver.py"
 
 
@@ -126,40 +124,7 @@ def run_command(
     return result.stdout
 
 
-def run_v1_test(path: Path) -> None:
-    # Load/ validate the test
-    config_path = path / "test.json"
-    assert config_path.exists()
-
-    (path / "out").mkdir(exist_ok=True)
-
-    config: dict[str, dict] = json.load(config_path.open())
-    schema.validate_config_follows_schema(config)
-
-    # Run the test
-    try:
-        run_command(
-            path,
-            config["compile"].get("command", []),
-            config["compile"].get("output", {}),
-        )
-    except TestCommandFailure as exc:
-        raise exc.with_stage("compile")
-
-    if "runtime" not in config:
-        return
-
-    try:
-        run_command(
-            path,
-            config["runtime"].get("command", []),
-            config["runtime"].get("output", {}),
-        )
-    except TestCommandFailure as exc:
-        raise exc.with_stage("runtime")
-
-
-def run_v2_test(file_path: Path) -> None:
+def run_test(file_path: Path) -> None:
     assert file_path.exists()
     config = parse_file(file_path)
 
@@ -189,17 +154,13 @@ def run_v2_test(file_path: Path) -> None:
 
     try:
         run_command(
-            V2_TESTS_DIR,
+            TESTS_DIR,
             [LLI_CMD, "--extra-object", RUNTIME_OBJ_PATH, "-"],
             asdict(config.run),
             ir_output,
         )
     except TestCommandFailure as exc:
         raise exc.with_stage("runtime")
-
-
-def is_v2_test(path: Path) -> bool:
-    return not path.is_dir()
 
 
 # Mutex to ensure prints remain ordered (within each test)
@@ -210,10 +171,7 @@ def run_test_print_result(test_path: Path) -> bool:
     test_name = str(test_path.relative_to(PARENT_DIR))
 
     try:
-        if is_v2_test(test_path):
-            run_v2_test(test_path)
-        else:
-            run_v1_test(test_path)
+        run_test(test_path)
 
         with io_lock:
             print(f"PASSED '{test_name}'")
@@ -264,8 +222,8 @@ def main() -> None:
     args = parser.parse_args()
 
     assert DRIVER_PATH.is_file()
-    assert V2_TESTS_DIR.is_dir()
-    V2_OUT_DIR.mkdir(exist_ok=True)
+    assert TESTS_DIR.is_dir()
+    OUT_DIR.mkdir(exist_ok=True)
 
     build_jit_dependencies()
 
@@ -274,18 +232,13 @@ def main() -> None:
 
         run_test_print_result(test_path)
     else:
-        all_v1_test_dirs = [
-            test_path.parent
-            for test_path in PARENT_DIR.rglob("**/test.json")
-            if test_path.is_file()
-        ]
-        all_v2_test_files = [
+        all_test_files = [
             test_file
-            for test_file in V2_TESTS_DIR.rglob("**/*.c3")
+            for test_file in TESTS_DIR.rglob("**/*.c3")
             if not test_file.stem.startswith("_") and test_file.is_file()
         ]
 
-        sys_exit(run_tests(all_v1_test_dirs + all_v2_test_files, args.workers))
+        sys_exit(run_tests(all_test_files, args.workers))
 
 
 if __name__ == "__main__":

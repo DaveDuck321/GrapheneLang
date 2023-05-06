@@ -29,7 +29,7 @@ class TestConfig:
 
 
 # Global; only ever make one parser
-lark = Lark.open(str(Path(__file__).parent / "v2_grammar.lark"), parser="lalr")
+lark = Lark.open(str(Path(__file__).parent / "test_config_grammar.lark"), parser="lalr")
 
 
 class ConfigInterpreter(Interpreter):
