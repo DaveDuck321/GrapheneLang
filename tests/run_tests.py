@@ -20,8 +20,7 @@ PARENT_DIR = Path(__file__).parent
 V2_TESTS_DIR = PARENT_DIR / "v2"
 V2_OUT_DIR = V2_TESTS_DIR / "out"
 RUNTIME_OBJ_PATH = V2_OUT_DIR / "runtime.o"
-
-DRIVER_RESOLVED_PATH = str((PARENT_DIR.parent / "driver.py").resolve())
+DRIVER_PATH = PARENT_DIR.parent / "driver.py"
 
 
 class TestFailure(RuntimeError):
@@ -78,7 +77,7 @@ class IRGrepFailure(TestFailure):
 
 def run_command(
     directory: Path,
-    command: list[str],
+    command: list[str | Path],
     expected_output: dict[str, list[str]],
     stdin: Optional[str] = None,
 ) -> str:
@@ -171,10 +170,10 @@ def run_v2_test(file_path: Path) -> None:
             file_path.parent,
             [
                 "python",
-                DRIVER_RESOLVED_PATH,
+                DRIVER_PATH,
                 "--emit-llvm-to-stdout",
                 *config.compile_args,
-                str(file_path),
+                file_path,
             ],
             asdict(config.compile),
         )
@@ -191,7 +190,7 @@ def run_v2_test(file_path: Path) -> None:
     try:
         run_command(
             V2_TESTS_DIR,
-            [LLI_CMD, "--extra-object", str(RUNTIME_OBJ_PATH), "-"],
+            [LLI_CMD, "--extra-object", RUNTIME_OBJ_PATH, "-"],
             asdict(config.run),
             ir_output,
         )
@@ -264,6 +263,8 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    assert DRIVER_PATH.is_file()
+    assert V2_TESTS_DIR.is_dir()
     V2_OUT_DIR.mkdir(exist_ok=True)
 
     build_jit_dependencies()
