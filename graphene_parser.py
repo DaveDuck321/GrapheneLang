@@ -518,7 +518,7 @@ class ParseFunctionSignatures(Interpreter):
             and fn_obj.get_signature().return_type != cg.IntType()
         ):
             raise InvalidMainReturnType(
-                fn_obj.get_signature().return_type.format_for_output_to_user()
+                fn_obj.get_signature().return_type.format_for_output_to_user(True)
             )
 
         return fn_obj

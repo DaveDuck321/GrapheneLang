@@ -12,7 +12,11 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
-from .user_facing_errors import SubstitutionFailure
+from .user_facing_errors import (
+    FailedLookupError,
+    RedefinitionError,
+    SubstitutionFailure,
+)
 
 
 @dataclass
@@ -487,6 +491,15 @@ class TypeSymbolTable:
                         assert isinstance(arg, UnresolvedType)
                         resolved_specialization.append(self.resolve_type(arg))
 
+                # Check for duplication
+                for other in self._resolved_types[type_name]:
+                    if other.specialization == resolved_specialization:
+                        raise RedefinitionError(
+                            "type",
+                            type_name + format_specialization(resolved_specialization),
+                        )
+
+                # Finish resolution
                 resolved_rhs = self.resolve_type(unresolved_type.aliased)
                 self._resolved_types[type_name].append(
                     NamedType(
@@ -503,6 +516,15 @@ class TypeSymbolTable:
     def lookup_type(
         self, prefix: str, specialization: list[SpecializationItem]
     ) -> NamedType:
+        if (
+            prefix not in self._resolved_types
+            and prefix not in self._generic_unresolved_types
+        ):
+            # Substitution impossible
+            raise FailedLookupError(
+                "type", f"typedef {prefix}{format_specialization(specialization)} : ..."
+            )
+
         candidates = []
         for resolved_type in self._resolved_types[prefix]:
             if resolved_type.specialization == specialization:
@@ -526,11 +548,9 @@ class TypeSymbolTable:
         self._generic_unresolved_types[unresolved_typedef.name] = unresolved_typedef
 
     def add_unresolved_type(self, unresolved_typedef: SpecializedTypedef) -> None:
-        # TODO: check for duplicates
         self._unresolved_types[unresolved_typedef.name].append(unresolved_typedef)
 
     def add_resolved_type(self, resolved_type: NamedType) -> None:
-        # TODO: check for duplicates
         self._resolved_types[resolved_type.name].append(resolved_type)
 
     def resolve_type(self, unresolved_type: UnresolvedType) -> Type:

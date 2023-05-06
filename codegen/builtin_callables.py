@@ -39,7 +39,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
         rhs_definition = rhs.underlying_type.definition
         assert isinstance(lhs_definition, (IntegerDefinition, BoolDefinition))
         assert isinstance(rhs_definition, (IntegerDefinition, BoolDefinition))
-        assert lhs.underlying_type.definition == rhs.underlying_type.definition
+        assert lhs.underlying_type == rhs.underlying_type
 
         super().__init__(self.get_result_type(arguments), False)
 

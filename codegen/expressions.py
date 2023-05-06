@@ -451,7 +451,7 @@ class InitializerList(TypedExpression):
     def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
         if not isinstance(other.definition, StructDefinition):
             raise InvalidInitializerListConversion(
-                other.format_for_output_to_user(), self.format_for_output_to_user()
+                other.format_for_output_to_user(True), self.format_for_output_to_user()
             )
 
         ordered_members = self.get_ordered_members(other)
@@ -487,7 +487,7 @@ class NamedInitializerList(InitializerList):
         for member_name, _ in other.definition.members:
             if member_name not in self._members:
                 raise InvalidInitializerListConversion(
-                    other.format_for_output_to_user(),
+                    other.format_for_output_to_user(True),
                     self.format_for_output_to_user(),
                 )
             ordered_members.append(self._members[member_name])

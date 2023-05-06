@@ -83,7 +83,7 @@ class Type(ABC):
         return result
 
     @abstractmethod
-    def format_for_output_to_user(self) -> str:
+    def format_for_output_to_user(self, full = False) -> str:
         pass
 
     @property

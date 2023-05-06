@@ -22,7 +22,7 @@ class NamedType(Type):
         self.specialization = specialization
         self.alias = alias
 
-    def format_for_output_to_user(self) -> str:
+    def get_name(self) -> str:
         reference_suffix = (
             "&"
             if self.is_reference and not self.definition.is_always_a_reference
@@ -43,6 +43,14 @@ class NamedType(Type):
 
         specialization_format = ", ".join(specializations)
         return f"{self.name}<{specialization_format}>{reference_suffix}"
+
+    def format_for_output_to_user(self, full=False) -> str:
+        if not full:
+            return self.get_name()
+
+        return (
+            f"typedef {self.get_name()} = {self.definition.format_for_output_to_user()}"
+        )
 
     @property
     def ir_mangle(self) -> str:
@@ -131,6 +139,9 @@ class PrimitiveType(NamedType):
     def __init__(self, name: str, definition: TypeDefinition) -> None:
         super().__init__(name, [], definition, None)
 
+    def format_for_output_to_user(self, full=False) -> str:
+        return self.get_name()
+
     @property
     def ir_type(self) -> str:
         if self.is_reference:
@@ -153,9 +164,11 @@ class VoidDefinition(TypeDefinition):
     def ir_mangle(self) -> str:
         return "void"
 
+    @property
     def size(self) -> int:
         assert False
 
+    @property
     def alignment(self) -> int:
         assert False
 
