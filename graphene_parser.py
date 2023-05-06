@@ -400,7 +400,7 @@ class ParseFunctionSignatures(Interpreter):
             if len(arguments) != len(unresolved_args):
                 return None  # SFINAE
 
-            deduced_mapping: cg.UnresolvedGenericMapping = {}
+            deduced_mapping: cg.GenericMapping = {}
             for actual_arg, unresolved_arg in zip(arguments, unresolved_args):
                 if not unresolved_arg.pattern_match(
                     actual_arg.underlying_type, deduced_mapping
@@ -410,13 +410,9 @@ class ParseFunctionSignatures(Interpreter):
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.SpecializationItem] = []
             for generic in generic_definitions:
-                specialization = deduced_mapping[generic.name]
-                if isinstance(specialization, cg.CompileTimeConstant):
-                    deduced_specialization.append(specialization.resolve())
-                else:
-                    resolved_type = self._program.resolve_type(specialization)
-                    deduced_specialization.append(resolved_type)
+                deduced_specialization.append(deduced_mapping[generic.name])
 
+            assert len(deduced_specialization) == len(generic_definitions)
             return deduced_specialization
 
         self._program.add_generic_function(

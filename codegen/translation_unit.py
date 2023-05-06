@@ -12,7 +12,13 @@ from .builtin_types import (
 )
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
-from .interfaces import Parameter, SpecializationItem, Type, TypedExpression, GenericMapping
+from .interfaces import (
+    Parameter,
+    SpecializationItem,
+    Type,
+    TypedExpression,
+    GenericMapping,
+)
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .type_resolution import (
@@ -364,7 +370,9 @@ class Program:
     def resolve_type(self, unresolved: UnresolvedType) -> Type:
         return self._type_table.resolve_type(unresolved)
 
-    def resolve_generic_mapping(self, unresolved: UnresolvedGenericMapping) -> GenericMapping:
+    def resolve_generic_mapping(
+        self, unresolved: UnresolvedGenericMapping
+    ) -> GenericMapping:
         resolved: GenericMapping = {}
         for item_name, item in unresolved.items():
             if isinstance(item, NumericLiteralConstant):

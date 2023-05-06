@@ -29,7 +29,7 @@ class NamedType(Type):
             else ""
         )
 
-        if len(self.specialization) != 0:
+        if len(self.specialization) == 0:
             return self.name + reference_suffix
 
         specializations = []
@@ -48,7 +48,7 @@ class NamedType(Type):
     def ir_mangle(self) -> str:
         prefix = "__R_" if self.is_reference else "__T_"
 
-        if len(self.specialization) != 0:
+        if len(self.specialization) == 0:
             return prefix + self.name
 
         specializations = []

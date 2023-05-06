@@ -44,6 +44,9 @@ class TypeDefinition(ABC):
     def is_always_a_reference(self) -> bool:
         return False
 
+    def __repr__(self) -> str:
+        return f"TypeDefinition({self.format_for_output_to_user()})"
+
 
 class Type(ABC):
     def __init__(self, definition: TypeDefinition, is_reference: bool) -> None:
@@ -92,6 +95,9 @@ class Type(ABC):
     @abstractmethod
     def ir_type(self) -> str:
         pass
+
+    def __repr__(self) -> str:
+        return f"Type({self.format_for_output_to_user()})"
 
 
 class Variable(ABC):
@@ -246,6 +252,17 @@ class TypedExpression(Generatable):
 
 SpecializationItem = Type | int
 GenericMapping = dict[str, SpecializationItem]
+
+
+def format_specialization(specialization: list[SpecializationItem]) -> str:
+    if len(specialization) == 0:
+        return ""
+
+    items = ", ".join(
+        item.format_for_output_to_user() if isinstance(item, Type) else str(item)
+        for item in specialization
+    )
+    return f"<{items}>"
 
 
 @dataclass

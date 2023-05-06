@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable
 
-from .interfaces import Type, SpecializationItem
+from .interfaces import GenericMapping, Type, SpecializationItem, format_specialization
 from .builtin_types import (
     AnonymousType,
     HeapArrayDefinition,
@@ -12,6 +12,7 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
+from .user_facing_errors import SubstitutionFailure
 
 
 @dataclass
@@ -41,9 +42,7 @@ class UnresolvedType:
         pass
 
     @abstractmethod
-    def pattern_match(
-        self, target: Type, mapping_out: "UnresolvedGenericMapping"
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         pass
 
 
@@ -64,9 +63,7 @@ class CompileTimeConstant:
         pass
 
     @abstractmethod
-    def pattern_match(
-        self, target: int, mapping_out: "UnresolvedGenericMapping"
-    ) -> bool:
+    def pattern_match(self, target: int, mapping_out: GenericMapping) -> bool:
         pass
 
 
@@ -89,7 +86,7 @@ class NumericLiteralConstant(CompileTimeConstant):
     def resolve(self) -> int:
         return self.value
 
-    def pattern_match(self, target: int, mapping_out: UnresolvedGenericMapping) -> bool:
+    def pattern_match(self, target: int, mapping_out: GenericMapping) -> bool:
         return target == self.value
 
 
@@ -113,12 +110,12 @@ class GenericValueReference(CompileTimeConstant):
     def resolve(self) -> int:
         assert False
 
-    def pattern_match(self, target: int, mapping_out: UnresolvedGenericMapping) -> bool:
+    def pattern_match(self, target: int, mapping_out: GenericMapping) -> bool:
         if self.argument_name in mapping_out:
             # TODO: user facing error
             return mapping_out[self.argument_name] == target
 
-        mapping_out[self.argument_name] = NumericLiteralConstant(target)
+        mapping_out[self.argument_name] = target
         return True
 
 
@@ -140,9 +137,7 @@ class UnresolvedTypeWrapper(UnresolvedType):
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         return self.resolved_type
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         return self.resolved_type == target
 
 
@@ -190,9 +185,7 @@ class UnresolvedNamedType(UnresolvedType):
 
         return lookup(self.name, resolved_specialization)
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         if not isinstance(target, NamedType):
             return False
 
@@ -232,14 +225,12 @@ class UnresolvedGenericType(UnresolvedType):
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         assert False
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         if self.name in mapping_out:
             # TODO: user facing error
             return target == mapping_out[self.name]
 
-        mapping_out[self.name] = UnresolvedTypeWrapper(target)
+        mapping_out[self.name] = target
         return True
 
 
@@ -264,9 +255,7 @@ class UnresolvedReferenceType(UnresolvedType):
         # TODO: support circular references
         return self.value_type.resolve(lookup).convert_to_reference_type()
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         if not target.is_reference:
             return False
 
@@ -313,9 +302,7 @@ class UnresolvedStructType(UnresolvedType):
 
         return AnonymousType(StructDefinition(resolved_members))
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         assert False  # TODO
 
 
@@ -354,9 +341,7 @@ class UnresolvedStackArrayType(UnresolvedType):
         resolved_member = self.member_type.resolve(lookup)
         return AnonymousType(StackArrayDefinition(resolved_member, resolved_dimensions))
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         assert False  # TODO
 
 
@@ -398,9 +383,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
         resolved_member = self.member_type.resolve(lookup)
         return AnonymousType(HeapArrayDefinition(resolved_member, resolved_dimensions))
 
-    def pattern_match(
-        self, target: Type, mapping_out: dict[str, UnresolvedSpecializationItem]
-    ) -> bool:
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         assert False  # TODO
 
 
@@ -493,9 +476,10 @@ class TypeSymbolTable:
             self.sort_dependencies_topologically(unresolved_type_name, resolution_order)
 
         for type_name in resolution_order:
-            resolved_specialization: list[SpecializationItem] = []
             # TODO: further sort this list to parse a single type in the correct order
             for unresolved_type in self._unresolved_types[type_name]:
+                resolved_specialization: list[SpecializationItem] = []
+
                 for arg in unresolved_type.specialization:
                     if isinstance(arg, CompileTimeConstant):
                         resolved_specialization.append(arg.resolve())
@@ -531,8 +515,9 @@ class TypeSymbolTable:
             return candidates[0]
 
         # We haven't found a specialization so we produce one from the the generic
-        # TODO: user facing error
-        assert prefix in self._generic_unresolved_types
+        if prefix not in self._generic_unresolved_types:
+            raise SubstitutionFailure(prefix + format_specialization(specialization))
+
         return self.specialize_and_resolve_generic_type(prefix, specialization)
 
     def add_generic_unresolved_type(self, unresolved_typedef: GenericTypedef) -> None:
