@@ -1,4 +1,4 @@
-@require_once "other_thing.c3";
+@require_once "_other_thing.c3";
 
 typedef SubDirStruct : {item : int};
 
