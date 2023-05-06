@@ -2,7 +2,6 @@ import fnmatch
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 from multiprocessing import cpu_count
 from os import getenv
 from pathlib import Path
