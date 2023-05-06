@@ -10,7 +10,7 @@ from sys import exit as sys_exit
 from threading import Lock
 from typing import Optional
 
-from test_config_parser import parse_file
+from test_config_parser import ExpectedOutput, parse_file
 
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
@@ -27,11 +27,7 @@ class TestFailure(RuntimeError):
 
 class TestCommandFailure(TestFailure):
     def __init__(
-        self,
-        name: str,
-        status: int,
-        stdout: list[str],
-        stderr: list[str],
+        self, name: str, status: int, stdout: list[str], stderr: list[str], stage: str
     ) -> None:
         super().__init__(f"Actual '{name}' does not match expected")
 
@@ -39,13 +35,7 @@ class TestCommandFailure(TestFailure):
         self.status = status
         self.stdout = stdout
         self.stderr = stderr
-
-        self.stage: Optional[str] = None
-
-    def with_stage(self, stage: str) -> "TestCommandFailure":
         self.stage = stage
-
-        return self
 
     def __str__(self) -> str:
         assert self.stage is not None
@@ -74,9 +64,10 @@ class IRGrepFailure(TestFailure):
 
 
 def run_command(
+    stage: str,
     directory: Path,
     command: list[str | Path],
-    expected_output: dict[str, list[str]],
+    expected_output: ExpectedOutput,
     stdin: Optional[str] = None,
 ) -> str:
     result = subprocess.run(
@@ -111,14 +102,14 @@ def run_command(
         # - [!seq] to match any character not in seq
         return all(map(fnmatch.fnmatchcase, actual_trimmed, expected_trimmed))
 
-    if expected_output.get("status", 0) != status:
-        raise TestCommandFailure("status", status, stdout, stderr)
+    if expected_output.status != status:
+        raise TestCommandFailure("status", status, stdout, stderr, stage)
 
-    if not match_output(stdout, expected_output.get("stdout")):
-        raise TestCommandFailure("stdout", status, stdout, stderr)
+    if not match_output(stdout, expected_output.stdout):
+        raise TestCommandFailure("stdout", status, stdout, stderr, stage)
 
-    if not match_output(stderr, expected_output.get("stderr")):
-        raise TestCommandFailure("stderr", status, stdout, stderr)
+    if not match_output(stderr, expected_output.stderr):
+        raise TestCommandFailure("stderr", status, stdout, stderr, stage)
 
     # Return the unsplit output.
     return result.stdout
@@ -128,39 +119,34 @@ def run_test(file_path: Path) -> None:
     assert file_path.exists()
     config = parse_file(file_path)
 
-    # Compile the test
+    # @COMPILE (mandatory)
     assert config.compile
-    try:
-        ir_output = run_command(
-            file_path.parent,
-            [
-                "python",
-                DRIVER_PATH,
-                "--emit-llvm-to-stdout",
-                *config.compile_args,
-                file_path,
-            ],
-            asdict(config.compile),
-        )
-    except TestCommandFailure as exc:
-        raise exc.with_stage("compile")
+    ir_output = run_command(
+        "compile",
+        file_path.parent,
+        [
+            "python",
+            DRIVER_PATH,
+            "--emit-llvm-to-stdout",
+            *config.compile_args,
+            file_path,
+        ],
+        config.compile,
+    )
 
-    if config.grep_ir_str:
-        if config.grep_ir_str not in ir_output:
-            raise IRGrepFailure(config.grep_ir_str)
+    # @GREP_IR
+    if config.grep_ir_str and config.grep_ir_str not in ir_output:
+        raise IRGrepFailure(config.grep_ir_str)
 
-    if config.run is None:
-        return
-
-    try:
+    # @RUN
+    if config.run:
         run_command(
+            "runtime",
             TESTS_DIR,
             [LLI_CMD, "--extra-object", RUNTIME_OBJ_PATH, "-"],
-            asdict(config.run),
+            config.run,
             ir_output,
         )
-    except TestCommandFailure as exc:
-        raise exc.with_stage("runtime")
 
 
 # Mutex to ensure prints remain ordered (within each test)
@@ -208,7 +194,7 @@ def build_jit_dependencies() -> None:
     ):
         # Need to use `cc` because `as` doesn't run the C preprocessor.
         subprocess.run(
-            ["cc", "-c", str(runtime_src_path), "-o", str(RUNTIME_OBJ_PATH)], check=True
+            ["cc", "-c", runtime_src_path, "-o", RUNTIME_OBJ_PATH], check=True
         )
 
     assert RUNTIME_OBJ_PATH.is_file()
