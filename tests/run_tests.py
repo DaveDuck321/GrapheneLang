@@ -23,6 +23,10 @@ RUNTIME_OBJ_PATH = V2_OUT_DIR / "runtime.o"
 
 
 class TestFailure(RuntimeError):
+    pass
+
+
+class TestCommandFailure(TestFailure):
     def __init__(
         self,
         name: str,
@@ -39,7 +43,7 @@ class TestFailure(RuntimeError):
 
         self.stage: Optional[str] = None
 
-    def with_stage(self, stage: str) -> "TestFailure":
+    def with_stage(self, stage: str) -> "TestCommandFailure":
         self.stage = stage
 
         return self
@@ -58,6 +62,16 @@ class TestFailure(RuntimeError):
                 *self.stderr,
             ]
         )
+
+
+class IRGrepFailure(TestFailure):
+    def __init__(self, needle: str) -> None:
+        super().__init__(f"Couldn't find `{needle}` in the IR")
+
+        self.needle = needle
+
+    def __str__(self) -> str:
+        return f"***GREP_IR ERROR: {super().__str__()}"
 
 
 def run_command(
@@ -99,13 +113,13 @@ def run_command(
         return all(map(fnmatch.fnmatchcase, actual_trimmed, expected_trimmed))
 
     if expected_output.get("status", 0) != status:
-        raise TestFailure("status", status, stdout, stderr)
+        raise TestCommandFailure("status", status, stdout, stderr)
 
     if not match_output(stdout, expected_output.get("stdout")):
-        raise TestFailure("stdout", status, stdout, stderr)
+        raise TestCommandFailure("stdout", status, stdout, stderr)
 
     if not match_output(stderr, expected_output.get("stderr")):
-        raise TestFailure("stderr", status, stdout, stderr)
+        raise TestCommandFailure("stderr", status, stdout, stderr)
 
     # Return the unsplit output.
     return result.stdout
@@ -128,7 +142,7 @@ def run_v1_test(path: Path) -> None:
             config["compile"].get("command", []),
             config["compile"].get("output", {}),
         )
-    except TestFailure as exc:
+    except TestCommandFailure as exc:
         raise exc.with_stage("compile")
 
     if "runtime" not in config:
@@ -140,7 +154,7 @@ def run_v1_test(path: Path) -> None:
             config["runtime"].get("command", []),
             config["runtime"].get("output", {}),
         )
-    except TestFailure as exc:
+    except TestCommandFailure as exc:
         raise exc.with_stage("runtime")
 
 
@@ -162,8 +176,12 @@ def run_v2_test(file_path: Path) -> None:
             ],
             asdict(config.compile),
         )
-    except TestFailure as exc:
+    except TestCommandFailure as exc:
         raise exc.with_stage("compile")
+
+    if config.grep_ir_str:
+        if config.grep_ir_str not in ir_output:
+            raise IRGrepFailure(config.grep_ir_str)
 
     if config.run is None:
         return
@@ -175,7 +193,7 @@ def run_v2_test(file_path: Path) -> None:
             asdict(config.run),
             ir_output,
         )
-    except TestFailure as exc:
+    except TestCommandFailure as exc:
         raise exc.with_stage("runtime")
 
 
