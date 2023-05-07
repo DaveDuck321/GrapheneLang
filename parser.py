@@ -960,7 +960,6 @@ def generate_assignment(
     body: Tree,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-
     lhs_tree, rhs_tree = body.children
     lhs = ExpressionTransformer.parse(
         program, function, scope, generic_mapping, lhs_tree
@@ -993,7 +992,6 @@ def generate_body(
     body: Tree,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-
     generators = {
         "assignment": generate_assignment,
         "const_declaration": partial(generate_variable_declaration, True),
