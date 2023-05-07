@@ -28,11 +28,11 @@ function[T] max_heapify: (array: T[&], heap_size: isize, i: isize) -> void = {
 
     let max_i : isize = i;
 
-    if (heap_size > left_i && array[left_i] > array[max_i]) {
+    if (left_i < heap_size && array[max_i] < array[left_i]) {
         max_i = left_i;
     }
 
-    if (heap_size > right_i && array[right_i] > array[max_i]) {
+    if (right_i < heap_size && array[max_i] < array[right_i]) {
         max_i = right_i;
     }
 

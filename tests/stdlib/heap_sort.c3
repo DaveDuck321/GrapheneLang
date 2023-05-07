@@ -6,7 +6,7 @@ function main : () -> int = {
     let expected : int[7];
 
     let i : int = 0;
-    while (7 > i) {
+    while (i < 7) {
         array[i] = 7 - i;
         expected[i] = i;
 
@@ -17,7 +17,7 @@ function main : () -> int = {
     max_heapify<int>(&array, 7, 0);
 
     i = 0;
-    while (7 > i) {
+    while (i < 7) {
         if (array[i] != expected[i]) {
             return array[i];
         }
