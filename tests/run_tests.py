@@ -1,31 +1,32 @@
 import fnmatch
-import json
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 from multiprocessing import cpu_count
+from os import getenv
 from pathlib import Path
-from subprocess import PIPE
 from sys import exit as sys_exit
 from threading import Lock
 from typing import Optional
 
-import schema
-from v2_parser import parse_file
+from test_config_parser import ExpectedOutput, parse_file
+
+LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
 PARENT_DIR = Path(__file__).parent
-V2_TESTS_DIR = PARENT_DIR / "v2"
-V2_OUT_DIR = V2_TESTS_DIR / "out"
+TESTS_DIR = PARENT_DIR
+OUT_DIR = TESTS_DIR / "out"
+RUNTIME_OBJ_PATH = OUT_DIR / "runtime.o"
+DRIVER_PATH = PARENT_DIR.parent / "driver.py"
 
 
 class TestFailure(RuntimeError):
+    pass
+
+
+class TestCommandFailure(TestFailure):
     def __init__(
-        self,
-        name: str,
-        status: int,
-        stdout: list[str],
-        stderr: list[str],
+        self, name: str, status: int, stdout: list[str], stderr: list[str], stage: str
     ) -> None:
         super().__init__(f"Actual '{name}' does not match expected")
 
@@ -33,13 +34,7 @@ class TestFailure(RuntimeError):
         self.status = status
         self.stdout = stdout
         self.stderr = stderr
-
-        self.stage: Optional[str] = None
-
-    def with_stage(self, stage: str) -> "TestFailure":
         self.stage = stage
-
-        return self
 
     def __str__(self) -> str:
         assert self.stage is not None
@@ -57,27 +52,29 @@ class TestFailure(RuntimeError):
         )
 
 
-def validate_command_status(
-    directory: Path, command: list[str], expected_output
-) -> None:
-    status = subprocess.call(command, cwd=str(directory))
+class IRGrepFailure(TestFailure):
+    def __init__(self, needle: str) -> None:
+        super().__init__(f"Couldn't find `{needle}` in the IR")
 
-    if expected_output.get("status", 0) != status:
-        print("*** ERROR: Actual 'status' does not match expected")
+        self.needle = needle
+
+    def __str__(self) -> str:
+        return f"***GREP_IR ERROR: {super().__str__()}"
 
 
-def validate_command_output_with_harness(
+def run_command(
+    stage: str,
     directory: Path,
-    command: list[str],
-    expected_output: dict[str, list[str]],
-):
+    command: list[str | Path],
+    expected_output: ExpectedOutput,
+    stdin: Optional[str] = None,
+) -> str:
     result = subprocess.run(
         command,
+        capture_output=True,
         check=False,
         cwd=str(directory),
-        stdin=PIPE,
-        stdout=PIPE,
-        stderr=PIPE,
+        input=stdin,
         text=True,
     )
     status = result.returncode
@@ -104,103 +101,51 @@ def validate_command_output_with_harness(
         # - [!seq] to match any character not in seq
         return all(map(fnmatch.fnmatchcase, actual_trimmed, expected_trimmed))
 
-    if expected_output.get("status", 0) != status:
-        raise TestFailure("status", status, stdout, stderr)
+    if expected_output.status != status:
+        raise TestCommandFailure("status", status, stdout, stderr, stage)
 
-    if not match_output(stdout, expected_output.get("stdout")):
-        raise TestFailure("stdout", status, stdout, stderr)
+    if not match_output(stdout, expected_output.stdout):
+        raise TestCommandFailure("stdout", status, stdout, stderr, stage)
 
-    if not match_output(stderr, expected_output.get("stderr")):
-        raise TestFailure("stderr", status, stdout, stderr)
+    if not match_output(stderr, expected_output.stderr):
+        raise TestCommandFailure("stderr", status, stdout, stderr, stage)
 
-    return True
-
-
-def run_v1_test(path: Path, io_harness: bool) -> None:
-    # Load/ validate the test
-    config_path = path / "test.json"
-    assert config_path.exists()
-
-    (path / "out").mkdir(exist_ok=True)
-
-    config: dict[str, dict] = json.load(config_path.open())
-    schema.validate_config_follows_schema(config)
-
-    fn_validate = (
-        validate_command_output_with_harness if io_harness else validate_command_status
-    )
-
-    # Run the test
-    try:
-        fn_validate(
-            path,
-            config["compile"].get("command", []),
-            config["compile"].get("output", {}),
-        )
-    except TestFailure as exc:
-        raise exc.with_stage("compile")
-
-    if "runtime" not in config:
-        return
-
-    try:
-        fn_validate(
-            path,
-            config["runtime"].get("command", []),
-            config["runtime"].get("output", {}),
-        )
-    except TestFailure as exc:
-        raise exc.with_stage("runtime")
+    # Return the unsplit output.
+    return result.stdout
 
 
-def run_v2_test(file_path: Path, io_harness: bool) -> None:
+def run_test(file_path: Path) -> None:
     assert file_path.exists()
     config = parse_file(file_path)
 
-    fn_validate = (
-        validate_command_output_with_harness if io_harness else validate_command_status
+    # @COMPILE (mandatory)
+    assert config.compile
+    ir_output = run_command(
+        "compile",
+        file_path.parent,
+        [
+            "python",
+            DRIVER_PATH,
+            "--emit-llvm-to-stdout",
+            *config.compile_args,
+            file_path,
+        ],
+        config.compile,
     )
 
-    binary_path = V2_OUT_DIR / file_path.relative_to(V2_TESTS_DIR).with_suffix("")
-    if binary_path.parent != V2_OUT_DIR:
-        binary_path.parent.mkdir(exist_ok=True)
+    # @GREP_IR
+    if config.grep_ir_str and config.grep_ir_str not in ir_output:
+        raise IRGrepFailure(config.grep_ir_str)
 
-    # Compile the test
-    assert config.compile
-    try:
-        fn_validate(
-            V2_TESTS_DIR,
-            [
-                "python",
-                "../../driver.py",
-                *config.compile_args,
-                str(file_path),
-                "-o",
-                str(binary_path),
-            ],
-            asdict(config.compile),
+    # @RUN
+    if config.run:
+        run_command(
+            "runtime",
+            TESTS_DIR,
+            [LLI_CMD, "--extra-object", RUNTIME_OBJ_PATH, "-"],
+            config.run,
+            ir_output,
         )
-    except TestFailure as exc:
-        raise exc.with_stage("compile")
-
-    if config.run is None:
-        return
-
-    try:
-        fn_validate(
-            V2_TESTS_DIR,
-            [str(binary_path)],
-            asdict(config.run),
-        )
-    except TestFailure as exc:
-        raise exc.with_stage("runtime")
-
-
-def run_test(test_path: Path, io_harness: bool = True) -> None:
-    if test_path.is_dir():
-        run_v1_test(test_path, io_harness)
-    else:
-        run_v2_test(test_path, io_harness)
 
 
 # Mutex to ensure prints remain ordered (within each test)
@@ -212,6 +157,7 @@ def run_test_print_result(test_path: Path) -> bool:
 
     try:
         run_test(test_path)
+
         with io_lock:
             print(f"PASSED '{test_name}'")
         return True
@@ -236,6 +182,23 @@ def run_tests(tests: list[Path], workers: int) -> int:
     return failed
 
 
+def build_jit_dependencies() -> None:
+    runtime_src_path = PARENT_DIR.parent / "std" / "runtime.S"
+    assert runtime_src_path.is_file()
+
+    # Don't compile the runtime again if it's up-to-date.
+    if (
+        not RUNTIME_OBJ_PATH.is_file()
+        or runtime_src_path.stat().st_mtime > RUNTIME_OBJ_PATH.stat().st_mtime
+    ):
+        # Need to use `cc` because `as` doesn't run the C preprocessor.
+        subprocess.run(
+            ["cc", "-c", runtime_src_path, "-o", RUNTIME_OBJ_PATH], check=True
+        )
+
+    assert RUNTIME_OBJ_PATH.is_file()
+
+
 def main() -> None:
     parser = ArgumentParser("run_tests.py")
     parser.add_argument("--test", required=False)
@@ -243,23 +206,24 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    V2_OUT_DIR.mkdir(exist_ok=True)
+    assert DRIVER_PATH.is_file()
+    assert TESTS_DIR.is_dir()
+    OUT_DIR.mkdir(exist_ok=True)
+
+    build_jit_dependencies()
 
     if args.test is not None:
-        run_test(PARENT_DIR / args.test, io_harness=False)
+        test_path = PARENT_DIR / args.test
+
+        run_test_print_result(test_path)
     else:
-        all_v1_test_dirs = [
-            test_path.parent
-            for test_path in PARENT_DIR.rglob("**/test.json")
-            if test_path.is_file()
-        ]
-        all_v2_test_files = [
+        all_test_files = [
             test_file
-            for test_file in V2_TESTS_DIR.rglob("**/*.c3")
-            if test_file.is_file()
+            for test_file in TESTS_DIR.rglob("**/*.c3")
+            if not test_file.stem.startswith("_") and test_file.is_file()
         ]
 
-        sys_exit(run_tests(all_v1_test_dirs + all_v2_test_files, args.workers))
+        sys_exit(run_tests(all_test_files, args.workers))
 
 
 if __name__ == "__main__":

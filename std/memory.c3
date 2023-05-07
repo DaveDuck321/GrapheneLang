@@ -153,9 +153,8 @@ function initialize_allocator : () -> Allocator = {
     // TODO: use variable initialized inside for loop
     let i : int = 0;
 
-    // TODO: use i < allocator.bin_count
     // TODO: use i < allocator.bins:len() (fails since it cannot dedude arg types)
-    while (allocator.bin_count >= i) {
+    while (i < allocator.bin_count) {
         // TODO: use a true random number
         // TODO: allow 64 bit constants
         allocator.integrity_checks[i] = 0xd2f4bd5b;

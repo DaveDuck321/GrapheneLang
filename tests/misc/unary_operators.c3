@@ -1,0 +1,20 @@
+foreign puts : (str: u8[&]) -> int;
+
+function a : () -> int = {
+    puts("a");
+    return 1;
+};
+
+@operator - : (rhs: int) -> int = {
+    puts("-");
+    return __builtin_add(rhs, 6);
+};
+
+function main: () -> int = {
+    return -a();
+};
+
+/// @COMPILE
+/// @RUN; EXPECT 7; EXPECT OUT
+/// a
+/// -
