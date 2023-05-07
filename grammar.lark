@@ -124,7 +124,8 @@ POWER_TOKEN: "**"
 !?logical_or: logical_and
             | logical_and "||" logical_or -> operator_use
 
-!?logical_and: comparison_op
+// Increase the priority to parse this preferentially over `a & &b`.
+!?logical_and.1: comparison_op
              | comparison_op "&&" logical_and -> operator_use
 
 ?comparison_op: bitwise_or
