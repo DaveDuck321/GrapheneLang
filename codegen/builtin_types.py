@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
+    ArrayDimensionError,
     InvalidIntSize,
     VoidArrayDeclaration,
     VoidStructDeclaration,
@@ -334,6 +335,9 @@ class StackArrayDefinition(TypeDefinition):
         self.member = member
         self.dimensions = dimensions
 
+        if any(dim <= 0 for dim in self.dimensions):
+            raise ArrayDimensionError(self.format_for_output_to_user())
+
         if self.member.definition.is_void:
             raise VoidArrayDeclaration(
                 self.format_for_output_to_user(),
@@ -379,6 +383,9 @@ class HeapArrayDefinition(TypeDefinition):
 
         self.member = member
         self.known_dimensions = known_dimensions
+
+        if any(dim <= 0 for dim in self.known_dimensions):
+            raise ArrayDimensionError(self.format_for_output_to_user())
 
         if self.member.definition.is_void:
             raise VoidArrayDeclaration(
