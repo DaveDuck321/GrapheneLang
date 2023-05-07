@@ -275,7 +275,7 @@ class ParseFunctionSignatures(Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
-        self.current_file = None
+        self.current_file: Optional[str] = None
 
         self._program = program
         self._function_body_trees: list[
