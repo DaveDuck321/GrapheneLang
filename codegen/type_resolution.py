@@ -13,6 +13,7 @@ from .builtin_types import (
     StructDefinition,
 )
 from .user_facing_errors import (
+    DoubleReferenceError,
     FailedLookupError,
     RedefinitionError,
     SubstitutionFailure,
@@ -257,7 +258,11 @@ class UnresolvedReferenceType(UnresolvedType):
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         # TODO: support circular references
-        return self.value_type.resolve(lookup).convert_to_reference_type()
+        resolved_value = self.value_type.resolve(lookup)
+        if resolved_value.is_reference:
+            raise DoubleReferenceError(resolved_value.format_for_output_to_user(True))
+
+        return resolved_value.convert_to_reference_type()
 
     def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         if not target.is_reference:

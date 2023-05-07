@@ -16,28 +16,31 @@ class NamedType(Type):
         definition: TypeDefinition,
         alias: Optional[Type],
     ) -> None:
-        super().__init__(definition, definition.is_always_a_reference)
+        if alias is not None:
+            assert alias.definition.are_equivalent(definition)
+            super().__init__(definition, alias.is_reference)
+        else:
+            super().__init__(definition, definition.is_always_a_reference)
 
         self.name = name
         self.specialization = specialization
         self.alias = alias
 
     def get_name(self) -> str:
+        specialization = format_specialization(self.specialization)
+        return f"{self.name}{specialization}"
+
+    def format_for_output_to_user(self, full=False) -> str:
         reference_suffix = (
             "&"
             if self.is_reference and not self.definition.is_always_a_reference
             else ""
         )
-        specialization = format_specialization(self.specialization)
-        return f"{self.name}{specialization}{reference_suffix}"
 
-    def format_for_output_to_user(self, full=False) -> str:
         if not full:
-            return self.get_name()
+            return self.get_name() + reference_suffix
 
-        return (
-            f"typedef {self.get_name()} = {self.definition.format_for_output_to_user()}"
-        )
+        return f"typedef {self.get_name()} = {self.definition.format_for_output_to_user()}{reference_suffix}"
 
     @property
     def ir_mangle(self) -> str:
@@ -70,7 +73,7 @@ class AnonymousType(Type):
     def __init__(self, definition: TypeDefinition) -> None:
         super().__init__(definition, definition.is_always_a_reference)
 
-    def format_for_output_to_user(self) -> str:
+    def format_for_output_to_user(self, full=False) -> str:
         reference_suffix = (
             "&"
             if self.is_reference and not self.definition.is_always_a_reference
@@ -127,7 +130,7 @@ class PrimitiveType(NamedType):
         super().__init__(name, [], definition, None)
 
     def format_for_output_to_user(self, full=False) -> str:
-        return self.get_name()
+        return super().format_for_output_to_user(False)
 
     @property
     def ir_type(self) -> str:
