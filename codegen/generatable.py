@@ -2,10 +2,7 @@ from typing import Iterable, Iterator, Optional
 
 from .builtin_types import BoolType, CharArrayDefinition
 from .interfaces import Generatable, Type, TypedExpression, Variable
-from .type_conversions import (
-    assert_is_implicitly_convertible,
-    do_implicit_conversion,
-)
+from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
     AssignmentToNonPointerError,
     OperandError,
