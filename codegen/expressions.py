@@ -250,7 +250,6 @@ class StructMemberAccess(TypedExpression):
             f"{pointer_offset.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation}",
         ]
 
-
         # Prevent double indirection, dereference the element pointer to get the
         # underlying reference
         if self._member_type.is_reference:

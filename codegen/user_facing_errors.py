@@ -264,12 +264,35 @@ class MissingFunctionReturn(ErrorWithLineInfo):
 class VoidVariableDeclaration(GrapheneError):
     def __init__(
         self,
-        kind: Literal["variable", "argument", "struct member"],
+        kind: Literal["variable", "argument"],
         variable_name: str,
         full_type: str,
     ) -> None:
         super().__init__(
             f"Error: {kind} '{variable_name}' cannot have type '{full_type}'"
+        )
+
+
+class VoidStructDeclaration(GrapheneError):
+    def __init__(
+        self,
+        struct_type: str,
+        member_name: str,
+        member_type: str,
+    ) -> None:
+        super().__init__(
+            f"Error: struct '{struct_type}' cannot have member '{member_name}' of type '{member_type}'"
+        )
+
+
+class VoidArrayDeclaration(GrapheneError):
+    def __init__(
+        self,
+        array_type: str,
+        member_type: str,
+    ) -> None:
+        super().__init__(
+            f"Error: array '{array_type}' cannot operate on scalar '{member_type}'"
         )
 
 

@@ -5,7 +5,11 @@ from operator import mul
 from typing import Callable, Optional
 
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
-from .user_facing_errors import InvalidIntSize
+from .user_facing_errors import (
+    InvalidIntSize,
+    VoidArrayDeclaration,
+    VoidStructDeclaration,
+)
 
 
 class NamedType(Type):
@@ -256,6 +260,14 @@ class StructDefinition(TypeDefinition):
         self.members = members
         self._uuid = uuid.uuid4()
 
+        for member_name, member_type in self.members:
+            if member_type.definition.is_void:
+                raise VoidStructDeclaration(
+                    self.format_for_output_to_user(),
+                    member_name,
+                    member_type.format_for_output_to_user(True),
+                )
+
     def are_equivalent(self, other: TypeDefinition) -> bool:
         if not isinstance(other, StructDefinition):
             return False
@@ -322,6 +334,12 @@ class StackArrayDefinition(TypeDefinition):
         self.member = member
         self.dimensions = dimensions
 
+        if self.member.definition.is_void:
+            raise VoidArrayDeclaration(
+                self.format_for_output_to_user(),
+                self.member.format_for_output_to_user(True),
+            )
+
     def are_equivalent(self, other: TypeDefinition) -> bool:
         if not isinstance(other, StackArrayDefinition):
             return False
@@ -361,6 +379,12 @@ class HeapArrayDefinition(TypeDefinition):
 
         self.member = member
         self.known_dimensions = known_dimensions
+
+        if self.member.definition.is_void:
+            raise VoidArrayDeclaration(
+                self.format_for_output_to_user(),
+                self.member.format_for_output_to_user(True),
+            )
 
     def are_equivalent(self, other: TypeDefinition) -> bool:
         if not isinstance(other, HeapArrayDefinition):
