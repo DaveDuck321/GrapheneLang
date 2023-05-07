@@ -637,7 +637,7 @@ class ExpressionParser(Interpreter):
         if isinstance(thing, Token):
             # The interpreter cannot visit tokens by default
             return getattr(self, thing.type)(thing)
-        return self._visit_tree(thing)
+        return super().visit(thing)
 
     @v_args(inline=True)
     def expression(self, expr_tree: Tree) -> FlattenedExpression:
