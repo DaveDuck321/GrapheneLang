@@ -180,7 +180,7 @@ class AssignmentToNonPointerError(GrapheneError):
 class ArrayDimensionError(GrapheneError):
     def __init__(self, array_type: str) -> None:
         super().__init__(
-            f"Error: cannot construct array type '{array_type}' since it has a non-positive index"
+            f"Error: cannot construct array type '{array_type}' since it has a non-positive size"
         )
 
 

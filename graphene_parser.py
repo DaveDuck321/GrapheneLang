@@ -78,8 +78,7 @@ def search_include_path_for_file(
     return matching_files.pop()
 
 
-def parse_generic_definition(definition: Any) -> cg.GenericArgument:
-    assert isinstance(definition, Token)
+def parse_generic_definition(definition: Token) -> cg.GenericArgument:
     assert definition.type == "GENERIC_IDENTIFIER"
     return cg.GenericArgument(definition.value, definition.value[0] == "@")
 
@@ -338,6 +337,7 @@ class ParseFunctionSignatures(Interpreter):
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions: list[cg.GenericArgument] = []
         for generic_tree in generic_definitions_tree.children:
+            assert isinstance(generic_tree, Token)
             generic = parse_generic_definition(generic_tree)
             generic_definitions.append(generic)
 
