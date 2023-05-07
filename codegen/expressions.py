@@ -416,7 +416,9 @@ class ArrayInitializer(TypedExpression):
         target_type = array_type.definition.member
         for member_expr in element_exprs:
             conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
-            member, extra_exprs = do_implicit_conversion(member_expr, target_type)
+            member, extra_exprs = do_implicit_conversion(
+                member_expr, target_type, "array initialization"
+            )
             self._elements.append(member)
             self._conversion_exprs.extend(extra_exprs)
             self.implicit_conversion_cost += conversion_cost or 0
@@ -566,7 +568,7 @@ class NamedInitializerList(InitializerList):
 
         if len(other.definition.members) != len(self._members):
             raise InvalidInitializerListLength(
-                len(self._members), len(other.definition.members)
+                len(self._members), len(other.definition.members), "a struct"
             )
 
         ordered_members: list[TypedExpression] = []
@@ -603,7 +605,7 @@ class UnnamedInitializerList(InitializerList):
         if isinstance(other.definition, StructDefinition):
             if len(other.definition.members) != len(self._members):
                 raise InvalidInitializerListLength(
-                    len(self._members), len(other.definition.members)
+                    len(self._members), len(other.definition.members), "a struct"
                 )
         else:  # isinstance(other.definition, StackArrayDefinition)
             if len(other.definition.dimensions) != 1:
@@ -612,7 +614,9 @@ class UnnamedInitializerList(InitializerList):
                     self.format_for_output_to_user(),
                 )
             if (dimension := other.definition.dimensions[0]) != len(self._members):
-                raise InvalidInitializerListLength(len(self._members), dimension)
+                raise InvalidInitializerListLength(
+                    len(self._members), dimension, "an array"
+                )
 
         return self._members
 
