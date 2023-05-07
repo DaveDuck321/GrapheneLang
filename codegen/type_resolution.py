@@ -201,8 +201,15 @@ class UnresolvedNamedType(UnresolvedType):
             if isinstance(this_arg, CompileTimeConstant) != isinstance(target_arg, int):
                 return False
 
-            if not this_arg.pattern_match(target_arg, mapping_out):
-                return False
+            if isinstance(this_arg, CompileTimeConstant):
+                assert isinstance(target_arg, int)
+                if not this_arg.pattern_match(target_arg, mapping_out):
+                    return False
+
+            if isinstance(this_arg, UnresolvedType):
+                assert isinstance(target_arg, Type)
+                if not this_arg.pattern_match(target_arg, mapping_out):
+                    return False
 
         return True
 
