@@ -1,0 +1,41 @@
+name: Graphene tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        llvm-version: [15, 16]
+
+    env:
+      GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
+      GRAPHENE_LLI_CMD: lli-${{ matrix.llvm-version }}
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.11"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Install clang and lli
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh ${{ matrix.llvm-version }}
+        sudo apt-get install -y llvm-${{ matrix.llvm-version }}-runtime
+    - name: Run tests
+      run: python tests/run_tests.py
