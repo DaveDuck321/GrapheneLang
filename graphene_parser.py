@@ -12,12 +12,10 @@ from lark.visitors import Interpreter, Transformer, v_args
 import codegen as cg
 from codegen.user_facing_errors import (
     CircularImportException,
-    DoubleReferenceError,
     ErrorWithLineInfo,
     FailedLookupError,
     FileDoesNotExistException,
     FileIsAmbiguousException,
-    GenericArgumentCountError,
     GenericHasGenericAnnotation,
     GrapheneError,
     InvalidMainReturnType,
@@ -168,7 +166,7 @@ class TypeTransformer(Transformer):
         program: cg.Program,
         tree: Tree,
         generic_mapping: cg.GenericMapping,
-    ) -> cg.Type:
+    ) -> cg.SpecializationItem:
         unresolved_mapping: cg.UnresolvedGenericMapping = {}
         for name, item in generic_mapping.items():
             if isinstance(item, cg.Type):
@@ -181,6 +179,9 @@ class TypeTransformer(Transformer):
             result = cls(unresolved_mapping).transform(tree)
         except VisitError as exc:
             raise exc.orig_exc
+
+        if isinstance(result, cg.CompileTimeConstant):
+            return result.resolve()
 
         assert isinstance(result, cg.UnresolvedType)
         return program.resolve_type(result)
@@ -617,7 +618,7 @@ def is_unresolved_specialization_list(
     return all(isinstance(item, cg.UnresolvedSpecializationItem) for item in lst)
 
 
-class ExpressionTransformer(Transformer):
+class ExpressionParser(Interpreter):
     def __init__(
         self,
         program: cg.Program,
@@ -625,17 +626,22 @@ class ExpressionTransformer(Transformer):
         scope: cg.Scope,
         generic_mapping: cg.GenericMapping,
     ) -> None:
-        super().__init__(visit_tokens=True)
+        super().__init__()
 
         self._program = program
         self._function = function
         self._scope = scope
         self._generic_mapping = generic_mapping
 
+    def visit(self, thing: Tree | Token) -> FlattenedExpression:
+        if isinstance(thing, Token):
+            # The interpreter cannot visit tokens by default
+            return getattr(self, thing.type)(thing)
+        return self._visit_tree(thing)
+
     @v_args(inline=True)
-    def expression(self, value: FlattenedExpression) -> FlattenedExpression:
-        assert isinstance(value, FlattenedExpression)
-        return value
+    def expression(self, expr_tree: Tree) -> FlattenedExpression:
+        return self.visit(expr_tree)
 
     def UNSIGNED_HEX_CONSTANT(self, value: Token) -> FlattenedExpression:
         const_expr = cg.ConstantExpression(cg.UIntType(), value)
@@ -659,27 +665,11 @@ class ExpressionTransformer(Transformer):
         return FlattenedExpression([const_expr])
 
     @v_args(inline=True)
-    def compile_time_constant(self, constant: Token | FlattenedExpression) -> int:
-        # TODO: this should be parsed correctly to begin with
-        if isinstance(constant, FlattenedExpression):
-            # TODO: this should be parsed correctly
-            expression = constant.expression()
-            assert len(constant.subexpressions) == 1
-            assert isinstance(expression, cg.ConstantExpression)
-            return int(expression.value)
-        if isinstance(constant, Token):
-            # TODO: user facing errors
-            assert constant.value in self._generic_mapping
-            mapped_value = self._generic_mapping[constant.value]
-            assert isinstance(mapped_value, int)
-            return mapped_value
-
-        assert False
-
-    @v_args(inline=True)
     def operator_use(
-        self, lhs: FlattenedExpression, operator: Token, rhs: FlattenedExpression
+        self, lhs_tree: Tree, operator: Token, rhs_tree: Tree
     ) -> FlattenedExpression:
+        lhs = self.visit(lhs_tree)
+        rhs = self.visit(rhs_tree)
         assert isinstance(lhs, FlattenedExpression)
         assert isinstance(rhs, FlattenedExpression)
 
@@ -696,8 +686,9 @@ class ExpressionTransformer(Transformer):
 
     @v_args(inline=True)
     def unary_operator_use(
-        self, operator: Token, rhs: FlattenedExpression
+        self, operator: Token, rhs_tree: Tree
     ) -> FlattenedExpression:
+        rhs = self.visit(rhs_tree)
         assert isinstance(rhs, FlattenedExpression)
 
         flattened_expr = FlattenedExpression(rhs.subexpressions)
@@ -723,20 +714,14 @@ class ExpressionTransformer(Transformer):
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
         specialization: list[cg.SpecializationItem] = []
-        if specialization_tree is not None:
-            for specialization_item in specialization_tree.children:
-                if isinstance(specialization_item, Tree):
-                    assert specialization_item.data == "type"
-                    specialization.append(
-                        TypeTransformer.parse_and_resolve(
-                            self._program,
-                            specialization_item,
-                            self._generic_mapping,
-                        )
-                    )
-                else:
-                    assert isinstance(specialization_item, int)
-                    specialization.append(specialization_item)
+        for specialization_item_tree in get_optional_children(specialization_tree):
+            specialization.append(
+                TypeTransformer.parse_and_resolve(
+                    self._program,
+                    specialization_item_tree,
+                    self._generic_mapping,
+                )
+            )
 
         call_expr = self._program.lookup_call_expression(
             fn_name, specialization, fn_call_args
@@ -744,10 +729,9 @@ class ExpressionTransformer(Transformer):
         return flattened_expr.add_parent(call_expr)
 
     @v_args(inline=True)
-    def function_call(
-        self, name_tree: Tree, *args: FlattenedExpression
-    ) -> FlattenedExpression:
+    def function_call(self, name_tree: Tree, *arg_trees: Tree) -> FlattenedExpression:
         fn_name, specialization_tree = name_tree.children
+        args = [self.visit(tree) for tree in arg_trees]
         assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
 
@@ -755,13 +739,16 @@ class ExpressionTransformer(Transformer):
 
     @v_args(inline=True)
     def ufcs_call(
-        self, this: FlattenedExpression, name_tree: Tree, *args: FlattenedExpression
+        self, this_tree: Tree, name_tree: Tree, *arg_trees: Tree
     ) -> FlattenedExpression:
         # TODO perhaps we shouldn't always borrow this, although this is a bit
         # tricky as we haven't done overload resolution yet (which depends on
         # whether we borrow or not). A solution would be to borrow if we can,
         # otherwise pass an unborrowed/const-reference and let overload
         # resolution figure it out, although this isn't very explicit.
+        this = self.visit(this_tree)
+        args: list[FlattenedExpression] = [self.visit(tree) for tree in arg_trees]
+        assert is_flattened_expression_iterable(args)
         assert isinstance(this, FlattenedExpression)
         borrowed_this = this.add_parent(cg.BorrowExpression(this.expression(), False))
 
@@ -787,15 +774,16 @@ class ExpressionTransformer(Transformer):
         if var is None:
             raise FailedLookupError("variable", var_name)
 
-        var_ref = cg.VariableReference(var)
-        return FlattenedExpression([var_ref])
+        return FlattenedExpression([cg.VariableReference(var)])
 
-    def ensure_pointer_is_available(self, expr: FlattenedExpression):
+    def _ensure_pointer_is_available(
+        self, expr: FlattenedExpression
+    ) -> FlattenedExpression:
         # Copy expression to stack if it is not a pointer
         if expr.expression().has_address:
             return expr
 
-        temp_var = cg.StackVariable("", expr.type(), True, True)
+        temp_var = cg.StackVariable("", expr.type(), True, True)  # FIXME
         self._scope.add_variable(temp_var)
 
         expr.subexpressions.append(cg.VariableAssignment(temp_var, expr.expression()))
@@ -803,9 +791,12 @@ class ExpressionTransformer(Transformer):
 
     @v_args(inline=True)
     def array_index_access(
-        self, lhs: FlattenedExpression, *index_exprs: FlattenedExpression
+        self, lhs_tree: Tree, *index_expr_trees: Tree
     ) -> FlattenedExpression:
-        lhs = self.ensure_pointer_is_available(lhs)
+        index_exprs: list[FlattenedExpression] = [
+            self.visit(tree) for tree in index_expr_trees
+        ]
+        lhs = self._ensure_pointer_is_available(self.visit(lhs_tree))
         lhs_expr = lhs.expression()
 
         cg_indices: list[cg.TypedExpression] = []
@@ -817,28 +808,30 @@ class ExpressionTransformer(Transformer):
 
     @v_args(inline=True)
     def struct_member_access(
-        self, lhs: FlattenedExpression, member_name: Token
+        self, lhs_tree: Tree, member_name: Token
     ) -> FlattenedExpression:
+        lhs = self.visit(lhs_tree)
         assert isinstance(member_name, Token)
 
         struct_access = cg.StructMemberAccess(lhs.expression(), member_name)
         return lhs.add_parent(struct_access)
 
     @v_args(inline=True)
-    def borrow_operator_use(self, lhs: FlattenedExpression):
+    def borrow_operator_use(self, lhs_tree: Tree) -> FlattenedExpression:
+        lhs = self.visit(lhs_tree)
         borrow = cg.BorrowExpression(lhs.expression(), False)
         return lhs.add_parent(borrow)
 
     @v_args(inline=True)
-    def const_borrow_operator_use(self, lhs: FlattenedExpression):
+    def const_borrow_operator_use(self, lhs_tree: Tree) -> FlattenedExpression:
+        lhs = self.visit(lhs_tree)
         borrow = cg.BorrowExpression(lhs.expression(), True)
         return lhs.add_parent(borrow)
 
     def struct_initializer_without_names(
-        self, members: list[FlattenedExpression]
+        self, member_trees: Tree
     ) -> FlattenedExpression:
-        assert isinstance(members, list)
-
+        members = [self.visit(tree) for tree in member_trees.children]
         member_exprs: list[cg.TypedExpression] = []
         combined_flattened = FlattenedExpression([])
 
@@ -849,12 +842,15 @@ class ExpressionTransformer(Transformer):
         return combined_flattened.add_parent(cg.UnnamedInitializerList(member_exprs))
 
     def struct_initializer_with_names(
-        self, member_with_names: list[FlattenedExpression | Token]
+        self, member_with_names: Tree
     ) -> FlattenedExpression:
-        assert isinstance(member_with_names, list)
-
-        # Use zip to transpose a list of pairs into a pair of lists.
-        names, members = list(map(list, zip(*in_pairs(member_with_names))))
+        names: list[str] = []
+        members: list[FlattenedExpression] = []
+        for name_token, member_tree in in_pairs(member_with_names.children):
+            assert isinstance(name_token, Token)
+            assert isinstance(member_tree, (Tree | Token))
+            names.append(name_token.value)
+            members.append(self.visit(member_tree))
 
         member_exprs: list[cg.TypedExpression] = []
         combined_flattened = FlattenedExpression([])
@@ -868,11 +864,8 @@ class ExpressionTransformer(Transformer):
         )
 
     @v_args(inline=True)
-    def adhoc_struct_initialization(
-        self, expr: FlattenedExpression
-    ) -> FlattenedExpression:
-        assert isinstance(expr.expression(), cg.InitializerList)
-        return expr
+    def adhoc_struct_initialization(self, expr_tree: Tree) -> FlattenedExpression:
+        return self.visit(expr_tree)
 
     @staticmethod
     def parse(
@@ -882,9 +875,7 @@ class ExpressionTransformer(Transformer):
         generic_mapping: cg.GenericMapping,
         body: Tree,
     ) -> FlattenedExpression:
-        result = ExpressionTransformer(
-            program, function, scope, generic_mapping
-        ).transform(body)
+        result = ExpressionParser(program, function, scope, generic_mapping).visit(body)
         assert isinstance(result, FlattenedExpression)
         return result
 
@@ -897,7 +888,7 @@ def generate_standalone_expression(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     assert len(body.children) == 1
-    flattened_expr = ExpressionTransformer.parse(
+    flattened_expr = ExpressionParser.parse(
         program, function, scope, generic_mapping, body
     )
 
@@ -917,7 +908,7 @@ def generate_return_statement(
         return
 
     (expr,) = body.children
-    flattened_expr = ExpressionTransformer.parse(
+    flattened_expr = ExpressionParser.parse(
         program, function, scope, generic_mapping, expr
     )
 
@@ -939,7 +930,7 @@ def generate_variable_declaration(
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
     rhs: Optional[FlattenedExpression] = (
-        ExpressionTransformer.parse(program, function, scope, generic_mapping, rhs_tree)
+        ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
         if rhs_tree is not None
         else None
     )
@@ -948,6 +939,7 @@ def generate_variable_declaration(
     assert isinstance(type_tree, Tree)
 
     var_type = TypeTransformer.parse_and_resolve(program, type_tree, generic_mapping)
+    assert isinstance(var_type, cg.Type)
     if var_type.definition.is_void:
         raise VoidVariableDeclaration(
             "variable", var_name, var_type.format_for_output_to_user()
@@ -973,7 +965,7 @@ def generate_if_statement(
     condition_tree, if_scope_tree, else_scope_tree = body.children
     assert len(condition_tree.children) == 1
 
-    condition_expr = ExpressionTransformer.parse(
+    condition_expr = ExpressionParser.parse(
         program, function, scope, generic_mapping, condition_tree
     )
 
@@ -1003,7 +995,7 @@ def generate_while_statement(
     condition_tree, inner_scope_tree = body.children
     assert len(condition_tree.children) == 1
 
-    condition_expr = ExpressionTransformer.parse(
+    condition_expr = ExpressionParser.parse(
         program, function, scope, generic_mapping, condition_tree
     )
 
@@ -1031,12 +1023,8 @@ def generate_assignment(
 ) -> None:
 
     lhs_tree, rhs_tree = body.children
-    lhs = ExpressionTransformer.parse(
-        program, function, scope, generic_mapping, lhs_tree
-    )
-    rhs = ExpressionTransformer.parse(
-        program, function, scope, generic_mapping, rhs_tree
-    )
+    lhs = ExpressionParser.parse(program, function, scope, generic_mapping, lhs_tree)
+    rhs = ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
 
     scope.add_generatable(lhs.subexpressions)
     scope.add_generatable(rhs.subexpressions)
