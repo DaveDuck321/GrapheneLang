@@ -24,6 +24,7 @@ from codegen.user_facing_errors import (
     InvalidSyntax,
     MissingFunctionReturn,
     RepeatedGenericName,
+    StructMemberRedeclaration,
     SubstitutionFailure,
     VoidVariableDeclaration,
 )
@@ -163,19 +164,29 @@ class TypeTransformer(Transformer):
         return underlying_array.take_reference()
 
     def struct_type(self, member_trees: list[Token | cg.Type]) -> cg.Type:
-        members = []
+        members: dict[str, cg.Type] = {}
 
         # Yes, this is how you are supposed to annotate unpacking products...
-        m_name: str
+        m_name: Token
         m_type: cg.Type
         for m_name, m_type in in_pairs(member_trees):
             if m_type.is_void:
                 raise VoidVariableDeclaration(
                     "struct member", m_name, m_type.get_user_facing_name(True)
                 )
-            members.append(cg.Parameter(m_name, m_type))
 
-        return cg.Type(cg.StructDefinition(members))
+            if m_name in members:
+                assert isinstance(m_name.line, int)
+                raise StructMemberRedeclaration(
+                    m_name, members[m_name].get_user_facing_name(False), m_name.line
+                )
+
+            members[m_name] = m_type
+
+        # As of Python 3.7, dict preserves insertion order.
+        return cg.Type(
+            cg.StructDefinition([cg.Parameter(n, t) for n, t in members.items()])
+        )
 
     @classmethod
     def parse(

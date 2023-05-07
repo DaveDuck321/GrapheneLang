@@ -186,7 +186,7 @@ class StructDefinition(TypeDefinition):
     def __init__(self, members: list[Parameter]) -> None:
         super().__init__()
 
-        # TODO: assert member names are unique
+        # The caller is responsible for ensuring that member names are unique.
         self.members = members
 
         # Different structs should compare different even if they have the same body

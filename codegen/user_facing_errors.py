@@ -283,3 +283,14 @@ class InvalidSyntax(ErrorWithLineInfo):
         message = "\n    ".join(context_lines)
         message += "\nError: invalid syntax, unexpected symbol"
         super().__init__(message, line_number)
+
+
+class StructMemberRedeclaration(ErrorWithLineInfo):
+    def __init__(self, name: str, previous_type: str, line: int) -> None:
+        # TODO would be nice if we could print the struct's name (if available).
+        super().__init__(
+            f"Error: redeclaration of struct member `{name}` (previous "
+            f"declaration `{name}: {previous_type}`)",
+            line,
+            "struct definition",
+        )
