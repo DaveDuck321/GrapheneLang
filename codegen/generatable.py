@@ -2,10 +2,7 @@ from typing import Iterable, Iterator, Optional
 
 from .builtin_types import BoolType, CharArrayDefinition
 from .interfaces import Generatable, Type, TypedExpression, Variable
-from .type_conversions import (
-    assert_is_implicitly_convertible,
-    do_implicit_conversion,
-)
+from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
     AssignmentToNonPointerError,
     OperandError,
@@ -200,26 +197,41 @@ class IfElseStatement(Generatable):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#br-instruction
+        need_label_after_statement = False
 
         conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
 
+        ir = self.expand_ir(extra_exprs, reg_gen)
+
         # br i1 <cond>, label <iftrue>, label <iffalse>
-        return [
-            *self.expand_ir(extra_exprs, reg_gen),
-            (
-                f"br {conv_condition.ir_ref_with_type_annotation}, label "
-                f"%{self.if_scope.start_label}, label %{self.else_scope.start_label}"
-            ),
-            # If body
-            f"{self.if_scope.start_label}:",
-            *self.if_scope.generate_ir(reg_gen),
-            f"br label %{self.else_scope.end_label}",
-            # Else body
-            f"{self.else_scope.start_label}:",
-            *self.else_scope.generate_ir(reg_gen),
-            f"br label %{self.else_scope.end_label}",
-            f"{self.else_scope.end_label}:",
-        ]
+        ir.append(
+            f"br {conv_condition.ir_ref_with_type_annotation}, "
+            f"label %{self.if_scope.start_label}, label %{self.else_scope.start_label}"
+        )
+
+        # If body
+        ir.append(f"{self.if_scope.start_label}:")
+        ir.extend(self.if_scope.generate_ir(reg_gen))
+
+        if not self.if_scope.is_return_guaranteed():
+            # Jump to the end of the if/else statement.
+            ir.append(f"br label %{self.else_scope.end_label}")
+            need_label_after_statement = True
+
+        # Else body
+        ir.append(f"{self.else_scope.start_label}:")
+        ir.extend(self.else_scope.generate_ir(reg_gen))
+
+        if not self.else_scope.is_return_guaranteed():
+            # Jump to the end of the if/else statement.
+            ir.append(f"br label %{self.else_scope.end_label}")
+            need_label_after_statement = True
+
+        if need_label_after_statement:
+            # LLVM will complain if this is empty.
+            ir.append(f"{self.else_scope.end_label}:")
+
+        return ir
 
     def is_return_guaranteed(self) -> bool:
         return (
@@ -311,9 +323,6 @@ class ReturnStatement(Generatable):
 
         # ret <type> <value>; Return a value from a non-void function
         ir_lines.append(f"ret {conv_returned_expr.ir_ref_with_type_annotation}")
-
-        # An implicit basic block is created immediately after a return
-        next(reg_gen)
 
         return ir_lines
 

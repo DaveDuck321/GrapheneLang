@@ -3,10 +3,7 @@ from typing import Iterator, Optional
 
 from .builtin_types import IntegerDefinition, HeapArrayDefinition, StackArrayDefinition
 from .interfaces import Type, TypedExpression
-from .user_facing_errors import (
-    OperandError,
-    TypeCheckerError,
-)
+from .user_facing_errors import OperandError, TypeCheckerError
 
 
 class SquashIntoUnderlyingType(TypedExpression):

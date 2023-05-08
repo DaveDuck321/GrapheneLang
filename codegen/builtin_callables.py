@@ -447,10 +447,12 @@ class BitcastExpression(TypedExpression):
         self._src_expr.assert_can_write_to()
 
 
-def get_builtin_callables() -> dict[
-    str,
-    Callable[[list[SpecializationItem], list[TypedExpression]], TypedExpression],
-]:
+def get_builtin_callables() -> (
+    dict[
+        str,
+        Callable[[list[SpecializationItem], list[TypedExpression]], TypedExpression],
+    ]
+):
     def get_integer_builtin(expression_class: PyType[BasicIntegerExpression]):
         return (expression_class.USER_FACING_NAME, expression_class)
 

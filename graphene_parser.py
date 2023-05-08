@@ -24,6 +24,7 @@ from codegen.user_facing_errors import (
     MissingFunctionReturn,
     RepeatedGenericName,
     SourceLocation,
+    StructMemberRedeclaration,
     SubstitutionFailure,
     VoidVariableDeclaration,
 )
@@ -149,17 +150,25 @@ class TypeTransformer(Transformer):
     ) -> cg.UnresolvedType:
         return cg.UnresolvedHeapArrayType(element_type, list(known_dimensions))
 
-    def struct_type(
-        self, member_trees: list[Token | cg.UnresolvedType]
-    ) -> cg.UnresolvedType:
-        members: list[tuple[str, cg.UnresolvedType]] = []
+    def struct_type(self, member_trees: list[Token | cg.UnresolvedType]) -> cg.UnresolvedType:
+        members: dict[str, cg.UnresolvedType] = {}
 
         for member_name, member_type in in_pairs(member_trees):
             assert isinstance(member_name, Token)
             assert isinstance(member_type, cg.UnresolvedType)
-            members.append((member_name.value, member_type))
 
-        return cg.UnresolvedStructType(members)
+            if member_name in members:
+                assert isinstance(member_name.line, int)
+                raise StructMemberRedeclaration(
+                    member_name,
+                    members[member_name].format_for_output_to_user(),
+                    member_name.line,
+                )
+
+            members[member_name.value] = member_type
+
+        # As of Python 3.7, dict preserves insertion order.
+        return cg.UnresolvedStructType([(n, t) for n, t in members.items()])
 
     @classmethod
     def parse_and_resolve(
@@ -1048,7 +1057,6 @@ def generate_assignment(
     body: Tree,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-
     lhs_tree, rhs_tree = body.children
     lhs = ExpressionParser.parse(program, function, scope, generic_mapping, lhs_tree)
     rhs = ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
@@ -1077,7 +1085,6 @@ def generate_body(
     body: Tree,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-
     generators = {
         "assignment": generate_assignment,
         "const_declaration": partial(generate_variable_declaration, True),

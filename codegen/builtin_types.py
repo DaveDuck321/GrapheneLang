@@ -257,7 +257,7 @@ class StructDefinition(TypeDefinition):
     def __init__(self, members: list[tuple[str, Type]]) -> None:
         super().__init__()
 
-        # TODO: assert member names are unique
+        # The caller is responsible for ensuring that member names are unique.
         self.members = members
         self._uuid = uuid.uuid4()
 
