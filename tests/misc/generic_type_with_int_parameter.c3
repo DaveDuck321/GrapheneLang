@@ -1,6 +1,6 @@
 @require_once "std/io.c3";
 
-typedef[Len] string : u8[Len];
+typedef[@Len] string : u8[@Len];
 
 function main: () -> int = {
     // XXX we truncate array types.

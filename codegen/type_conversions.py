@@ -1,7 +1,7 @@
 from functools import cached_property
 from typing import Iterator, Optional
 
-from .builtin_types import ArrayDefinition, IntegerDefinition
+from .builtin_types import HeapArrayDefinition, IntegerDefinition, StackArrayDefinition
 from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
@@ -45,7 +45,7 @@ class PromoteInteger(TypedExpression):
         src_definition = src.underlying_type.definition
 
         assert not src.has_address
-        assert not dest_type.is_borrowed_reference
+        assert not dest_type.is_reference
         assert isinstance(src_definition, IntegerDefinition)
         assert isinstance(dest_type.definition, IntegerDefinition)
         assert src_definition.is_signed == dest_type.definition.is_signed
@@ -170,15 +170,15 @@ def implicit_conversion_impl(
     expr_list.extend(exprs)
 
     # The type-system reference should not be implicitly dereferenced
-    if last_type().is_borrowed_reference != dest_type.is_borrowed_reference:
+    if last_type().is_reference != dest_type.is_reference:
         maybe_missing_borrow = False
         if src.underlying_type == dest_type.convert_to_value_type():
             maybe_missing_borrow = src.was_reference_type_at_any_point
 
         raise TypeCheckerError(
             context,
-            src.underlying_type.get_user_facing_name(False),
-            dest_type.get_user_facing_name(False),
+            src.underlying_type.format_for_output_to_user(),
+            dest_type.format_for_output_to_user(),
             maybe_missing_borrow,
         )
 
@@ -197,21 +197,43 @@ def implicit_conversion_impl(
 
     # Array reference equivalence
     if (
-        isinstance(last_def, ArrayDefinition)
-        and isinstance(dest_def, ArrayDefinition)
-        and last_def.dimensions[1:] == dest_def.dimensions[1:]
-        and last_def.dimensions[0] >= dest_def.dimensions[0]
+        last_type().is_reference
+        and dest_type.is_reference
+        and isinstance(last_def, (HeapArrayDefinition, StackArrayDefinition))
+        and isinstance(dest_def, (HeapArrayDefinition, StackArrayDefinition))
+        and last_def.member == dest_def.member
     ):
-        # TODO: promotion cost going from known size to smaller/ unknown size
-        expr_list.append(Reinterpret(last_expr(), dest_type))
+        if (
+            isinstance(last_def, HeapArrayDefinition)
+            and isinstance(dest_def, HeapArrayDefinition)
+            and last_def.known_dimensions == dest_def.known_dimensions
+        ):
+            expr_list.append(Reinterpret(last_expr(), dest_type))
+
+        if (
+            isinstance(last_def, StackArrayDefinition)
+            and isinstance(dest_def, HeapArrayDefinition)
+            and last_def.dimensions[1:] == dest_def.known_dimensions
+        ):
+            # TODO: promotion cost going from known size to smaller/ unknown size
+            expr_list.append(Reinterpret(last_expr(), dest_type))
+
+        if (
+            isinstance(last_def, StackArrayDefinition)
+            and isinstance(dest_def, StackArrayDefinition)
+            and last_def.dimensions[1:] == dest_def.dimensions[1:]
+            and last_def.dimensions[0] >= dest_def.dimensions[0]
+        ):
+            # TODO: promotion cost going from known size to smaller/ unknown size
+            expr_list.append(Reinterpret(last_expr(), dest_type))
 
     # TODO float promotion.
 
     if last_type() != dest_type:
         raise TypeCheckerError(
             context,
-            src.underlying_type.get_user_facing_name(False),
-            dest_type.get_user_facing_name(False),
+            src.underlying_type.format_for_output_to_user(),
+            dest_type.format_for_output_to_user(),
         )
 
     return promotion_cost, expr_list

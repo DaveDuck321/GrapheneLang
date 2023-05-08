@@ -2,10 +2,10 @@ from abc import abstractmethod
 from typing import Iterator, Optional
 
 from .builtin_types import (
-    ArrayDefinition,
     FunctionSignature,
     IntType,
     SizeType,
+    StackArrayDefinition,
     StructDefinition,
 )
 from .interfaces import Type, TypedExpression, Variable
@@ -31,7 +31,7 @@ class ConstantExpression(TypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
         super().__init__(cst_type, False)
 
-        self.value = cst_type.graphene_literal_to_ir_constant(value)
+        self.value = cst_type.definition.graphene_literal_to_ir_constant(value)
 
     def __repr__(self) -> str:
         return f"ConstantExpression({self.underlying_type}, {self.value})"
@@ -55,7 +55,7 @@ class VariableReference(TypedExpression):
         super().__init__(
             variable.type.convert_to_value_type(),
             True,
-            variable.type.is_borrowed_reference,
+            variable.type.is_reference,
         )
 
         self.variable = variable
@@ -81,7 +81,7 @@ class VariableReference(TypedExpression):
         self._ir_ref = self.variable.ir_ref_without_type_annotation
 
         ir = []
-        if self.variable.type.is_borrowed_reference:
+        if self.variable.type.is_reference:
             self._ir_ref = f"%{self.dereference_double_indirection(reg_gen, ir)}"
 
         return ir
@@ -115,7 +115,7 @@ class FunctionCallExpression(TypedExpression):
     def __init__(
         self, signature: FunctionSignature, args: list[TypedExpression]
     ) -> None:
-        if signature.return_type.is_borrowed_reference:
+        if signature.return_type.is_reference:
             # The user needs to borrow again if they want the actual reference
             super().__init__(signature.return_type.convert_to_value_type(), True, True)
         else:
@@ -148,7 +148,7 @@ class FunctionCallExpression(TypedExpression):
         call_expr = f"call {self.signature.ir_ref}({str.join(', ', args_ir)})"
 
         # We cannot assign `void` to a register.
-        if not self.signature.return_type.is_void:
+        if not self.signature.return_type.definition.is_void:
             self.result_reg = next(reg_gen)
             call_expr = f"%{self.result_reg} = {call_expr}"
 
@@ -177,11 +177,11 @@ class BorrowExpression(TypedExpression):
     def __init__(self, expr: TypedExpression, is_explicitly_constant: bool) -> None:
         self._expr = expr
 
-        if expr.underlying_type.is_borrowed_reference:
-            raise DoubleBorrowError(expr.underlying_type.get_user_facing_name(True))
+        if expr.underlying_type.is_reference:
+            raise DoubleBorrowError(expr.underlying_type.format_for_output_to_user())
 
         if not expr.is_indirect_pointer_to_type:
-            raise BorrowTypeError(expr.underlying_type.get_user_facing_name(True))
+            raise BorrowTypeError(expr.underlying_type.format_for_output_to_user())
 
         # TODO: test if the expression is constant, if it is fall back to a constant borrow
         self._is_constant = is_explicitly_constant
@@ -191,7 +191,7 @@ class BorrowExpression(TypedExpression):
         if not self._is_constant:
             expr.assert_can_write_to()
 
-        super().__init__(expr.underlying_type.take_reference(), False)
+        super().__init__(expr.underlying_type.convert_to_reference_type(), False)
 
     def __repr__(self) -> str:
         return f"BorrowExpression({repr(self._expr)})"
@@ -219,7 +219,7 @@ class StructMemberAccess(TypedExpression):
         if not isinstance(underlying_definition, StructDefinition):
             raise TypeCheckerError(
                 "struct member access",
-                lhs.underlying_type.get_user_facing_name(False),
+                lhs.underlying_type.format_for_output_to_user(),
                 "{...}",
             )
 
@@ -228,7 +228,7 @@ class StructMemberAccess(TypedExpression):
         )
 
         # If the member is a reference we can always calculate an address
-        if self._member_type.is_borrowed_reference:
+        if self._member_type.is_reference:
             super().__init__(self._member_type.convert_to_value_type(), True)
         else:
             # We only know an address if the struct itself has an address
@@ -252,7 +252,7 @@ class StructMemberAccess(TypedExpression):
 
         # Prevent double indirection, dereference the element pointer to get the
         # underlying reference
-        if self._member_type.is_borrowed_reference:
+        if self._member_type.is_reference:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
@@ -279,7 +279,7 @@ class StructMemberAccess(TypedExpression):
 
     def __repr__(self) -> str:
         return (
-            f"StructMemberAccess({self.underlying_type.get_user_facing_name(False)}"
+            f"StructMemberAccess({self.underlying_type.format_for_output_to_user()}"
             f".{self._member_name}: {self.underlying_type})"
         )
 
@@ -307,21 +307,21 @@ class ArrayIndexAccess(TypedExpression):
         self._array_ptr = array_ptr
 
         array_definition = self._type_of_array.definition
-        if not isinstance(array_definition, ArrayDefinition):
+        if not isinstance(array_definition, StackArrayDefinition):
             raise TypeCheckerError(
                 "array index access",
-                array_ptr.underlying_type.get_user_facing_name(False),
+                array_ptr.underlying_type.format_for_output_to_user(),
                 "T[...]",
             )
 
-        if len(array_definition._dimensions) != len(indices):
+        if len(array_definition.dimensions) != len(indices):
             raise ArrayIndexCount(
-                self._type_of_array.get_user_facing_name(False),
+                self._type_of_array.format_for_output_to_user(),
                 len(indices),
-                len(array_definition._dimensions),
+                len(array_definition.dimensions),
             )
 
-        self._element_type: Type = array_definition._element_type
+        self._element_type: Type = array_definition.member
         self._conversion_exprs: list[TypedExpression] = []
 
         # Now convert all the indices into integers using standard implicit rules
@@ -352,7 +352,7 @@ class ArrayIndexAccess(TypedExpression):
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
-        if self._element_type.is_borrowed_reference:
+        if self._element_type.is_reference:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
@@ -375,7 +375,7 @@ class ArrayIndexAccess(TypedExpression):
 
 class StructInitializer(TypedExpression):
     def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
-        assert not struct_type.is_borrowed_reference
+        assert not struct_type.is_reference
         assert isinstance(struct_type.definition, StructDefinition)
         assert len(member_exprs) == len(struct_type.definition.members)
 
@@ -385,11 +385,9 @@ class StructInitializer(TypedExpression):
         self.implicit_conversion_cost = 0
         self.result_ref: Optional[str] = None
 
-        for target_member, member_expr in zip(
+        for (_, target_type), member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
         ):
-            target_type = target_member.type
-
             conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
             member, extra_exprs = do_implicit_conversion(member_expr, target_type)
             self._members.append(member)
@@ -431,7 +429,7 @@ class StructInitializer(TypedExpression):
 
 class InitializerList(TypedExpression):
     @abstractmethod
-    def get_user_facing_name(self, full: bool) -> str:
+    def format_for_output_to_user(self) -> str:
         pass
 
     def get_equivalent_pure_type(self) -> Type:
@@ -439,7 +437,7 @@ class InitializerList(TypedExpression):
 
     @property
     def underlying_type(self) -> Type:
-        raise InvalidInitializerListDeduction(self.get_user_facing_name(False))
+        raise InvalidInitializerListDeduction(self.format_for_output_to_user())
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -458,7 +456,7 @@ class InitializerList(TypedExpression):
     def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
         if not isinstance(other.definition, StructDefinition):
             raise InvalidInitializerListConversion(
-                other.get_user_facing_name(False), self.get_user_facing_name(False)
+                other.format_for_output_to_user(True), self.format_for_output_to_user()
             )
 
         ordered_members = self.get_ordered_members(other)
@@ -472,12 +470,12 @@ class NamedInitializerList(InitializerList):
 
         self._members = dict(zip(names, members, strict=True))
 
-    def get_user_facing_name(self, full: bool) -> str:
+    def format_for_output_to_user(self) -> str:
         members = [
-            f"{name}: {type_name.underlying_type.get_user_facing_name(full)}"
+            f"{name}: {type_name.underlying_type.format_for_output_to_user()}"
             for name, type_name in self._members.items()
         ]
-        return f"{{{', '.join(members)}}}"
+        return "{" + ", ".join(members) + "}"
 
     def __repr__(self) -> str:
         return f"InitializerList({list(self._members.items())})"
@@ -491,13 +489,13 @@ class NamedInitializerList(InitializerList):
             )
 
         ordered_members: list[TypedExpression] = []
-        for member in other.definition.members:
-            if member.name not in self._members:
+        for member_name, _ in other.definition.members:
+            if member_name not in self._members:
                 raise InvalidInitializerListConversion(
-                    other.get_user_facing_name(True),
-                    self.get_user_facing_name(False),
+                    other.format_for_output_to_user(True),
+                    self.format_for_output_to_user(),
                 )
-            ordered_members.append(self._members[member.name])
+            ordered_members.append(self._members[member_name])
 
         return ordered_members
 
@@ -508,12 +506,12 @@ class UnnamedInitializerList(InitializerList):
 
         self._members = members
 
-    def get_user_facing_name(self, full: bool) -> str:
+    def format_for_output_to_user(self) -> str:
         type_names = [
-            member.underlying_type.get_user_facing_name(full)
+            member.underlying_type.format_for_output_to_user()
             for member in self._members
         ]
-        return f"{{{', '.join(type_names)}}}"
+        return "{" + ", ".join(type_names) + "}"
 
     def __repr__(self) -> str:
         return f"InitializerList({self._members})"

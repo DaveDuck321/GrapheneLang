@@ -2,10 +2,100 @@ import uuid
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
-from .interfaces import Parameter, SpecializationItem, Type, TypeDefinition
-from .user_facing_errors import FailedLookupError, InvalidIntSize
+from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
+from .user_facing_errors import (
+    ArrayDimensionError,
+    InvalidIntSize,
+    VoidArrayDeclaration,
+    VoidStructDeclaration,
+)
+
+
+class NamedType(Type):
+    def __init__(
+        self,
+        name: str,
+        specialization: list[SpecializationItem],
+        definition: TypeDefinition,
+        alias: Optional[Type],
+    ) -> None:
+        if alias is not None:
+            assert alias.definition.are_equivalent(definition)
+            super().__init__(definition, alias.is_reference)
+        else:
+            super().__init__(definition, definition.is_always_a_reference)
+
+        self.name = name
+        self.specialization = specialization
+        self.alias = alias
+
+    def get_name(self) -> str:
+        specialization = format_specialization(self.specialization)
+        return f"{self.name}{specialization}"
+
+    def format_for_output_to_user(self, full=False) -> str:
+        reference_suffix = (
+            "&"
+            if self.is_reference and not self.definition.is_always_a_reference
+            else ""
+        )
+
+        if not full:
+            return self.get_name() + reference_suffix
+
+        return f"typedef {self.get_name()} = {self.definition.format_for_output_to_user()}{reference_suffix}"
+
+    @property
+    def ir_mangle(self) -> str:
+        prefix = "__R_" if self.is_reference else "__T_"
+
+        if len(self.specialization) == 0:
+            return prefix + self.name
+
+        specializations = []
+        for argument in self.specialization:
+            if isinstance(argument, int):
+                # TODO: negative numbers
+                specializations.append(str(argument))
+            elif isinstance(argument, Type):
+                specializations.append(argument.ir_mangle)
+            else:
+                assert False
+
+        specialization_format = "".join(specializations)
+        return f"{prefix}{self.name}__S{specialization_format}"
+
+    @property
+    def ir_type(self) -> str:
+        if self.is_reference:
+            return "ptr"
+        return f"%type.{self.ir_mangle}"
+
+
+class AnonymousType(Type):
+    def __init__(self, definition: TypeDefinition) -> None:
+        super().__init__(definition, definition.is_always_a_reference)
+
+    def format_for_output_to_user(self, full=False) -> str:
+        reference_suffix = (
+            "&"
+            if self.is_reference and not self.definition.is_always_a_reference
+            else ""
+        )
+        return self.definition.format_for_output_to_user() + reference_suffix
+
+    @property
+    def ir_mangle(self) -> str:
+        prefix = "__R_" if self.is_reference else "__ANON_"
+        return prefix + self.definition.ir_mangle
+
+    @property
+    def ir_type(self) -> str:
+        if self.is_reference:
+            return "ptr"
+        return self.definition.ir_type
 
 
 class PrimitiveDefinition(TypeDefinition):
@@ -20,41 +110,71 @@ class PrimitiveDefinition(TypeDefinition):
         self._ir = ir_type
         self._name = name
 
-    @cached_property
-    def alignment(self) -> int:
-        return self._size
+    def format_for_output_to_user(self) -> str:
+        return self._name
 
-    @cached_property
+    @property
+    def ir_type(self) -> str:
+        return self._ir
+
+    @property
+    def ir_mangle(self) -> str:
+        return self._ir
+
+    @property
     def size(self) -> int:
         return self._size
 
-    @cached_property
-    def user_facing_name(self) -> str:
-        return self._name
+    @property
+    def alignment(self) -> int:
+        return self._size
 
-    def get_ir_type(self, alias: Optional[str]) -> str:
-        return f"%alias.{alias}" if alias else self.ir_definition
 
-    @cached_property
-    def ir_definition(self) -> str:
-        return self._ir
+class PrimitiveType(NamedType):
+    def __init__(self, name: str, definition: TypeDefinition) -> None:
+        super().__init__(name, [], definition, None)
 
-    @cached_property
-    def mangled_name(self) -> str:
-        # Assert not reached: not all primitive types can be instantiated
-        # anonymously. Those that can (e.g. structs, ints) overwrite this.
+    def format_for_output_to_user(self, full=False) -> str:
+        return super().format_for_output_to_user(False)
+
+    @property
+    def ir_type(self) -> str:
+        if self.is_reference:
+            return "ptr"
+        return self.definition.ir_type
+
+
+class VoidDefinition(TypeDefinition):
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        return isinstance(other, VoidDefinition)
+
+    def format_for_output_to_user(self) -> str:
+        return "void"
+
+    @property
+    def ir_type(self) -> str:
+        return "void"
+
+    @property
+    def ir_mangle(self) -> str:
+        return "void"
+
+    @property
+    def size(self) -> int:
         assert False
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._name})"
+    @property
+    def alignment(self) -> int:
+        assert False
 
-    def __eq__(self, other: Any) -> bool:
-        assert isinstance(other, TypeDefinition)
-        if isinstance(other, PrimitiveDefinition):
-            # TODO: I'm not sure this is the correct approach
-            return self._size == other._size and self._ir == other._ir
+    @property
+    def is_void(self) -> bool:
+        return True
 
-        return False
+
+class VoidType(PrimitiveType):
+    def __init__(self) -> None:
+        super().__init__("void", VoidDefinition())
 
 
 class IntegerDefinition(PrimitiveDefinition):
@@ -79,71 +199,20 @@ class IntegerDefinition(PrimitiveDefinition):
 
         return str(value)
 
-    @cached_property
-    def mangled_name(self) -> str:
-        return self._name
-
-    def __eq__(self, other: Any) -> bool:
-        if not super().__eq__(other):
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        if not isinstance(other, IntegerDefinition):
             return False
-
-        if isinstance(other, IntegerDefinition):
-            return self.is_signed == other.is_signed and self.bits == other.bits
-
-        return False
+        return self.is_signed == other.is_signed and self.bits == other.bits
 
 
-class VoidDefinition(TypeDefinition):
-    def graphene_literal_to_ir_constant(self, value: str) -> str:
-        assert False
-
-    @cached_property
-    def alignment(self) -> int:
-        assert False
-
-    @cached_property
-    def size(self) -> int:
-        assert False
-
-    @cached_property
-    def user_facing_name(self) -> str:
-        return "void"
-
-    def get_ir_type(self, alias: Optional[str]) -> str:
-        return f"%alias.{alias}" if alias else self.ir_definition
-
-    @cached_property
-    def ir_definition(self) -> str:
-        return "void"
-
-    @cached_property
-    def mangled_name(self) -> str:
-        return "void"
-
-    @cached_property
-    def is_void(self) -> bool:
-        return True
-
-    def __repr__(self) -> str:
-        return "VoidDefinition"
-
-    def __eq__(self, other: Any) -> bool:
-        return isinstance(other, VoidDefinition)
-
-
-class VoidType(Type):
-    def __init__(self) -> None:
-        super().__init__(VoidDefinition())
-
-
-class GenericIntType(Type):
+class GenericIntType(PrimitiveType):
     def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
         is_power_of_2 = ((size_in_bits - 1) & size_in_bits) == 0
         is_divisible_into_bytes = (size_in_bits % 8) == 0
         assert is_power_of_2 and is_divisible_into_bytes
 
         definition = IntegerDefinition(name, size_in_bits, is_signed)
-        super().__init__(definition)
+        super().__init__(name, definition)
 
 
 class IntType(GenericIntType):
@@ -166,87 +235,75 @@ class IPtrType(GenericIntType):
         super().__init__("iptr", 64, True)
 
 
-class BoolType(Type):
-    class Definition(PrimitiveDefinition):
-        def __init__(self) -> None:
-            super().__init__(1, "i1", "bool")
-
-        def graphene_literal_to_ir_constant(self, value: str) -> str:
-            # We happen to be using the same boolean constants as LLVM IR.
-            assert value in ("true", "false")
-
-            return value
-
+class BoolDefinition(PrimitiveDefinition):
     def __init__(self) -> None:
-        definition = self.Definition()
-        super().__init__(definition, definition._name)
+        super().__init__(1, "i1", "bool")
+
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        return isinstance(other, BoolDefinition)
+
+    def graphene_literal_to_ir_constant(self, value: str) -> str:
+        # We happen to be using the same boolean constants as LLVM IR.
+        assert value in ("true", "false")
+        return value
+
+
+class BoolType(PrimitiveType):
+    def __init__(self) -> None:
+        super().__init__("bool", BoolDefinition())
 
 
 class StructDefinition(TypeDefinition):
-    def __init__(self, members: list[Parameter]) -> None:
+    def __init__(self, members: list[tuple[str, Type]]) -> None:
         super().__init__()
 
         # The caller is responsible for ensuring that member names are unique.
         self.members = members
-
-        # Different structs should compare different even if they have the same body
         self._uuid = uuid.uuid4()
 
-    def get_member_by_name(self, name: str) -> tuple[int, Type]:
-        for index, member in enumerate(self.members):
-            if member.name == name:
-                return index, member.type
-        raise FailedLookupError("struct member", f"{{{name}: ...}}")
+        for member_name, member_type in self.members:
+            if member_type.definition.is_void:
+                raise VoidStructDeclaration(
+                    self.format_for_output_to_user(),
+                    member_name,
+                    member_type.format_for_output_to_user(True),
+                )
 
-    def graphene_literal_to_ir_constant(self, value: str) -> str:
-        # TODO support structure constants.
-        raise NotImplementedError()
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        if not isinstance(other, StructDefinition):
+            return False
 
-    @cached_property
-    def user_facing_name(self) -> str:
-        members = (
-            f"{m.name} : {m.type.get_user_facing_name(False)}" for m in self.members
+        return other._uuid == self._uuid
+
+    def format_for_output_to_user(self) -> str:
+        members_format = ", ".join(
+            f"{member_name}: {member_type.format_for_output_to_user()}"
+            for member_name, member_type in self.members
         )
-        return f"{{{', '.join(members)}}}"
+        return "{" + members_format + "}"
 
-    def get_ir_type(self, alias: Optional[str]) -> str:
-        # If this type has an alias, then we've generated a definition for it at
-        # the top of the IR source.
-        if alias:
-            return f"%struct.{alias}"
+    @property
+    def ir_type(self) -> str:
+        member_ir = ", ".join(member.ir_type for _, member in self.members)
+        return "{" + member_ir + "}"
 
-        # If it doesn't, then we need to define the type here.
-        return self.ir_definition
+    @property
+    def ir_mangle(self) -> str:
+        member_mangle = "".join(member.ir_mangle for _, member in self.members)
+        return f"__S{member_mangle}"
 
-    @cached_property
-    def ir_definition(self) -> str:
-        member_ir = map(lambda m: m.type.ir_type, self.members)
-        return "{" + str.join(", ", member_ir) + "}"
-
-    @cached_property
-    def mangled_name(self) -> str:
-        subtypes = map(lambda m: m.type.mangled_name, self.members)
-        return f"__ST{''.join(subtypes)}__TS"
-
-    @cached_property
-    def alignment(self) -> int:
-        # TODO: can we be less conservative here
-        return (
-            max(member.type.alignment for member in self.members) if self.members else 1
-        )
-
-    @cached_property
+    @property
     def size(self) -> int:
         # Return this size of the struct with c-style padding (for now)
         #   TODO: we should manually set the `datalayout` string to match this
         this_size = 0
-        for member in self.members:
+        for _, member_type in self.members:
             # Add padding to ensure each member is aligned
-            remainder = this_size % member.type.alignment
-            this_size += (member.type.alignment - remainder) % member.type.alignment
+            remainder = this_size % member_type.alignment
+            this_size += (member_type.alignment - remainder) % member_type.alignment
 
             # Append member to the struct
-            this_size += member.type.size
+            this_size += member_type.size
 
         # Add padding to align the final struct
         remainder = this_size % self.alignment
@@ -254,85 +311,127 @@ class StructDefinition(TypeDefinition):
 
         return this_size
 
-    def __repr__(self) -> str:
-        return f"StructDefinition({', '.join(map(repr, self.members))})"
-
-    def __eq__(self, other: Any) -> bool:
-        assert isinstance(other, TypeDefinition)
-        if not isinstance(other, StructDefinition):
-            return False
-        return self._uuid == other._uuid
-
-
-class ArrayDefinition(TypeDefinition):
-    UNKNOWN_DIMENSION = 0
-
-    def __init__(self, element_type: Type, dimensions: list[int]) -> None:
-        super().__init__()
-
-        self._element_type = element_type
-        self._dimensions = dimensions
-
-    @cached_property
-    def dimensions(self) -> list[int]:
-        return self._dimensions
-
-    def graphene_literal_to_ir_constant(self, value: str) -> str:
-        # TODO support array constants.
-        raise NotImplementedError()
-
-    @cached_property
-    def user_facing_name(self) -> str:
-        type_name = self._element_type.get_user_facing_name(False)
-        # TODO: ideally we would print T[&, 2, 3] for heap arrays
-        #       atm `Type` would insert an extra (incorrect) reference symbol if we tried this
-        dimensions = ", ".join(map(str, self._dimensions))
-        return f"{type_name}[{dimensions}]"
-
-    def get_ir_type(self, alias: Optional[str]) -> str:
-        if alias:
-            return f"%array.{alias}"
-
-        return self.ir_definition
-
-    @cached_property
-    def ir_definition(self) -> str:
-        def ir_sub_definition(dims: list[int]):
-            if len(dims) == 0:
-                return self._element_type.ir_type
-            return f"[{dims[0]} x {ir_sub_definition(dims[1:])}]"
-
-        return ir_sub_definition(self._dimensions)
-
-    @cached_property
-    def mangled_name(self) -> str:
-        dimensions = "_".join(map(str, self._dimensions))
-        return f"__AR{self._element_type.mangled_name}_{dimensions}__AR"
-
-    @cached_property
+    @property
     def alignment(self) -> int:
-        return self._element_type.alignment
-
-    @cached_property
-    def size(self) -> int:
-        assert self._dimensions[0] != self.UNKNOWN_DIMENSION
-        return self._element_type.size * reduce(mul, self._dimensions, 1)
-
-    def __repr__(self) -> str:
-        dimensions = ", ".join(map(str, self._dimensions))
-        return f"Array({self._element_type} x ({dimensions}))"
-
-    def __eq__(self, other: Any) -> bool:
-        assert isinstance(other, TypeDefinition)
-        if not isinstance(other, ArrayDefinition):
-            return False
+        # TODO: can we be less conservative here
         return (
-            self._dimensions == other._dimensions
-            and self._element_type == other._element_type
+            max(member_type.alignment for _, member_type in self.members)
+            if self.members
+            else 1
         )
 
+    def get_member_by_name(self, target_name: str) -> tuple[int, Type]:
+        for index, (member_name, member_type) in enumerate(self.members):
+            if member_name == target_name:
+                return index, member_type
 
-class CharArrayDefinition(ArrayDefinition):
+        assert False
+
+
+class StackArrayDefinition(TypeDefinition):
+    def __init__(self, member: Type, dimensions: list[int]) -> None:
+        super().__init__()
+
+        self.member = member
+        self.dimensions = dimensions
+
+        if any(dim <= 0 for dim in self.dimensions):
+            raise ArrayDimensionError(self.format_for_output_to_user())
+
+        if self.member.definition.is_void:
+            raise VoidArrayDeclaration(
+                self.format_for_output_to_user(),
+                self.member.format_for_output_to_user(True),
+            )
+
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        if not isinstance(other, StackArrayDefinition):
+            return False
+
+        return other.member == self.member and other.dimensions == self.dimensions
+
+    def format_for_output_to_user(self) -> str:
+        dimensions_format = ", ".join(map(str, self.dimensions))
+        return f"{self.member.format_for_output_to_user()}[{dimensions_format}]"
+
+    @property
+    def ir_type(self) -> str:
+        def ir_sub_definition(dims: list[int]):
+            if len(dims) == 0:
+                return self.member.ir_type
+            return f"[{dims[0]} x {ir_sub_definition(dims[1:])}]"
+
+        return ir_sub_definition(self.dimensions)
+
+    @property
+    def ir_mangle(self) -> str:
+        dimensions = "_".join(map(str, self.dimensions))
+        return f"__A_{self.member.ir_mangle}__{dimensions}"
+
+    @property
+    def size(self) -> int:
+        return self.member.size * reduce(mul, self.dimensions, 1)
+
+    @property
+    def alignment(self) -> int:
+        return self.member.alignment
+
+
+class HeapArrayDefinition(TypeDefinition):
+    def __init__(self, member: Type, known_dimensions: list[int]) -> None:
+        super().__init__()
+
+        self.member = member
+        self.known_dimensions = known_dimensions
+
+        if any(dim <= 0 for dim in self.known_dimensions):
+            raise ArrayDimensionError(self.format_for_output_to_user())
+
+        if self.member.definition.is_void:
+            raise VoidArrayDeclaration(
+                self.format_for_output_to_user(),
+                self.member.format_for_output_to_user(True),
+            )
+
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        if not isinstance(other, HeapArrayDefinition):
+            return False
+
+        return (
+            other.member == self.member
+            and other.known_dimensions == self.known_dimensions
+        )
+
+    def format_for_output_to_user(self) -> str:
+        if len(self.known_dimensions) == 0:
+            return f"{self.member.format_for_output_to_user()}[&]"
+
+        dimensions_format = ", ".join(map(str, self.known_dimensions))
+        return f"{self.member.format_for_output_to_user()}[&, {dimensions_format}]"
+
+    @property
+    def ir_type(self) -> str:
+        assert False  # The containing type should always be a reference
+
+    @property
+    def ir_mangle(self) -> str:
+        dimensions = "_".join(map(str, self.known_dimensions))
+        return f"__UA_{self.member.ir_mangle}__{dimensions}"
+
+    @property
+    def size(self) -> int:
+        assert False
+
+    @property
+    def alignment(self) -> int:
+        assert False
+
+    @property
+    def is_always_a_reference(self) -> bool:
+        return True
+
+
+class CharArrayDefinition(StackArrayDefinition):
     def __init__(self, encoded_str: str, length: int) -> None:
         self._encoded_str = encoded_str
         super().__init__(GenericIntType("u8", 8, False), [length])
@@ -362,14 +461,14 @@ class FunctionSignature:
         if self.is_main() or self.is_foreign():
             return self.name
 
-        arguments_mangle = "".join(arg.mangled_name for arg in self.arguments)
+        arguments_mangle = "".join(arg.ir_mangle for arg in self.arguments)
 
         specialization_mangle = ""
         if len(self.specialization) != 0:
             specialization_mangle = (
                 "__SPECIAL_"
                 + "".join(
-                    specialization_item.mangled_name
+                    specialization_item.ir_mangle
                     if isinstance(specialization_item, Type)
                     else str(specialization_item)
                     for specialization_item in self.specialization
@@ -408,7 +507,7 @@ class FunctionSignature:
     @cached_property
     def user_facing_name(self) -> str:
         return self._repr_impl(
-            lambda t: t.get_user_facing_name(False) if isinstance(t, Type) else str(t)
+            lambda t: t.format_for_output_to_user() if isinstance(t, Type) else str(t)
         )
 
     @cached_property
@@ -416,7 +515,7 @@ class FunctionSignature:
         return f"{self.return_type.ir_type} @{self.mangled_name}"
 
 
-def get_builtin_types() -> list[Type]:
+def get_builtin_types() -> list[PrimitiveType]:
     # Generate sized int types
     sized_int_types = []
     for size in (8, 16, 32, 64, 128):

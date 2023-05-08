@@ -9,5 +9,5 @@ function main: () -> int = {
 };
 
 /// @COMPILE; EXPECT ERR
-/// File '*.c3', line 6, in 'function main: () -> int'
+/// File '*.c3', line 3, in 'typedef'
 /// Error: generic 'T' has a generic annotation (generic types may not have additional generic annotations)

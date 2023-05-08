@@ -1,6 +1,12 @@
+from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
 
-from lark import Token
+
+@dataclass
+class SourceLocation:
+    line: int
+    file: str
+    include_hierarchy: list[str]
 
 
 class GrapheneError(ValueError):
@@ -17,6 +23,20 @@ class ErrorWithLineInfo(ValueError):
         super().__init__(message)
 
         self.line = line
+        self.context = context
+
+    @property
+    def message(self) -> str:
+        return str(self)
+
+
+class ErrorWithLocationInfo(ValueError):
+    def __init__(
+        self, message: str, location: SourceLocation, context: Optional[str] = None
+    ) -> None:
+        super().__init__(message)
+
+        self.loc = location
         self.context = context
 
     @property
@@ -63,6 +83,13 @@ class SubstitutionFailure(GrapheneError):
         super().__init__(
             f"Error: no definition exists for Type '{name_with_specialization}', "
             "it may be incorrectly specialized"
+        )
+
+
+class PatternMatchFailed(SubstitutionFailure):
+    def __init__(self, target: str, actual: str) -> None:
+        super(GrapheneError).__init__(
+            f"Error: cannot pattern match '{actual}' to '{target}'"
         )
 
 
@@ -172,14 +199,19 @@ class AssignmentToNonPointerError(GrapheneError):
         )
 
 
-class RepeatedGenericName(ErrorWithLineInfo):
-    def __init__(self, generic_name: Token, type_name: str) -> None:
-        assert generic_name.line is not None
+class ArrayDimensionError(GrapheneError):
+    def __init__(self, array_type: str) -> None:
+        super().__init__(
+            f"Error: cannot construct array type '{array_type}' since it has a non-positive size"
+        )
 
+
+class RepeatedGenericName(ErrorWithLineInfo):
+    def __init__(self, generic_name: str, line_number: int, type_name: str) -> None:
         super().__init__(
             f"Error: generic '{generic_name}' appears more than once in "
             f"the declaration of '{type_name}'",
-            generic_name.line,
+            line_number,
             f"typedef {type_name} : ...",
         )
 
@@ -261,12 +293,35 @@ class MissingFunctionReturn(ErrorWithLineInfo):
 class VoidVariableDeclaration(GrapheneError):
     def __init__(
         self,
-        kind: Literal["variable", "argument", "struct member"],
+        kind: Literal["variable", "argument"],
         variable_name: str,
         full_type: str,
     ) -> None:
         super().__init__(
             f"Error: {kind} '{variable_name}' cannot have type '{full_type}'"
+        )
+
+
+class VoidStructDeclaration(GrapheneError):
+    def __init__(
+        self,
+        struct_type: str,
+        member_name: str,
+        member_type: str,
+    ) -> None:
+        super().__init__(
+            f"Error: struct '{struct_type}' cannot have member '{member_name}' of type '{member_type}'"
+        )
+
+
+class VoidArrayDeclaration(GrapheneError):
+    def __init__(
+        self,
+        array_type: str,
+        member_type: str,
+    ) -> None:
+        super().__init__(
+            f"Error: array '{array_type}' cannot operate on scalar '{member_type}'"
         )
 
 

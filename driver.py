@@ -2,8 +2,9 @@ import argparse
 import subprocess
 import sys
 from os import getenv
-from parser import generate_ir_from_source
 from pathlib import Path
+
+from graphene_parser import generate_ir_from_source
 
 
 def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
