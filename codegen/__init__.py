@@ -1,10 +1,4 @@
-from .builtin_types import (
-    BoolType,
-    IntType,
-    StructDefinition,
-    UIntType,
-    VoidType,
-)
+from .builtin_types import BoolType, IntType, StructDefinition, UIntType, VoidType
 from .expressions import (
     ArrayIndexAccess,
     BorrowExpression,
@@ -34,7 +28,6 @@ from .interfaces import (
     Variable,
 )
 from .translation_unit import Function, GenericFunctionParser, Program, Scope
-
 from .type_resolution import (
     CompileTimeConstant,
     GenericArgument,

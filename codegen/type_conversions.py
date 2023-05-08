@@ -1,7 +1,7 @@
 from functools import cached_property
 from typing import Iterator, Optional
 
-from .builtin_types import IntegerDefinition, HeapArrayDefinition, StackArrayDefinition
+from .builtin_types import HeapArrayDefinition, IntegerDefinition, StackArrayDefinition
 from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 

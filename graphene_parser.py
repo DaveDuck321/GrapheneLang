@@ -150,7 +150,9 @@ class TypeTransformer(Transformer):
     ) -> cg.UnresolvedType:
         return cg.UnresolvedHeapArrayType(element_type, list(known_dimensions))
 
-    def struct_type(self, member_trees: list[Token | cg.UnresolvedType]) -> cg.UnresolvedType:
+    def struct_type(
+        self, member_trees: list[Token | cg.UnresolvedType]
+    ) -> cg.UnresolvedType:
         members: dict[str, cg.UnresolvedType] = {}
 
         for member_name, member_type in in_pairs(member_trees):

@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable
 
-from .interfaces import GenericMapping, Type, SpecializationItem, format_specialization
 from .builtin_types import (
     AnonymousType,
     HeapArrayDefinition,
@@ -12,6 +11,7 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
+from .interfaces import GenericMapping, SpecializationItem, Type, format_specialization
 from .user_facing_errors import (
     DoubleReferenceError,
     ErrorWithLocationInfo,
