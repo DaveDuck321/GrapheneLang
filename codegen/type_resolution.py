@@ -361,7 +361,17 @@ class UnresolvedStackArrayType(UnresolvedType):
         return AnonymousType(StackArrayDefinition(resolved_member, resolved_dimensions))
 
     def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
-        assert False  # TODO
+        if not isinstance(target.definition, StackArrayDefinition):
+            return False
+
+        if len(self.dimensions) != len(target.definition.dimensions):
+            return False
+
+        for target_dim, our_dim in zip(target.definition.dimensions, self.dimensions):
+            if not our_dim.pattern_match(target_dim, mapping_out):
+                return False
+
+        return self.member_type.pattern_match(target.definition.member, mapping_out)
 
 
 @dataclass
@@ -403,7 +413,19 @@ class UnresolvedHeapArrayType(UnresolvedType):
         return AnonymousType(HeapArrayDefinition(resolved_member, resolved_dimensions))
 
     def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
-        assert False  # TODO
+        if not isinstance(target.definition, HeapArrayDefinition):
+            return False
+
+        if len(self.known_dimensions) != len(target.definition.known_dimensions):
+            return False
+
+        for target_dim, our_dim in zip(
+            target.definition.known_dimensions, self.known_dimensions
+        ):
+            if not our_dim.pattern_match(target_dim, mapping_out):
+                return False
+
+        return self.member_type.pattern_match(target.definition.member, mapping_out)
 
 
 @dataclass
