@@ -19,13 +19,13 @@ function to_value : (_: FalseType) -> bool = {
 function main : () -> int = {
     let result1 : IsIntegral<u16> = {};
     if (to_value(result1)) {
-        puts("u16 is integral");
+        puts("u16 is integral\0");
     }
 
     let result2 : IsIntegral<u8[&]> = {};
     if (to_value(result2)) {
         // Should not run
-        puts("u8[&] is integral");
+        puts("u8[&] is integral\0");
     }
     return 0;
 };

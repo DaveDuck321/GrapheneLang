@@ -1,17 +1,17 @@
 foreign puts : (str: u8[&]) -> int;
 
 function a : () -> int = {
-    puts("a");
+    puts("a\0");
     return 1;
 };
 
 function b : (b: int) -> int = {
-    puts("b");
+    puts("b\0");
     return 7;
 };
 
 function c : () -> int = {
-    puts("c");
+    puts("c\0");
     return 1;
 };
 

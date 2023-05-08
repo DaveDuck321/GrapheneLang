@@ -6,6 +6,7 @@ from .user_facing_errors import InvalidEscapeSequence
 _ESCAPE_SEQUENCES_TABLE = {
     '"': chr(0x22),
     "\\": chr(0x5C),
+    "0": chr(0x00),
     "a": chr(0x07),
     "b": chr(0x08),
     "f": chr(0x0C),
@@ -33,9 +34,6 @@ def encode_string(string: str) -> tuple[str, int]:
         utf8_bytes = char.encode("utf-8")
 
         for byte in utf8_bytes:
-            # We can't store zeros in a null-terminated string.
-            assert byte != 0
-
             buffer.append(f"\\{byte:0>2x}")
 
         byte_len += len(utf8_bytes)
@@ -81,9 +79,5 @@ def encode_string(string: str) -> tuple[str, int]:
 
     # Consume any remaining characters.
     consume_substr(len(string))
-
-    # Append the null terminator.
-    buffer.append("\\00")
-    byte_len += 1
 
     return "".join(buffer), byte_len

@@ -57,7 +57,7 @@ foreign puts : (str: u8[&]) -> int;
 
 function main : () -> int = {
     if (1 + 1 != 3) {
-        puts("sanity check");
+        puts("sanity check\0");
     }
 
     // All of the following check for obvious errors

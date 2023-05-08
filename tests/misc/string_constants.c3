@@ -9,6 +9,6 @@ function main: () -> int = {
 };
 
 /// @COMPILE --use-crt
-/// @GREP_IR [12 x i8] c"άβ\c2\ad\e2\80\80γ\00"
+/// @GREP_IR [11 x i8] c"άβ\c2\ad\e2\80\80γ"
 /// @RUN; EXPECT OUT
 /// άβ­ γ

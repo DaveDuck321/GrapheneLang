@@ -1,27 +1,27 @@
 foreign puts : (str: u8[&]) -> int;
 
 @operator + : (rhs: int, lhs: int) -> int = {
-    puts("+");
+    puts("+\0");
     return 0;
 };
 
 @operator * : (rhs: int, lhs: int) -> int = {
-    puts("*");
+    puts("*\0");
     return 0;
 };
 
 @operator || : (rhs: int, lhs: int) -> bool = {
-    puts("||");
+    puts("||\0");
     return false;
 };
 
 @operator ** : (rhs: int, lhs: int) -> int = {
-    puts("**");
+    puts("**\0");
     return 0;
 };
 
 @operator == : (rhs: int, lhs: int) -> bool = {
-    puts("==");
+    puts("==\0");
     return false;
 };
 

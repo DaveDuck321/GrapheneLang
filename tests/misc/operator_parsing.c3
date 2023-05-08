@@ -2,55 +2,55 @@ foreign puts : (str: u8[&]) -> int;
 
 @operator - : (val: int) -> int = {
     // unary_operator: highest precedence.
-    puts("-");
+    puts("-\0");
     return 0;
 };
 
 @operator ** : (rhs: int, lhs: int) -> int = {
     // power.
-    puts("**");
+    puts("**\0");
     return 0;
 };
 
 @operator * : (rhs: int, lhs: int) -> int = {
     // mult_div.
-    puts("*");
+    puts("*\0");
     return 0;
 };
 
 @operator + : (rhs: int, lhs: int) -> int = {
     // add_sub.
-    puts("+");
+    puts("+\0");
     return 0;
 };
 
 @operator >> : (rhs: int, lhs: int) -> int = {
     // bit_shift.
-    puts(">>");
+    puts(">>\0");
     return 0;
 };
 
 @operator & : (rhs: int, lhs: int) -> int = {
     // bitwise_and.
-    puts("&");
+    puts("&\0");
     return 0;
 };
 
 @operator ^ : (rhs: int, lhs: int) -> int = {
     // bitwise_xor.
-    puts("^");
+    puts("^\0");
     return 0;
 };
 
 @operator | : (rhs: int, lhs: int) -> int = {
     // bitwise_or.
-    puts("|");
+    puts("|\0");
     return 0;
 };
 
 @operator == : (rhs: int, lhs: int) -> bool = {
     // comparison_op.
-    puts("==");
+    puts("==\0");
     return false;
 };
 

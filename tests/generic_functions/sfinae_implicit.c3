@@ -13,12 +13,12 @@ typedef IsLargeIntegral<i128> : TrueType;
 foreign puts : (str : u8[&]) -> int;
 
 function[T] generic_fn : (a : T) -> EnableIf<IsLargeIntegral<T>> = {
-    puts("Large integral type");
+    puts("Large integral type\0");
     return 0;
 };
 
 function[T] generic_fn : (a : T) -> EnableIf<Not<IsLargeIntegral<T>>> = {
-    puts("Small integral type");
+    puts("Small integral type\0");
     return 0;
 };
 
