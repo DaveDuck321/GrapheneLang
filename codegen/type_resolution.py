@@ -559,6 +559,7 @@ class TypeSymbolTable:
 
         # Ensure we only resolve each type once
         self._unresolved_types.clear()
+        self._unresolved_visiting_state.clear()
 
     def lookup_type(
         self, prefix: str, specialization: list[SpecializationItem]
