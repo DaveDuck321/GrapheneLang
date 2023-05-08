@@ -415,13 +415,16 @@ class ArrayInitializer(TypedExpression):
 
         target_type = array_type.definition.member
         for member_expr in element_exprs:
-            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
             member, extra_exprs = do_implicit_conversion(
                 member_expr, target_type, "array initialization"
             )
+
+            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
+            assert conversion_cost is not None
+
             self._elements.append(member)
             self._conversion_exprs.extend(extra_exprs)
-            self.implicit_conversion_cost += conversion_cost or 0
+            self.implicit_conversion_cost += conversion_cost
 
         super().__init__(array_type, False, False)
 
@@ -471,11 +474,14 @@ class StructInitializer(TypedExpression):
         for (_, target_type), member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
         ):
-            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
             member, extra_exprs = do_implicit_conversion(member_expr, target_type)
+
+            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
+            assert conversion_cost is not None
+
             self._members.append(member)
             self._conversion_exprs.extend(extra_exprs)
-            self.implicit_conversion_cost += conversion_cost or 0
+            self.implicit_conversion_cost += conversion_cost
 
         super().__init__(struct_type, False, False)
 
@@ -607,7 +613,8 @@ class UnnamedInitializerList(InitializerList):
                 raise InvalidInitializerListLength(
                     len(self._members), len(other.definition.members), "a struct"
                 )
-        else:  # isinstance(other.definition, StackArrayDefinition)
+        else:
+            assert isinstance(other.definition, StackArrayDefinition)
             if len(other.definition.dimensions) != 1:
                 raise InvalidInitializerListConversion(
                     other.format_for_output_to_user(True),
