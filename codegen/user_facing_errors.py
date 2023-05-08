@@ -1,4 +1,12 @@
+from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
+
+
+@dataclass
+class SourceLocation:
+    line: int
+    file: str
+    include_hierarchy: list[str]
 
 
 class GrapheneError(ValueError):
@@ -15,6 +23,20 @@ class ErrorWithLineInfo(ValueError):
         super().__init__(message)
 
         self.line = line
+        self.context = context
+
+    @property
+    def message(self) -> str:
+        return str(self)
+
+
+class ErrorWithLocationInfo(ValueError):
+    def __init__(
+        self, message: str, location: SourceLocation, context: Optional[str] = None
+    ) -> None:
+        super().__init__(message)
+
+        self.loc = location
         self.context = context
 
     @property

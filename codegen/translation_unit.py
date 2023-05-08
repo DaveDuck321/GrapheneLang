@@ -22,21 +22,17 @@ from .interfaces import (
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .type_resolution import (
-    GenericArgument,
     GenericTypedef,
     NumericLiteralConstant,
     SpecializedTypedef,
     TypeSymbolTable,
     UnresolvedGenericMapping,
-    UnresolvedSpecializationItem,
     UnresolvedType,
 )
 from .user_facing_errors import (
     AmbiguousFunctionCall,
-    FailedLookupError,
     OverloadResolutionError,
     RedefinitionError,
-    SubstitutionFailure,
 )
 
 
@@ -410,25 +406,11 @@ class Program:
     def resolve_all_types(self) -> None:
         self._type_table.resolve_all_types()
 
-    def add_type_alias(
-        self,
-        prefix: str,
-        specialization: list[UnresolvedSpecializationItem],
-        aliased: UnresolvedType,
-    ) -> None:
-        self._type_table.add_unresolved_type(
-            SpecializedTypedef(prefix, specialization, aliased)
-        )
+    def add_type_alias(self, typedef: SpecializedTypedef) -> None:
+        self._type_table.add_unresolved_type(typedef)
 
-    def add_generic_type_alias(
-        self,
-        prefix: str,
-        generics: list[GenericArgument],
-        aliased: UnresolvedType,
-    ) -> None:
-        self._type_table.add_generic_unresolved_type(
-            GenericTypedef(prefix, generics, aliased)
-        )
+    def add_generic_type_alias(self, typedef: GenericTypedef) -> None:
+        self._type_table.add_generic_unresolved_type(typedef)
 
     def add_static_string(self, string: str) -> StaticVariable:
         if string in self._string_cache:

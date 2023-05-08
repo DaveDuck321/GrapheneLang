@@ -38,8 +38,10 @@ from .translation_unit import Function, GenericFunctionParser, Program, Scope
 from .type_resolution import (
     CompileTimeConstant,
     GenericArgument,
+    GenericTypedef,
     GenericValueReference,
     NumericLiteralConstant,
+    SpecializedTypedef,
     UnresolvedGenericMapping,
     UnresolvedGenericType,
     UnresolvedHeapArrayType,

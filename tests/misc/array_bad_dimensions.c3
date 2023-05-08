@@ -6,4 +6,4 @@ function main: () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 1, in 'typedef'
-/// Error: cannot construct array type 'int[6, 0]' since it has a non-positive index
+/// Error: cannot construct array type 'int[[]6, 0[]]' since it has a non-positive size

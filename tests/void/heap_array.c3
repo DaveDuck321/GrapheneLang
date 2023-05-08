@@ -9,4 +9,4 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 2, in 'typedef'
-/// Error: array 'my_void[&]' cannot operate on scalar 'typedef my_void = void'
+/// Error: array 'my_void[[]&[]]' cannot operate on scalar 'typedef my_void = void'

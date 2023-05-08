@@ -14,8 +14,11 @@ from .builtin_types import (
 )
 from .user_facing_errors import (
     DoubleReferenceError,
+    ErrorWithLocationInfo,
     FailedLookupError,
+    GrapheneError,
     RedefinitionError,
+    SourceLocation,
     SubstitutionFailure,
 )
 
@@ -408,6 +411,7 @@ class SpecializedTypedef:
     name: str
     specialization: list[UnresolvedSpecializationItem]
     aliased: UnresolvedType
+    loc: SourceLocation
 
 
 @dataclass
@@ -415,6 +419,7 @@ class GenericTypedef:
     name: str
     generics: list[GenericArgument]
     aliased: UnresolvedType
+    loc: SourceLocation
 
 
 class TypeSymbolTable:
@@ -485,6 +490,35 @@ class TypeSymbolTable:
         self._resolved_types[generic.name].append(result)
         return result
 
+    def resolve_typedef(self, typedef: SpecializedTypedef) -> None:
+        resolved_specialization: list[SpecializationItem] = []
+
+        for arg in typedef.specialization:
+            if isinstance(arg, CompileTimeConstant):
+                resolved_specialization.append(arg.resolve())
+            else:
+                assert isinstance(arg, UnresolvedType)
+                resolved_specialization.append(self.resolve_type(arg))
+
+        # Check for duplication
+        for other in self._resolved_types[typedef.name]:
+            if other.specialization == resolved_specialization:
+                raise RedefinitionError(
+                    "type",
+                    typedef.name + format_specialization(resolved_specialization),
+                )
+
+        # Finish resolution
+        resolved_rhs = self.resolve_type(typedef.aliased)
+        self._resolved_types[typedef.name].append(
+            NamedType(
+                typedef.name,
+                resolved_specialization,
+                resolved_rhs.definition,
+                resolved_rhs,
+            )
+        )
+
     def resolve_all_types(self) -> None:
         # Guarantee all typedefed specializations have been resolved
         resolution_order = []
@@ -494,33 +528,12 @@ class TypeSymbolTable:
         for type_name in resolution_order:
             # TODO: further sort this list to parse a single type in the correct order
             for unresolved_type in self._unresolved_types[type_name]:
-                resolved_specialization: list[SpecializationItem] = []
-
-                for arg in unresolved_type.specialization:
-                    if isinstance(arg, CompileTimeConstant):
-                        resolved_specialization.append(arg.resolve())
-                    else:
-                        assert isinstance(arg, UnresolvedType)
-                        resolved_specialization.append(self.resolve_type(arg))
-
-                # Check for duplication
-                for other in self._resolved_types[type_name]:
-                    if other.specialization == resolved_specialization:
-                        raise RedefinitionError(
-                            "type",
-                            type_name + format_specialization(resolved_specialization),
-                        )
-
-                # Finish resolution
-                resolved_rhs = self.resolve_type(unresolved_type.aliased)
-                self._resolved_types[type_name].append(
-                    NamedType(
-                        type_name,
-                        resolved_specialization,
-                        resolved_rhs.definition,
-                        resolved_rhs,
+                try:
+                    self.resolve_typedef(unresolved_type)
+                except GrapheneError as exc:
+                    raise ErrorWithLocationInfo(
+                        exc.message, unresolved_type.loc, "typedef"
                     )
-                )
 
         # Ensure we only resolve each type once
         self._unresolved_types.clear()

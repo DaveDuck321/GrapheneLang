@@ -13,6 +13,7 @@ import codegen as cg
 from codegen.user_facing_errors import (
     CircularImportException,
     ErrorWithLineInfo,
+    ErrorWithLocationInfo,
     FailedLookupError,
     FileDoesNotExistException,
     FileIsAmbiguousException,
@@ -22,6 +23,7 @@ from codegen.user_facing_errors import (
     InvalidSyntax,
     MissingFunctionReturn,
     RepeatedGenericName,
+    SourceLocation,
     SubstitutionFailure,
     VoidVariableDeclaration,
 )
@@ -209,14 +211,20 @@ class TypeTransformer(Transformer):
 
 
 class ParseTypeDefinitions(Interpreter):
-    def __init__(self, program: cg.Program) -> None:
+    def __init__(
+        self, file: str, include_hierarchy: list[str], program: cg.Program
+    ) -> None:
         super().__init__()
 
         self._program = program
+        self._file = file
+        self._include_hierarchy = include_hierarchy
 
     def _generic_typedef(
-        self, prefix: str, generic_definitions_tree: Tree, rhs_tree: Tree
+        self, prefix: Token, generic_definitions_tree: Tree, rhs_tree: Tree
     ) -> None:
+        assert prefix.line is not None
+        loc = SourceLocation(prefix.line, self._file, self._include_hierarchy)
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions = []
@@ -237,26 +245,33 @@ class ParseTypeDefinitions(Interpreter):
             )
 
         rhs_type = TypeTransformer.parse(rhs_tree, generic_mapping)
-        self._program.add_generic_type_alias(prefix, generic_definitions, rhs_type)
+        self._program.add_generic_type_alias(
+            cg.GenericTypedef(prefix.value, generic_definitions, rhs_type, loc)
+        )
 
     def _specialized_typedef(
         self,
-        prefix: str,
+        prefix: Token,
         specialization: list[cg.UnresolvedSpecializationItem],
         rhs_tree: Tree,
     ) -> None:
+        assert prefix.line is not None
+        loc = SourceLocation(prefix.line, self._file, self._include_hierarchy)
+
         rhs_type = TypeTransformer.parse(rhs_tree, {})
-        self._program.add_type_alias(prefix, specialization, rhs_type)
+        self._program.add_type_alias(
+            cg.SpecializedTypedef(prefix.value, specialization, rhs_type, loc)
+        )
 
     @inline_and_wrap_user_facing_errors("typedef")
     def generic_typedef(
         self, generic_definitions_tree: Optional[Tree], type_name: Token, rhs_tree: Tree
     ) -> None:
         if generic_definitions_tree is not None:
-            self._generic_typedef(type_name.value, generic_definitions_tree, rhs_tree)
+            self._generic_typedef(type_name, generic_definitions_tree, rhs_tree)
         else:
             # Confusingly parsed but this is just a standard typedef
-            self._specialized_typedef(type_name.value, [], rhs_tree)
+            self._specialized_typedef(type_name, [], rhs_tree)
 
     @inline_and_wrap_user_facing_errors("typedef<...>")
     def specialized_typedef(
@@ -267,28 +282,33 @@ class ParseTypeDefinitions(Interpreter):
             TypeTransformer.parse_specialization(tree)
             for tree in specialization_tree.children
         ]
-        self._specialized_typedef(type_name.value, specialization, rhs_tree)
+        self._specialized_typedef(type_name, specialization, rhs_tree)
 
 
 class ParseFunctionSignatures(Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
-        self.current_file: Optional[str] = None
+        self._current_file: Optional[str] = None
+        self._include_hierarchy: Optional[list[str]] = None
 
         self._program = program
         self._function_body_trees: list[
-            tuple[str, cg.Function, Tree, cg.GenericMapping]
+            tuple[SourceLocation, cg.Function, Tree, cg.GenericMapping]
         ] = []
 
-    def parse_file(self, file_name: str, tree: Tree) -> None:
-        self.current_file = file_name
+    def parse_file(
+        self, file_name: str, include_hierarchy: list[str], tree: Tree
+    ) -> None:
+        self._current_file = file_name
+        self._include_hierarchy = include_hierarchy
         self.visit(tree)
-        self.current_file = None
+        self._current_file = None
+        self._include_hierarchy = None
 
     def get_function_body_trees(
         self,
-    ) -> list[tuple[str, cg.Function, Tree, cg.GenericMapping]]:
+    ) -> list[tuple[SourceLocation, cg.Function, Tree, cg.GenericMapping]]:
         return self._function_body_trees
 
     @inline_and_wrap_user_facing_errors("function[...] signature")
@@ -334,6 +354,12 @@ class ParseFunctionSignatures(Interpreter):
         return_type_tree: Tree,
         body_tree: Tree,
     ):
+        assert self._current_file is not None
+        assert self._include_hierarchy is not None
+        location = SourceLocation(
+            args_tree.meta.line, self._current_file, self._include_hierarchy
+        )
+
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions: list[cg.GenericArgument] = []
         for generic_tree in generic_definitions_tree.children:
@@ -352,9 +378,6 @@ class ParseFunctionSignatures(Interpreter):
         for name, type_tree in in_pairs(args_tree.children):
             unresolved_args.append(TypeTransformer.parse(type_tree, generic_mapping))
             arg_names.append(name.value)
-
-        assert self.current_file is not None
-        file_name = self.current_file
 
         def try_parse_fn_from_specialization(
             fn_name: str,
@@ -390,7 +413,7 @@ class ParseFunctionSignatures(Interpreter):
                 return None  # SFINAE
 
             self._function_body_trees.append(
-                (file_name, function, body_tree, specialization_map)
+                (location, function, body_tree, specialization_map)
             )
             return function
 
@@ -489,8 +512,12 @@ class ParseFunctionSignatures(Interpreter):
         # Save the body to parse later (TODO: maybe forward declarations
         # should be possible?)
         if body_tree is not None:
-            assert self.current_file is not None
-            self._function_body_trees.append((self.current_file, func, body_tree, {}))
+            assert self._current_file is not None
+            assert self._include_hierarchy is not None
+            location = SourceLocation(
+                args_tree.meta.line, self._current_file, self._include_hierarchy
+            )
+            self._function_body_trees.append((location, func, body_tree, {}))
 
     def _build_function(
         self,
@@ -1110,7 +1137,6 @@ def append_file_to_program(
     include_path: list[Path],
     included_from: list[ResolvedPath],
     already_processed: set[ResolvedPath],
-    debug_compiler: bool = False,
 ) -> None:
     already_processed.add(file_path)
 
@@ -1127,26 +1153,18 @@ def append_file_to_program(
         ).visit(tree)
         # TODO: these stages can be combined if we require forward declaration
         # FIXME: allow recursive types
-        ParseTypeDefinitions(program).visit(tree)
+        ParseTypeDefinitions(
+            str(file_path), list(map(str, included_from)), program
+        ).visit(tree)
         program.resolve_all_types()
 
-        function_parser.parse_file(file_path, tree)
+        function_parser.parse_file(str(file_path), list(map(str, included_from)), tree)
     except ErrorWithLineInfo as exc:
-        if debug_compiler:
-            traceback.print_exc()
-            print("~~~ User-facing error message ~~~")
-
-        context_str = f", in '{exc.context}'" if exc.context else ""
-        print(f"File '{file_path}', line {exc.line}{context_str}", file=sys.stderr)
-        print(f"    {exc.message}", file=sys.stderr)
-
-        if included_from:
-            print(file=sys.stderr)
-
-        for file in reversed(included_from):
-            print(f"Included from file '{file}'", file=sys.stderr)
-
-        sys.exit(1)
+        raise ErrorWithLocationInfo(
+            exc.message,
+            SourceLocation(exc.line, str(file_path), list(map(str, included_from))),
+            exc.context,
+        ) from exc
 
 
 def parse_file_into_lark_tree(lark: Lark, file_path: ResolvedPath) -> Tree:
@@ -1201,31 +1219,39 @@ def generate_ir_from_source(
     )
 
     program = cg.Program()
-    fn_parser = ParseFunctionSignatures(program)
-    append_file_to_program(
-        lark,
-        program,
-        fn_parser,
-        ResolvedPath(file_path),
-        include_path,
-        [],
-        set(),
-        debug_compiler,
-    )
-
-    file_name = file_path
     try:
-        for file_name, fn, body, specialization in fn_parser.get_function_body_trees():
-            generate_function_body(program, fn, body, specialization)
+        fn_parser = ParseFunctionSignatures(program)
+        append_file_to_program(
+            lark,
+            program,
+            fn_parser,
+            ResolvedPath(file_path),
+            include_path,
+            [],
+            set(),
+        )
 
-    except ErrorWithLineInfo as exc:
+        for loc, fn, body, specialization in fn_parser.get_function_body_trees():
+            try:
+                generate_function_body(program, fn, body, specialization)
+            except ErrorWithLineInfo as exc:
+                location = SourceLocation(exc.line, loc.file, loc.include_hierarchy)
+                raise ErrorWithLocationInfo(exc.message, location, exc.context)
+
+    except ErrorWithLocationInfo as exc:
         if debug_compiler:
             traceback.print_exc()
             print("~~~ User-facing error message ~~~")
 
-        context_str = f", in '{exc.context}'" if exc.context else ""
-        print(f"File '{file_name}', line {exc.line}{context_str}", file=sys.stderr)
+        context = f", in '{exc.context}'" if exc.context else ""
+        print(f"File '{exc.loc.file}', line {exc.loc.line}{context}", file=sys.stderr)
         print(f"    {exc.message}", file=sys.stderr)
+
+        if exc.loc.include_hierarchy:
+            print(file=sys.stderr)
+
+        for file in reversed(exc.loc.include_hierarchy):
+            print(f"Included from file '{file}'", file=sys.stderr)
 
         sys.exit(1)
 
