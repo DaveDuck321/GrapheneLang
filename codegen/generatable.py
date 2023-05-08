@@ -158,11 +158,13 @@ class Scope(Generatable):
         for variable in self._variables.values():
             contained_ir.extend(variable.generate_ir(reg_gen))
 
-        for lines in self._lines:
-            contained_ir.extend(lines.generate_ir(reg_gen))
+        for line in self._lines:
+            contained_ir.extend(line.generate_ir(reg_gen))
+            if line.is_return_guaranteed():
+                # Avoid generating dead instructions
+                # TODO: warn about unreachable code
+                break
 
-        # TODO: generate the 'start' and 'end' labels when required
-        #       We need to ensure each basic block has a terminating instruction
         return contained_ir
 
     def is_empty(self) -> bool:
