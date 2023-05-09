@@ -139,10 +139,23 @@ def run_test(file_path: Path) -> None:
 
     # @RUN
     if config.run:
+        # If we're not using the C runtime, then don't resolve lli process
+        # symbols in JIT'd code (or else the tests will be able to call into
+        # glibc) and specify `_start` as the entry function (defined in
+        # runtime.S).
+        # NOTE lli has a hardcoded runtime initialisation routine, which
+        # includes running constructors and destructors. This always gets called
+        # before execution jumps into the JIT'd code.
+        lli_runtime_options = (
+            ["--no-process-syms", "--entry-function=_start"]
+            if "--use-crt" not in config.compile_args
+            else []
+        )
+
         run_command(
             "runtime",
             TESTS_DIR,
-            [LLI_CMD, "--extra-object", RUNTIME_OBJ_PATH, "-"],
+            [LLI_CMD, *lli_runtime_options, "--extra-object", RUNTIME_OBJ_PATH, "-"],
             config.run,
             ir_output,
         )
