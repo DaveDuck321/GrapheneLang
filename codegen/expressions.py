@@ -3,6 +3,7 @@ from typing import Iterator, Optional
 
 from .builtin_types import (
     FunctionSignature,
+    HeapArrayDefinition,
     IntType,
     SizeType,
     StackArrayDefinition,
@@ -307,19 +308,28 @@ class ArrayIndexAccess(TypedExpression):
         self._array_ptr = array_ptr
 
         array_definition = self._type_of_array.definition
-        if not isinstance(array_definition, StackArrayDefinition):
+        if not isinstance(
+            array_definition, (StackArrayDefinition, HeapArrayDefinition)
+        ):
             raise TypeCheckerError(
                 "array index access",
                 array_ptr.underlying_type.format_for_output_to_user(),
                 "T[...]",
             )
 
-        if len(array_definition.dimensions) != len(indices):
-            raise ArrayIndexCount(
-                self._type_of_array.format_for_output_to_user(),
-                len(indices),
-                len(array_definition.dimensions),
-            )
+        if isinstance(array_definition, StackArrayDefinition):
+            if len(array_definition.dimensions) != len(indices):
+                raise ArrayIndexCount(
+                    self._type_of_array.format_for_output_to_user(),
+                    len(indices),
+                    len(array_definition.dimensions),
+                )
+        else:
+            # FIXME consider `known_dimensions`.
+            if len(indices) != 1:
+                raise ArrayIndexCount(
+                    self._type_of_array.format_for_output_to_user(), len(indices), 1
+                )
 
         self._element_type: Type = array_definition.member
         self._conversion_exprs: list[TypedExpression] = []
@@ -337,10 +347,24 @@ class ArrayIndexAccess(TypedExpression):
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
+        array_def = self._type_of_array.definition
+        assert isinstance(array_def, (StackArrayDefinition, HeapArrayDefinition))
+
         conversion_ir = self.expand_ir(self._conversion_exprs, reg_gen)
 
-        pointer_offset = ConstantExpression(IntType(), "0")
-        indices_ir = [pointer_offset.ir_ref_with_type_annotation]
+        # To access a stack array, we need to dereference the pointer returend
+        # by `alloca` to get the address of the first element, and then we can
+        # index into it. For heap arrays, we already have its address so we can
+        # index it immediately.
+        if isinstance(array_def, StackArrayDefinition):
+            indices_ir = [
+                ConstantExpression(SizeType(), "0").ir_ref_with_type_annotation
+            ]
+            gep_type = self._type_of_array.ir_type
+        else:
+            indices_ir = []
+            gep_type = array_def.member.ir_type
+
         for index in self._indices:
             indices_ir.append(index.ir_ref_with_type_annotation)
 
@@ -348,7 +372,7 @@ class ArrayIndexAccess(TypedExpression):
         self.result_reg = next(reg_gen)
         ir = [
             *conversion_ir,
-            f"%{self.result_reg} = getelementptr inbounds {self._type_of_array.ir_type},"
+            f"%{self.result_reg} = getelementptr inbounds {gep_type},"
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
