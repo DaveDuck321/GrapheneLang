@@ -21,7 +21,7 @@ function main: () -> int = {
     return a();
 };
 
-/// @COMPILE
+/// @COMPILE --use-crt
 /// @RUN; EXPECT 1; EXPECT OUT
 /// c
 /// b
