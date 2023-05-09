@@ -11,4 +11,4 @@ expect_status: "EXPECT" INT
 expect_msg: "EXPECT" (/OUT/ | /ERR/) /([^@].*\n?)+/
 compile_cmd: "@COMPILE" ARG* [";" expect_status] [";" expect_msg]
 grep_ir_cmd: "@GREP_IR" /.+\n/
-run_cmd: "@RUN" [";" expect_status] [";" expect_msg]
+run_cmd: "@RUN" ARG* [";" expect_status] [";" expect_msg]
