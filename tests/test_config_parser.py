@@ -24,7 +24,7 @@ class ExpectedOutput:
 class TestConfig:
     compile: Optional[ExpectedOutput]
     compile_args: list[str]
-    grep_ir_str: Optional[str]
+    grep_ir_strs: list[str]
     run: Optional[ExpectedOutput]
     run_args: list[str]
 
@@ -37,7 +37,7 @@ class ConfigInterpreter(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.config = TestConfig(None, [], None, None, [])
+        self.config = TestConfig(None, [], [], None, [])
 
     @staticmethod
     def _format_msg(msg: str) -> list[str]:
@@ -96,7 +96,7 @@ class ConfigInterpreter(Interpreter):
 
     @v_args(inline=True)
     def grep_ir_cmd(self, token: Token) -> None:
-        self.config.grep_ir_str = token.strip()
+        self.config.grep_ir_strs.append(token.strip())
 
 
 def parse_file(path: Path) -> TestConfig:
