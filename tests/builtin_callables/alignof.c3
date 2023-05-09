@@ -30,7 +30,9 @@ function main: () -> int = {
     }
 
     align = __builtin_alignof<MyArray1>();
-    if (align != 4) {
+    // Arrays of length at least 16 bytes have an alignment of at least 16
+    // bytes.
+    if (align != 16) {
         return 1;
     }
 
