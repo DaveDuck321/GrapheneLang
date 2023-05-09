@@ -134,8 +134,9 @@ def run_test(file_path: Path) -> None:
     )
 
     # @GREP_IR
-    if config.grep_ir_str and config.grep_ir_str not in ir_output:
-        raise IRGrepFailure(config.grep_ir_str)
+    for needle in config.grep_ir_strs:
+        if needle not in ir_output:
+            raise IRGrepFailure(needle)
 
     # @RUN
     if config.run:
