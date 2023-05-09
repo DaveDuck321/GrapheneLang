@@ -16,6 +16,21 @@
 
 .global _start
 _start:
+    # The first value of the stack is the argument count (argc). Pop it and
+    # place it into %rdi, the register that stores the first argument to be
+    # passed into main().
+    # Next on the stack is the argument pointers array (argv). Set %rsi, the
+    # register that stores the second argument of main(), to its address.
+    # See Section 3.4.1 of docs/abi.pdf for more.
+    pop     %rdi
+    mov     %rsp, %rsi
+
+    # lli thinks it called main(), so argc and argv are already in %rdi and
+    # %rsi, respectively. Thus, skip the code that retrieves them from the
+    # stack.
+.global _lli_start
+_lli_start:
+
     # Terminate the stack frame linked list; useful when compiling with
     # -fno-omit-frame-pointer.
     xor     %ebp, %ebp
