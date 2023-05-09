@@ -147,7 +147,7 @@ def run_test(file_path: Path) -> None:
         # includes running constructors and destructors. This always gets called
         # before execution jumps into the JIT'd code.
         lli_runtime_options = (
-            ["--no-process-syms", "--entry-function=_start"]
+            ["--no-process-syms", "--entry-function=_lli_start"]
             if "--use-crt" not in config.compile_args
             else []
         )
