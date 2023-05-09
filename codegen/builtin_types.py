@@ -294,26 +294,33 @@ class StructDefinition(TypeDefinition):
 
     @property
     def size(self) -> int:
-        # Return this size of the struct with c-style padding (for now)
+        # Return the size of the struct as set by the System V AMD64 ABI.
+        # [docs/abi.pdf, Section 3.1.2]
         #   TODO: we should manually set the `datalayout` string to match this
+
+        def compute_padding(curr_size: int, align_to: int) -> int:
+            # Simplifies to this, using the properties of remainders.
+            return -curr_size % align_to
+
+        # Each member is assigned to the lowest available offset with the
+        # appropriate alignment.
         this_size = 0
         for _, member_type in self.members:
             # Add padding to ensure each member is aligned
-            remainder = this_size % member_type.alignment
-            this_size += (member_type.alignment - remainder) % member_type.alignment
+            this_size += compute_padding(this_size, member_type.alignment)
 
             # Append member to the struct
             this_size += member_type.size
 
-        # Add padding to align the final struct
-        remainder = this_size % self.alignment
-        this_size += (self.alignment - remainder) % self.alignment
+        # The size of any object is always a multiple of the object‘s alignment.
+        this_size += compute_padding(this_size, self.alignment)
 
         return this_size
 
     @property
     def alignment(self) -> int:
-        # TODO: can we be less conservative here
+        # Structures and unions assume the alignment of their most strictly
+        # aligned component. [docs/abi.pdf, Section 3.1.2]
         return (
             max(member_type.alignment for _, member_type in self.members)
             if self.members
