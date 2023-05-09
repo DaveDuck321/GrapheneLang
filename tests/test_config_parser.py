@@ -26,6 +26,7 @@ class TestConfig:
     compile_args: list[str]
     grep_ir_str: Optional[str]
     run: Optional[ExpectedOutput]
+    run_args: list[str]
 
 
 # Global; only ever make one parser
@@ -36,7 +37,7 @@ class ConfigInterpreter(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.config = TestConfig(None, [], None, None)
+        self.config = TestConfig(None, [], None, None, [])
 
     @staticmethod
     def _format_msg(msg: str) -> list[str]:
@@ -86,7 +87,12 @@ class ConfigInterpreter(Interpreter):
     @v_args(inline=True)
     def run_cmd(self, *trees: Tree) -> None:
         assert self.config.run is None
-        self.config.run = self._cmd_impl(*trees)
+
+        *arg_tokens, status_tree, msg_tree = trees
+        assert is_list_of_str(arg_tokens)
+
+        self.config.run = self._cmd_impl(status_tree, msg_tree)
+        self.config.run_args.extend(arg_tokens)
 
     @v_args(inline=True)
     def grep_ir_cmd(self, token: Token) -> None:

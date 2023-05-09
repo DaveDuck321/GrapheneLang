@@ -155,7 +155,14 @@ def run_test(file_path: Path) -> None:
         run_command(
             "runtime",
             TESTS_DIR,
-            [LLI_CMD, *lli_runtime_options, "--extra-object", RUNTIME_OBJ_PATH, "-"],
+            [
+                LLI_CMD,
+                *lli_runtime_options,
+                "--extra-object",
+                RUNTIME_OBJ_PATH,
+                "-",
+                *config.run_args,
+            ],
             config.run,
             ir_output,
         )
