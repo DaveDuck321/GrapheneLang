@@ -21,6 +21,15 @@ _start:
     xor     %ebp, %ebp
     push    %rbp                    # rip = 0
     push    %rbp                    # rbp = 0
+
+    # The stack needs to be 16 byte aligned immediately before the call
+    # instruction is executed. Therefore, AND %rsp with a sign-extended 0xf0 to
+    # clear the 4 LSBs.
+    # NOTE if we start passing 256-bit (AVX) or 512-bit (AVX-512) packed data
+    # types on the stack, then the stack needs to be 32 or 64 byte aligned,
+    # respectively. Right now, the widest built-in type is i128.
+    # See Section 3.2.2 of docs/abi.pdf for more.
+    and     $-0x10, %rsp
     mov     %rsp, %rbp
 
     # System V AMD64 ABI dictates that the first two arguments are stored in
@@ -32,12 +41,12 @@ _start:
     mov     $60, %eax
     syscall
 
-# https://refspecs.linuxfoundation.org/elf/x86_64-abi-0.99.pdf
 # Userspace applications use the following register sequence
 #   %rdi, %rsi, %rdx, %rcx, %r8 and %r9  (then stack)
 # The kernel uses the following register sequence (clobbering %rcx and %r11)
 #   %rdi, %rsi, %rdx, %r10, %r8 and %r9  (with %rax as the syscall number)
-#
+# See Section 3.2.3 of docs/abi.pdf for more.
+
 # Helper exposing `syscall` as a foreign function
 # Relies on the caller to use the System V AMD64 ABI calling convention
 # We clobber %rcx, %r10, %r11 (ok since we don't need to preserve them)
