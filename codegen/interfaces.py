@@ -37,6 +37,11 @@ class TypeDefinition(ABC):
         pass
 
     @property
+    @abstractmethod
+    def is_finite(self) -> bool:
+        pass
+
+    @property
     def is_void(self) -> bool:
         return False
 
@@ -53,12 +58,27 @@ class Type(ABC):
         self.definition = definition
         self.is_reference = is_reference
 
+        self._visited_in_finite_resolution = False
+
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
         return (
             other.is_reference == self.is_reference
             and self.definition.are_equivalent(other.definition)
         )
+
+    @property
+    def is_finite(self) -> bool:
+        if self.is_reference:
+            return True
+
+        if self._visited_in_finite_resolution:
+            return False
+
+        self._visited_in_finite_resolution = True
+        is_finite = self.definition.is_finite
+        self._visited_in_finite_resolution = False
+        return is_finite
 
     @property
     def size(self) -> int:

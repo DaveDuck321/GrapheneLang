@@ -17,6 +17,7 @@ from .user_facing_errors import (
     ErrorWithLocationInfo,
     FailedLookupError,
     GrapheneError,
+    NonDeterminableSize,
     RedefinitionError,
     SourceLocation,
     SubstitutionFailure,
@@ -486,6 +487,26 @@ class TypeSymbolTable:
         self._unresolved_visiting_state[name] = 2  # Finished
         order.append(name)
 
+    def resolve_named_type(
+        self,
+        name: str,
+        specialization: list[SpecializationItem],
+        alias: UnresolvedType,
+    ) -> NamedType:
+        resolved_type = NamedType(name, specialization)
+        try:
+            # Prematurely assume type is resolvable (for cyclic types)
+            self._resolved_types[name].append(resolved_type)
+            resolved_type.update_with_finalized_alias(self.resolve_type(alias))
+            if not resolved_type.is_finite:
+                raise NonDeterminableSize(resolved_type.format_for_output_to_user(True))
+        except SubstitutionFailure as exc:
+            # Type is NOT resolvable, undo bad assumption and rethrow error
+            self._resolved_types[name].remove(resolved_type)
+            raise exc
+
+        return resolved_type
+
     def specialize_and_resolve_generic_type(
         self, name: str, specialization: list[SpecializationItem]
     ) -> NamedType:
@@ -504,13 +525,8 @@ class TypeSymbolTable:
 
             specialization_map[generic_arg.name] = specialization_item
 
-        unresolved_alias = generic.aliased.produce_specialized_copy(specialization_map)
-        resolved_alias = self.resolve_type(unresolved_alias)
-        result = NamedType(
-            generic.name, specialization, resolved_alias.definition, resolved_alias
-        )
-        self._resolved_types[generic.name].append(result)
-        return result
+        alias = generic.aliased.produce_specialized_copy(specialization_map)
+        return self.resolve_named_type(name, specialization, alias)
 
     def resolve_typedef(self, typedef: SpecializedTypedef) -> None:
         resolved_specialization: list[SpecializationItem] = []
@@ -531,15 +547,7 @@ class TypeSymbolTable:
                 )
 
         # Finish resolution
-        resolved_rhs = self.resolve_type(typedef.aliased)
-        self._resolved_types[typedef.name].append(
-            NamedType(
-                typedef.name,
-                resolved_specialization,
-                resolved_rhs.definition,
-                resolved_rhs,
-            )
-        )
+        self.resolve_named_type(typedef.name, resolved_specialization, typedef.aliased)
 
     def resolve_all_types(self) -> None:
         # Guarantee all typedefed specializations have been resolved

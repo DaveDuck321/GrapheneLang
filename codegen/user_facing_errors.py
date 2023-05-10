@@ -93,6 +93,13 @@ class PatternMatchFailed(SubstitutionFailure):
         )
 
 
+class NonDeterminableSize(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot construct recursive type '{type_name}' since it has a non-determinable size"
+        )
+
+
 class OverloadResolutionError(GrapheneError):
     def __init__(
         self,
