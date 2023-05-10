@@ -13,23 +13,61 @@ from .user_facing_errors import (
 )
 
 
+class PlaceholderDefinition(TypeDefinition):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        assert False
+
+    def format_for_output_to_user(self) -> str:
+        assert False
+
+    @property
+    def is_finite(self) -> bool:
+        # We can't verify if the type is finite right now because we haven't
+        # substituted in all placeholder values, this is fine though because
+        # the types we cyclically depend on will check us again when they've
+        # actually had their placeholders substituted.
+        return True
+
+    @property
+    def ir_mangle(self) -> str:
+        assert False
+
+    @property
+    def ir_type(self) -> str:
+        assert False
+
+    @property
+    def size(self) -> int:
+        assert False
+
+    @property
+    def alignment(self) -> int:
+        assert False
+
+
 class NamedType(Type):
     def __init__(
         self,
         name: str,
         specialization: list[SpecializationItem],
-        definition: TypeDefinition,
-        alias: Optional[Type],
     ) -> None:
-        if alias is not None:
-            assert alias.definition.are_equivalent(definition)
-            super().__init__(definition, alias.is_reference)
-        else:
-            super().__init__(definition, definition.is_always_a_reference)
+        # NameType is initially created WITHOUT a definition
+        # The definition is substituted later to allow recursive types
+        super().__init__(PlaceholderDefinition(), False)
 
         self.name = name
         self.specialization = specialization
+        self.alias: Optional[Type] = None
+
+    def update_with_finalized_alias(self, alias: Type) -> None:
+        assert self.alias is None
+
         self.alias = alias
+        self.definition = alias.definition
+        self.is_reference = alias.is_reference
 
     def get_name(self) -> str:
         specialization = format_specialization(self.specialization)
@@ -114,6 +152,10 @@ class PrimitiveDefinition(TypeDefinition):
         return self._name
 
     @property
+    def is_finite(self) -> bool:
+        return True
+
+    @property
     def ir_type(self) -> str:
         return self._ir
 
@@ -132,7 +174,8 @@ class PrimitiveDefinition(TypeDefinition):
 
 class PrimitiveType(NamedType):
     def __init__(self, name: str, definition: TypeDefinition) -> None:
-        super().__init__(name, [], definition, None)
+        super().__init__(name, [])
+        self.definition = definition
 
     def format_for_output_to_user(self, full=False) -> str:
         return super().format_for_output_to_user(False)
@@ -144,20 +187,12 @@ class PrimitiveType(NamedType):
         return self.definition.ir_type
 
 
-class VoidDefinition(TypeDefinition):
+class VoidDefinition(PrimitiveDefinition):
+    def __init__(self) -> None:
+        super().__init__(1, "void", "void")
+
     def are_equivalent(self, other: TypeDefinition) -> bool:
         return isinstance(other, VoidDefinition)
-
-    def format_for_output_to_user(self) -> str:
-        return "void"
-
-    @property
-    def ir_type(self) -> str:
-        return "void"
-
-    @property
-    def ir_mangle(self) -> str:
-        return "void"
 
     @property
     def size(self) -> int:
@@ -283,6 +318,13 @@ class StructDefinition(TypeDefinition):
         return "{" + members_format + "}"
 
     @property
+    def is_finite(self) -> bool:
+        for _, member_type in self.members:
+            if not member_type.is_finite:
+                return False
+        return True
+
+    @property
     def ir_type(self) -> str:
         member_ir = ", ".join(member.ir_type for _, member in self.members)
         return "{" + member_ir + "}"
@@ -355,6 +397,10 @@ class StackArrayDefinition(TypeDefinition):
         return f"{self.member.format_for_output_to_user()}[{dimensions_format}]"
 
     @property
+    def is_finite(self) -> bool:
+        return self.member.is_finite
+
+    @property
     def ir_type(self) -> str:
         def ir_sub_definition(dims: list[int]):
             if len(dims) == 0:
@@ -408,6 +454,10 @@ class HeapArrayDefinition(TypeDefinition):
 
         dimensions_format = ", ".join(map(str, self.known_dimensions))
         return f"{self.member.format_for_output_to_user()}[&, {dimensions_format}]"
+
+    @property
+    def is_finite(self) -> bool:
+        return False
 
     @property
     def ir_type(self) -> str:
