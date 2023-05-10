@@ -363,12 +363,7 @@ class StackArrayDefinition(TypeDefinition):
 
     @property
     def ir_type(self) -> str:
-        def ir_sub_definition(dims: list[int]):
-            if len(dims) == 0:
-                return self.member.ir_type
-            return f"[{dims[0]} x {ir_sub_definition(dims[1:])}]"
-
-        return ir_sub_definition(self.dimensions)
+        return format_array_dims_for_ir(self.dimensions, self.member)
 
     @property
     def ir_mangle(self) -> str:
@@ -542,3 +537,10 @@ def get_builtin_types() -> list[PrimitiveType]:
         SizeType(),
         VoidType(),
     ]
+
+
+def format_array_dims_for_ir(dims: list[int], element_type: Type) -> str:
+    if not dims:
+        return element_type.ir_type
+
+    return f"[{dims[0]} x {format_array_dims_for_ir(dims[1:], element_type)}]"
