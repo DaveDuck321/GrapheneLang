@@ -8,6 +8,7 @@ from .builtin_types import (
     SizeType,
     StackArrayDefinition,
     StructDefinition,
+    format_array_dims_for_ir,
 )
 from .interfaces import Type, TypedExpression, Variable
 from .type_conversions import (
@@ -325,8 +326,7 @@ class ArrayIndexAccess(TypedExpression):
                     len(array_definition.dimensions),
                 )
         else:
-            # FIXME consider `known_dimensions`.
-            if len(indices) != 1:
+            if len(indices) != 1 + len(array_definition.known_dimensions):
                 raise ArrayIndexCount(
                     self._type_of_array.format_for_output_to_user(), len(indices), 1
                 )
@@ -360,10 +360,12 @@ class ArrayIndexAccess(TypedExpression):
             indices_ir = [
                 ConstantExpression(SizeType(), "0").ir_ref_with_type_annotation
             ]
-            gep_type = self._type_of_array.ir_type
+            gep_type_ir = self._type_of_array.ir_type
         else:
             indices_ir = []
-            gep_type = array_def.member.ir_type
+            gep_type_ir = format_array_dims_for_ir(
+                array_def.known_dimensions, array_def.member
+            )
 
         for index in self._indices:
             indices_ir.append(index.ir_ref_with_type_annotation)
@@ -372,7 +374,7 @@ class ArrayIndexAccess(TypedExpression):
         self.result_reg = next(reg_gen)
         ir = [
             *conversion_ir,
-            f"%{self.result_reg} = getelementptr inbounds {gep_type},"
+            f"%{self.result_reg} = getelementptr inbounds {gep_type_ir},"
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
