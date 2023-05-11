@@ -399,6 +399,66 @@ class ArrayIndexAccess(TypedExpression):
         self._array_ptr.assert_can_write_to()
 
 
+class ArrayInitializer(TypedExpression):
+    def __init__(self, array_type: Type, element_exprs: list[TypedExpression]) -> None:
+        assert not array_type.is_reference
+        assert isinstance(array_type.definition, StackArrayDefinition)
+        # TODO support for multidimensional arrays?
+        assert len(array_type.definition.dimensions) == 1
+        assert len(element_exprs) == array_type.definition.dimensions[0]
+
+        self._result_ref: Optional[str] = None
+        self._elements: list[TypedExpression] = []
+        self._conversion_exprs: list[TypedExpression] = []
+        self.implicit_conversion_cost = 0
+        self.result_ref: Optional[str] = None
+
+        target_type = array_type.definition.member
+        for member_expr in element_exprs:
+            member, extra_exprs = do_implicit_conversion(
+                member_expr, target_type, "array initialization"
+            )
+
+            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
+            assert conversion_cost is not None
+
+            self._elements.append(member)
+            self._conversion_exprs.extend(extra_exprs)
+            self.implicit_conversion_cost += conversion_cost
+
+        super().__init__(array_type, False, False)
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
+
+        previous_ref = "undef"
+        for index, value in enumerate(self._elements):
+            current_ref = f"%{next(reg_gen)}"
+            ir.append(
+                f"{current_ref} = insertvalue {self.underlying_type.ir_type} {previous_ref}, "
+                f"{value.ir_ref_with_type_annotation}, {index}"
+            )
+
+            previous_ref = current_ref
+
+        self.result_ref = previous_ref
+        return ir
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert self.result_ref
+        return self.result_ref
+
+    def __repr__(self) -> str:
+        return f"ArrayInitializer({self.underlying_type}, {self._elements})"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("cannot modify temporary array")
+
+
 class StructInitializer(TypedExpression):
     def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
         assert not struct_type.is_reference
@@ -414,11 +474,14 @@ class StructInitializer(TypedExpression):
         for (_, target_type), member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
         ):
-            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
             member, extra_exprs = do_implicit_conversion(member_expr, target_type)
+
+            conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
+            assert conversion_cost is not None
+
             self._members.append(member)
             self._conversion_exprs.extend(extra_exprs)
-            self.implicit_conversion_cost += conversion_cost or 0
+            self.implicit_conversion_cost += conversion_cost
 
         super().__init__(struct_type, False, False)
 
@@ -511,7 +574,7 @@ class NamedInitializerList(InitializerList):
 
         if len(other.definition.members) != len(self._members):
             raise InvalidInitializerListLength(
-                len(self._members), len(other.definition.members)
+                len(self._members), len(other.definition.members), "a struct"
             )
 
         ordered_members: list[TypedExpression] = []
@@ -543,10 +606,34 @@ class UnnamedInitializerList(InitializerList):
         return f"InitializerList({self._members})"
 
     def get_ordered_members(self, other: Type) -> list[TypedExpression]:
-        assert isinstance(other.definition, StructDefinition)
-        if len(other.definition.members) != len(self._members):
-            raise InvalidInitializerListLength(
-                len(self._members), len(other.definition.members)
-            )
+        assert isinstance(other.definition, (StructDefinition, StackArrayDefinition))
+
+        if isinstance(other.definition, StructDefinition):
+            if len(other.definition.members) != len(self._members):
+                raise InvalidInitializerListLength(
+                    len(self._members), len(other.definition.members), "a struct"
+                )
+        else:
+            assert isinstance(other.definition, StackArrayDefinition)
+            if len(other.definition.dimensions) != 1:
+                raise InvalidInitializerListConversion(
+                    other.format_for_output_to_user(True),
+                    self.format_for_output_to_user(),
+                )
+            if (dimension := other.definition.dimensions[0]) != len(self._members):
+                raise InvalidInitializerListLength(
+                    len(self._members), dimension, "an array"
+                )
 
         return self._members
+
+    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
+        # Unnamed initializer lists can also be converted to stack arrays.
+        if isinstance(other.definition, StackArrayDefinition):
+            ordered_members = self.get_ordered_members(other)
+            array_initializer = ArrayInitializer(other, ordered_members)
+            return array_initializer.implicit_conversion_cost, [array_initializer]
+
+        # If other is not a stack array, then delegate to the parent class. It
+        # can handle all other cases.
+        return super().try_convert_to_type(other)
