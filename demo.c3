@@ -1,32 +1,50 @@
+@require_once "std/algorithm.c3";
 @require_once "std/arithmetic.c3";
-@require_once "std/memory.c3";
+@require_once "std/io.c3";
 
+function print_num : (num: int) -> void = {
+    let strs: u8[&][10] = {
+        "0\n",
+        "1\n",
+        "2\n",
+        "3\n",
+        "4\n",
+        "5\n",
+        "6\n",
+        "7\n",
+        "8\n",
+        "9\n"
+    };
 
-typedef MyStruct : {
-    a : int,
-    b : isize
+    sys_write(1, &strs[num], 2);
 };
 
-
 function main : () -> int = {
-    let allocator : Allocator = initialize_allocator();
+    let array    : int[7];
+    let expected : int[7];
 
-    let a : int& = &allocator:allocate<int>();
-    let b : MyStruct& = &allocator:allocate<MyStruct>();
+    let i : int = 0;
+    while (i < 7) {
+        array[i] = 7 - i;
+        expected[i] = i;
 
-    let c : i64[100]& = &allocator:allocate<i64[100]>();
-    let d : i64[800]& = &allocator:allocate<i64[800]>();
-    allocator:deallocate<i64[100]>(&c);
-
-    let e : MyStruct& = &allocator:allocate<MyStruct>();
-
-    a = 10;
-    b.a = 27;
-    b.b = 5;
-
-    if (a + b.a + b.b == 42) {
-        return 0;
+        i = i + 1;
     }
 
-    return 1;
+    heap_sort<int>(&array, 7);
+    max_heapify<int>(&array, 7, 0);
+
+    i = 0;
+    while (i < 7) {
+        if (array[i] != expected[i]) {
+            print_num(i);
+            print_num(array[i]);
+            print_num(expected[i]);
+            return array[i];
+        }
+
+        i = i + 1;
+    }
+
+    return 0;
 };

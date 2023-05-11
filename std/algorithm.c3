@@ -37,8 +37,8 @@ function[T] max_heapify: (array: T[&], heap_size: isize, i: isize) -> void = {
     }
 
     if (max_i != i) {
-        swap<T>(&array[i], &array[max_i]);
-        max_heapify<T>(&array, max_i);
+        swap(&array[i], &array[max_i]);
+        max_heapify(&array, heap_size, max_i);
     }
 };
 
@@ -47,19 +47,18 @@ function[T] build_max_heap: (array: T[&], heap_size: isize) -> void = {
 
     // TODO: use a for loop...
     while (i >= 0) {
-        max_heapify<T>(array, heap_size, i);
+        max_heapify(&array, heap_size, i);
         i = i - 1;
     }
 };
 
 function[T] heap_sort: (array: T[&], heap_size: isize) -> void = {
-    build_max_heap<T>(array);
+    build_max_heap(&array, heap_size);
 
-    let heap_size : isize = Len;
     while (heap_size > 1) {
-        swap<T>(&array[heap_size - 1], &array[0]);
+        swap(&array[heap_size - 1], &array[0]);
         heap_size = heap_size - 1;
 
-        max_heapify<T>(array, heap_size, 0);
+        max_heapify(&array, heap_size, 0);
     }
 };
