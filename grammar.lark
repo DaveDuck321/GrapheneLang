@@ -115,7 +115,7 @@ COMPARE_TOKEN: "<" | ">" | "==" | ">=" | "<=" | "!=" | "<=>"
 SHIFT_TOKEN: "<<" | ">>"
 ADD_SUB_TOKEN: "+" | "-"
 MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
-UNARY_OPERATOR_TOKEN: "!" | "-" | "+"
+UNARY_OPERATOR_TOKEN: "!" | "-" | "+" | "~"
 POWER_TOKEN: "**"
 
 // TODO: add support for arbitrary operators
@@ -218,7 +218,7 @@ specialized_named_function: "function" function_name _function_definition
 constructor_function: "@constructor" _function_definition
 destructor_function: "@destructor" _function_definition
 
-OPERATOR: /[.<>%*$@|&\/=?!+^\-]+/
+OPERATOR: /[.<>%*$@|&\/=?!+^\-~]+/
 generic_operator_function: "@operator" generic_definition_list OPERATOR _function_definition
 specialized_operator_function: "@operator" OPERATOR [generic_specialization] _function_definition
 
