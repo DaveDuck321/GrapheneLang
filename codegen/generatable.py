@@ -118,6 +118,7 @@ class Scope(Generatable):
         self._outer_scope: Optional[Scope] = outer_scope
         self._variables: dict[str, StackVariable] = {}
         self._lines: list[Generatable] = []
+        self._generic_pack: Optional[tuple[str, int]] = None
 
     def add_generatable(self, line: Generatable | Iterable[Generatable]) -> None:
         if isinstance(line, Generatable):
@@ -143,6 +144,22 @@ class Scope(Generatable):
             return self._outer_scope.search_for_variable(var_name)
 
         return None
+
+    def add_generic_pack(self, pack_name: str, pack_length: int) -> None:
+        self._generic_pack = (pack_name, pack_length)
+
+    def search_for_generic_pack(self, pack_name: str) -> list[StackVariable]:
+        # TODO this is horrible.
+        assert self._generic_pack is not None
+        assert pack_name == self._generic_pack[0]
+
+        vars = [
+            self.search_for_variable(f"{pack_name}{i}")
+            for i in range(self._generic_pack[1])
+        ]
+
+        assert all(vars)
+        return vars  # type: ignore
 
     @property
     def start_label(self) -> str:
