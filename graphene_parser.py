@@ -390,34 +390,69 @@ class ParseFunctionSignatures(Interpreter):
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions: list[cg.GenericArgument] = []
-        for generic_tree in generic_definitions_tree.children:
-            assert isinstance(generic_tree, Token)
-            generic = parse_generic_definition(generic_tree)
-            generic_definitions.append(generic)
 
-            if generic.is_value_arg:
-                generic_mapping[generic.name] = cg.GenericValueReference(generic.name)
+        # One for the type and one for the actual args.
+        variadic_type_pack_name: Optional[str] = None
+        variadic_args_pack_name: Optional[str] = None
+
+        for generic_token in generic_definitions_tree.children:
+            assert isinstance(generic_token, Token)
+            if generic_token.type == "GENERIC_IDENTIFIER":
+                generic = parse_generic_definition(generic_token)
+                generic_definitions.append(generic)
+
+                if generic.is_value_arg:
+                    generic_mapping[generic.name] = cg.GenericValueReference(
+                        generic.name
+                    )
+                else:
+                    generic_mapping[generic.name] = cg.UnresolvedGenericType(
+                        generic.name
+                    )
             else:
-                generic_mapping[generic.name] = cg.UnresolvedGenericType(generic.name)
+                assert generic_token.type == "GENERIC_PACK_IDENTIFIER"
+                # NOTE enforced by the grammar. We might want to relax this
+                # later and allow more than one pack per function.
+                assert variadic_type_pack_name is None
+
+                variadic_type_pack_name = generic_token.value
 
         arg_names: list[str] = []
         unresolved_return = TypeTransformer.parse(return_type_tree, generic_mapping)
         signature_args: list[cg.UnresolvedType | cg.Type] = []
         for name, type_tree in in_pairs(args_tree.children):
-            arg_names.append(name.value)
-            unresolved_arg = TypeTransformer.parse(type_tree, generic_mapping)
-            try:
-                signature_args.append(self._program.resolve_type(unresolved_arg))
-            except cg.GenericResolutionImpossible:
-                # This must be a generic type, lets resolve it later
-                signature_args.append(unresolved_arg)
+            assert isinstance(name, Token)
+            # TODO refactor, this is very ugly.
+            if isinstance(type_tree, Token):
+                # TODO user-facing error.
+                assert type_tree.value == variadic_type_pack_name
+                variadic_args_pack_name = f"{name.value}..."
+            else:
+                assert isinstance(type_tree, Tree)
+                arg_names.append(name.value)
+
+                unresolved_arg = TypeTransformer.parse(type_tree, generic_mapping)
+                try:
+                    signature_args.append(self._program.resolve_type(unresolved_arg))
+                except cg.GenericResolutionImpossible:
+                    # This must be a generic type, lets resolve it later
+                    signature_args.append(unresolved_arg)
+
+        def is_compatible(our_len: int, their_len: int) -> bool:
+            if variadic_type_pack_name:
+                # Must be strictly less than, as the variadic arguments cannot
+                # be empty.
+                return our_len < their_len
+
+            # Normal function, must match one-to-one.
+            return our_len == their_len
 
         def try_parse_fn_from_specialization(
             fn_name: str,
             specializations: list[cg.SpecializationItem],
         ) -> Optional[cg.Function]:
             assert generic_name == fn_name
-            if len(generic_definitions) != len(specializations):
+            if not is_compatible(len(generic_definitions), len(specializations)):
                 return None  # SFINAE
 
             specialization_map = {
@@ -425,23 +460,43 @@ class ParseFunctionSignatures(Interpreter):
                 for generic, specialization in zip(generic_definitions, specializations)
             }
 
+            specialization_arg_names = arg_names.copy()
+
+            specialized_args = [
+                arg.produce_specialized_copy(specialization_map)
+                if isinstance(arg, cg.UnresolvedType)
+                else arg
+                for arg in signature_args
+            ]
+
+            if variadic_type_pack_name:
+                # Consume remaining specializations. Our type system can't deal
+                # with type packs, so convert them into single types.
+                for i, specialization in enumerate(
+                    specializations[len(generic_definitions) :]
+                ):
+                    specialization_map[f"{variadic_type_pack_name}{i}"] = specialization
+                    # TODO user-facing error. Can't have @Constants in type
+                    # packs.
+                    assert isinstance(specialization, cg.Type)
+                    specialized_args.append(cg.UnresolvedTypeWrapper(specialization))
+                    specialization_arg_names.append(f"{variadic_args_pack_name}{i}")
+
             try:
                 # Resolve everything that depends on the specialization
                 resolved_return = self._program.resolve_type(
                     unresolved_return.produce_specialized_copy(specialization_map)
                 )
                 resolved_args = [
-                    self._program.resolve_type(
-                        arg.produce_specialized_copy(specialization_map)
-                    )
+                    self._program.resolve_type(arg)
                     if isinstance(arg, cg.UnresolvedType)
                     else arg
-                    for arg in signature_args
+                    for arg in specialized_args
                 ]
 
                 function = self._build_function(
                     fn_name,
-                    arg_names,
+                    specialization_arg_names,
                     resolved_args,
                     resolved_return,
                     False,
@@ -449,6 +504,12 @@ class ParseFunctionSignatures(Interpreter):
                 )
             except SubstitutionFailure:
                 return None  # SFINAE
+
+            if variadic_args_pack_name:
+                function.top_level_scope.add_generic_pack(
+                    variadic_args_pack_name,
+                    len(specializations) - len(generic_definitions),
+                )
 
             self._function_body_trees.append(
                 (location, function, body_tree, specialization_map)
@@ -460,7 +521,7 @@ class ParseFunctionSignatures(Interpreter):
         ) -> Optional[list[cg.SpecializationItem]]:
             assert generic_name == fn_name
 
-            if len(calling_args) != len(signature_args):
+            if not is_compatible(len(signature_args), len(calling_args)):
                 return None  # SFINAE
 
             deduced_mapping: cg.GenericMapping = {}
@@ -480,6 +541,14 @@ class ParseFunctionSignatures(Interpreter):
                 deduced_specialization.append(deduced_mapping[generic.name])
 
             assert len(deduced_specialization) == len(generic_definitions)
+
+            if variadic_type_pack_name:
+                # Now append the types of the remaining TypedExpressions's. They
+                # are also part of the specialization.
+                deduced_specialization.extend(
+                    arg.underlying_type for arg in calling_args[len(signature_args) :]
+                )
+
             return deduced_specialization
 
         self._program.add_generic_function(
@@ -590,9 +659,9 @@ class ParseFunctionSignatures(Interpreter):
         specialization: list[cg.SpecializationItem],
     ) -> cg.Function:
         fn_args: list[cg.Parameter] = []
-        for arg_name, arg_type in zip(arg_names, arg_types):
-            assert isinstance(arg_type, cg.Type)
 
+        for arg_name, arg_type in zip(arg_names, arg_types, strict=True):
+            assert isinstance(arg_type, cg.Type)
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
             if arg_type.definition.is_void:
@@ -695,6 +764,13 @@ def is_flattened_expression_iterable(
 ) -> TypeGuard[Iterable[FlattenedExpression]]:
     # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
     return all(isinstance(expr, FlattenedExpression) for expr in exprs)
+
+
+def is_tree_or_token_iterable(
+    exprs: Iterable[Any],
+) -> TypeGuard[Iterable[Tree | Token]]:
+    # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
+    return all(isinstance(expr, (Tree, Token)) for expr in exprs)
 
 
 def is_unresolved_specialization_list(
@@ -816,10 +892,30 @@ class ExpressionParser(Interpreter):
         )
         return flattened_expr.add_parent(call_expr)
 
+    @staticmethod
+    def _split_function_call_args(
+        *args: Any,
+    ) -> tuple[list[Tree | Token], Optional[Token]]:
+        *arg_trees, pack_name = args
+
+        assert is_tree_or_token_iterable(arg_trees)
+        if pack_name is not None:
+            assert isinstance(pack_name, Token)
+
+        return [*arg_trees], pack_name
+
     @v_args(inline=True)
-    def function_call(self, name_tree: Tree, *arg_trees: Tree) -> FlattenedExpression:
+    def function_call(self, name_tree: Tree, *all_args: Any) -> FlattenedExpression:
         fn_name, specialization_tree = name_tree.children
+        arg_trees, pack_name = self._split_function_call_args(*all_args)
+
         args = [self.visit(tree) for tree in arg_trees]
+
+        if pack_name:
+            variadic_vars = self._scope.search_for_generic_pack(pack_name)
+            for var in variadic_vars:
+                args.append(FlattenedExpression([cg.VariableReference(var)]))
+
         assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
 
@@ -827,8 +923,11 @@ class ExpressionParser(Interpreter):
 
     @v_args(inline=True)
     def ufcs_call(
-        self, this_tree: Tree, name_tree: Tree, *arg_trees: Tree
+        self, this_tree: Tree, name_tree: Tree, *all_args: Any
     ) -> FlattenedExpression:
+        # TODO support unpacking.
+        arg_trees, pack_name = self._split_function_call_args(*all_args)
+
         # TODO perhaps we shouldn't always borrow this, although this is a bit
         # tricky as we haven't done overload resolution yet (which depends on
         # whether we borrow or not). A solution would be to borrow if we can,

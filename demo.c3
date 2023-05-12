@@ -1,32 +1,20 @@
 @require_once "std/arithmetic.c3";
-@require_once "std/memory.c3";
 
-
-typedef MyStruct : {
-    a : int,
-    b : isize
+function[T] pack_len: (curr: T) -> int = {
+    // Base case
+    return 1;
 };
 
+function[T, Ys...] pack_len: (curr: T, next: Ys...) -> int = {
+    // Very Haskell
+    return pack_len(next...) + 1;
+};
+
+// FIXME format should be a base/length string type.
+function[@Len, T, Ys...] printf: (format: u8[@Len], val: T, next_vals: Ys...) -> void = {
+
+};
 
 function main : () -> int = {
-    let allocator : Allocator = initialize_allocator();
-
-    let a : int& = &allocator:allocate<int>();
-    let b : MyStruct& = &allocator:allocate<MyStruct>();
-
-    let c : i64[100]& = &allocator:allocate<i64[100]>();
-    let d : i64[800]& = &allocator:allocate<i64[800]>();
-    allocator:deallocate<i64[100]>(&c);
-
-    let e : MyStruct& = &allocator:allocate<MyStruct>();
-
-    a = 10;
-    b.a = 27;
-    b.b = 5;
-
-    if (a + b.a + b.b == 42) {
-        return 0;
-    }
-
-    return 1;
+    return pack_len(1, 2, 3);
 };
