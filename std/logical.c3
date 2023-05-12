@@ -8,6 +8,10 @@
     return true;
 };
 
+@operator [T] ~ : (value: T) -> TypeIf<T, IsLogical<T>> = {
+    return __builtin_bitwise_not(value);
+};
+
 @operator [T] | : (lhs : T, rhs : T) -> TypeIf<T, IsLogical<T>> = {
     return __builtin_bitwise_or(lhs, rhs);
 };

@@ -15,6 +15,12 @@ typedef CommonArithmeticType<i64, i128> : i128;
 
 typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsIntegral<V>>>;
 
+@operator [T] + : (value: T) -> TypeIf<T, IsIntegral<T>> = { return value; };
+
+@operator [T] - : (value: T) -> TypeIf<T, IsIntegral<T>> = {
+    return __builtin_minus(value);
+};
+
 @operator [U, V] + : (lhs: U, rhs : V) -> CommonArithmeticType<U, V> = {
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
