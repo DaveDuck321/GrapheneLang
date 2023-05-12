@@ -16,8 +16,68 @@ from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
 
+class UnaryIntegerExpression(TypedExpression, ABC):
+    IR_FORMAT_STR = ""
+    USER_FACING_NAME = ""
+
+    def __init__(
+        self, specialization: list[Type], arguments: list[TypedExpression]
+    ) -> None:
+        (self._arg,) = arguments
+
+        assert self.IR_FORMAT_STR is not None
+        assert len(specialization) == 0
+
+        definition = self._arg.underlying_type.definition
+        assert isinstance(definition, (IntegerDefinition, BoolDefinition))
+
+        self._arg_type = self._arg.underlying_type.convert_to_value_type()
+        super().__init__(self._arg_type, False)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self._arg})"
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#add-instruction (and below)
+        conv, extra_exprs = do_implicit_conversion(self._arg, self._arg_type)
+
+        ir_lines: list[str] = []
+        ir_lines.extend(self.expand_ir(extra_exprs, reg_gen))
+
+        self.result_reg = next(reg_gen)
+
+        op = self.IR_FORMAT_STR.format_map(
+            {
+                "type": self._arg_type.ir_type,
+                "arg": conv.ir_ref_without_type_annotation,
+            }
+        )
+
+        ir_lines.append(f"%{self.result_reg} = {op}")
+        return ir_lines
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError(f"cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
+
+
+class BitwiseNotExpression(UnaryIntegerExpression):
+    USER_FACING_NAME = "__builtin_bitwise_not"
+    IR_FORMAT_STR = "xor {type} -1, {arg}"
+
+
+class UnaryMinusExpression(UnaryIntegerExpression):
+    USER_FACING_NAME = "__builtin_minus"
+    IR_FORMAT_STR = "sub {type} 0, {arg}"
+
+
 class BasicIntegerExpression(TypedExpression, ABC):
-    # TODO: floating point support
     SIGNED_IR = ""
     UNSIGNED_IR = ""
     USER_FACING_NAME = ""
@@ -453,7 +513,9 @@ def get_builtin_callables() -> (
         Callable[[list[SpecializationItem], list[TypedExpression]], TypedExpression],
     ]
 ):
-    def get_integer_builtin(expression_class: PyType[BasicIntegerExpression]):
+    def get_integer_builtin(
+        expression_class: PyType[BasicIntegerExpression | UnaryIntegerExpression],
+    ):
         return (expression_class.USER_FACING_NAME, expression_class)
 
     integer_instructions = dict(
@@ -474,6 +536,8 @@ def get_builtin_callables() -> (
                 IsEqualExpression,
                 IsGreaterThanExpression,
                 IsLessThanExpression,
+                UnaryMinusExpression,
+                BitwiseNotExpression,
             ],
         )
     )
