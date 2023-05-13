@@ -198,6 +198,11 @@ class UnresolvedNamedType(UnresolvedType):
         if not isinstance(target, NamedType):
             return False
 
+        # If our name doesn't match recurse into the target's alias
+        if target.name != self.name:
+            assert target.alias is not None
+            return self.pattern_match(target.alias, mapping_out)
+
         if len(self.specialization) != len(target.specialization):
             return False
 
