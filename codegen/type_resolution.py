@@ -199,7 +199,7 @@ class UnresolvedNamedType(UnresolvedType):
 
         return lookup(self.name, resolved_specialization)
 
-    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
+    def _pattern_match_impl(self, target: Type, mapping_out: GenericMapping) -> bool:
         if not isinstance(target, NamedType):
             return False
 
@@ -227,6 +227,20 @@ class UnresolvedNamedType(UnresolvedType):
                     return False
 
         return True
+
+    def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
+        curr = target
+
+        while curr:
+            curr_mapping = mapping_out.copy()
+
+            if self._pattern_match_impl(curr, curr_mapping):
+                mapping_out.update(curr_mapping)
+                return True
+
+            curr = curr.alias if isinstance(curr, NamedType) else None
+
+        return False
 
 
 @dataclass
