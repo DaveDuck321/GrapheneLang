@@ -22,14 +22,14 @@ function PAGE_SIZE : () -> isize = {
 
 typedef AllocatorNode : {
     integrity_check : u64,
-    next_node : iptr // TODO use: Optional<Ptr<AllocatorNode>> (recursive type)
+    next_node : iptr, // TODO use: Optional<Ptr<AllocatorNode>> (recursive type)
 };
 
 typedef Allocator : {
     // TODO: parameterize `8` as a generic argument
     bin_count: isize,
     integrity_checks : u64[8],
-    bins : Optional<Ptr<AllocatorNode>>[8]
+    bins : Optional<Ptr<AllocatorNode>>[8],
 };
 
 function get_allocator_bin_index : (size_required : isize) -> isize = {

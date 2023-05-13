@@ -22,12 +22,12 @@ compile_time_constant: SIGNED_INT | NUMERIC_GENERIC_IDENTIFIER // TODO bool
 
 type_name: IDENTIFIER [generic_specialization]
 
-generic_definition_list: "[" GENERIC_IDENTIFIER ("," GENERIC_IDENTIFIER)* "]"
+generic_definition_list: "[" GENERIC_IDENTIFIER ("," GENERIC_IDENTIFIER)* ","? "]"
 _generic_specialization_item: type | compile_time_constant
-generic_specialization: "<" _generic_specialization_item ("," _generic_specialization_item)* ">"
+generic_specialization: "<" _generic_specialization_item ("," _generic_specialization_item)* ","? ">"
 
-_inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)*
-_inner_list_of_types: (type ("," type)*)?  // Can be empty
+_inner_list_of_named_members: IDENTIFIER ":" type ("," IDENTIFIER ":" type)* ","?
+_inner_list_of_types: (type ("," type)* ","? )?  // Can be empty
 
 ref_type: _type "&"
         | "(" _type ")" "&"
@@ -71,10 +71,10 @@ specialized_typedef: "typedef" IDENTIFIER generic_specialization ":" type
 BOOL_CONSTANT: "true" | "false"
 UNSIGNED_HEX_CONSTANT: "0x" HEXDIGIT+
 
-_inner_list_without_names: _expression ("," _expression)*
+_inner_list_without_names: _expression ("," _expression)* ","?
 struct_initializer_without_names: _inner_list_without_names?
 
-_inner_list_with_names: IDENTIFIER ":" _expression ("," IDENTIFIER ":" _expression)*
+_inner_list_with_names: IDENTIFIER ":" _expression ("," IDENTIFIER ":" _expression)* ","?
 inner_list_with_names: _inner_list_with_names
 struct_initializer_with_names: _inner_list_with_names
 
