@@ -19,6 +19,16 @@ function [T] addr_to_ref : (address : iptr) -> T& = {
     return &__builtin_int_to_ptr<T&>(address);
 };
 
+function [T] addr_to_heap_array : (bad_address : i32) -> T[&] = {
+    // TODO: this should be a static assert/ error
+    runtime_assert(false);
+    return &__builtin_int_to_ptr<T[&]>(bad_address);
+};
+
+function [T] addr_to_heap_array : (address : iptr) -> T[&] = {
+    return &__builtin_int_to_ptr<T[&]>(address);
+};
+
 function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); };
 function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); };
 function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); };

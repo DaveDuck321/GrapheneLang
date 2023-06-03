@@ -50,30 +50,47 @@ function get_block_size_from_bin_index : (bin : isize) -> isize = {
     return as_arithmetic(bin0_size << bin);
 };
 
-function [T] allocate : (allocator : Allocator&) -> T& = {
-    let bin_index : isize = get_allocator_bin_index(sizeof<T>());
+function allocate_impl : (allocator : Allocator&, requested_size : isize) -> isize = {
+    let bin_index : isize = get_allocator_bin_index(requested_size);
 
     let memory_address : iptr;
     if (bin_index >= allocator.bin_count) {
         // We just pass large allocations straight to the kernel
-        memory_address = allocate_page_and_return_address(sizeof<T>());
+        return allocate_page_and_return_address(requested_size);
     } else {
         // Otherwise we actually do it ourselves
-        memory_address = allocate_from_bin_and_return_address(&allocator, bin_index);
+        return allocate_from_bin_and_return_address(&allocator, bin_index);
     }
-
-    return &addr_to_ref<T>(memory_address);
 };
 
-function [T] deallocate : (allocator : Allocator&, ref : T&) -> void = {
-    let memory_address : iptr = __builtin_ptr_to_int(&ref);
 
-    let bin_index : isize = get_allocator_bin_index(sizeof<T>());
+function [T] allocate : (allocator : Allocator&) -> T& = {
+    return &addr_to_ref<T>(allocator:allocate_impl(sizeof<T>()));
+};
+
+function [T] allocate_span : (allocator : Allocator&, length: isize) -> Span<T> = {
+    return {
+        data : &addr_to_heap_array<T>(allocator:allocate_impl(sizeof<T>() * length)),
+        length : length,
+    };
+};
+
+
+function deallocate_impl : (allocator : Allocator&, memory_address: isize, size : isize) -> void = {
+    let bin_index : isize = get_allocator_bin_index(size);
     if (bin_index >= allocator.bin_count) {
-        deallocate_page(memory_address, sizeof<T>());
+        deallocate_page(memory_address, size);
     } else {
         deallocate_to_bin(&allocator, bin_index, memory_address);
     }
+};
+
+function [T] deallocate : (allocator : Allocator&, ref : T&) -> void = {
+    allocator:deallocate_impl(__builtin_ptr_to_int(&ref), sizeof<T>());
+};
+
+function [T] deallocate_span : (allocator : Allocator&, span : Span<T>) -> void = {
+    allocator:deallocate_impl(__builtin_ptr_to_int(&span.data), sizeof<T>() * span.length);
 };
 
 function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) -> void = {
