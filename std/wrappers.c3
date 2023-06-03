@@ -33,3 +33,8 @@ function [T] data : (self : Optional<T>&) -> T& = {
 function [T] has_value : (self : Optional<T>&) -> bool = {
     return self._has_value;
 };
+
+typedef [T] Span : {
+    data : T[&],
+    length : isize,
+};
