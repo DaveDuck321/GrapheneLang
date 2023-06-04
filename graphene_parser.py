@@ -385,10 +385,15 @@ class ParseFunctionSignatures(Interpreter):
 
         arg_names: list[str] = []
         unresolved_return = TypeTransformer.parse(return_type_tree, generic_mapping)
-        unresolved_args: list[cg.UnresolvedType] = []
+        args: list[cg.UnresolvedType | cg.Type] = []
         for name, type_tree in in_pairs(args_tree.children):
-            unresolved_args.append(TypeTransformer.parse(type_tree, generic_mapping))
             arg_names.append(name.value)
+            unresolved_arg = TypeTransformer.parse(type_tree, generic_mapping)
+            try:
+                args.append(self._program.resolve_type(unresolved_arg))
+            except cg.GenericResolutionImpossible:
+                # This must be a generic type, lets resolve it later
+                args.append(unresolved_arg)
 
         def try_parse_fn_from_specialization(
             fn_name: str,
@@ -403,20 +408,25 @@ class ParseFunctionSignatures(Interpreter):
                 for generic, specialization in zip(generic_definitions, specializations)
             }
 
-            specialized_return = unresolved_return.produce_specialized_copy(
-                specialization_map
-            )
-            specialized_args = [
-                arg.produce_specialized_copy(specialization_map)
-                for arg in unresolved_args
-            ]
-
             try:
+                # Resolve everything that depends on the specialization
+                resolved_return = self._program.resolve_type(
+                    unresolved_return.produce_specialized_copy(specialization_map)
+                )
+                resolved_args = [
+                    self._program.resolve_type(
+                        arg.produce_specialized_copy(specialization_map)
+                    )
+                    if isinstance(arg, cg.UnresolvedType)
+                    else arg
+                    for arg in args
+                ]
+
                 function = self._build_function(
                     fn_name,
                     arg_names,
-                    specialized_args,
-                    specialized_return,
+                    resolved_args,
+                    resolved_return,
                     False,
                     specializations,
                 )
@@ -433,11 +443,15 @@ class ParseFunctionSignatures(Interpreter):
         ) -> Optional[list[cg.SpecializationItem]]:
             assert generic_name == fn_name
 
-            if len(arguments) != len(unresolved_args):
+            if len(arguments) != len(args):
                 return None  # SFINAE
 
             deduced_mapping: cg.GenericMapping = {}
-            for actual_arg, unresolved_arg in zip(arguments, unresolved_args):
+            for actual_arg, unresolved_arg in zip(arguments, args):
+                if isinstance(unresolved_arg, cg.Type):
+                    # This is a non-generic type, we use the normal overload resolution here
+                    continue
+
                 if not unresolved_arg.pattern_match(
                     actual_arg.underlying_type, deduced_mapping
                 ):
@@ -508,15 +522,18 @@ class ParseFunctionSignatures(Interpreter):
         body_tree: Optional[Tree],
         foreign: bool,
     ) -> None:
-        arg_names: list[str] = []
         unresolved_return = TypeTransformer.parse(return_type_tree, {})
-        unresolved_args: list[cg.UnresolvedType] = []
+        resolved_return = self._program.resolve_type(unresolved_return)
+
+        arg_names: list[str] = []
+        resolved_arg: list[cg.Type] = []
         for name, type_tree in in_pairs(args_tree.children):
-            unresolved_args.append(TypeTransformer.parse(type_tree, {}))
+            unresolved_arg = TypeTransformer.parse(type_tree, {})
+            resolved_arg.append(self._program.resolve_type(unresolved_arg))
             arg_names.append(name.value)
 
         func = self._build_function(
-            fn_name, arg_names, unresolved_args, unresolved_return, foreign, []
+            fn_name, arg_names, resolved_arg, resolved_return, foreign, []
         )
         self._program.add_function(func)
 
@@ -534,14 +551,15 @@ class ParseFunctionSignatures(Interpreter):
         self,
         fn_name: str,
         arg_names: list[str],
-        arg_unresolved_types: list[cg.UnresolvedType],
-        unresolved_return_type: cg.UnresolvedType,
+        arg_types: list[cg.Type],
+        fn_return_type: cg.Type,
         foreign: bool,
         specialization: list[cg.SpecializationItem],
     ) -> cg.Function:
         fn_args: list[cg.Parameter] = []
-        for arg_name, arg_unresolved_type in zip(arg_names, arg_unresolved_types):
-            arg_type = self._program.resolve_type(arg_unresolved_type)
+        for arg_name, arg_type in zip(arg_names, arg_types):
+            assert isinstance(arg_type, cg.Type)
+
             fn_args.append(cg.Parameter(arg_name, arg_type))
 
             if arg_type.definition.is_void:
@@ -549,7 +567,6 @@ class ParseFunctionSignatures(Interpreter):
                     "argument", arg_name, arg_type.format_for_output_to_user()
                 )
 
-        fn_return_type = self._program.resolve_type(unresolved_return_type)
         fn_obj = cg.Function(fn_name, fn_args, fn_return_type, foreign, specialization)
 
         # main() must always return an int

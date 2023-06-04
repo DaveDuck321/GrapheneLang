@@ -24,6 +24,10 @@ from .user_facing_errors import (
 )
 
 
+class GenericResolutionImpossible(ValueError):
+    pass
+
+
 @dataclass
 class GenericArgument:
     name: str
@@ -117,7 +121,7 @@ class GenericValueReference(CompileTimeConstant):
         return NumericLiteralConstant(specialized_value)
 
     def resolve(self) -> int:
-        assert False
+        raise GenericResolutionImpossible("Generic value reference")
 
     def pattern_match(self, target: int, mapping_out: GenericMapping) -> bool:
         if self.argument_name in mapping_out:
@@ -245,7 +249,7 @@ class UnresolvedGenericType(UnresolvedType):
         return UnresolvedTypeWrapper(specialized_type)
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        assert False
+        raise GenericResolutionImpossible("Generic type")
 
     def pattern_match(self, target: Type, mapping_out: GenericMapping) -> bool:
         if self.name in mapping_out:
