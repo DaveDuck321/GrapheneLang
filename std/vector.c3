@@ -81,3 +81,10 @@ function [T] deallocate : (self : Vector<T>&) -> void = {
     // TODO: this aught to be a destructor
     self.allocator:deallocate_span(self.memory);
 };
+
+function [T] data : (self : Vector<T>&) -> Span<T> = {
+    return {
+        data : &self.memory.data,
+        length : self.length,
+    };
+};
