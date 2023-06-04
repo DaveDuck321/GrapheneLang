@@ -62,6 +62,9 @@ class NamedType(Type):
         self.specialization = specialization
         self.alias: Optional[Type] = None
 
+    def should_defer_to_alias_for_ir(self) -> bool:
+        return isinstance(self.alias, NamedType)
+
     def update_with_finalized_alias(self, alias: Type) -> None:
         assert self.alias is None
 
@@ -87,6 +90,10 @@ class NamedType(Type):
 
     @property
     def ir_mangle(self) -> str:
+        if self.should_defer_to_alias_for_ir():
+            assert self.alias is not None
+            return self.alias.ir_mangle
+
         prefix = "__R_" if self.is_reference else "__T_"
 
         if len(self.specialization) == 0:
@@ -107,6 +114,10 @@ class NamedType(Type):
 
     @property
     def ir_type(self) -> str:
+        if self.should_defer_to_alias_for_ir():
+            assert self.alias is not None
+            return self.alias.ir_type
+
         if self.is_reference:
             return "ptr"
         return f"%type.{self.ir_mangle}"

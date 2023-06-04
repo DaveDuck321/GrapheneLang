@@ -619,6 +619,9 @@ class TypeSymbolTable:
                 if defined_type.alias is None:
                     continue  # Skip over primitive types
 
+                if defined_type.should_defer_to_alias_for_ir():
+                    continue
+
                 ir.append(
                     f"{defined_type.ir_type} = type {defined_type.definition.ir_type}"
                 )
