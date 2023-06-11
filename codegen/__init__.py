@@ -31,6 +31,7 @@ from .translation_unit import Function, GenericFunctionParser, Program, Scope
 from .type_resolution import (
     CompileTimeConstant,
     GenericArgument,
+    GenericResolutionImpossible,
     GenericTypedef,
     GenericValueReference,
     NumericLiteralConstant,
