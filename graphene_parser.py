@@ -385,15 +385,15 @@ class ParseFunctionSignatures(Interpreter):
 
         arg_names: list[str] = []
         unresolved_return = TypeTransformer.parse(return_type_tree, generic_mapping)
-        args: list[cg.UnresolvedType | cg.Type] = []
+        signature_args: list[cg.UnresolvedType | cg.Type] = []
         for name, type_tree in in_pairs(args_tree.children):
             arg_names.append(name.value)
             unresolved_arg = TypeTransformer.parse(type_tree, generic_mapping)
             try:
-                args.append(self._program.resolve_type(unresolved_arg))
+                signature_args.append(self._program.resolve_type(unresolved_arg))
             except cg.GenericResolutionImpossible:
                 # This must be a generic type, lets resolve it later
-                args.append(unresolved_arg)
+                signature_args.append(unresolved_arg)
 
         def try_parse_fn_from_specialization(
             fn_name: str,
@@ -419,7 +419,7 @@ class ParseFunctionSignatures(Interpreter):
                     )
                     if isinstance(arg, cg.UnresolvedType)
                     else arg
-                    for arg in args
+                    for arg in signature_args
                 ]
 
                 function = self._build_function(
@@ -439,15 +439,15 @@ class ParseFunctionSignatures(Interpreter):
             return function
 
         def try_deduce_specialization(
-            fn_name: str, arguments: list[cg.TypedExpression]
+            fn_name: str, calling_args: list[cg.TypedExpression]
         ) -> Optional[list[cg.SpecializationItem]]:
             assert generic_name == fn_name
 
-            if len(arguments) != len(args):
+            if len(calling_args) != len(signature_args):
                 return None  # SFINAE
 
             deduced_mapping: cg.GenericMapping = {}
-            for actual_arg, unresolved_arg in zip(arguments, args):
+            for actual_arg, unresolved_arg in zip(calling_args, signature_args):
                 if isinstance(unresolved_arg, cg.Type):
                     # This is a non-generic type, we use the normal overload resolution here
                     continue
