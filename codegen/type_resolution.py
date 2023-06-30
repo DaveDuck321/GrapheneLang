@@ -16,6 +16,7 @@ from .user_facing_errors import (
     DoubleReferenceError,
     ErrorWithLocationInfo,
     FailedLookupError,
+    GenericArgumentCountError,
     GrapheneError,
     NonDeterminableSize,
     RedefinitionError,
@@ -521,6 +522,11 @@ class TypeSymbolTable:
         self, name: str, specialization: list[SpecializationItem]
     ) -> NamedType:
         generic = self._generic_unresolved_types[name]
+
+        if len(specialization) != len(generic.generics):
+            raise GenericArgumentCountError(
+                generic.name, len(specialization), len(generic.generics)
+            )
 
         specialization_map = {}
         # Check specialization arguments are the correct type
