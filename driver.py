@@ -112,7 +112,8 @@ def main() -> None:
     if args.compile_to_object:
         extra_flags.append("-c")
     if not args.use_crt and not args.compile_to_object:
-        extra_flags.append("-nostartfiles")
+        # -nostdlib prevents both the standard library and the start files from
+        # being linked with the executable.
         extra_flags.append("-nostdlib")
         extra_flags.append(str(parent_dir / "std" / "runtime.S"))
 
