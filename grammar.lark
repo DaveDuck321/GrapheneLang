@@ -184,7 +184,7 @@ return_statement.1: "return" expression?
 _expression: logical_or
 expression: _expression
 
-assignment: expression "=" expression
+assignment: expression ASSIGNMENT_OPERATOR expression
 
 scope: "{" _line_of_code* "}"
 
@@ -215,7 +215,11 @@ foreign_function: "foreign" IDENTIFIER _function_declaration
 generic_named_function: "function" generic_definition_list IDENTIFIER _function_definition
 specialized_named_function: "function" function_name _function_definition
 
-constructor_function: "@constructor" _function_definition
+ASSIGNMENT_OPERATOR: "=" | "+=" | "-=" | "*=" | "/=" | "|=" | "^=" | "@=" | "&="
+
+generic_assignment_function: "@assignment" generic_definition_list ASSIGNMENT_OPERATOR _function_definition
+specialized_assignment_function: "@assignment" ASSIGNMENT_OPERATOR [generic_specialization] _function_definition
+
 destructor_function: "@destructor" _function_definition
 
 OPERATOR: /[.<>%*$@|&\/=?!+^\-~]+/
@@ -228,15 +232,16 @@ specialized_operator_function: "@operator" OPERATOR [generic_specialization] _fu
 //
 
 _top_level_program_feature: const_declaration
-                          | constructor_function
                           | destructor_function
                           | foreign_function
+                          | generic_assignment_function
                           | generic_named_function
-                          | generic_typedef
-                          | specialized_operator_function
                           | generic_operator_function
+                          | generic_typedef
                           | require_once
+                          | specialized_assignment_function
                           | specialized_named_function
+                          | specialized_operator_function
                           | specialized_typedef
                           | variable_declaration
 

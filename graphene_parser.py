@@ -1076,13 +1076,17 @@ def generate_assignment(
     body: Tree,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-    lhs_tree, rhs_tree = body.children
+    lhs_tree, operator, rhs_tree = body.children
     lhs = ExpressionParser.parse(program, function, scope, generic_mapping, lhs_tree)
     rhs = ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
 
-    scope.add_generatable(lhs.subexpressions)
-    scope.add_generatable(rhs.subexpressions)
-    scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
+    assert isinstance(operator, Token)
+    if operator.value == "=":
+        scope.add_generatable(lhs.subexpressions)
+        scope.add_generatable(rhs.subexpressions)
+        scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
+    else:
+        raise NotImplementedError()
 
 
 def generate_scope_body(
