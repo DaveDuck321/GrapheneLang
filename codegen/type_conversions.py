@@ -247,15 +247,6 @@ def do_implicit_conversion(
     return expr_list[-1], expr_list[1:]
 
 
-def is_type_implicitly_convertible(src: TypedExpression, dest_type: Type) -> bool:
-    try:
-        implicit_conversion_impl(src, dest_type)
-    except TypeCheckerError:
-        return False
-
-    return True
-
-
 def assert_is_implicitly_convertible(
     expr: TypedExpression, target: Type, context: str
 ) -> None:
