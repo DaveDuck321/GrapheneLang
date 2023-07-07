@@ -24,7 +24,7 @@ function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
 function [T] push_back : (self : Vector<T>&, data : T) -> void = {
     if (self.length == self.memory.length) {
         // Grow the vector
-        let new_capacity : isize = 2*self.memory.length;
+        let new_capacity : isize = 2 * self.memory.length;
         let new_memory : Span<T> = self.allocator:allocate_span<T>(new_capacity);
 
         // Copy the old data
@@ -32,7 +32,7 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
         let index : isize = 0;
         while (index < self.length) {
             new_memory.data[index] = self.memory.data[index];
-            index = index + 1;
+            index += 1;
         }
 
         self.allocator:deallocate_span(self.memory);
@@ -40,15 +40,13 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
     }
     self.memory.data[self.length] = data;
 
-    // TODO: += operator
-    self.length = self.length + 1;
+    self.length += 1;
 };
 
 function [T] pop_back : (self : Vector<T>&) -> T = {
     runtime_assert(self.length > 0);
 
-    // TODO: -= operator
-    self.length = self.length - 1;
+    self.length -= 1;
     return self.memory.data[self.length];
 };
 

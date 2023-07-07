@@ -37,7 +37,7 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
     let size_over_current_bin : isize = size_required / sizeof<AllocatorNode>();
 
     while (size_over_current_bin != 0) {
-        bin_index = bin_index + 1;
+        bin_index += 1;
         // TODO: maybe we should have signed bitshift... but also LLVM can defo optimize the division
         size_over_current_bin = size_over_current_bin / 2;
     }
@@ -179,9 +179,7 @@ function initialize_allocator : () -> Allocator = {
 
         // TODO: use constructor
         allocator.bins[i]:erase<Ptr<AllocatorNode>>();
-
-        // TODO: i += 1
-        i = i + 1;
+        i += 1;
     }
     return allocator;
 };
