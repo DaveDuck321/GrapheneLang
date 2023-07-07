@@ -357,6 +357,23 @@ class ParseFunctionSignatures(Interpreter):
             body_tree,
         )
 
+    @inline_and_wrap_user_facing_errors("@assignment[...] signature")
+    def generic_assignment_function(
+        self,
+        generic_definitions_tree: Tree,
+        assignment_op_name: Token,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ):
+        self._parse_generic_function_impl(
+            assignment_op_name.value,
+            generic_definitions_tree,
+            args_tree,
+            return_type_tree,
+            body_tree,
+        )
+
     def _parse_generic_function_impl(
         self,
         generic_name: str,
@@ -503,6 +520,22 @@ class ParseFunctionSignatures(Interpreter):
 
         self._parse_function(
             op_name.value, args_tree, return_type_tree, body_tree, False
+        )
+
+    @inline_and_wrap_user_facing_errors("@assignment signature")
+    def specialized_assignment_function(
+        self,
+        assignment_op_name: Token,
+        specialization: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ) -> None:
+        if specialization is not None:
+            raise NotImplementedError()
+
+        self._parse_function(
+            assignment_op_name.value, args_tree, return_type_tree, body_tree, False
         )
 
     @inline_and_wrap_user_facing_errors("foreign signature")
@@ -1080,13 +1113,20 @@ def generate_assignment(
     lhs = ExpressionParser.parse(program, function, scope, generic_mapping, lhs_tree)
     rhs = ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
 
+    scope.add_generatable(lhs.subexpressions)
+    scope.add_generatable(rhs.subexpressions)
+
     assert isinstance(operator, Token)
     if operator.value == "=":
-        scope.add_generatable(lhs.subexpressions)
-        scope.add_generatable(rhs.subexpressions)
         scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
     else:
-        raise NotImplementedError()
+        borrowed_lhs = cg.BorrowExpression(lhs.expression(), False)
+        scope.add_generatable(borrowed_lhs)
+        scope.add_generatable(
+            program.lookup_call_expression(
+                operator, [], [borrowed_lhs, rhs.expression()]
+            )
+        )
 
 
 def generate_scope_body(
