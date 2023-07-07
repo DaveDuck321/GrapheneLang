@@ -1,5 +1,13 @@
+@require_once "assignments.c3";
 @require_once "type_traits.c3";
 @require_once "util.c3";
+
+typedef HasTrivialAssignments<bool> : TrueType;
+typedef HasTrivialAssignments<u8> : TrueType;
+typedef HasTrivialAssignments<u16> : TrueType;
+typedef HasTrivialAssignments<u32> : TrueType;
+typedef HasTrivialAssignments<u64> : TrueType;
+typedef HasTrivialAssignments<u128> : TrueType;
 
 @operator ! : (value : bool) -> bool = {
     if (value) {
