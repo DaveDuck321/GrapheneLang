@@ -33,3 +33,5 @@ typedef IsLogical<u16> : TrueType;
 typedef IsLogical<u32> : TrueType;
 typedef IsLogical<u64> : TrueType;
 typedef IsLogical<u128> : TrueType;
+
+typedef[T] HasTrivialAssignments : FalseType;
