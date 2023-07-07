@@ -90,8 +90,7 @@ function [T] Narrow : (value : i128) -> TypeIf<T, IsIntegral<T>> = {
 };
 
 @operator [U, V] >= : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
-    // TODO: should be `return !(lhs < rhs)`;
-    return !(rhs > lhs);
+    return !(lhs < rhs);
 };
 
 typedef[T] HasSpaceship : FalseType;
