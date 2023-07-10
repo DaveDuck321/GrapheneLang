@@ -510,12 +510,12 @@ class ParseFunctionSignatures(Interpreter):
     def specialized_operator_function(
         self,
         op_name: Token,
-        specialization: Tree,
+        specialization_tree: Tree,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        if specialization is not None:
+        if specialization_tree is not None:
             raise NotImplementedError()
 
         self._parse_function(
@@ -526,12 +526,12 @@ class ParseFunctionSignatures(Interpreter):
     def specialized_assignment_function(
         self,
         assignment_op_name: Token,
-        specialization: Tree,
+        specialization_tree: Tree,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        if specialization is not None:
+        if specialization_tree is not None:
             raise NotImplementedError()
 
         self._parse_function(
