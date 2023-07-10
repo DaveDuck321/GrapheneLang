@@ -5,6 +5,7 @@ from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
     AssignmentToNonPointerError,
+    FailedLookupError,
     OperandError,
     RedefinitionError,
 )
@@ -149,9 +150,10 @@ class Scope(Generatable):
         self._generic_pack = (pack_name, pack_length)
 
     def search_for_generic_pack(self, pack_name: str) -> list[StackVariable]:
-        # TODO this is horrible.
-        assert self._generic_pack is not None
-        assert pack_name == self._generic_pack[0]
+        if self._generic_pack is None or self._generic_pack[0] != pack_name:
+            if self._outer_scope is None:
+                raise FailedLookupError("parameter pack", pack_name)
+            return self._outer_scope.search_for_generic_pack(pack_name)
 
         vars = [
             self.search_for_variable(f"{pack_name}{i}")
