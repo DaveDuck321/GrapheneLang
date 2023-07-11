@@ -5,7 +5,7 @@ function[T] foo: (i: isize, j: T) -> void = {};
 function main : () -> int = {
     const i: isize = 2;
 
-    // CommonoArithmeticType<isize, int> should match against isize.
+    // CommonArithmeticType<isize, int> should match against isize.
     foo(i + 1, 0);
 
     return 0;
