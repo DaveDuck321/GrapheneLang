@@ -177,6 +177,7 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 
 if_statement: "if" "(" expression ")" scope ["else" scope]
 while_statement: "while" "(" expression ")" scope
+for_statement: "for" "(" IDENTIFIER "in" expression ")" scope
 // This needs a higher priority, otherwise `return -1` is parsed as an
 // operator_use with a variable called `return`.
 return_statement.1: "return" expression?
@@ -201,6 +202,7 @@ _line_of_code_without_semi: assignment
                           | variable_declaration
 
 _line_of_code: _line_of_code_without_semi ";"
+             | for_statement
              | if_statement
              | scope
              | while_statement
