@@ -374,6 +374,25 @@ class ParseFunctionSignatures(Interpreter):
             body_tree,
         )
 
+    @inline_and_wrap_user_facing_errors("@implicit[...] signature")
+    def generic_implicit_function(
+        self,
+        generic_definitions_tree: Tree,
+        implicit_function_name: Token,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ):
+        # TODO: user facing error
+        assert implicit_function_name.value in ("has_next", "get_next", "destruct")
+        self._parse_generic_function_impl(
+            "__builtin_" + implicit_function_name.value,
+            generic_definitions_tree,
+            args_tree,
+            return_type_tree,
+            body_tree,
+        )
+
     def _parse_generic_function_impl(
         self,
         generic_name: str,
@@ -536,6 +555,29 @@ class ParseFunctionSignatures(Interpreter):
 
         self._parse_function(
             assignment_op_name.value, args_tree, return_type_tree, body_tree, False
+        )
+
+    @inline_and_wrap_user_facing_errors("@implicit signature")
+    def specialized_implicit_function(
+        self,
+        implicit_function_name: Token,
+        specialization_tree: Tree,
+        args_tree: Tree,
+        return_type_tree: Tree,
+        body_tree: Tree,
+    ) -> None:
+        if specialization_tree is not None:
+            raise NotImplementedError()
+
+        # TODO: user facing error
+        assert implicit_function_name.value in ("has_next", "get_next", "destruct")
+
+        self._parse_function(
+            "__builtin_" + implicit_function_name.value,
+            args_tree,
+            return_type_tree,
+            body_tree,
+            False,
         )
 
     @inline_and_wrap_user_facing_errors("foreign signature")
