@@ -113,7 +113,7 @@ class Scope(Generatable):
         super().__init__()
 
         assert scope_id >= 0
-        self._id = scope_id
+        self.id = scope_id
 
         self._outer_scope: Optional[Scope] = outer_scope
         self._variables: dict[str, StackVariable] = {}
@@ -146,11 +146,11 @@ class Scope(Generatable):
 
     @property
     def start_label(self) -> str:
-        return f"scope_{self._id}_begin"
+        return f"scope_{self.id}_begin"
 
     @property
     def end_label(self) -> str:
-        return f"scope_{self._id}_end"
+        return f"scope_{self.id}_end"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         contained_ir = []

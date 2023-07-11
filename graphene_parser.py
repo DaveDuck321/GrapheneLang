@@ -1144,6 +1144,68 @@ def generate_while_statement(
     )
 
 
+def generate_for_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    body: Tree,
+    generic_mapping: cg.GenericMapping,
+) -> None:
+    (
+        variable_name,
+        iterator_expression_tree,
+        inner_scope_tree,
+    ) = body.children
+    assert isinstance(variable_name, Token)
+
+    # Outer scope
+    outer_scope = cg.Scope(function.get_next_scope_id(), scope)
+
+    #    Produce the iterator
+    iter_expr = ExpressionParser.parse(
+        program, function, scope, generic_mapping, iterator_expression_tree
+    )
+    #    Save the iterator onto the stack (for referencing)
+    iter_variable = cg.StackVariable(
+        f"__for_iter_{outer_scope.id}", iter_expr.type(), False, True
+    )
+    outer_scope.add_variable(iter_variable)
+    outer_scope.add_generatable(iter_expr.subexpressions)
+    outer_scope.add_generatable(
+        cg.VariableAssignment(iter_variable, iter_expr.expression())
+    )
+    var_ref = cg.VariableReference(iter_variable)
+    borrowed_iter_expr = cg.BorrowExpression(var_ref, False)
+    outer_scope.add_generatable([var_ref, borrowed_iter_expr])
+
+    # Inner scope
+    inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
+
+    has_next_expr = program.lookup_call_expression(
+        "__builtin_has_next", [], [borrowed_iter_expr]
+    )
+    get_next_expr = program.lookup_call_expression(
+        "__builtin_get_next", [], [borrowed_iter_expr]
+    )
+    inner_scope.add_generatable(get_next_expr)
+
+    iter_result_variable = cg.StackVariable(
+        variable_name, get_next_expr.underlying_type, False, True
+    )
+    inner_scope.add_variable(iter_result_variable)
+    inner_scope.add_generatable(
+        cg.VariableAssignment(iter_result_variable, get_next_expr)
+    )
+
+    # For loop is just syntax sugar for a while loop
+    generate_body(program, function, inner_scope, inner_scope_tree, generic_mapping)
+
+    outer_scope.add_generatable(
+        cg.WhileStatement(inner_scope.id, has_next_expr, [has_next_expr], inner_scope)
+    )
+    scope.add_generatable(outer_scope)
+
+
 def generate_assignment(
     program: cg.Program,
     function: cg.Function,
@@ -1194,6 +1256,7 @@ def generate_body(
         "assignment": generate_assignment,
         "const_declaration": partial(generate_variable_declaration, True),
         "expression": generate_standalone_expression,
+        "for_statement": generate_for_statement,
         "if_statement": generate_if_statement,
         "return_statement": generate_return_statement,
         "scope": generate_scope_body,
