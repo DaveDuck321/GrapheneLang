@@ -141,3 +141,7 @@ def get_datalayout() -> str:
 
 def get_target_triple() -> str:
     return _get_config().llvm_target_triple
+
+
+def get_llvm_type_info(llvm_type_name: str) -> TypeInfo:
+    return _get_config().llvm_types[llvm_type_name]
