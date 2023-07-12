@@ -132,5 +132,5 @@ def get_datalayout() -> str:
     return str.join("-", specs)
 
 
-set_target("x86_64_linux")
-print(get_datalayout())
+def get_target_triple() -> str:
+    return _get_config().llvm_target_triple
