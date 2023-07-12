@@ -6,7 +6,7 @@
         32,
         64
     ],
-    "env": "linux",
+    "abi": "SystemV_AMD64",
     "endianness": "little",
     "mangling": "elf",
     "stack_align": 128,

@@ -41,6 +41,48 @@ class ManglingStyle(Enum):
         raise NotImplementedError()
 
 
+class ABI(Enum):
+    SystemV_AMD64 = 0
+
+    def compute_struct_size(
+        self, member_sizes: list[int], member_aligns: list[int]
+    ) -> int:
+        # Return the size of the struct as set by the System V AMD64 ABI.
+        # [docs/abi.pdf, Section 3.1.2]
+
+        def compute_padding(curr_size: int, align_to: int) -> int:
+            # Simplifies to this, using the properties of remainders.
+            return -curr_size % align_to
+
+        # Each member is assigned to the lowest available offset with the
+        # appropriate alignment.
+        struct_size = 0
+        for member_size, member_align in zip(member_sizes, member_aligns, strict=True):
+            # Add padding to ensure each member is aligned
+            struct_size += compute_padding(struct_size, member_align)
+
+            # Append member to the struct
+            struct_size += member_size
+
+        # The size of any object is always a multiple of the object‘s alignment.
+        struct_size += compute_padding(
+            struct_size, self.compute_struct_alignment(member_aligns)
+        )
+
+        return struct_size
+
+    def compute_struct_alignment(self, member_aligns: list[int]) -> int:
+        # Structures and unions assume the alignment of their most strictly
+        # aligned component. [docs/abi.pdf, Section 3.1.2]
+        return max(member_aligns) if member_aligns else 1
+
+    @classmethod
+    def from_str(cls, string: str) -> "ABI":
+        if string == "SystemV_AMD64":
+            return cls.SystemV_AMD64
+        raise NotImplementedError()
+
+
 @dataclass
 class TypeInfo:
     size: int
@@ -51,7 +93,7 @@ class TypeInfo:
 class TargetConfig:
     arch: str
     arch_native_widths: list[int]
-    env: str
+    abi: ABI
     endianness: Endianess
     mangling: ManglingStyle
     stack_align: int
@@ -82,6 +124,10 @@ def set_target(target: str) -> None:
         # ManglingStyle enum.
         if "mangling" in object:
             object["mangling"] = ManglingStyle.from_str(object["mangling"])
+
+        # ABI enum.
+        if "abi" in object:
+            object["abi"] = ABI.from_str(object["abi"])
 
         return object
 
@@ -145,3 +191,7 @@ def get_target_triple() -> str:
 
 def get_llvm_type_info(llvm_type_name: str) -> TypeInfo:
     return _get_config().llvm_types[llvm_type_name]
+
+
+def get_abi() -> ABI:
+    return _get_config().abi
