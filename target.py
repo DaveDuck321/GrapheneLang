@@ -2,6 +2,7 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from sys import exit as sys_exit
 from typing import Any, Optional
 
 
@@ -85,6 +86,12 @@ def set_target(target: str) -> None:
         return object
 
     config_path = (TARGETS_DIR / target).with_suffix(".json")
+
+    if not config_path.is_file():
+        # TODO we should be throwing exceptions and catching them in the driver.
+        print(f"Could not find a configuration file for target '{target}'")
+        sys_exit(1)
+
     with open(config_path) as config_file:
         config_data = json.load(config_file, object_hook=parse_type_info)
 
