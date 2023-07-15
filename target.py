@@ -241,5 +241,9 @@ def get_llvm_type_info(llvm_type_name: str) -> TypeInfo:
     return _get_config().llvm_types[llvm_type_name]
 
 
+def get_ptr_type_info() -> TypeInfo:
+    return get_llvm_type_info("ptr")
+
+
 def get_abi() -> ABI:
     return _get_config().abi

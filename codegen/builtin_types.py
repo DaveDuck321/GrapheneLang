@@ -4,7 +4,7 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Optional
 
-from target import get_abi
+from target import get_abi, get_ptr_type_info
 
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
@@ -275,12 +275,12 @@ class UIntType(GenericIntType):
 
 class SizeType(GenericIntType):
     def __init__(self) -> None:
-        super().__init__("isize", 64, True)
+        super().__init__("isize", get_ptr_type_info().size.in_bits, True)
 
 
 class IPtrType(GenericIntType):
     def __init__(self) -> None:
-        super().__init__("iptr", 64, True)
+        super().__init__("iptr", get_ptr_type_info().size.in_bits, True)
 
 
 class BoolDefinition(PrimitiveDefinition):
