@@ -116,7 +116,7 @@ _target: Optional[str] = None
 _target_config: Optional[TargetConfig] = None
 
 
-def set_target(target: str) -> None:
+def load_target_config(target: str) -> None:
     global _target, _target_config
 
     _target = target

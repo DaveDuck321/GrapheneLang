@@ -5,7 +5,7 @@ from os import getenv
 from pathlib import Path
 
 from graphene_parser import generate_ir_from_source
-from target import get_target_triple, set_target
+from target import get_target_triple, load_target_config
 
 
 def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
@@ -80,7 +80,7 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
-    set_target(args.target)
+    load_target_config(args.target)
     ir = generate_ir_from_source(args.input[0], include_path, args.debug_compiler)
 
     if will_emit_llvm:
