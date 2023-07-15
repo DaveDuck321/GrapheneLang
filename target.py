@@ -51,7 +51,16 @@ class ABI(Enum):
         # [docs/abi.pdf, Section 3.1.2]
 
         def compute_padding(curr_size: int, align_to: int) -> int:
-            # Simplifies to this, using the properties of remainders.
+            # First, compute the number of bytes needed to pad the struct to
+            # the next `align_to` boundary:
+            # padding = align_to - (curr_size % align_to)
+            #
+            # Then, take the modulus again so that we don't add unnecessary
+            # padding if the next member is already aligned:
+            # return padding % align_to
+            #
+            # Using the properties of remainders, the above procedure simplifies
+            # to:
             return -curr_size % align_to
 
         # Each member is assigned to the lowest available offset with the
