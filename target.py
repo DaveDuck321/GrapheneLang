@@ -131,6 +131,7 @@ class TargetConfig:
     endianness: Endianess
     mangling: ManglingStyle
     stack_align: Size
+    int_type: TypeInfo
     llvm_target_triple: str
     llvm_types: dict[str, TypeInfo]
 
@@ -243,6 +244,10 @@ def get_llvm_type_info(llvm_type_name: str) -> TypeInfo:
 
 def get_ptr_type_info() -> TypeInfo:
     return get_llvm_type_info("ptr")
+
+
+def get_int_type_info() -> TypeInfo:
+    return _get_config().int_type
 
 
 def get_abi() -> ABI:

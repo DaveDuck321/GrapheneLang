@@ -10,6 +10,10 @@
     "endianness": "little",
     "mangling": "elf",
     "stack_align": 16,
+    "int_type": {
+        "size": 4,
+        "align": 4
+    },
     "llvm_target_triple": "x86_64-unknown-linux-gnu",
     "llvm_types": {
         "ptr": {
