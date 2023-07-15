@@ -411,14 +411,7 @@ class StackArrayDefinition(TypeDefinition):
 
     @property
     def alignment(self) -> int:
-        # An array uses the same alignment as its elements, except that a local
-        # or global array variable of length at least 16 bytes or a C99
-        # variable-length array variable always has alignment of at least 16
-        # bytes. [docs/abi.pdf, Section 3.1.2]
-        # TODO move to target.py.
-        return (
-            self.member.alignment if self.size < 16 else max(self.member.alignment, 16)
-        )
+        return get_abi().compute_stack_array_alignment(self.size, self.member.alignment)
 
 
 class HeapArrayDefinition(TypeDefinition):

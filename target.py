@@ -47,6 +47,9 @@ class ABI(Enum):
     def compute_struct_size(
         self, member_sizes: list[int], member_aligns: list[int]
     ) -> int:
+        if self != self.SystemV_AMD64:
+            raise NotImplementedError
+
         # Return the size of the struct as set by the System V AMD64 ABI.
         # [docs/abi.pdf, Section 3.1.2]
 
@@ -81,9 +84,22 @@ class ABI(Enum):
         return struct_size
 
     def compute_struct_alignment(self, member_aligns: list[int]) -> int:
+        if self != self.SystemV_AMD64:
+            raise NotImplementedError
+
         # Structures and unions assume the alignment of their most strictly
         # aligned component. [docs/abi.pdf, Section 3.1.2]
         return max(member_aligns) if member_aligns else 1
+
+    def compute_stack_array_alignment(self, array_size: int, member_align: int) -> int:
+        if self != self.SystemV_AMD64:
+            raise NotImplementedError
+
+        # An array uses the same alignment as its elements, except that a local
+        # or global array variable of length at least 16 bytes or a C99
+        # variable-length array variable always has alignment of at least 16
+        # bytes. [docs/abi.pdf, Section 3.1.2]
+        return member_align if array_size < 16 else max(member_align, 16)
 
     @classmethod
     def from_str(cls, string: str) -> "ABI":
