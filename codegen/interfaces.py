@@ -85,13 +85,13 @@ class Type(ABC):
     @property
     def size(self) -> int:
         if self.is_reference:
-            return get_llvm_type_info("ptr").size
+            return get_llvm_type_info("ptr").size.in_bytes
         return self.definition.size
 
     @property
     def alignment(self) -> int:
         if self.is_reference:
-            return get_llvm_type_info("ptr").align
+            return get_llvm_type_info("ptr").align.in_bytes
         return self.definition.alignment
 
     def convert_to_value_type(self) -> "Type":

@@ -84,19 +84,28 @@ class ABI(Enum):
 
 
 @dataclass
+class Size:
+    in_bytes: int
+
+    @property
+    def in_bits(self) -> int:
+        return self.in_bytes * 8
+
+
+@dataclass
 class TypeInfo:
-    size: int
-    align: int
+    size: Size
+    align: Size
 
 
 @dataclass(kw_only=True)
 class TargetConfig:
     arch: str
-    arch_native_widths: list[int]
+    arch_native_widths: list[Size]
     abi: ABI
     endianness: Endianess
     mangling: ManglingStyle
-    stack_align: int
+    stack_align: Size
     llvm_target_triple: str
     llvm_types: dict[str, TypeInfo]
 
@@ -112,10 +121,10 @@ def set_target(target: str) -> None:
 
     _target = target
 
-    def parse_type_info(object: dict[str, Any]) -> TypeInfo | dict[str, Any]:
+    def json_object_hook(object: dict[str, Any]) -> TypeInfo | dict[str, Any]:
         # Pack into TypeInfo.
         if "size" in object and "align" in object:
-            return TypeInfo(object["size"], object["align"])
+            return TypeInfo(Size(object["size"]), Size(object["align"]))
 
         # Endianness enum.
         if "endianness" in object:
@@ -129,6 +138,16 @@ def set_target(target: str) -> None:
         if "abi" in object:
             object["abi"] = ABI.from_str(object["abi"])
 
+        # Convert elements of arch_native_widths to Size.
+        if "arch_native_widths" in object:
+            object["arch_native_widths"] = [
+                Size(i) for i in object["arch_native_widths"]
+            ]
+
+        # Convert stack_align to Size.
+        if "stack_align" in object:
+            object["stack_align"] = Size(object["stack_align"])
+
         return object
 
     config_path = (TARGETS_DIR / target).with_suffix(".json")
@@ -139,7 +158,7 @@ def set_target(target: str) -> None:
         sys_exit(1)
 
     with open(config_path) as config_file:
-        config_data = json.load(config_file, object_hook=parse_type_info)
+        config_data = json.load(config_file, object_hook=json_object_hook)
 
     # The __init__ function checks that all specified fields are in the
     # dictionary and that no additional fields are present. This should catch
@@ -167,20 +186,24 @@ def get_datalayout() -> str:
     specs.append(config.mangling.llvm_datalayout_spec)
 
     # Pointer type.
-    specs.append(f"p:{config.llvm_types['ptr'].size}:{config.llvm_types['ptr'].align}")
+    specs.append(
+        f"p:{config.llvm_types['ptr'].size.in_bits}:{config.llvm_types['ptr'].align.in_bits}"
+    )
 
     # Other types.
     specs.extend(
-        f"{type_name}:{type_info.align}"
+        f"{type_name}:{type_info.align.in_bits}"
         for type_name, type_info in config.llvm_types.items()
         if type_name != "ptr"
     )
 
     # Native integer widths.
-    specs.append("n" + str.join(":", map(str, config.arch_native_widths)))
+    specs.append(
+        "n" + str.join(":", map(lambda w: str(w.in_bits), config.arch_native_widths))
+    )
 
     # Alignment of the stack.
-    specs.append(f"S{config.stack_align}")
+    specs.append(f"S{config.stack_align.in_bits}")
 
     return str.join("-", specs)
 
