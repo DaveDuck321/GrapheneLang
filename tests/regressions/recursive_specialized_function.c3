@@ -1,4 +1,4 @@
-@require_once "std/arithmetic.c3";
+@require_once "std/arithmetic.c3"
 
 function [T] recursive: (i: int) -> int = {
     if (i > 0) {
@@ -6,11 +6,11 @@ function [T] recursive: (i: int) -> int = {
     }
 
     return 0;
-};
+}
 
 function main : () -> int = {
     return recursive<int>(2);
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 0

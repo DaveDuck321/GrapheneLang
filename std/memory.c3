@@ -1,36 +1,36 @@
-@require_once "arithmetic.c3";
-@require_once "assert.c3";
-@require_once "logical.c3";
-@require_once "syscalls.c3";
-@require_once "util.c3";
-@require_once "wrappers.c3";
+@require_once "arithmetic.c3"
+@require_once "assert.c3"
+@require_once "logical.c3"
+@require_once "syscalls.c3"
+@require_once "util.c3"
+@require_once "wrappers.c3"
 
 function allocate_page_and_return_address : (length : isize) -> iptr = {
     let prot : u32 = SYS_PROT_READ() | SYS_PROT_WRITE();
     let flags : u32 = SYS_MAP_PRIVATE() | SYS_MAP_ANONYMOUS();
 
     return sys_mmap(0, length, prot, flags, -1, 0);
-};
+}
 
 function deallocate_page : (addr: iptr, length : isize) -> void = {
     sys_munmap(addr, length);
-};
+}
 
 function PAGE_SIZE : () -> isize = {
     return 4096;  // TODO: this should be a compile time constant
-};
+}
 
 typedef AllocatorNode : {
     integrity_check : u64,
     next_node : iptr, // TODO use: Optional<Ptr<AllocatorNode>> (recursive type)
-};
+}
 
 typedef Allocator : {
     // TODO: parameterize `8` as a generic argument
     bin_count: isize,
     integrity_checks : u64[8],
     bins : Optional<Ptr<AllocatorNode>>[8],
-};
+}
 
 function get_allocator_bin_index : (size_required : isize) -> isize = {
     let bin_index : int = 0;
@@ -43,12 +43,12 @@ function get_allocator_bin_index : (size_required : isize) -> isize = {
     }
 
     return bin_index;
-};
+}
 
 function get_block_size_from_bin_index : (bin : isize) -> isize = {
     let bin0_size: u64 = as_logical(sizeof<AllocatorNode>());
     return as_arithmetic(bin0_size << bin);
-};
+}
 
 function allocate_impl : (allocator : Allocator&, requested_size : isize) -> isize = {
     let bin_index : isize = get_allocator_bin_index(requested_size);
@@ -61,19 +61,19 @@ function allocate_impl : (allocator : Allocator&, requested_size : isize) -> isi
         // Otherwise we actually do it ourselves
         return allocate_from_bin_and_return_address(&allocator, bin_index);
     }
-};
+}
 
 
 function [T] allocate : (allocator : Allocator&) -> T& = {
     return &addr_to_ref<T>(allocator:allocate_impl(sizeof<T>()));
-};
+}
 
 function [T] allocate_span : (allocator : Allocator&, length: isize) -> Span<T> = {
     return {
         data : &addr_to_heap_array<T>(allocator:allocate_impl(sizeof<T>() * length)),
         length : length,
     };
-};
+}
 
 
 function deallocate_impl : (allocator : Allocator&, memory_address: isize, size : isize) -> void = {
@@ -83,15 +83,15 @@ function deallocate_impl : (allocator : Allocator&, memory_address: isize, size 
     } else {
         deallocate_to_bin(&allocator, bin_index, memory_address);
     }
-};
+}
 
 function [T] deallocate : (allocator : Allocator&, ref : T&) -> void = {
     allocator:deallocate_impl(__builtin_ptr_to_int(&ref), sizeof<T>());
-};
+}
 
 function [T] deallocate_span : (allocator : Allocator&, span : Span<T>) -> void = {
     allocator:deallocate_impl(__builtin_ptr_to_int(&span.data), sizeof<T>() * span.length);
-};
+}
 
 function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) -> void = {
     let integrity_check : u64 = allocator.integrity_checks[bin];
@@ -109,7 +109,7 @@ function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) 
         new_node.next_node = 0;
     }
     allocator.bins[bin]:store<Ptr<AllocatorNode>>({&new_node});
-};
+}
 
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
     // No bins available, lets allocate more memory
@@ -158,7 +158,7 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
 
     // FIXME: we generate invalid code without this return
     return 0;
-};
+}
 
 function initialize_allocator : () -> Allocator = {
     // TODO: should actually check that the bin is a power of 2 bytes
@@ -182,4 +182,4 @@ function initialize_allocator : () -> Allocator = {
         i += 1;
     }
     return allocator;
-};
+}

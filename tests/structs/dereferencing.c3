@@ -1,14 +1,14 @@
-typedef MyStruct : {member : int};
+typedef MyStruct : {member : int}
 
-foreign GetStruct : () -> MyStruct;
+foreign GetStruct : () -> MyStruct
 
 function fn_val : () -> MyStruct = {
     return GetStruct();
-};
+}
 
 function fn_ref : (in : MyStruct&) -> MyStruct& = {
     return &in;
-};
+}
 
 
 function main: () -> int = {
@@ -23,6 +23,6 @@ function main: () -> int = {
     let result4 : int = fn_ref(&b).member;
 
     return 0;
-};
+}
 
 /// @COMPILE

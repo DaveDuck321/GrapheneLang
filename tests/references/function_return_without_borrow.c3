@@ -1,6 +1,6 @@
 function test_fn : (arg : int&) -> int& = {
     return &arg;
-};
+}
 
 function main : () -> int = {
     let a : int = 0;
@@ -9,7 +9,7 @@ function main : () -> int = {
     a_ref = 10;
 
     return a;
-};
+}
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 7, in 'function main: () -> int'

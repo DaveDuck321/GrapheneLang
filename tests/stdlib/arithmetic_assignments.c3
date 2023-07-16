@@ -1,4 +1,4 @@
-@require_once "std/arithmetic.c3";
+@require_once "std/arithmetic.c3"
 
 
 function main : () -> int = {
@@ -10,7 +10,7 @@ function main : () -> int = {
     a *= 9;
     a -= 1;
     return a;
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 71

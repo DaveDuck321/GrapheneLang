@@ -1,15 +1,15 @@
-@require_once "arithmetic.c3";
-@require_once "assert.c3";
-@require_once "memory.c3";
-@require_once "wrappers.c3";
+@require_once "arithmetic.c3"
+@require_once "assert.c3"
+@require_once "memory.c3"
+@require_once "wrappers.c3"
 
 typedef [T] Vector : {
     allocator : Allocator&,
     memory : Span<T>,
     length : isize,
-};
+}
 
-function DEFAULT_VECTOR_CAPACITY : () -> isize = { return 8; };
+function DEFAULT_VECTOR_CAPACITY : () -> isize = { return 8; }
 
 function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
     /* TODO: It'd be kinda nice to NOT allocate by default
@@ -19,7 +19,7 @@ function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
         memory : allocator:allocate_span<T>(DEFAULT_VECTOR_CAPACITY()),
         length : 0,
     };
-};
+}
 
 function [T] push_back : (self : Vector<T>&, data : T) -> void = {
     if (self.length == self.memory.length) {
@@ -41,48 +41,48 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
     self.memory.data[self.length] = data;
 
     self.length += 1;
-};
+}
 
 function [T] pop_back : (self : Vector<T>&) -> T = {
     runtime_assert(self.length > 0);
 
     self.length -= 1;
     return self.memory.data[self.length];
-};
+}
 
 function [T] get : (self : Vector<T>&, index : isize) -> T = {
     runtime_assert(index >= 0);
     runtime_assert(index < self.length); // TODO: && in previous line
     return self.memory.data[index];
-};
+}
 
 function [T] set : (self : Vector<T>&, index : isize, data : T) -> void = {
     runtime_assert(index >= 0);
     runtime_assert(index < self.length);  // TODO: && in previous line
     self.memory.data[index] = data;
-};
+}
 
 function [T] length : (self : Vector<T>&) -> isize = {
     return self.length;
-};
+}
 
 function [T] capacity : (self : Vector<T>&) -> isize = {
     return self.memory.length;
-};
+}
 
 function [T] clear : (self : Vector<T>&) -> void = {
     // TODO: destructor support (if we add destructors)
     self.length = 0;
-};
+}
 
 function [T] deallocate : (self : Vector<T>&) -> void = {
     // TODO: this aught to be a destructor
     self.allocator:deallocate_span(self.memory);
-};
+}
 
 function [T] data : (self : Vector<T>&) -> Span<T> = {
     return {
         data : &self.memory.data,
         length : self.length,
     };
-};
+}

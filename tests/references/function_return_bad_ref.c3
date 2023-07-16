@@ -1,6 +1,6 @@
 function test_fn : (arg : int&) -> int& = {
     return arg;
-};
+}
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 2, in 'function test_fn: (int&) -> int&'

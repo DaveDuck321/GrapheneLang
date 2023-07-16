@@ -1,8 +1,8 @@
-typedef my_int : i64;
+typedef my_int : i64
 
 function main : () -> my_int = {
     return 0;
-};
+}
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 3, in 'function signature'

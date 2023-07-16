@@ -1,6 +1,6 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/logical.c3";
-@require_once "std/util.c3";
+@require_once "std/arithmetic.c3"
+@require_once "std/logical.c3"
+@require_once "std/util.c3"
 
 function main : () -> int = {
     let a : int = 1;
@@ -21,7 +21,7 @@ function main : () -> int = {
     }
 
     return - a + - + - a;
-};
+}
 
 /// @COMPILE
 /// @RUN

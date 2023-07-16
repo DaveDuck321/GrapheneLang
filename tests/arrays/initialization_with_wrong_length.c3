@@ -2,7 +2,7 @@ function main : () -> int = {
     const array : int[4] = { 0, 0, 1 };
 
     return array[3];
-};
+}
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 2, in 'function main: () -> int'

@@ -1,10 +1,10 @@
 function [T] sizeof : () -> isize = {
     return __builtin_sizeof<T>();
-};
+}
 
 function [T] alignof : () -> isize = {
     return __builtin_alignof<T>();
-};
+}
 
 function [T] addr_to_ref : (bad_address : i32) -> T& = {
     // NOTE: this overload ensures that we are called with an i64 (with no implict conversions)
@@ -13,30 +13,30 @@ function [T] addr_to_ref : (bad_address : i32) -> T& = {
     // TODO: this should be a static assert/ error
     runtime_assert(false);
     return &__builtin_int_to_ptr<T&>(0);
-};
+}
 
 function [T] addr_to_ref : (address : iptr) -> T& = {
     return &__builtin_int_to_ptr<T&>(address);
-};
+}
 
 function [T] addr_to_heap_array : (bad_address : i32) -> T[&] = {
     // TODO: this should be a static assert/ error
     runtime_assert(false);
     return &__builtin_int_to_ptr<T[&]>(bad_address);
-};
+}
 
 function [T] addr_to_heap_array : (address : iptr) -> T[&] = {
     return &__builtin_int_to_ptr<T[&]>(address);
-};
+}
 
-function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); };
-function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); };
-function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); };
-function as_arithmetic : (value : u64)  -> i64  = { return __builtin_bitcast<i64>(value); };
-function as_arithmetic : (value : u128) -> i128 = { return __builtin_bitcast<i128>(value); };
+function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); }
+function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); }
+function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); }
+function as_arithmetic : (value : u64)  -> i64  = { return __builtin_bitcast<i64>(value); }
+function as_arithmetic : (value : u128) -> i128 = { return __builtin_bitcast<i128>(value); }
 
-function as_logical : (value : i8)   -> u8   = { return __builtin_bitcast<u8>(value); };
-function as_logical : (value : i16)  -> u16  = { return __builtin_bitcast<u16>(value); };
-function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(value); };
-function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); };
-function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); };
+function as_logical : (value : i8)   -> u8   = { return __builtin_bitcast<u8>(value); }
+function as_logical : (value : i16)  -> u16  = { return __builtin_bitcast<u16>(value); }
+function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(value); }
+function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); }
+function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); }

@@ -1,5 +1,5 @@
-@require_once "std/logical.c3";
-@require_once "std/type_traits.c3";
+@require_once "std/logical.c3"
+@require_once "std/type_traits.c3"
 
 function main : () -> int = {
     let a : bool = true;
@@ -26,7 +26,7 @@ function main : () -> int = {
         return 1;
     }
     return 0;
-};
+}
 
 /// @COMPILE
 /// @RUN

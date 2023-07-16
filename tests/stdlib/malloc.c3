@@ -1,11 +1,11 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/memory.c3";
-@require_once "std/wrappers.c3";
+@require_once "std/arithmetic.c3"
+@require_once "std/memory.c3"
+@require_once "std/wrappers.c3"
 
 typedef MyStruct : {
     a : int,
     b : isize
-};
+}
 
 
 function main : () -> int = {
@@ -66,7 +66,7 @@ function main : () -> int = {
     }
 
     return 0;
-};
+}
 
 /// @COMPILE
 /// @RUN

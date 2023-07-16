@@ -1,8 +1,8 @@
-@require_once "std/arithmetic.c3";
+@require_once "std/arithmetic.c3"
 
 function test_fn : (arg : int&) -> int& = {
     return &arg;
-};
+}
 
 function main : () -> int = {
     let a : int = 0;
@@ -14,7 +14,7 @@ function main : () -> int = {
     test_fn(&b) = 9;
 
     return a + b;
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 19

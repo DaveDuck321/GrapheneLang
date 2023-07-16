@@ -1,9 +1,9 @@
-typedef[T, T] my_struct : {a: T, b: T};
+typedef[T, T] my_struct : {a: T, b: T}
 
 function main: () -> int = {
     // Linker fails without a main().
     return 0;
-};
+}
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 1, in 'typedef my_struct : ...'

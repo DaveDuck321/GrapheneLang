@@ -1,8 +1,8 @@
-@require_once "_import.c3";
+@require_once "_import.c3"
 
 function main : () -> int = {
     return test();
-};
+}
 
 /// @COMPILE -Iincluded; EXPECT ERR
 /// File '*.c3', line 1, in '@require_once "_import.c3"'

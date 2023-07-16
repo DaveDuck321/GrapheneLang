@@ -1,5 +1,5 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/vector.c3";
+@require_once "std/arithmetic.c3"
+@require_once "std/vector.c3"
 
 
 function main : () -> int = {
@@ -28,7 +28,7 @@ function main : () -> int = {
 
     vec:deallocate(); // TODO: RAII
     return 0;
-};
+}
 
 /// @COMPILE
 /// @RUN

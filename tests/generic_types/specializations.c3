@@ -1,20 +1,20 @@
-typedef TrueType : {};
-typedef FalseType : {};
+typedef TrueType : {}
+typedef FalseType : {}
 
-typedef[T] IsIntegral : FalseType;
-typedef IsIntegral<int> : TrueType;
-typedef IsIntegral<u8> : TrueType;
-typedef IsIntegral<u16> : TrueType;
+typedef[T] IsIntegral : FalseType
+typedef IsIntegral<int> : TrueType
+typedef IsIntegral<u8> : TrueType
+typedef IsIntegral<u16> : TrueType
 
-foreign puts : (str : u8[&]) -> int;
+foreign puts : (str : u8[&]) -> int
 
 function to_value : (_: TrueType) -> bool = {
     return true;
-};
+}
 
 function to_value : (_: FalseType) -> bool = {
     return false;
-};
+}
 
 function main : () -> int = {
     let result1 : IsIntegral<u16> = {};
@@ -28,7 +28,7 @@ function main : () -> int = {
         puts("u8[&] is integral\0");
     }
     return 0;
-};
+}
 
 /// @COMPILE --use-crt
 /// @RUN; EXPECT OUT

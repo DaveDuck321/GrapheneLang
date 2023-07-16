@@ -1,4 +1,4 @@
-@require_once "std/arithmetic.c3";
+@require_once "std/arithmetic.c3"
 
 function main : () -> int = {
     let a : int = 0;
@@ -13,7 +13,7 @@ function main : () -> int = {
         return 0;
     }
     return 1;
-};
+}
 
 /// @COMPILE
 /// @RUN

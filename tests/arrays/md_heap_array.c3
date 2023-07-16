@@ -1,4 +1,4 @@
-@require_once "std/arithmetic.c3";
+@require_once "std/arithmetic.c3"
 
 function main : () -> int = {
     let stack_array : i32[2, 2, 2];
@@ -23,7 +23,7 @@ function main : () -> int = {
     }
 
     return 0;
-};
+}
 
 /// @COMPILE
 /// @GREP_IR getelementptr inbounds [2 x [2 x i32]]

@@ -4,12 +4,12 @@ function foo : () -> void = {
     } else {
         return;
     }
-};
+}
 
 function main : () -> int = {
     foo();
     return 0;
-};
+}
 
 /// @COMPILE
 /// @RUN

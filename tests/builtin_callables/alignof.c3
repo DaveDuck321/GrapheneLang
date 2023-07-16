@@ -1,14 +1,14 @@
-typedef MyStruct1 : {a : i32, b : i8, c : i16, d : i8};
-typedef MyStruct2 : {a : i8, b : i16, c : i8, d : i32};
-typedef MyArray1 : i32[5];
-typedef MyArray2 : i8[5];
+typedef MyStruct1 : {a : i32, b : i8, c : i16, d : i8}
+typedef MyStruct2 : {a : i8, b : i16, c : i8, d : i32}
+typedef MyArray1 : i32[5]
+typedef MyArray2 : i8[5]
 
 @operator != : (lhs : isize, rhs : isize) -> bool = {
     if (__builtin_is_equal(lhs, rhs)) {
         return false;
     }
     return true;
-};
+}
 
 function main: () -> int = {
     // TODO: we get an uninitialized variable warning without the =0
@@ -42,7 +42,7 @@ function main: () -> int = {
     }
 
     return 0;
-};
+}
 
 /// @COMPILE
 /// @RUN

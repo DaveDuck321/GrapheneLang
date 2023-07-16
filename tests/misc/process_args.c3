@@ -1,5 +1,5 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/syscalls.c3";
+@require_once "std/arithmetic.c3"
+@require_once "std/syscalls.c3"
 
 function strlen : (cstr: u8[&]) -> isize = {
     let len : isize = 0;
@@ -10,7 +10,7 @@ function strlen : (cstr: u8[&]) -> isize = {
     }
 
     return len;
-};
+}
 
 function main : (argc: int, argv: u8[&][&]) -> int = {
     let i : int = 0;
@@ -22,7 +22,7 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
     }
 
     return argc;
-};
+}
 
 /// @COMPILE
 /// @RUN a bb ccc; EXPECT 4; EXPECT OUT

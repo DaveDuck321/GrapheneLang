@@ -6,12 +6,12 @@
 function[T] pack_len: (curr: T) -> int = {
     // Base case
     return 1;
-};
+}
 
 function[T, Ys...] pack_len: (curr: T, next: Ys...) -> int = {
     // Very Haskell
     return pack_len(next...) + 1;
-};
+}
 
 function to_str: (allocator: Allocator&, val: int) -> iovec = {
     // FIXME should be const.
@@ -32,7 +32,7 @@ function to_str: (allocator: Allocator&, val: int) -> iovec = {
 
     // TODO numbers > 10 and < 0.
     return iov;
-};
+}
 
 function[@Len] to_str: (allocator: Allocator&, val: u8[@Len]) -> iovec = {
     // FIXME we leak memory here.
@@ -45,11 +45,11 @@ function[@Len] to_str: (allocator: Allocator&, val: u8[@Len]) -> iovec = {
     }
 
     return {&mem, @Len};
-};
+}
 
 function[T] printf_single: (allocator: Allocator&, iov: iovec[&], i: isize, val: T) -> void = {
     iov[i] = to_str(&allocator, val);
-};
+}
 
 function[@Len, T] printf_impl: (allocator: Allocator&,
                                        format: u8[@Len]&,
@@ -88,7 +88,7 @@ function[@Len, T] printf_impl: (allocator: Allocator&,
     iov[iov_i] = {&mem, format_j - format_i};
 
     return 1;
-};
+}
 
 function[@Len, T, Ys...] printf_impl: (allocator: Allocator&,
                                        format: u8[@Len]&,
@@ -127,7 +127,7 @@ function[@Len, T, Ys...] printf_impl: (allocator: Allocator&,
     iov[iov_i] = {&mem, format_j - format_i};
 
     return 1;
-};
+}
 
 function[@Len, Ts...] printf: (format: u8[@Len]&, vals: Ts...) -> void = {
     let allocator: Allocator = initialize_allocator();
@@ -138,11 +138,11 @@ function[@Len, Ts...] printf: (format: u8[@Len]&, vals: Ts...) -> void = {
     let fixme: iovec[&] = &iov;
     const len: int = printf_impl(&allocator, &format, 0, &fixme, 0, vals...);
     sys_writev(1, &fixme, len);
-};
+}
 
 function main : () -> int = {
     // printf("one # #\n", "two", "three");
     printf("a: #, b: #, c: #\n", 1, 2, 3);
 
     return 0;
-};
+}
