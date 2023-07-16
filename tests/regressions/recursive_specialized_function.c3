@@ -1,7 +1,7 @@
 @require_once "std/arithmetic.c3"
 
 function [T] recursive: (i: int) -> int = {
-    if (i > 0) {
+    if i > 0{
         recursive<T>(i - 1);
     }
 

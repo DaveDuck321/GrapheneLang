@@ -16,7 +16,7 @@ function [T] foo : () -> T = {
 function main : () -> int = {
     let val : A<B<int>> = foo<A<B<int>>>();
 
-    if (0 < 1) {
+    if 0 < 1{
         return -val.a.b;
     } else {
         return 1;

@@ -3,7 +3,7 @@
 }
 
 function foo : (i : int&) -> void = {
-    if (i > 2) {
+    if i > 2{
         return;
     }
 

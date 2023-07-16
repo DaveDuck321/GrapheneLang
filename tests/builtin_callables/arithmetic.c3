@@ -3,7 +3,7 @@
 }
 
 @operator != : (lhs: int, rhs: int) -> bool = {
-    if (lhs == rhs) {
+    if lhs == rhs{
         return false;
     }
     return true;
@@ -56,66 +56,66 @@
 foreign puts : (str: u8[&]) -> int
 
 function main : () -> int = {
-    if (1 + 1 != 3) {
+    if 1 + 1 != 3{
         puts("sanity check\0");
     }
 
     // All of the following check for obvious errors
-    if (2 != 2) {
+    if 2 != 2{
         return 1;
     }
-    if (1 > 2) {
+    if 1 > 2{
         return 1;
     }
-    if (-1 > 2) {
-        return 1;
-    }
-
-    if (2 < 1) {
-        return 1;
-    }
-    if (2 < -1) {
+    if -1 > 2{
         return 1;
     }
 
-    if (1 + 1 != 2) {
+    if 2 < 1{
         return 1;
     }
-    if (-1 + 1 != 0) {
-        return 1;
-    }
-
-    if (3*4 != 12) {
-        return 1;
-    }
-    if (3*-4 != -12) {
+    if 2 < -1{
         return 1;
     }
 
-    if (10 / 4 != 2) {
+    if 1 + 1 != 2{
         return 1;
     }
-    if (-10 / 4 != -2) {
-        return 1;
-    }
-
-    if (9 >> 1 != 4) {
-        return 1;
-    }
-    if (-2 >> 1 != -1) {
-        return 1;
-    }
-    if (9 << 1 != 18) {
+    if -1 + 1 != 0{
         return 1;
     }
 
-    if (5 & 4 != 4) {
+    if 3*4 != 12{
         return 1;
     }
-    if (5 | 4 != 5) {
+    if 3*-4 != -12{
         return 1;
     }
-    if (5 ^ 4 != 1) {
+
+    if 10 / 4 != 2{
+        return 1;
+    }
+    if -10 / 4 != -2{
+        return 1;
+    }
+
+    if 9 >> 1 != 4{
+        return 1;
+    }
+    if -2 >> 1 != -1{
+        return 1;
+    }
+    if 9 << 1 != 18{
+        return 1;
+    }
+
+    if 5 & 4 != 4{
+        return 1;
+    }
+    if 5 | 4 != 5{
+        return 1;
+    }
+    if 5 ^ 4 != 1{
         return 1;
     }
     return 0;

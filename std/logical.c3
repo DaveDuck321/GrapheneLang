@@ -10,7 +10,7 @@ typedef HasTrivialAssignments<u64> : TrueType
 typedef HasTrivialAssignments<u128> : TrueType
 
 @operator ! : (value : bool) -> bool = {
-    if (value) {
+    if value {
         return false;
     }
     return true;

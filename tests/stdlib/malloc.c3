@@ -16,7 +16,7 @@ function main : () -> int = {
 
     // Allocate int array
     let i: int = 0;
-    while (i < 1028) {
+    while i < 1028 {
         let allocated : int& = &allocator:allocate<int>();
         allocated_memory[i] = {&allocated};
         allocated = i;
@@ -25,8 +25,8 @@ function main : () -> int = {
 
     // Check int array contains valid data
     i = 0;
-    while (i < 1028) {
-        if (allocated_memory[i]:data() != i) {
+    while i < 1028 {
+        if allocated_memory[i]:data() != i{
             return 1;
         }
         i = i + 1;
@@ -34,14 +34,14 @@ function main : () -> int = {
 
     // Deallocate every other element of int array
     i = 0;
-    while (i < 1028) {
+    while i < 1028 {
         allocator:deallocate(&allocated_memory[i]:data());
         i = i + 2;
     }
 
     // Allocate an unrelated struct array
     i = 0;
-    while (i < 512) {
+    while i < 512 {
         let allocated : MyStruct& = &allocator:allocate<MyStruct>();
         allocated_structs[i] = {&allocated};
         allocated = {-1, -1};
@@ -50,15 +50,15 @@ function main : () -> int = {
 
     // Deallocate the struct array
     i = 0;
-    while (i < 512) {
+    while i < 512 {
         allocator:deallocate(&allocated_structs[i]:data());
         i = i + 1;
     }
 
     // Check the remaining elements of the int array are still valid
     i = 1;
-    while (i < 1028) {
-        if (allocated_memory[i]:data() != i) {
+    while i < 1028 {
+        if allocated_memory[i]:data() != i{
             return 1;
         }
         allocator:deallocate(&allocated_memory[i]:data());

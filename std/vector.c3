@@ -22,7 +22,7 @@ function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
 }
 
 function [T] push_back : (self : Vector<T>&, data : T) -> void = {
-    if (self.length == self.memory.length) {
+    if self.length == self.memory.length{
         // Grow the vector
         let new_capacity : isize = 2 * self.memory.length;
         let new_memory : Span<T> = self.allocator:allocate_span<T>(new_capacity);
@@ -30,7 +30,7 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
         // Copy the old data
         // TODO: use a memcpy/ for loop
         let index : isize = 0;
-        while (index < self.length) {
+        while index < self.length {
             new_memory.data[index] = self.memory.data[index];
             index += 1;
         }

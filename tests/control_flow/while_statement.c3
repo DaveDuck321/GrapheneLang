@@ -8,7 +8,7 @@ function main : () -> int = {
     let i : int = 0;
     let sum : int = 0;
 
-    while (is_less_than_20(i)) {
+    while is_less_than_20(i) {
         i = i + 1;
         sum = sum + i;
     }

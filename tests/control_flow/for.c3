@@ -18,7 +18,7 @@ function range : (lower: int, upper: int) -> Range = {
 
 function main : () -> int = {
     let sum : int = 0;
-    for (i in range(0, 10)) {
+    for i in range(0, 10) {
         sum += i;
     }
     return sum;

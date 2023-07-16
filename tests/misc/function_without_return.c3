@@ -1,5 +1,5 @@
 function without_return : (a : bool) -> int = {
-    if (a) {
+    if a{
         return 7;
     }
 }

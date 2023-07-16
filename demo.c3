@@ -39,7 +39,7 @@ function[@Len] to_str: (allocator: Allocator&, val: u8[@Len]) -> iovec = {
     let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
 
     let i: isize = 0;
-    while (i < @Len) {
+    while i < @Len {
         mem[i] = val[i];
         i = i + 1;
     }
@@ -59,13 +59,13 @@ function[@Len, T] printf_impl: (allocator: Allocator&,
                                        val: T
                                       ) -> int = {
     let format_j : isize = format_i;
-    while (format_j < @Len) {
+    while format_j < @Len {
         // 35 is # in ASCII.
-        if (format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35))) {
+        if format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35){
             // FIXME memory leak.
             let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
             let i: isize = format_i;
-            while (i < format_j) {
+            while i < format_j {
                 mem[i] = format[i];
                 i = i + 1;
             }
@@ -81,7 +81,7 @@ function[@Len, T] printf_impl: (allocator: Allocator&,
 
     let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
     let i: isize = format_i;
-    while (i < format_j) {
+    while i < format_j {
         mem[i] = format[i];
         i = i + 1;
     }
@@ -98,13 +98,13 @@ function[@Len, T, Ys...] printf_impl: (allocator: Allocator&,
                                        val: T,
                                        next_vals: Ys...) -> int = {
     let format_j : isize = format_i;
-    while (format_j < @Len) {
+    while format_j < @Len {
         // 35 is # in ASCII.
-        if (format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35))) {
+        if format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35){
             // FIXME memory leak.
             let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
             let i: isize = format_i;
-            while (i < format_j) {
+            while i < format_j {
                 mem[i] = format[i];
                 i = i + 1;
             }
@@ -120,7 +120,7 @@ function[@Len, T, Ys...] printf_impl: (allocator: Allocator&,
 
     let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
     let i: isize = format_i;
-    while (i < format_j) {
+    while i < format_j {
         mem[i] = format[i];
         i = i + 1;
     }

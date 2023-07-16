@@ -18,7 +18,7 @@ function[@Len] puts : (str: u8[@Len]&) -> int = {
 
     const ret : isize = sys_writev(/* stdout */ 1, &iov, 2);
 
-    if (ret != -1) {
+    if ret != -1 {
         // Upon successful completion, puts() shall return a non-negative
         // number.
         return 0;

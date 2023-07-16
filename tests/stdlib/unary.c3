@@ -4,19 +4,19 @@
 
 function main : () -> int = {
     let a : int = 1;
-    if (-a != -1) {
+    if -a != -1{
         return 1;
     }
 
-    if (+a != 1) {
+    if +a != 1{
         return 1;
     }
 
     let b : u32 = 0xFFFF0000;
-    if (b ^ 0xFFFFFFFF != 0xFFFF) {
+    if b ^ 0xFFFFFFFF != 0xFFFF{
         return 1;
     }
-    if (~(b ^ 0xFFFFFFFF) != 0xFFFF0000) {
+    if ~(b ^ 0xFFFFFFFF) != 0xFFFF0000{
         return 1;
     }
 

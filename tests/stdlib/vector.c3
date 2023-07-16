@@ -13,16 +13,16 @@ function main : () -> int = {
     vec:push_back(4);
     vec:push_back(5);
 
-    if (vec:pop_back() != 5) {
+    if vec:pop_back() != 5{
         return 1;
     }
 
-    if (vec:get(1) != 1) {
+    if vec:get(1) != 1{
         return 1;
     }
 
     vec:set(0, 10);
-    if (vec:get(0) != 10) {
+    if vec:get(0) != 10{
         return 1;
     }
 

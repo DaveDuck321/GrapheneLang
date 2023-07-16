@@ -175,9 +175,9 @@ const_declaration: "const" IDENTIFIER ":" type "=" expression
 // Control flow
 //
 
-if_statement: "if" "(" expression ")" scope ["else" scope]
-while_statement: "while" "(" expression ")" scope
-for_statement: "for" "(" IDENTIFIER "in" expression ")" scope
+if_statement: "if" expression scope ["else" scope]
+while_statement: "while" expression scope
+for_statement: "for" IDENTIFIER "in" expression scope
 // This needs a higher priority, otherwise `return -1` is parsed as an
 // operator_use with a variable called `return`.
 return_statement.1: "return" expression?
