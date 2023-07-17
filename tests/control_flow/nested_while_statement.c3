@@ -18,7 +18,7 @@ function main : () -> int = {
         }
     }
 
-    if sum != 2100{
+    if sum != 2100 {
         return 1;
     }
     return 0;

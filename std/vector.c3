@@ -22,7 +22,7 @@ function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
 }
 
 function [T] push_back : (self : Vector<T>&, data : T) -> void = {
-    if self.length == self.memory.length{
+    if self.length == self.memory.length {
         // Grow the vector
         let new_capacity : isize = 2 * self.memory.length;
         let new_memory : Span<T> = self.allocator:allocate_span<T>(new_capacity);

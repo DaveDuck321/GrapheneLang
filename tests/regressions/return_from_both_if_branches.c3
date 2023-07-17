@@ -1,5 +1,5 @@
 function foo : () -> void = {
-    if true{
+    if true {
         return;
     } else {
         return;

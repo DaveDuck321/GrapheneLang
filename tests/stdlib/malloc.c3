@@ -26,7 +26,7 @@ function main : () -> int = {
     // Check int array contains valid data
     i = 0;
     while i < 1028 {
-        if allocated_memory[i]:data() != i{
+        if allocated_memory[i]:data() != i {
             return 1;
         }
         i = i + 1;
@@ -58,7 +58,7 @@ function main : () -> int = {
     // Check the remaining elements of the int array are still valid
     i = 1;
     while i < 1028 {
-        if allocated_memory[i]:data() != i{
+        if allocated_memory[i]:data() != i {
             return 1;
         }
         allocator:deallocate(&allocated_memory[i]:data());

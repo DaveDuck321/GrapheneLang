@@ -61,7 +61,7 @@ function[@Len, T] printf_impl: (allocator: Allocator&,
     let format_j : isize = format_i;
     while format_j < @Len {
         // 35 is # in ASCII.
-        if format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35){
+        if format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35) {
             // FIXME memory leak.
             let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
             let i: isize = format_i;
@@ -100,7 +100,7 @@ function[@Len, T, Ys...] printf_impl: (allocator: Allocator&,
     let format_j : isize = format_i;
     while format_j < @Len {
         // 35 is # in ASCII.
-        if format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35){
+        if format[format_j] == __builtin_bitcast<u8>(__builtin_narrow<i8>(35) {
             // FIXME memory leak.
             let mem: u8[@Len]& = &allocator:allocate<u8[@Len]>();
             let i: isize = format_i;

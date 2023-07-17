@@ -3,7 +3,7 @@ function[Ts...] inner: (args: Ts...) -> int = {
 }
 
 function[T, Ys...] outer: (curr: T, next: Ys...) -> int = {
-    if true{
+    if true {
         return inner(next...);
     } else {
         return 1;

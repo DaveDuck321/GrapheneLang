@@ -9,16 +9,16 @@ function main : () -> int = {
     heap_array[1, 0, 1] = 1;
     heap_array[1, 1, 1] = 1;
 
-    if heap_array[0, 0, 1] != 1{
+    if heap_array[0, 0, 1] != 1 {
         return 1;
     }
-    if heap_array[0, 1, 1] != 1{
+    if heap_array[0, 1, 1] != 1 {
         return 1;
     }
-    if heap_array[1, 0, 1] != 1{
+    if heap_array[1, 0, 1] != 1 {
         return 1;
     }
-    if heap_array[1, 1, 1] != 1{
+    if heap_array[1, 1, 1] != 1 {
         return 1;
     }
 
