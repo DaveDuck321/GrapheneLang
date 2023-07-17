@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
+from sys import stderr
 from typing import Any, Optional
 
 
@@ -180,7 +181,7 @@ def load_target_config(target: str) -> None:
 
     if not config_path.is_file():
         # TODO we should be throwing exceptions and catching them in the driver.
-        print(f"Could not find a configuration file for target '{target}'")
+        print(f"Could not find a configuration file for target '{target}'", file=stderr)
         sys_exit(1)
 
     with open(config_path) as config_file:
