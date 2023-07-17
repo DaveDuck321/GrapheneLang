@@ -1,11 +1,11 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/memory.c3";
-@require_once "std/wrappers.c3";
+@require_once "std/arithmetic.c3"
+@require_once "std/memory.c3"
+@require_once "std/wrappers.c3"
 
 typedef MyStruct : {
     a : int,
     b : isize
-};
+}
 
 
 function main : () -> int = {
@@ -17,7 +17,7 @@ function main : () -> int = {
     allocator:deallocate_span(span_to_deallocate);
 
     return span.data[29];
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 42

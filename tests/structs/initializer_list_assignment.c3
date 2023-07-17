@@ -1,4 +1,4 @@
-typedef MyStruct : {a: int, x: int};
+typedef MyStruct : {a: int, x: int}
 
 function main : () -> int = {
     let struct : MyStruct;
@@ -6,7 +6,7 @@ function main : () -> int = {
     struct = {x: 11, a: 12};
 
     return struct.x;
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 11

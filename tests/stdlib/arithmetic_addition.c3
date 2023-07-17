@@ -1,11 +1,11 @@
-@require_once "std/arithmetic.c3";
-@require_once "std/type_traits.c3";
+@require_once "std/arithmetic.c3"
+@require_once "std/type_traits.c3"
 
-typedef isI128<i128> : TrueType;
+typedef isI128<i128> : TrueType
 
 function[T] assertIsI128 : (arg: T) -> TypeIf<i128, isI128<T>> = {
     return arg;
-};
+}
 
 function main : () -> int = {
     let a : i8 = __builtin_narrow<i8>(1);
@@ -16,7 +16,7 @@ function main : () -> int = {
 
     let sum : i128 = assertIsI128(a + b + d + e + c);
     return __builtin_narrow<i32>(sum);
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 31

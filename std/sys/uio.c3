@@ -4,4 +4,4 @@
 typedef iovec : {
     iov_base : u8[&], // Base address of a memory region for input or output.
     iov_len  : isize  // The size of the memory pointed to by iov_base.
-};
+}

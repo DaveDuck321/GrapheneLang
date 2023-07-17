@@ -1,4 +1,4 @@
-foreign foo : (x: void) -> void;
+foreign foo : (x: void) -> void
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 1, in 'foreign signature'

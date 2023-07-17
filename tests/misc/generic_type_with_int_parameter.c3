@@ -1,6 +1,6 @@
-@require_once "std/io.c3";
+@require_once "std/io.c3"
 
-typedef[@Len] string : u8[@Len];
+typedef[@Len] string : u8[@Len]
 
 function main: () -> int = {
     // XXX we truncate array types.
@@ -9,7 +9,7 @@ function main: () -> int = {
     puts<2>(&const str);
 
     return 0;
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT OUT

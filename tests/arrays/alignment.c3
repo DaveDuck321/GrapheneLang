@@ -7,7 +7,7 @@ function main : () -> int = {
     let large : int[4];
 
     return 0;
-};
+}
 
 /// @COMPILE
 /// @GREP_IR [3 x i32], align 4

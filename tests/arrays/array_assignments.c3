@@ -1,8 +1,8 @@
-typedef MyArray : int[3];
+typedef MyArray : int[3]
 
 @operator + : (lhs : int, rhs: int) -> int = {
     return __builtin_add(lhs, rhs);
-};
+}
 
 function main : () -> int = {
     let array : MyArray;
@@ -14,7 +14,7 @@ function main : () -> int = {
     c = 7;  // Sets `array[1]` to 7
     array[2] = 9;
     return array[0] + array[1] + array[2];
-};
+}
 
 /// @COMPILE
 /// @RUN; EXPECT 22
