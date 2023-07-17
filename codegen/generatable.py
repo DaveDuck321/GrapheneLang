@@ -120,6 +120,13 @@ class Scope(Generatable):
         self._variables: dict[str, StackVariable] = {}
         self._lines: list[Generatable] = []
         self._generic_pack: Optional[tuple[str, int]] = None
+        self._allocations: list[StackVariable] = []
+
+    def _record_allocation(self, var: StackVariable) -> None:
+        self._allocations.append(var)
+
+        if self._outer_scope is not None:
+            self._outer_scope._record_allocation(var)
 
     def add_generatable(self, line: Generatable | Iterable[Generatable]) -> None:
         if isinstance(line, Generatable):
@@ -133,6 +140,7 @@ class Scope(Generatable):
         if var.user_facing_name in self._variables:
             raise RedefinitionError("variable", var.user_facing_name)
 
+        self._record_allocation(var)
         self._variables[var.user_facing_name] = var
 
     def search_for_variable(self, var_name: str) -> Optional[StackVariable]:
@@ -174,8 +182,11 @@ class Scope(Generatable):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         contained_ir = []
 
-        for variable in self._variables.values():
-            contained_ir.extend(variable.generate_ir(reg_gen))
+        # Variables are allocated at the function scope (not in inner-scopes)
+        #   This prevents a large loop causing a stack overflow
+        if self._outer_scope is None:
+            for variable in self._allocations:
+                contained_ir.extend(variable.generate_ir(reg_gen))
 
         for line in self._lines:
             contained_ir.extend(line.generate_ir(reg_gen))
