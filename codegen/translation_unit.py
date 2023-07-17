@@ -3,6 +3,8 @@ from functools import cached_property
 from itertools import count
 from typing import Callable, Iterable, Optional
 
+import target
+
 from .builtin_callables import get_builtin_callables
 from .builtin_types import (
     AnonymousType,
@@ -427,10 +429,11 @@ class Program:
     def add_static_variable(self, var: StaticVariable) -> None:
         self._static_variables.append(var)
 
-    def generate_ir(self, target="x86_64-pc-linux-gnu") -> list[str]:
+    def generate_ir(self) -> list[str]:
         lines: list[str] = []
 
-        lines.append(f'target triple = "{target}"')
+        lines.append(f'target datalayout = "{target.get_datalayout()}"')
+        lines.append(f'target triple = "{target.get_target_triple()}"')
 
         lines.append("")
         var_reg_gen = count(0)

@@ -5,6 +5,7 @@ from os import getenv
 from pathlib import Path
 
 from graphene_parser import generate_ir_from_source
+from target import get_target_triple, load_target_config
 
 
 def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
@@ -51,6 +52,8 @@ def main() -> None:
     parser.add_argument("--debug-compiler", action="store_true")
     parser.add_argument("--nostdlib", action="store_true")
     parser.add_argument("--use-crt", action="store_true")
+    # TODO target the host by default.
+    parser.add_argument("--target", required=False, type=str, default="x86_64_linux")
     args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
@@ -77,6 +80,7 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
+    load_target_config(args.target)
     ir = generate_ir_from_source(args.input[0], include_path, args.debug_compiler)
 
     if will_emit_llvm:
@@ -89,14 +93,16 @@ def main() -> None:
     # Use clang to finish compile
 
     if will_emit_optimized_llvm:
-        # TODO: the llvm optimization pipeline is run twice if we also want a binary
+        # TODO: the llvm optimization pipeline is run twice if we also want a
+        # binary
         subprocess.run(
             [
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
-                "-Wno-override-module",
                 "-S",
                 "-emit-llvm",
                 f"-O{opt_level}",
+                "-target",
+                get_target_triple(),
                 "-o",
                 optimized_llvm_output,
                 "-xir",  # Only STDIN is IR, so this should be last.
@@ -121,8 +127,9 @@ def main() -> None:
         subprocess.run(
             [
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
-                "-Wno-override-module",  # Don't complain about the target triple.
                 f"-O{opt_level}",
+                "-target",
+                get_target_triple(),
                 "-o",
                 binary_output,
                 *extra_flags,

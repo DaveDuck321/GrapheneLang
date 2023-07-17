@@ -3,6 +3,8 @@ from copy import copy
 from dataclasses import dataclass
 from typing import Any, Iterable, Iterator, Optional
 
+from target import get_llvm_type_info
+
 
 class TypeDefinition(ABC):
     def graphene_literal_to_ir_constant(self, value: str) -> str:
@@ -83,13 +85,13 @@ class Type(ABC):
     @property
     def size(self) -> int:
         if self.is_reference:
-            return 8  # TODO: respect the datalayout string
+            return get_llvm_type_info("ptr").size.in_bytes
         return self.definition.size
 
     @property
     def alignment(self) -> int:
         if self.is_reference:
-            return 8  # TODO: respect the datalayout string
+            return get_llvm_type_info("ptr").align.in_bytes
         return self.definition.alignment
 
     def convert_to_value_type(self) -> "Type":

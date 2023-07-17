@@ -4,6 +4,8 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Optional
 
+from target import get_abi, get_int_type_info, get_ptr_type_info
+
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
     ArrayDimensionError,
@@ -263,22 +265,26 @@ class GenericIntType(PrimitiveType):
 
 class IntType(GenericIntType):
     def __init__(self) -> None:
-        super().__init__("int", 32, True)
+        super().__init__("int", get_int_type_info().size.in_bits, True)
 
 
 class UIntType(GenericIntType):
     def __init__(self) -> None:
-        super().__init__("u32", 32, False)
+        super().__init__(
+            f"u{get_int_type_info().size.in_bits}",
+            get_int_type_info().size.in_bits,
+            False,
+        )
 
 
 class SizeType(GenericIntType):
     def __init__(self) -> None:
-        super().__init__("isize", 64, True)
+        super().__init__("isize", get_ptr_type_info().size.in_bits, True)
 
 
 class IPtrType(GenericIntType):
     def __init__(self) -> None:
-        super().__init__("iptr", 64, True)
+        super().__init__("iptr", get_ptr_type_info().size.in_bits, True)
 
 
 class BoolDefinition(PrimitiveDefinition):
@@ -347,38 +353,14 @@ class StructDefinition(TypeDefinition):
 
     @property
     def size(self) -> int:
-        # Return the size of the struct as set by the System V AMD64 ABI.
-        # [docs/abi.pdf, Section 3.1.2]
-        #   TODO: we should manually set the `datalayout` string to match this
-
-        def compute_padding(curr_size: int, align_to: int) -> int:
-            # Simplifies to this, using the properties of remainders.
-            return -curr_size % align_to
-
-        # Each member is assigned to the lowest available offset with the
-        # appropriate alignment.
-        this_size = 0
-        for _, member_type in self.members:
-            # Add padding to ensure each member is aligned
-            this_size += compute_padding(this_size, member_type.alignment)
-
-            # Append member to the struct
-            this_size += member_type.size
-
-        # The size of any object is always a multiple of the object‘s alignment.
-        this_size += compute_padding(this_size, self.alignment)
-
-        return this_size
+        member_sizes = [member.size for _, member in self.members]
+        member_aligns = [member.alignment for _, member in self.members]
+        return get_abi().compute_struct_size(member_sizes, member_aligns)
 
     @property
     def alignment(self) -> int:
-        # Structures and unions assume the alignment of their most strictly
-        # aligned component. [docs/abi.pdf, Section 3.1.2]
-        return (
-            max(member_type.alignment for _, member_type in self.members)
-            if self.members
-            else 1
-        )
+        member_aligns = [member.alignment for _, member in self.members]
+        return get_abi().compute_struct_alignment(member_aligns)
 
     def get_member_by_name(self, target_name: str) -> tuple[int, Type]:
         for index, (member_name, member_type) in enumerate(self.members):
@@ -433,13 +415,7 @@ class StackArrayDefinition(TypeDefinition):
 
     @property
     def alignment(self) -> int:
-        # An array uses the same alignment as its elements, except that a local
-        # or global array variable of length at least 16 bytes or a C99
-        # variable-length array variable always has alignment of at least 16
-        # bytes. [docs/abi.pdf, Section 3.1.2]
-        return (
-            self.member.alignment if self.size < 16 else max(self.member.alignment, 16)
-        )
+        return get_abi().compute_stack_array_alignment(self.size, self.member.alignment)
 
 
 class HeapArrayDefinition(TypeDefinition):
