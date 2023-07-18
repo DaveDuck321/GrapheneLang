@@ -116,12 +116,13 @@ class NamedType(Type):
 
     @property
     def ir_type(self) -> str:
+        if self.is_reference:
+            return "ptr"
+
         if self.should_defer_to_alias_for_ir():
             assert self.alias is not None
             return self.alias.ir_type
 
-        if self.is_reference:
-            return "ptr"
         return f"%type.{self.ir_mangle}"
 
 
