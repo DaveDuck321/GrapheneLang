@@ -50,10 +50,10 @@ function [T] pop_back : (self : Vector<T>&) -> T = {
     return self.memory.data[self.length];
 }
 
-function [T] get : (self : Vector<T>&, index : isize) -> T = {
+function [T] get : (self : Vector<T>&, index : isize) -> T& = {
     runtime_assert(index >= 0);
     runtime_assert(index < self.length); // TODO: && in previous line
-    return self.memory.data[index];
+    return &self.memory.data[index];
 }
 
 function [T] set : (self : Vector<T>&, index : isize, data : T) -> void = {
@@ -85,4 +85,24 @@ function [T] data : (self : Vector<T>&) -> Span<T> = {
         data : &self.memory.data,
         length : self.length,
     };
+}
+
+
+typedef [T] VectorIter : {
+    vector : Vector<T>&,
+    index : isize,
+}
+
+function [T] get_iter : (vec : Vector<T>&) -> VectorIter<T> = {
+    return {&vec, 0};
+}
+
+@implicit [T] has_next : (iter : VectorIter<T>&) -> bool = {
+    return iter.index < iter.vector.length;
+}
+
+@implicit [T] get_next : (iter : VectorIter<T>&) -> T& = {
+    let index : isize = iter.index;
+    iter.index += 1;
+    return &iter.vector:get(index);
 }

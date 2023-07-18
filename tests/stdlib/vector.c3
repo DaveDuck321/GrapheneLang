@@ -26,6 +26,14 @@ function main : () -> int = {
         return 1;
     }
 
+    let sum : int = 0;
+    for i in vec:get_iter() {
+        sum += i;
+    }
+    if sum != 20 {
+        return 1;
+    }
+
     vec:deallocate(); // TODO: RAII
     return 0;
 }
