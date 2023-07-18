@@ -1,10 +1,11 @@
-import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
 from sys import stderr
 from typing import Any, Optional
+
+import yaml
 
 
 class Endianess(Enum):
@@ -118,13 +119,19 @@ class Size:
         return self.in_bytes * 8
 
 
-@dataclass
+@dataclass(init=False)
 class TypeInfo:
     size: Size
     align: Size
 
+    def __init__(self, size: int, align: int) -> None:
+        # Both in bytes (we can't rename the arguments because they need to
+        # match with the keys in the yaml files).
+        self.size = Size(size)
+        self.align = Size(align)
 
-@dataclass(kw_only=True)
+
+@dataclass(init=False)
 class TargetConfig:
     arch: str
     arch_native_widths: list[Size]
@@ -136,6 +143,28 @@ class TargetConfig:
     llvm_target_triple: str
     llvm_types: dict[str, TypeInfo]
 
+    def __init__(
+        self,
+        arch: str,
+        arch_native_widths: list[int],
+        abi: str,
+        endianness: str,
+        mangling: str,
+        stack_align: int,
+        int_type: dict,
+        llvm_target_triple: str,
+        llvm_types: dict[str, dict],
+    ) -> None:
+        self.arch = arch
+        self.arch_native_widths = [Size(w) for w in arch_native_widths]
+        self.abi = ABI.from_str(abi)
+        self.endianness = Endianess.from_str(endianness)
+        self.mangling = ManglingStyle.from_str(mangling)
+        self.stack_align = Size(stack_align)
+        self.int_type = TypeInfo(**int_type)
+        self.llvm_target_triple = llvm_target_triple
+        self.llvm_types = {t: TypeInfo(**d) for t, d in llvm_types.items()}
+
 
 TARGETS_DIR = Path(__file__).parent / "targets"
 
@@ -146,38 +175,13 @@ _target_config: Optional[TargetConfig] = None
 def load_target_config(target: str) -> None:
     global _target, _target_config
 
+    # Should only call this once.
+    assert _target is None
+    assert _target_config is None
+
     _target = target
 
-    def json_object_hook(object: dict[str, Any]) -> TypeInfo | dict[str, Any]:
-        # Pack into TypeInfo.
-        if "size" in object and "align" in object:
-            return TypeInfo(Size(object["size"]), Size(object["align"]))
-
-        # Endianness enum.
-        if "endianness" in object:
-            object["endianness"] = Endianess.from_str(object["endianness"])
-
-        # ManglingStyle enum.
-        if "mangling" in object:
-            object["mangling"] = ManglingStyle.from_str(object["mangling"])
-
-        # ABI enum.
-        if "abi" in object:
-            object["abi"] = ABI.from_str(object["abi"])
-
-        # Convert elements of arch_native_widths to Size.
-        if "arch_native_widths" in object:
-            object["arch_native_widths"] = [
-                Size(i) for i in object["arch_native_widths"]
-            ]
-
-        # Convert stack_align to Size.
-        if "stack_align" in object:
-            object["stack_align"] = Size(object["stack_align"])
-
-        return object
-
-    config_path = (TARGETS_DIR / target).with_suffix(".json")
+    config_path = (TARGETS_DIR / target).with_suffix(".yml")
 
     if not config_path.is_file():
         # TODO we should be throwing exceptions and catching them in the driver.
@@ -185,7 +189,7 @@ def load_target_config(target: str) -> None:
         sys_exit(1)
 
     with open(config_path) as config_file:
-        config_data = json.load(config_file, object_hook=json_object_hook)
+        config_data = yaml.safe_load(config_file)
 
     # The __init__ function checks that all specified fields are in the
     # dictionary and that no additional fields are present. This should catch
