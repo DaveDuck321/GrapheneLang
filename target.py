@@ -110,7 +110,7 @@ class ABI(Enum):
         raise NotImplementedError()
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Size:
     in_bytes: int
 
@@ -119,7 +119,7 @@ class Size:
         return self.in_bytes * 8
 
 
-@dataclass(init=False)
+@dataclass(init=False, slots=True)
 class TypeInfo:
     size: Size
     align: Size
@@ -131,7 +131,7 @@ class TypeInfo:
         self.align = Size(align)
 
 
-@dataclass(init=False)
+@dataclass(init=False, slots=True)
 class TargetConfig:
     arch: str
     arch_native_widths: list[Size]
