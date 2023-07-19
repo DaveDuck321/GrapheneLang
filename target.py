@@ -206,6 +206,13 @@ def _get_config() -> TargetConfig:
     return _target_config
 
 
+def get_target() -> str:
+    global _target
+
+    assert _target is not None
+    return _target
+
+
 def get_datalayout() -> str:
     config = _get_config()
     specs: list[str] = []

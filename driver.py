@@ -5,7 +5,7 @@ from os import getenv
 from pathlib import Path
 
 from graphene_parser import generate_ir_from_source
-from target import get_target_triple, load_target_config
+from target import get_target, get_target_triple, load_target_config
 
 
 def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
@@ -122,7 +122,7 @@ def main() -> None:
         # -nostdlib prevents both the standard library and the start files from
         # being linked with the executable.
         extra_flags.append("-nostdlib")
-        extra_flags.append(str(parent_dir / "std" / "runtime.S"))
+        extra_flags.append(str(parent_dir / "std" / get_target() / "runtime.S"))
     if args.static:
         extra_flags.append("-static")
 
