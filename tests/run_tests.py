@@ -204,7 +204,8 @@ def run_tests(tests: list[Path], workers: int) -> int:
 
 
 def build_jit_dependencies() -> None:
-    runtime_src_path = PARENT_DIR.parent / "std" / "runtime.S"
+    # TODO auto-detect host's target.
+    runtime_src_path = PARENT_DIR.parent / "std" / "x86_64_linux" / "runtime.S"
     assert runtime_src_path.is_file()
 
     # Don't compile the runtime again if it's up-to-date.
