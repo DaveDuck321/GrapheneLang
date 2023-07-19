@@ -17,7 +17,7 @@ PARENT_DIR = Path(__file__).parent
 TESTS_DIR = PARENT_DIR
 OUT_DIR = TESTS_DIR / "out"
 RUNTIME_OBJ_PATH = OUT_DIR / "runtime.o"
-DRIVER_PATH = PARENT_DIR.parent / "driver.py"
+DRIVER_PATH = PARENT_DIR.parent / "glang"
 
 
 class TestFailure(RuntimeError):
@@ -124,7 +124,6 @@ def run_test(file_path: Path) -> None:
         "compile",
         file_path.parent,
         [
-            "python",
             DRIVER_PATH,
             "--emit-llvm-to-stdout",
             *config.compile_args,
