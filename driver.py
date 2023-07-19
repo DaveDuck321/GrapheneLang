@@ -128,6 +128,7 @@ def main() -> None:
             [
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 f"-O{opt_level}",
+                "-fuse-ld=lld",  # Use the LLVM cross-linker.
                 "-target",
                 get_target_triple(),
                 "-o",
