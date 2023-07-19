@@ -54,6 +54,7 @@ def main() -> None:
     parser.add_argument("--use-crt", action="store_true")
     # TODO target the host by default.
     parser.add_argument("--target", required=False, type=str, default="x86_64_linux")
+    parser.add_argument("--static", action="store_true")
     args = parser.parse_args(sys_args)
 
     will_emit_llvm: bool = args.emit_llvm or args.emit_everything
@@ -122,6 +123,8 @@ def main() -> None:
         # being linked with the executable.
         extra_flags.append("-nostdlib")
         extra_flags.append(str(parent_dir / "std" / "runtime.S"))
+    if args.static:
+        extra_flags.append("-static")
 
     if will_emit_binary:
         subprocess.run(
