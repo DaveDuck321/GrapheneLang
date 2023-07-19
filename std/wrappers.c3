@@ -38,3 +38,8 @@ typedef [T] Span : {
     data : T[&],
     length : isize,
 }
+
+// BUG: the error from `function [T, @Len] make_span : (data : T[@Len]&) -> Span` gives the wrong line number
+function [T, @Len] make_span : (data : T[@Len]&) -> Span<u8> = {
+    return {&data, @Len};
+}
