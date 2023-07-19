@@ -854,8 +854,8 @@ class ExpressionParser(Interpreter):
         return FlattenedExpression([const_expr])
 
     def NUMERIC_GENERIC_IDENTIFIER(self, value: Token) -> FlattenedExpression:
-        # TODO: user facing error
-        assert value in self._generic_mapping
+        if value not in self._generic_mapping:
+            raise FailedLookupError("numeric generic", f"[{value}, ...]")
 
         mapped_value = self._generic_mapping[value]
         assert isinstance(mapped_value, int)  # TODO: user facing error
