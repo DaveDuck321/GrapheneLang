@@ -15,18 +15,43 @@ class DriverArguments(Tap):
     # TODO target the host by default.
     input: Path
     output: Optional[Path] = None
+
     compile_to_object: bool = False
+    """Do not run the linker, generate a target ".o" object file instead."""
+
     include_path: list[Path] = []
+    """Add the specified directories to the search path for include files."""
+
     optimize: str = "0"
+    """Optimization setting forwarded to clang."""
+
     emit_llvm: bool = False
+    """Output generated IR to a file."""
+
     emit_llvm_to_stdout: bool = False
+    """Output generated IR to stdout."""
+
     emit_optimized_llvm: bool = False
+    """Output IR optimized by clang to a file."""
+
     emit_everything: bool = False
+    """Output generated IR, optimized IR, and the binary."""
+
     debug_compiler: bool = False
+    """Print full exception traces."""
+
     nostdlib: bool = False
+    """Do not add the Graphene standard library to the include search path."""
+
     use_crt: bool = False
+    """Link with the C runtime and standard library instead of Graphene's."""
+
     target: str = "x86_64_linux"
+    """Specify the architecture and platform to build for."""
+
     static: bool = False
+    """Prevent linking with any shared libaries, generate a static executable
+    instead."""
 
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
