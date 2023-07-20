@@ -1,0 +1,47 @@
+arch: arm
+# All registers are 32 bits wide. To add 8-bit or 16-bit numbers, the processor
+# has to use shift instructions (sxt{b,h} on armv6 and later, lsl followed by
+# asr on earlier architectures) after the 32-bit add instruction to clear the
+# additional (carry out) bit of the sum.
+arch_native_widths:
+  - 4
+# EABI stands for Embedded ABI, although it is still supported by the Linux
+# kernel. The older OABI is also supported.
+abi: arm_eabi
+endianness: little
+mangling: elf
+# The stack must always be at least 4-byte aligned, and 8-byte aligned at a
+# "public interface"
+# https://github.com/ARM-software/abi-aa/blob/617079d8a0d45bec83d351974849483cf0cc66d5/aapcs32/aapcs32.rst#6212stack-constraints-at-a-public-interface
+stack_align: 8
+# EABI defines the C int type as a 4-byte word.
+# https://github.com/ARM-software/abi-aa/blob/617079d8a0d45bec83d351974849483cf0cc66d5/aapcs32/aapcs32.rst#811arithmetic-types
+int_type:
+  size: 4
+  align: 4
+# armv4t is very old, we might want to target a more recent architecture.
+llvm_target_triple: armv4t-unknown-linux-eabi
+# EABI defines the size and alignment of all fundamental data types. Although
+# EABI treats code pointers and data pointers separately, the front-end only
+# supports does not make that distinction. Thankfully, they both have the same
+# requirements, so we can treat them as a single type.
+# https://github.com/ARM-software/abi-aa/blob/617079d8a0d45bec83d351974849483cf0cc66d5/aapcs32/aapcs32.rst#51fundamental-data-types
+llvm_types:
+  ptr:
+    size: 4
+    align: 4
+  i1:
+    size: 1
+    align: 1
+  i8:
+    size: 1
+    align: 1
+  i16:
+    size: 2
+    align: 2
+  i32:
+    size: 4
+    align: 4
+  i64:
+    size: 8
+    align: 8
