@@ -1,5 +1,5 @@
-@require_once "std/syscalls.c3"
-@require_once "std/util.c3"
+@require_once "syscalls.c3"
+@require_once "util.c3"
 
 typedef pid_t : int
 
