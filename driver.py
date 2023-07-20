@@ -78,10 +78,13 @@ def main() -> None:
     optimized_llvm_output = llvm_output.with_suffix(".opt.ll")
     binary_output = Path("a.out")
 
+    load_target_config(args.target)
+
     parent_dir = Path(__file__).parent.resolve()
 
     if not args.nostdlib:
         args.include_path.append(parent_dir)
+        args.include_path.append(parent_dir / "std" / get_target())
 
     # -o defaults to binary output path
     if args.output:
@@ -91,7 +94,6 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
-    load_target_config(args.target)
     ir = generate_ir_from_source(args.input, args.include_path, args.debug_compiler)
 
     if will_emit_llvm:

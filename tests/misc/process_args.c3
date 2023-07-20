@@ -1,5 +1,5 @@
 @require_once "std/arithmetic.c3"
-@require_once "std/syscalls.c3"
+@require_once "syscalls.c3"
 
 function strlen : (cstr: u8[&]) -> isize = {
     let len : isize = 0;
