@@ -104,6 +104,7 @@ def main() -> None:
         sys.stdout.write(ir)
 
     # Use clang to finish compile
+    assert args.optimize != "2", "@DaveDuck321's coward assert!"
 
     if will_emit_optimized_llvm:
         # TODO: the llvm optimization pipeline is run twice if we also want a
