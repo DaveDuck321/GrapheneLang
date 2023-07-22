@@ -1,5 +1,5 @@
 black
 lark==1.1.5
 pylint==2.17.4
-PyYAML==6.0
+PyYAML==6.0.1
 typed-argument-parser==1.8.1
