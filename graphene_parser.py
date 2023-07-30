@@ -105,7 +105,7 @@ class TypeTransformer(Transformer):
     @v_args(inline=True)
     def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> cg.CompileTimeConstant:
         if not token.value in self._generic_args:
-            assert False  # TODO: user facing error
+            raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
         result = self._generic_args[token.value]
         assert isinstance(result, cg.CompileTimeConstant)  # TODO: user facing error
