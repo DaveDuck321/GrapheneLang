@@ -6,6 +6,10 @@ function [T] alignof : () -> isize = {
     return __builtin_alignof<T>();
 }
 
+function [T] ref_to_addr : (ref : T&) -> iptr = {
+    return __builtin_ptr_to_int(&ref);
+}
+
 function [T] addr_to_ref : (bad_address : i32) -> T& = {
     // NOTE: this overload ensures that we are called with an i64 (with no implict conversions)
     //       ideally we could prevent this with SFINAE (using partial specialization)
