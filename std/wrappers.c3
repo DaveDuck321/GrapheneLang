@@ -39,7 +39,26 @@ typedef [T] Span : {
     length : isize,
 }
 
+typedef [T] SpanIter : {
+    span : Span<T>,
+    index : isize,
+}
+
 // BUG: the error from `function [T, @Len] make_span : (data : T[@Len]&) -> Span` gives the wrong line number
-function [T, @Len] make_span : (data : T[@Len]&) -> Span<u8> = {
+function [T, @Len] make_span : (data : T[@Len]&) -> Span<T> = {
     return {&data, @Len};
+}
+
+function [T] get_iter : (span : Span<T>&) -> SpanIter<T> = {
+    return {span, 0};
+}
+
+@implicit [T] has_next : (iter : SpanIter<T>&) -> bool = {
+    return iter.index < iter.span.length;
+}
+
+@implicit [T] get_next : (iter : SpanIter<T>&) -> T& = {
+    let index : isize = iter.index;
+    iter.index += 1;
+    return &iter.span.data[index];
 }
