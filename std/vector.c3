@@ -43,6 +43,13 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
     self.length += 1;
 }
 
+function [T] extend_back : (self : Vector<T>&, data: Span<T>) -> void = {
+    // TODO: create capacity in one go
+    for value in data:get_iter() {
+        self:push_back(value);
+    }
+}
+
 function [T] pop_back : (self : Vector<T>&) -> T = {
     runtime_assert(self.length > 0);
 
