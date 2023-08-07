@@ -36,8 +36,9 @@ function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32
     return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, 9);
 }
 
-function sys_munmap : (addr: isize, length : isize) -> isize = {
-    return _syscall_2(addr, length, 11);
+function sys_munmap : (addr: isize, length : isize) -> int = {
+    let result : isize = _syscall_2(addr, length, 11);
+    return __builtin_narrow<int>(result);
 }
 
 function sys_exit : (code : int) -> void = {

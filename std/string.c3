@@ -18,7 +18,6 @@ function length : (str: CString&) -> isize = {
     return len;
 }
 
-// TODO: this is kinda ugly, we need partial functions
 function [@Len] make_cstring : (literal : u8[@Len]&) -> CString = {
     runtime_assert(literal[@Len - 1] == 0x00);
     return {&literal};
@@ -58,7 +57,7 @@ function ascii_to_upper : (char : u8) -> u8 = {
     // TODO: support &&
     // TODO: support char literals
     if (as_arithmetic(char) >= as_arithmetic("a"[0])) | (as_arithmetic(char) <= as_arithmetic("z"[0])) {
-        return char & __builtin_narrow<u8>(0x20);
+        return char ^ __builtin_narrow<u8>(0x20);
     }
     return char;
 }

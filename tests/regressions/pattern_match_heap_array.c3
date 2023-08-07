@@ -9,4 +9,6 @@ function main : () -> int = {
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 5, in 'function main: () -> int'
 /// Error: overload resolution for function call 'puts(u8[[]&[]])' failed
-/// No overloads available
+/// Available overloads:
+/// - function puts: (Span<u8>) -> int
+/// - function puts: (CString) -> int
