@@ -22,6 +22,7 @@ from codegen.user_facing_errors import (
     InvalidMainReturnType,
     InvalidSyntax,
     MissingFunctionReturn,
+    PatternMatchDeductionFailure,
     RepeatedGenericName,
     SourceLocation,
     StructMemberRedeclaration,
@@ -557,6 +558,9 @@ class ParseFunctionSignatures(Interpreter):
             # Convert the deduced mapping into a specialization
             deduced_specialization: list[cg.SpecializationItem] = []
             for generic in generic_definitions:
+                if generic.name not in deduced_mapping:
+                    raise PatternMatchDeductionFailure(fn_name, generic.name)
+
                 deduced_specialization.append(deduced_mapping[generic.name])
 
             assert len(deduced_specialization) == len(generic_definitions)

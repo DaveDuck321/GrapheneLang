@@ -92,6 +92,11 @@ class PatternMatchFailed(SubstitutionFailure):
             f"Error: cannot pattern match '{actual}' to '{target}'"
         )
 
+class PatternMatchDeductionFailure(GrapheneError):
+    def __init__(self, fn_name: str, unmatched_variable: str) -> None:
+        super().__init__(f"Error: cannot deduce generic type '{unmatched_variable}' "
+                         f"in function '{fn_name}', manual specialization is required")
+
 
 class NonDeterminableSize(GrapheneError):
     def __init__(self, type_name: str) -> None:
