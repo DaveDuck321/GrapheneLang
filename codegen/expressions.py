@@ -216,7 +216,7 @@ class StructMemberAccess(TypedExpression):
         self._member_name = member_name
         self._lhs = lhs
 
-        self._struct_type = lhs.underlying_type
+        self._struct_type = lhs.underlying_type.convert_to_value_type()
         underlying_definition = lhs.underlying_type.definition
         if not isinstance(underlying_definition, StructDefinition):
             raise TypeCheckerError(
@@ -305,7 +305,7 @@ class ArrayIndexAccess(TypedExpression):
         # NOTE: needs address since getelementptr must be used for runtime indexing
         assert array_ptr.has_address
 
-        self._type_of_array: Type = array_ptr.underlying_type
+        self._type_of_array: Type = array_ptr.underlying_type.convert_to_value_type()
         self._array_ptr = array_ptr
 
         array_definition = self._type_of_array.definition
