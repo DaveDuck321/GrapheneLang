@@ -34,7 +34,7 @@ function puts : (str : Span<u8>) -> int = {
 }
 
 function[@Len] puts : (str: u8[@Len]&) -> int = {
-    return puts({&str, @Len});
+    return puts(make_span(&str));
 }
 
 function puts : (str: CString) -> int = {
