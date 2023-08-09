@@ -9,6 +9,7 @@ from target import get_abi, get_int_type_info, get_ptr_type_info
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
     ArrayDimensionError,
+    FailedLookupError,
     InvalidIntSize,
     VoidArrayDeclaration,
     VoidStructDeclaration,
@@ -368,7 +369,7 @@ class StructDefinition(TypeDefinition):
             if member_name == target_name:
                 return index, member_type
 
-        assert False
+        raise FailedLookupError("struct member", "{" + target_name + " : ... }")
 
 
 class StackArrayDefinition(TypeDefinition):
