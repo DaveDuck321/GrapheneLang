@@ -1,5 +1,7 @@
+@require_once "algorithms.c3"
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
+@require_once "iterators.c3"
 @require_once "string.c3"
 @require_once "sys/uio.c3"
 @require_once "syscalls.c3"
@@ -41,6 +43,30 @@ function puts : (str: CString) -> int = {
     // TODO: why is this intermediate variable needed?
     let span : Span<u8> = {&str.data, str:length()};
     return puts(span);
+}
+
+function itoa : (buffer : u8[&], number : isize) -> StringView = {
+    if number == 0 {
+        buffer[0] = "0"[0];
+        return {&buffer, 1};
+    }
+
+    let length : isize = 0;
+    while number != 0 {
+        // 0 -> 48 ascii
+        let next_digit: u8 = as_logical(__builtin_narrow<i8>(number % 10 + 48));
+
+        buffer[length] = next_digit;
+
+        number /= 10;
+        length += 1;
+    }
+
+    let result : StringView = {&buffer, length};
+
+    // XXX: its a bit unfair to call it a `StringView` when its mutated in-place
+    result:reverse();
+    return result;
 }
 
 typedef File : { fd : int }
