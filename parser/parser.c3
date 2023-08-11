@@ -173,7 +173,11 @@ function to_string_view : (slice : ProgramSlice&, program : StringView) -> Strin
     return {&data, slice.end - slice.start};
 }
 
-function ascii_is_word_char : (char : u8) -> bool = {
+function ascii_is_text_token_start_char : (char : u8) -> bool = {
+    return ascii_is_alpha(char) | (char == "_"[0]);
+}
+
+function ascii_is_text_token_char : (char : u8) -> bool = {
     return ascii_is_alphanumeric(char) | (char == "_"[0]);
 }
 
@@ -232,17 +236,10 @@ function [@Len] syntax_error : (cursor : Cursor&, description: u8[@Len]&) -> voi
 }
 
 function syntax_error : (cursor : Cursor&, description: StringView) -> void = {
-    puts("Syntax error at offset: ");
-
-    let int_buffer : u8[32];
-    let offset_string : StringView = itoa(&int_buffer, cursor.position);
-    puts(offset_string);
-
     let lookup_table : PositionLookupTable = generate_position_lookup_table(cursor.program, &cursor.allocator);
-    let line_number : isize = lookup_table:lookup_line_number(cursor.position);
-    let line_number_string : StringView = itoa(&int_buffer, line_number);
-    puts(line_number_string);
+    let location : FilePosition = lookup_table:lookup_position(cursor.position);
 
+    printf(make_span("Syntax error at offset: %, line : %, column : %\n"), location.offset, location.line_number, location.column_number);
     puts(description);
 
     runtime_assert(false);
@@ -300,7 +297,7 @@ function is_end_of_token : (cursor : Cursor&) -> bool = {
         return true;
     }
 
-    if !ascii_is_alphanumeric(cursor:get_char()) {
+    if !ascii_is_text_token_char(cursor:get_char()) {
         return true;
     }
 
@@ -455,13 +452,13 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
 
 
 function get_next_ascii_only_identifier : (cursor : Cursor&) -> ProgramSlice = {
-    if !(ascii_is_alpha(cursor:get_char()) | (cursor:is_next("_"))) {
+    if !ascii_is_text_token_start_char(cursor:get_char()) {
         syntax_error(&cursor, "TODO: Expected an alphabetic character");
     }
 
     let result : ProgramSlice  = {cursor.position, cursor.position};
     while !cursor:is_end_of_token() {
-        if !ascii_is_word_char(cursor:get_char()) {
+        if !ascii_is_text_token_char(cursor:get_char()) {
             syntax_error(&cursor, "TODO: Expected an alphanumeric character");
         }
 
@@ -604,7 +601,7 @@ function parse_specialization_list : (cursor : Cursor&) -> Vector<Specialization
     let is_missing_comma : bool = false;
 
     let specializations : Vector<Specialization> = make_vector<Specialization>(&cursor.allocator);
-    while cursor:try_skip_next_and_surrounding_white_space(">") {
+    while !cursor:try_skip_next_and_surrounding_white_space(">") {
         if cursor:get_char() == "\0"[0] {
             syntax_error(&cursor, "Unterminated specialization list");
         }
@@ -632,14 +629,13 @@ function parse_specialization_list : (cursor : Cursor&) -> Vector<Specialization
 function parse_struct_type : (cursor : Cursor&) -> StructType = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("{"));
 
-    // TODO: merge these into one line... WTF is happening
     let members : Vector<TypedMember> = cursor:parse_comma_separated_named_members(make_span("}"));
     return {members};
 }
 
 
 function parse_type_prefix : (cursor : Cursor&) -> Type = {
-    if ascii_is_alpha(cursor:get_char()) {
+    if ascii_is_text_token_start_char(cursor:get_char()) {
         let named_type : NamedType& = &cursor.allocator:allocate<NamedType>();
         named_type = cursor:parse_named_type();
         return {4, ref_to_addr(&named_type)};
@@ -679,7 +675,6 @@ function parse_array_type : (cursor : Cursor&, prefix : Type) -> Type = {
 }
 
 function parse_type : (cursor : Cursor&) -> Type = {
-    puts("parsing type");
     let prefix : Type = cursor:parse_type_prefix();
 
     if cursor:is_next("[") {
@@ -711,8 +706,6 @@ function parse_typedef : (cursor : Cursor&) -> Typedef = {
     if !cursor:try_skip_next_and_surrounding_white_space(":") {
         syntax_error(&cursor, "TODO: expected a ':'");
     }
-
-    puts("here");
 
     // TODO: I'm using `if ... {full} else {allocate empty}` pattern a lot... is there a nicer way
     let specialization : Vector<Specialization>;
@@ -836,6 +829,11 @@ function parse_function_args : (cursor : Cursor&) -> Vector<TypedMember> = {
     if !cursor:try_skip_next_and_surrounding_white_space(":") {
         syntax_error(&cursor, "TODO: expected a ':'");
     }
+
+    if !cursor:try_skip_next_and_surrounding_white_space("(") {
+        syntax_error(&cursor, "TODO: expected a '('");
+    }
+
     return cursor:parse_comma_separated_named_members(make_span(")"));
 }
 
