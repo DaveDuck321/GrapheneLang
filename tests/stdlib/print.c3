@@ -13,6 +13,7 @@ function main : () -> int = {
     let var : int = 6999;
     let string : StringView = make_span("other string");
     printf(sv("Hello % world %%"), struct, var, string);
+    print(struct, sv("world"), var);
     return 0;
 }
 
@@ -20,3 +21,4 @@ function main : () -> int = {
 /// @COMPILE
 /// @RUN; EXPECT OUT
 /// Hello struct world 6999other string
+/// structworld6999

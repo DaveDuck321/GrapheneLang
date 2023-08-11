@@ -13,7 +13,7 @@ function EOF : () -> int = {
     return -1;
 }
 
-function print : (str : StringView) -> void = {
+function write_to_stdout : (str : StringView) -> void = {
     // TODO: correct signature to match libc
     sys_write(/* stdout */ 1, &str.data, str.length);
 }
@@ -116,7 +116,7 @@ function [Arg] impl_printf_print_until_next_format : (buffer : u8[&], format_str
         runtime_assert(false);
     }
 
-    print({&format_string.data, insertion_index});
+    write_to_stdout({&format_string.data, insertion_index});
 
     // TODO: this NEEDS to be improved
     let continuation_addr : iptr = ref_to_addr(&format_string.data[insertion_index + 1]);
@@ -125,7 +125,7 @@ function [Arg] impl_printf_print_until_next_format : (buffer : u8[&], format_str
     let next_format_string : StringView = {&addr_to_heap_array<u8>(continuation_addr), ((format_string.length - insertion_index) - 1)};
 
     let formatted_arg : StringView = buffer:stringify(next_arg);
-    print(formatted_arg);
+    write_to_stdout(formatted_arg);
 
     return next_format_string;
 }
@@ -138,6 +138,20 @@ function [NextArg] impl_printf : (buffer : u8[&], format_string : StringView, ne
 function [NextArg, Args...] impl_printf : (buffer : u8[&], format_string : StringView, next_arg: NextArg, args : Args...) -> void = {
     let next_format_string : StringView = impl_printf_print_until_next_format(&buffer, format_string, next_arg);
     impl_printf(&buffer, next_format_string, args...);
+}
+
+function [NextArg] impl_print : (buffer : u8[&], next_arg: NextArg) -> void = {
+    write_to_stdout(buffer:stringify(next_arg));
+}
+
+function [NextArg, OtherArgs...] impl_print : (buffer : u8[&], next_arg: NextArg, other_args : OtherArgs...) -> void = {
+    write_to_stdout(buffer:stringify(next_arg));
+    impl_print(&buffer, other_args...);
+}
+
+function [Args...] print : (args : Args...) -> void = {
+    let buffer : u8[1024];
+    impl_print(&buffer, args...);
 }
 
 typedef File : { fd : int }
