@@ -77,7 +77,7 @@ typedef Typedef : {
 typedef Scope : { lines : Vector<Line> }
 typedef Line : {
     // TODO: enum
-    type : int, // 0: expression, 1: assignment, 2: return, 3: if, 4: while, 5: for, 6: scope
+    type : int, // 0: expression, 1: assignment, 2: return, 3: if, 4: while, 5: for, 6: scope, 7: declaration
     pointer : iptr
 }
 
@@ -765,18 +765,41 @@ function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("const"));
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+
     cursor:expect_next(":");
+
     let type : Type = cursor:parse_type();
-
     let expression : Expression = cursor:parse_expression();
-    cursor:expect_next(";");
 
+    cursor:expect_next(";");
     return {true, variable_name, type, make_optional(expression)};
 }
+
+function parse_let_declaration : (cursor : Cursor&) -> Declaration = {
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
+
+    let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+
+    cursor:expect_next(":");
+
+    let type : Type = cursor:parse_type();
+
+    let expression_opt : Optional<Expression>;
+    if cursor:is_next(";") {
+        expression_opt = make_optional<Expression>();
+    } else {
+        expression_opt = make_optional(cursor:parse_expression());
+    }
+
+    cursor:expect_next(";");
+    return {false, variable_name, type, expression_opt};
+}
+
 
 function parse_return : (cursor : Cursor&) -> Return = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("return"));
     let expression : Expression = cursor:parse_expression();
+    cursor:expect_next(";");
     return {expression};
 }
 
@@ -807,6 +830,16 @@ function parse_line : (cursor : Cursor&) -> Line = {
         let pointer : Scope& = &cursor.allocator:allocate<Scope>();
         pointer = cursor:parse_scope();
         return {6, ref_to_addr(&pointer)};
+    }
+    if cursor:is_next("let") {
+        let pointer : Declaration& = &cursor.allocator:allocate<Declaration>();
+        pointer = cursor:parse_let_declaration();
+        return {7, ref_to_addr(&pointer)};
+    }
+    if cursor:is_next("const") {
+        let pointer : Declaration& = &cursor.allocator:allocate<Declaration>();
+        pointer = cursor:parse_const_declaration();
+        return {7, ref_to_addr(&pointer)};
     }
 
     // The line is not a statement, it must be an expression or a assignment
