@@ -10,5 +10,5 @@ function main : () -> int = {
 /// File '*.c3', line 5, in 'function main: () -> int'
 /// Error: overload resolution for function call 'puts(u8[[]&[]])' failed
 /// Available overloads:
-/// - function puts: (Span<u8>) -> int
+/// - function puts: (StringView) -> int
 /// - function puts: (CString) -> int
