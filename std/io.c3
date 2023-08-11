@@ -99,7 +99,8 @@ function [@Len] printf : (format_string : u8[@Len]) -> void = {
 */
 
 function printf : (format_string : StringView) -> void = {
-    print(format_string);
+    // TODO: assert no format specificers
+    puts(format_string);
 }
 
 function [Args...] printf : (format_string : StringView, args : Args...) -> void = {
@@ -109,8 +110,9 @@ function [Args...] printf : (format_string : StringView, args : Args...) -> void
 
 function [Arg] impl_printf_print_until_next_format : (buffer : u8[&], format_string : StringView, next_arg : Arg) -> StringView = {
     let insertion_index : isize = format_string:index_of("%"[0]);
-    if (insertion_index == -1) | (insertion_index == format_string.length - 1) {
-        puts("Format string has mismatched format specifiers '%' and arguments");
+    if (insertion_index == -1) {
+        // TODO: this error looks kinda janky if something has already been printed
+        puts("\nprintf format string has mismatched numbers of '%' specifiers and arguments");
         runtime_assert(false);
     }
 
@@ -130,7 +132,7 @@ function [Arg] impl_printf_print_until_next_format : (buffer : u8[&], format_str
 
 function [NextArg] impl_printf : (buffer : u8[&], format_string : StringView, next_arg : NextArg) -> void = {
     let next_format_string : StringView = impl_printf_print_until_next_format(&buffer, format_string, next_arg);
-    print(next_format_string);
+    puts(next_format_string); // NOTE: intentional new line (c bad)
 }
 
 function [NextArg, Args...] impl_printf : (buffer : u8[&], format_string : StringView, next_arg: NextArg, args : Args...) -> void = {

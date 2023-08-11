@@ -231,17 +231,28 @@ function try_skip_next : (cursor : Cursor&, string : StringView) -> bool = {
     return true;
 }
 
+function print_syntax_error_location : (cursor : Cursor&) -> void = {
+    let lookup_table : PositionLookupTable = generate_position_lookup_table(cursor.program, &cursor.allocator);
+    let loc : FilePosition = lookup_table:lookup_position(cursor.position);
+
+    printf(
+        sv("Syntax error at line : %, column : %"),
+        loc.line,
+        loc.column,
+    );
+}
+
 // TODO: we cant accept a raw string here
 function syntax_error : (cursor : Cursor&, description: StringView) -> void = {
-    syntax_error(&cursor, description, sv(""));
+    print_syntax_error_location(&cursor);
+    printf(description);
+
+    runtime_assert(false);
 }
 
 // TODO: ugly error if we forget the generic definition
 function [Args...] syntax_error : (cursor : Cursor&, description: StringView, format_args : Args...) -> void = {
-    let lookup_table : PositionLookupTable = generate_position_lookup_table(cursor.program, &cursor.allocator);
-    let location : FilePosition = lookup_table:lookup_position(cursor.position);
-
-    printf(sv("Syntax error at offset: %, line : %, column : %\n"), location.offset, location.line_number, location.column_number);
+    print_syntax_error_location(&cursor);
     printf(description, format_args...);
 
     runtime_assert(false);
@@ -842,7 +853,7 @@ function parse_line : (cursor : Cursor&) -> Line = {
         return {7, ref_to_addr(&pointer)};
     }
 
-    // The line is not a statement, it must be an expression or a assignment
+    // The line is not a statement, it must be an expression or an assignment
     // TODO:
     runtime_assert(false);
     return {0, 0};

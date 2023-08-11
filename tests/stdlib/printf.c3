@@ -12,7 +12,7 @@ function main : () -> int = {
     let struct : MyStruct = {1};
     let var : int = 6999;
     let string : StringView = make_span("other string");
-    printf(make_span("Hello % world %%\n"), struct, var, string);
+    printf(sv("Hello % world %%"), struct, var, string);
     return 0;
 }
 
