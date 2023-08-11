@@ -10,7 +10,7 @@
 
 typedef TopLevelFeature : {
     type : int, // 0: typedef, 1: function, 2: require once
-    pointer : iptr. // TODO: the indirection here is unneeded... a union would be better
+    pointer : iptr, // TODO: the indirection here is unneeded... a union would be better
 }
 
 typedef ProgramSlice : {
@@ -240,7 +240,7 @@ function syntax_error : (cursor : Cursor&, description: StringView) -> void = {
 
     let lookup_table : PositionLookupTable = generate_position_lookup_table(cursor.program, &cursor.allocator);
     let line_number : isize = lookup_table:lookup_line_number(cursor.position);
-    let line_number_string : StringView = itoa(&int_buffer, cursor.position);
+    let line_number_string : StringView = itoa(&int_buffer, line_number);
     puts(line_number_string);
 
     puts(description);
@@ -271,19 +271,27 @@ function try_skip_comment : (cursor : Cursor&) -> bool = {
     return false;
 }
 
-function try_skip_white_space : (cursor : Cursor&) -> bool = {
-    if ascii_is_white_space(cursor:get_char()) {
+function try_skip_ascii_white_space : (cursor : Cursor&) -> bool = {
+    let has_skipped : bool = false;
+    while ascii_is_white_space(cursor:get_char()) {
         cursor.position += 1;
-        cursor:try_skip_white_space();
-        return true;
+        has_skipped = true;
     }
+    return has_skipped;
+}
 
-    // Comments are parsed as a single white space
-    if cursor:try_skip_comment() {
-        cursor:try_skip_white_space();
-        return true;
+function try_skip_white_space : (cursor : Cursor&) -> bool = {
+    // TODO: `do while` or similar
+    let has_skipped_this_loop : bool = true;
+    let has_skipped_any : bool = false;
+
+    while has_skipped_this_loop {
+        has_skipped_this_loop = false;
+        has_skipped_this_loop |= cursor:try_skip_ascii_white_space();
+        has_skipped_this_loop |= cursor:try_skip_comment();
+        has_skipped_any |= has_skipped_this_loop;
     }
-    return false;
+    return has_skipped_any;
 }
 
 function is_end_of_token : (cursor : Cursor&) -> bool = {
