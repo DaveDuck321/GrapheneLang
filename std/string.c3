@@ -6,6 +6,10 @@
 
 typedef StringView : Span<u8>
 
+function [@Len] sv : (string : u8[@Len]&) -> StringView = {
+    return make_span(&string);
+}
+
 @operator == : (lhs : StringView, rhs : StringView) -> bool = {
     if lhs.length != rhs.length {
         return false;

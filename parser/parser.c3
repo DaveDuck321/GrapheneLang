@@ -109,7 +109,7 @@ typedef Declaration : {
     is_const : bool,
     variable : ProgramSlice,
     type : Type,
-    expression : Optional<Ptr<Expression>>,
+    expression : Optional<Expression>,
 }
 
 typedef Expression : {
@@ -194,7 +194,7 @@ function get_char_at_offset : (cursor : Cursor&, offset : isize) -> u8 = {
 }
 
 function [@Len] is_next : (cursor : Cursor&, string : u8[@Len]&) -> bool = {
-    return cursor:is_next(make_span(&string));
+    return cursor:is_next(sv(&string));
 }
 
 function is_next : (cursor : Cursor&, string : StringView) -> bool = {
@@ -207,7 +207,7 @@ function is_next : (cursor : Cursor&, string : StringView) -> bool = {
 }
 
 function [@Len] try_skip_next_and_surrounding_white_space : (cursor : Cursor&, string : u8[@Len]&) -> bool = {
-    return cursor:try_skip_next_and_surrounding_white_space(make_span(&string));
+    return cursor:try_skip_next_and_surrounding_white_space(sv(&string));
 }
 
 function try_skip_next_and_surrounding_white_space : (cursor : Cursor&, string : StringView) -> bool = {
@@ -218,7 +218,7 @@ function try_skip_next_and_surrounding_white_space : (cursor : Cursor&, string :
 }
 
 function [@Len] try_skip_next : (cursor : Cursor&, string : u8[@Len]&) -> bool = {
-    return cursor:try_skip_next(make_span(&string));
+    return cursor:try_skip_next(sv(&string));
 }
 
 function try_skip_next : (cursor : Cursor&, string : StringView) -> bool = {
@@ -231,16 +231,18 @@ function try_skip_next : (cursor : Cursor&, string : StringView) -> bool = {
     return true;
 }
 
-function [@Len] syntax_error : (cursor : Cursor&, description: u8[@Len]&) -> void = {
-    syntax_error(&cursor, make_span(&description));
+// TODO: we cant accept a raw string here
+function syntax_error : (cursor : Cursor&, description: StringView) -> void = {
+    syntax_error(&cursor, description, sv(""));
 }
 
-function syntax_error : (cursor : Cursor&, description: StringView) -> void = {
+// TODO: ugly error if we forget the generic definition
+function [Args...] syntax_error : (cursor : Cursor&, description: StringView, format_args : Args...) -> void = {
     let lookup_table : PositionLookupTable = generate_position_lookup_table(cursor.program, &cursor.allocator);
     let location : FilePosition = lookup_table:lookup_position(cursor.position);
 
-    printf(make_span("Syntax error at offset: %, line : %, column : %\n"), location.offset, location.line_number, location.column_number);
-    puts(description);
+    printf(sv("Syntax error at offset: %, line : %, column : %\n"), location.offset, location.line_number, location.column_number);
+    printf(description, format_args...);
 
     runtime_assert(false);
 }
@@ -291,6 +293,12 @@ function try_skip_white_space : (cursor : Cursor&) -> bool = {
     return has_skipped_any;
 }
 
+function [@Len] expect_next : (cursor : Cursor&, next : u8[@Len]&) -> void = {
+    if !cursor:try_skip_next_and_surrounding_white_space(&next) {
+        syntax_error(&cursor, sv("Expected a '%'"), sv(&next));
+    }
+}
+
 function is_end_of_token : (cursor : Cursor&) -> bool = {
     if cursor:try_skip_white_space() {
         // White space can always end a token
@@ -324,7 +332,7 @@ function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
         } else {
             // Otherwise its a syntax error
             // TODO: format string
-            syntax_error(&cursor, "TODO: Unexpected symbol {} in token {}");
+            syntax_error(&cursor, sv("TODO: Unexpected symbol {} in token {}"));
         }
     }
     // TODO: check that the token's length != 2
@@ -342,7 +350,7 @@ function get_next_decimal_token : (cursor : Cursor&) -> ProgramSlice = {
         } else {
             // Otherwise its a syntax error
             // TODO: format string
-            syntax_error(&cursor, "TODO: Unexpected symbol {} in token {}");
+            syntax_error(&cursor, sv("TODO: Unexpected symbol {} in token {}"));
         }
     }
     // TODO: check that the token's length != 0
@@ -368,7 +376,7 @@ function get_next_string_literal_token : (cursor : Cursor&) -> ProgramSlice = {
     let current_char : u8 = cursor:get_char();
     while current_char != "\""[0] {
         if current_char == "\0"[0] {
-            syntax_error(&cursor, "TODO: Unterminated string");
+            syntax_error(&cursor, sv("TODO: Unterminated string"));
         }
 
         if current_char == "\\"[0] {
@@ -415,7 +423,7 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
         return {start_position, start_position + 1};
     }
 
-    syntax_error(&cursor, "TODO");
+    syntax_error(&cursor, sv("TODO"));
     return {0, 0};
 }
 
@@ -446,20 +454,20 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
         return {start_position, start_position + 2};
     }
 
-    syntax_error(&cursor, "TODO");
+    syntax_error(&cursor, sv("TODO"));
     return {0, 0};
 }
 
 
 function get_next_ascii_only_identifier : (cursor : Cursor&) -> ProgramSlice = {
     if !ascii_is_text_token_start_char(cursor:get_char()) {
-        syntax_error(&cursor, "TODO: Expected an alphabetic character");
+        syntax_error(&cursor, sv("TODO: Expected an alphabetic character"));
     }
 
     let result : ProgramSlice  = {cursor.position, cursor.position};
     while !cursor:is_end_of_token() {
         if !ascii_is_text_token_char(cursor:get_char()) {
-            syntax_error(&cursor, "TODO: Expected an alphanumeric character");
+            syntax_error(&cursor, sv("TODO: Expected an alphanumeric character"));
         }
 
         cursor.position += 1;
@@ -483,17 +491,15 @@ function parse_comma_separated_named_members : (cursor : Cursor&, matched_pair :
 
     while !cursor:try_skip_next_and_surrounding_white_space(matched_pair) {
         if cursor:get_char() == "\0"[0] {
-            syntax_error(&cursor, "Unterminated comma separated list");
+            syntax_error(&cursor, sv("Unterminated comma separated list"));
         }
         if is_missing_comma {
-            syntax_error(&cursor, "TODO: missing comma");
+            syntax_error(&cursor, sv("TODO: missing comma"));
         }
 
         // Argument name
         let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-        if !cursor:try_skip_next_and_surrounding_white_space(":") {
-            syntax_error(&cursor, "TODO: missing ':'");
-        }
+        cursor:expect_next(":");
 
         // Argument type
         let type : Type = cursor:parse_type();
@@ -516,10 +522,10 @@ function parse_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDef
     let generics : Vector<GenericDefinition> = make_vector<GenericDefinition>(&cursor.allocator);
     while cursor:try_skip_next_and_surrounding_white_space("]") {
         if cursor:get_char() == "\0"[0] {
-            syntax_error(&cursor, "Unterminated generic definition list");
+            syntax_error(&cursor, sv("Unterminated generic definition list"));
         }
         if is_missing_comma {
-            syntax_error(&cursor, "TODO: missing comma");
+            syntax_error(&cursor, sv("TODO: missing comma"));
         }
 
         if cursor:get_char() == "@"[0] {
@@ -579,10 +585,10 @@ function parse_compile_time_constant_list : (cursor : Cursor&) -> Vector<Compile
     let constants : Vector<CompileTimeConstant> = make_vector<CompileTimeConstant>(&cursor.allocator);
     while cursor:try_skip_next_and_surrounding_white_space("]") {
         if cursor:get_char() == "\0"[0] {
-            syntax_error(&cursor, "Unterminated constant list");
+            syntax_error(&cursor, sv("Unterminated constant list"));
         }
         if is_missing_comma {
-            syntax_error(&cursor, "TODO: missing comma");
+            syntax_error(&cursor, sv("TODO: missing comma"));
         }
 
         let constant : CompileTimeConstant = cursor:parse_compile_time_constant();
@@ -603,10 +609,10 @@ function parse_specialization_list : (cursor : Cursor&) -> Vector<Specialization
     let specializations : Vector<Specialization> = make_vector<Specialization>(&cursor.allocator);
     while !cursor:try_skip_next_and_surrounding_white_space(">") {
         if cursor:get_char() == "\0"[0] {
-            syntax_error(&cursor, "Unterminated specialization list");
+            syntax_error(&cursor, sv("Unterminated specialization list"));
         }
         if is_missing_comma {
-            syntax_error(&cursor, "TODO: missing comma");
+            syntax_error(&cursor, sv("TODO: missing comma"));
         }
 
         if cursor:is_at_start_of_compile_time_constant() {
@@ -629,7 +635,7 @@ function parse_specialization_list : (cursor : Cursor&) -> Vector<Specialization
 function parse_struct_type : (cursor : Cursor&) -> StructType = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("{"));
 
-    let members : Vector<TypedMember> = cursor:parse_comma_separated_named_members(make_span("}"));
+    let members : Vector<TypedMember> = cursor:parse_comma_separated_named_members(sv("}"));
     return {members};
 }
 
@@ -650,7 +656,7 @@ function parse_type_prefix : (cursor : Cursor&) -> Type = {
     }
 
 
-    syntax_error(&cursor, "TODO: Unexpected symbol {}");
+    syntax_error(&cursor, sv("TODO: Unexpected symbol {}"));
 
     // Unreachable
     // TODO: maybe allow `undefined` return
@@ -703,9 +709,7 @@ function parse_typedef : (cursor : Cursor&) -> Typedef = {
 
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
-    if !cursor:try_skip_next_and_surrounding_white_space(":") {
-        syntax_error(&cursor, "TODO: expected a ':'");
-    }
+    cursor:expect_next(":");
 
     // TODO: I'm using `if ... {full} else {allocate empty}` pattern a lot... is there a nicer way
     let specialization : Vector<Specialization>;
@@ -750,13 +754,24 @@ function parse_for : (cursor : Cursor&) -> For = {
     // TODO: accept type hints
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
-    if !cursor:try_skip_next_and_surrounding_white_space("in") {
-        syntax_error(&cursor, "TODO: expected `in`");
-    }
+    cursor:expect_next("in");
 
     let expression : Expression = cursor:parse_expression();
     let scope : Scope = cursor:parse_scope();
     return {variable_name, expression, scope};
+}
+
+function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("const"));
+
+    let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    cursor:expect_next(":");
+    let type : Type = cursor:parse_type();
+
+    let expression : Expression = cursor:parse_expression();
+    cursor:expect_next(";");
+
+    return {true, variable_name, type, make_optional(expression)};
 }
 
 function parse_return : (cursor : Cursor&) -> Return = {
@@ -806,7 +821,7 @@ function parse_scope : (cursor : Cursor&) -> Scope = {
     let result : Scope = {make_vector<Line>(&cursor.allocator)};
     while !cursor:try_skip_next_and_surrounding_white_space("}") {
         if cursor:get_char() == "\0"[0] {
-            syntax_error(&cursor, "TODO: unterminated '}'");
+            syntax_error(&cursor, sv("TODO: unterminated '}'"));
         }
         result.lines:push_back(cursor:parse_line());
     }
@@ -826,28 +841,18 @@ function parse_function_generics : (cursor : Cursor&) -> Vector<GenericDefinitio
 }
 
 function parse_function_args : (cursor : Cursor&) -> Vector<TypedMember> = {
-    if !cursor:try_skip_next_and_surrounding_white_space(":") {
-        syntax_error(&cursor, "TODO: expected a ':'");
-    }
-
-    if !cursor:try_skip_next_and_surrounding_white_space("(") {
-        syntax_error(&cursor, "TODO: expected a '('");
-    }
-
-    return cursor:parse_comma_separated_named_members(make_span(")"));
+    cursor:expect_next(":");
+    cursor:expect_next("(");
+    return cursor:parse_comma_separated_named_members(sv(")"));
 }
 
 function parse_function_return_type : (cursor : Cursor&) -> Type = {
-    if !cursor:try_skip_next_and_surrounding_white_space("->") {
-        syntax_error(&cursor, "TODO: expected '->'");
-    }
+    cursor:expect_next("->");
     return cursor:parse_type();
 }
 
 function parse_function_body : (cursor : Cursor&) -> Scope = {
-    if !cursor:try_skip_next_and_surrounding_white_space("=") {
-        syntax_error(&cursor, "TODO: expected '='");
-    }
+    cursor:expect_next("=");
     return cursor:parse_scope();
 }
 
@@ -869,8 +874,8 @@ function parse_implicit_function : (cursor : Cursor&) -> FunctionDefinition = {
     let generics : Vector<GenericDefinition> = cursor:parse_function_generics();
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
-    if !is_one_of(name:to_string_view(cursor.program), make_span("has_next"), make_span("get_next"), make_span("destruct")) {
-        syntax_error(&cursor, "TODO: Only 'has_next', 'get_next', and 'destruct' are valid implicit functions");
+    if !is_one_of(name:to_string_view(cursor.program), sv("has_next"), sv("get_next"), sv("destruct")) {
+        syntax_error(&cursor, sv("TODO: Only 'has_next', 'get_next', and 'destruct' are valid implicit functions"));
     }
 
     let args : Vector<TypedMember> = cursor:parse_function_args();
@@ -976,7 +981,7 @@ function parse_next_top_level_feature : (cursor : Cursor&) -> TopLevelFeature = 
         cursor.allocator:deallocate(&memory);
     }
 
-    syntax_error(&cursor, "Top level features must be one of TODO");
+    syntax_error(&cursor, sv("Top level features must be one of TODO"));
     return {0, 0};
 }
 
@@ -993,9 +998,9 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
         let read_buffer : u8[1024];
 
         // TODO: `do while` to avoid temp value? Or `break` to make this prettier
-        let read_data : StringView = make_span("uninitialized");
+        let read_data : StringView = sv("uninitialized");
         while read_data.length != 0 {
-            read_data = file:read(make_span(&read_buffer));
+            read_data = file:read(sv(&read_buffer));
             file_contents:extend_back(read_data);
         }
     }
