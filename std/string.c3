@@ -1,9 +1,28 @@
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
+@require_once "iterators.c3"
 @require_once "util.c3"
 @require_once "wrappers.c3"
 
 typedef StringView : Span<u8>
+
+@operator == : (lhs : StringView, rhs : StringView) -> bool = {
+    if lhs.length != rhs.length {
+        return false;
+    }
+
+    if ref_to_addr(&lhs.data) == ref_to_addr(&rhs.data) {
+        // Short circuit when the memory overlaps
+        return true;
+    }
+
+    for i in range(lhs.length) {
+        if lhs.data[i] != rhs.data[i] {
+            return false;
+        }
+    }
+    return true;
+}
 
 typedef CString : { data : u8[&] }
 
