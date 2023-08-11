@@ -24,10 +24,10 @@ function generate_position_lookup_table : (program : StringView, allocator: Allo
     return {new_lines};
 }
 
-function lookup_line_number : (table : PositionLookupTable&, offset : isize) -> isize = {
+function lookup_zero_indexed_line_number : (table : PositionLookupTable&, offset : isize) -> isize = {
     // TODO: this can be a binary search
     for line in range(table.offsets.length - 1) {
-        if table.offsets:get(line + 1) > offset {
+        if table.offsets:get(line) > offset {
             return line;
         }
     }
@@ -35,7 +35,14 @@ function lookup_line_number : (table : PositionLookupTable&, offset : isize) -> 
 }
 
 function lookup_position : (table: PositionLookupTable&, offset : isize) -> FilePosition = {
-    let line_number : isize = table:lookup_line_number(offset);
-    let column_number : isize = offset - table.offsets:get(line_number);
-    return {line_number, column_number, offset};
+    let line_number : isize = table:lookup_zero_indexed_line_number(offset);
+
+    // TODO: I'm using this pattern a lot, this should be a single statement
+    let column_number : isize;
+    if line_number == 0 {
+        column_number = offset + 1;
+    } else {
+        column_number = offset - table.offsets:get(line_number - 1);
+    }
+    return {line_number + 1, column_number, offset};
 }
