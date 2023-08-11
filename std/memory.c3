@@ -129,9 +129,10 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
         // TODO: we should eventually just copy the optional without the branch
         if node_to_pop.next_node != 0 {
             let next_node_but_fixme_address : iptr = node_to_pop.next_node;
-            let next_node : Ptr<AllocatorNode>& = &addr_to_ref<Ptr<AllocatorNode>>(next_node_but_fixme_address);
+            let next_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(next_node_but_fixme_address);
+            let next_node_ptr : Ptr<AllocatorNode> = {&next_node};
 
-            allocator.bins[bin]:store(next_node);
+            allocator.bins[bin]:store(next_node_ptr);
         } else {
             allocator.bins[bin]:erase();
         }

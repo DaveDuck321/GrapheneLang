@@ -4,9 +4,11 @@
 
 typedef MyStruct : {
     a : int,
-    b : isize
+    b : isize,
+    c : isize,
+    d : bool,
+    f : isize,
 }
-
 
 function main : () -> int = {
     let allocator : Allocator = initialize_allocator();
@@ -44,7 +46,7 @@ function main : () -> int = {
     while i < 512 {
         let allocated : MyStruct& = &allocator:allocate<MyStruct>();
         allocated_structs[i] = {&allocated};
-        allocated = {-1, -1};
+        allocated = {-1, -1, 0, false, 89};
         i = i + 1;
     }
 
@@ -63,6 +65,15 @@ function main : () -> int = {
         }
         allocator:deallocate(&allocated_memory[i]:data());
         i = i + 2;
+    }
+
+    // Allocate the struct array again to flush out any safety issues
+    i = 0;
+    while i < 512 {
+        let allocated : MyStruct& = &allocator:allocate<MyStruct>();
+        allocated_structs[i] = {&allocated};
+        allocated = {-1, -1, 0, false, 7};
+        i = i + 1;
     }
 
     return 0;
