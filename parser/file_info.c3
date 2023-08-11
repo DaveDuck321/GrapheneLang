@@ -8,8 +8,8 @@ typedef PositionLookupTable : {
 }
 
 typedef FilePosition : {
-    line_number : isize,
-    column_number : isize,
+    line : isize,
+    column : isize,
     offset : isize,
 }
 
