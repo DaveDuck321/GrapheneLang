@@ -13,7 +13,12 @@ function EOF : () -> int = {
     return -1;
 }
 
-function puts : (str : Span<u8>) -> int = {
+function print : (str : StringView) -> void = {
+    // TODO: correct signature to match libc
+    sys_write(/* stdout */ 1, &str.data, str.length);
+}
+
+function puts : (str : StringView) -> int = {
     // puts - put a string on standard output
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/puts.html
     let iov : iovec[2] = {
@@ -45,10 +50,19 @@ function puts : (str: CString) -> int = {
     return puts(span);
 }
 
-function itoa : (buffer : u8[&], number : isize) -> StringView = {
+function stringify : (buffer : u8[&], string : StringView) -> StringView = {
+    return string;
+}
+
+function stringify : (buffer : u8[&], number : isize) -> StringView = {
     if number == 0 {
         buffer[0] = "0"[0];
         return {&buffer, 1};
+    }
+
+    let is_negative : bool = number < 0;
+    if is_negative {
+        number *= -1;
     }
 
     let length : isize = 0;
@@ -62,11 +76,66 @@ function itoa : (buffer : u8[&], number : isize) -> StringView = {
         length += 1;
     }
 
+    if is_negative {
+        buffer[length] = "-"[0];
+        length += 1;
+    }
+
     let result : StringView = {&buffer, length};
 
     // XXX: its a bit unfair to call it a `StringView` when its mutated in-place
     result:reverse();
     return result;
+}
+
+/* TODO: these overloads fail an assert
+function [@Len, Args...] printf : (format_string : u8[@Len], args : Args...) -> void = {
+    printf(make_span(&format_string), args...);
+}
+
+function [@Len] printf : (format_string : u8[@Len]) -> void = {
+    printf(make_span(&format_string));
+}
+*/
+
+function printf : (format_string : StringView) -> void = {
+    print(format_string);
+}
+
+function [Args...] printf : (format_string : StringView, args : Args...) -> void = {
+    let buffer : u8[1024];
+    impl_printf(&buffer, format_string, args...);
+}
+
+function [Arg] impl_printf_print_until_next_format : (buffer : u8[&], format_string : StringView, next_arg : Arg) -> StringView = {
+    let insertion_index : isize = format_string:index_of("%"[0]);
+    if (insertion_index == -1) | (insertion_index == format_string.length - 1) {
+        puts("Format string has mismatched format specifiers '%' and arguments");
+        runtime_assert(false);
+    }
+
+    print({&format_string.data, insertion_index});
+
+    // TODO: this NEEDS to be improved
+    let continuation_addr : iptr = ref_to_addr(&format_string.data[insertion_index + 1]);
+
+    // XXX: our bidmas is wrong :-|
+    let next_format_string : StringView = {&addr_to_heap_array<u8>(continuation_addr), ((format_string.length - insertion_index) - 1)};
+
+    let formatted_arg : StringView = buffer:stringify(next_arg);
+    print(formatted_arg);
+
+    return next_format_string;
+}
+
+function [NextArg] impl_printf : (buffer : u8[&], format_string : StringView, next_arg : NextArg) -> void = {
+    let next_format_string : StringView = impl_printf_print_until_next_format(&buffer, format_string, next_arg);
+    print(next_format_string);
+}
+
+function [NextArg, Args...] impl_printf : (buffer : u8[&], format_string : StringView, next_arg: NextArg, args : Args...) -> void = {
+    let next_format_string : StringView = impl_printf_print_until_next_format(&buffer, format_string, next_arg);
+    impl_printf(&buffer, next_format_string, args...);
 }
 
 typedef File : { fd : int }
