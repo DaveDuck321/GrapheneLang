@@ -1,5 +1,6 @@
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
+@require_once "iterators.c3"
 @require_once "logical.c3"
 @require_once "syscalls.c3"
 @require_once "util.c3"
@@ -27,7 +28,6 @@ typedef AllocatorNode : {
 
 typedef Allocator : {
     // TODO: parameterize `8` as a generic argument
-    bin_count: isize,
     integrity_checks : u64[8],
     bins : Optional<Ptr<AllocatorNode>>[8],
 }
@@ -53,8 +53,7 @@ function get_block_size_from_bin_index : (bin : isize) -> isize = {
 function allocate_impl : (allocator : Allocator&, requested_size : isize) -> isize = {
     let bin_index : isize = get_allocator_bin_index(requested_size);
 
-    let memory_address : iptr;
-    if bin_index >= allocator.bin_count {
+    if bin_index >= allocator.bins:length() {
         // We just pass large allocations straight to the kernel
         return allocate_page_and_return_address(requested_size);
     } else {
@@ -78,7 +77,7 @@ function [T] allocate_span : (allocator : Allocator&, length: isize) -> Span<T> 
 
 function deallocate_impl : (allocator : Allocator&, memory_address: isize, size : isize) -> void = {
     let bin_index : isize = get_allocator_bin_index(size);
-    if bin_index >= allocator.bin_count {
+    if bin_index >= allocator.bins:length() {
         deallocate_page(memory_address, size);
     } else {
         deallocate_to_bin(&allocator, bin_index, memory_address);
@@ -86,11 +85,11 @@ function deallocate_impl : (allocator : Allocator&, memory_address: isize, size 
 }
 
 function [T] deallocate : (allocator : Allocator&, ref : T&) -> void = {
-    allocator:deallocate_impl(__builtin_ptr_to_int(&ref), sizeof<T>());
+    allocator:deallocate_impl(ref_to_addr(&ref), sizeof<T>());
 }
 
 function [T] deallocate_span : (allocator : Allocator&, span : Span<T>) -> void = {
-    allocator:deallocate_impl(__builtin_ptr_to_int(&span.data), sizeof<T>() * span.length);
+    allocator:deallocate_impl(ref_to_addr(&span.data), sizeof<T>() * span.length);
 }
 
 function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) -> void = {
@@ -99,12 +98,12 @@ function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) 
     let new_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(addr);
     new_node.integrity_check = integrity_check;
 
-    if allocator.bins[bin]:has_value<Ptr<AllocatorNode>>() {
-        let next_node_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data<Ptr<AllocatorNode>>();
-        let next_node : AllocatorNode& = &next_node_ptr:data<AllocatorNode>();
+    if allocator.bins[bin]:has_value() {
+        let next_node_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data();
+        let next_node : AllocatorNode& = &next_node_ptr:data();
         runtime_assert(next_node.integrity_check == integrity_check);
 
-        new_node.next_node = __builtin_ptr_to_int(next_node);
+        new_node.next_node = ref_to_addr(&next_node);
     } else {
         new_node.next_node = 0;
     }
@@ -113,7 +112,7 @@ function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) 
 
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
     // No bins available, lets allocate more memory
-    if bin == allocator.bin_count {
+    if bin == allocator.bins:length() {
         runtime_assert(get_block_size_from_bin_index(bin) == PAGE_SIZE());
         return allocate_page_and_return_address(PAGE_SIZE());
     }
@@ -122,23 +121,22 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
     let integrity_check : u64 = allocator.integrity_checks[bin];
 
     // TODO: need template arguments deduction for function calls (especially the UFCS)
-    if allocator.bins[bin]:has_value<Ptr<AllocatorNode>>() {
-        let node_to_pop_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data<Ptr<AllocatorNode>>();
-        let node_to_pop : AllocatorNode& = &node_to_pop_ptr:data<AllocatorNode>();
+    if allocator.bins[bin]:has_value() {
+        let node_to_pop_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data();
+        let node_to_pop : AllocatorNode& = &node_to_pop_ptr:data();
 
         runtime_assert(node_to_pop.integrity_check == integrity_check);
-
         // TODO: we should eventually just copy the optional without the branch
         if node_to_pop.next_node != 0 {
             let next_node_but_fixme_address : iptr = node_to_pop.next_node;
             let next_node : Ptr<AllocatorNode>& = &addr_to_ref<Ptr<AllocatorNode>>(next_node_but_fixme_address);
 
-            allocator.bins[bin]:store<Ptr<AllocatorNode>>(next_node);
+            allocator.bins[bin]:store(next_node);
         } else {
-            allocator.bins[bin]:erase<Ptr<AllocatorNode>>();
+            allocator.bins[bin]:erase();
         }
 
-        return __builtin_ptr_to_int(node_to_pop);
+        return ref_to_addr(&node_to_pop);
 
     } else {
         // We don't have any bins left, split one from the bin above us
@@ -165,21 +163,12 @@ function initialize_allocator : () -> Allocator = {
     runtime_assert(sizeof<AllocatorNode>() == 16);
 
     let allocator : Allocator;
-    allocator.bin_count = 8;  // TODO: this should be part of the Allocator type
 
-    // TODO: use variable initialized inside for loop
-    let i : int = 0;
-
-    // TODO: use i < allocator.bins:len() (fails since it cannot dedude arg types)
-    while i < allocator.bin_count {
+    for bin in range(allocator.bins:length()) {
         // TODO: use a true random number
         // TODO: allow 64 bit constants
-        allocator.integrity_checks[i] = 0xd2f4bd5b;
-
-
-        // TODO: use constructor
-        allocator.bins[i]:erase<Ptr<AllocatorNode>>();
-        i += 1;
+        allocator.integrity_checks[bin] = 0xd2f4bd5b;
+        allocator.bins[bin]:erase();
     }
     return allocator;
 }

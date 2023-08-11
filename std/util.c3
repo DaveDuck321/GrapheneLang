@@ -1,3 +1,7 @@
+function [T, @Len] length : (array : T[@Len]&) -> isize = {
+    return @Len;
+}
+
 function [T] sizeof : () -> isize = {
     return __builtin_sizeof<T>();
 }
