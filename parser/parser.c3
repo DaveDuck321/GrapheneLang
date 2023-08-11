@@ -678,7 +678,20 @@ function parse_array_type : (cursor : Cursor&, prefix : Type) -> Type = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
 
     let is_heap_array : bool = cursor:try_skip_next_and_surrounding_white_space("&");
-    let sizes : Vector<CompileTimeConstant> = cursor:parse_compile_time_constant_list();
+
+    let sizes : Vector<CompileTimeConstant>;
+    // TODO: this would be cleaner with a short-circuit `and`
+    if is_heap_array {
+        // A heap array may/ may not have further dimensions specified
+        if cursor:try_skip_next_and_surrounding_white_space(",") {
+            sizes = cursor:parse_compile_time_constant_list();
+        } else {
+            sizes = make_vector<CompileTimeConstant>(&cursor.allocator);
+        }
+    } else {
+        // A stack array must have a known size
+        sizes = cursor:parse_compile_time_constant_list();
+    }
 
     let array : ArrayType& = &cursor.allocator:allocate<ArrayType>();
     array = {prefix, sizes, is_heap_array};
