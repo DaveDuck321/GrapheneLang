@@ -272,9 +272,10 @@ function print_syntax_error_location : (cursor : Cursor&) -> void = {
     let loc : FilePosition = lookup_table:lookup_position(cursor.position);
 
     printf(
-        sv("Syntax error at line : %, column : %"),
+        sv("Syntax error at line : %, column : %, offset : %"),
         loc.line,
         loc.column,
+        loc.offset,
     );
 }
 
@@ -913,11 +914,51 @@ function parse_function_call : (cursor : Cursor&, prefix : Expression) -> Functi
 }
 
 function is_likely_the_start_of_a_specialized_function : (cursor : Cursor&) -> bool = {
-    // XXX: this is a stub
+    // This function does an approximate forward lookahead to determine whether
+    // the cursor is currently at the start of a less than expression or a
+    // specialized function call.
+
+    // Since it does not do a full parse, it may incorrectly identify a legal
+    // less than operator an illegal function call, the user can always correct
+    // this with parens.
+
     if !cursor:is_next("<") {
         return false;
     }
-    return true;
+
+    let brackets_stack : Vector<u8> = make_vector<u8>(&cursor.allocator);
+    let lookahead : Cursor = cursor;
+    while !lookahead:is_next("\0") {
+        if is_one_of(lookahead:get_char(), "<"[0], "("[0], "{"[0], "["[0]) {
+            brackets_stack:push_back(lookahead:get_char());
+        }
+
+        if is_one_of(lookahead:get_char(), ">"[0], ")"[0], "}"[0], "]"[0]) {
+            if !ascii_is_matched_pair(brackets_stack:pop_back(), lookahead:get_char()) {
+                brackets_stack:deallocate();
+                return false;
+            }
+
+            // We've closed the final triangle bracket, does it still look like a function?
+            if brackets_stack:length() == 0 {
+                brackets_stack:deallocate();
+
+                lookahead.position += 1;
+                lookahead:try_skip_white_space();
+
+                return lookahead:is_next("(");
+            }
+        }
+
+        // Otherwise, advance the lookahead
+        lookahead.position += 1;
+        lookahead:try_skip_white_space();
+    }
+
+    // Worst case (not possible without a syntax error)
+    // We've reached the end of the file without seeing a closing triangle bracket
+    brackets_stack:deallocate();
+    return false;
 }
 
 function parse_expression_postfix : (cursor : Cursor&, prefix : Expression) -> Expression = {
@@ -1398,7 +1439,6 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
 
     let program : Vector<TopLevelFeature> = make_vector<TopLevelFeature>(&allocator);
     while !cursor:is_next("\0") {
-        puts("here!");
         program:push_back(cursor:parse_next_top_level_feature());
     }
 
