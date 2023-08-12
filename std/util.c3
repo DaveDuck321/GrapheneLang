@@ -1,6 +1,26 @@
+typedef [T, @Len] ArrayIter : {
+    array : T[@Len]&,
+    index : isize,
+}
+
 function [T, @Len] length : (array : T[@Len]&) -> isize = {
     return @Len;
 }
+
+function [T, @Len] get_iter : (array : T[@Len]&) -> ArrayIter<T, @Len> = {
+    return {&array, 0};
+}
+
+@implicit [T, @Len] has_next : (array_iter : ArrayIter<T, @Len>&) -> bool = {
+    return array_iter.index < @Len;
+}
+
+@implicit [T, @Len] get_next : (array_iter : ArrayIter<T, @Len>&) -> T& = {
+    let result : T& = &array_iter.array[array_iter.index];
+    array_iter.index += 1;
+    return &result;
+}
+
 
 function [T] sizeof : () -> isize = {
     return __builtin_sizeof<T>();
@@ -48,3 +68,5 @@ function as_logical : (value : i16)  -> u16  = { return __builtin_bitcast<u16>(v
 function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(value); }
 function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); }
 function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); }
+
+function [T] has_next : (iter : T&) -> bool = { return iter:__builtin_has_next(); }
