@@ -23,7 +23,7 @@ function [T] make_optional : () -> Optional<T> = {
 }
 
 function [T] make_optional : (value : T) -> Optional<T> = {
-    return {_value : value, _has_value : true};
+    return {._value = value, ._has_value = true};
 }
 
 function [T] data : (self : Optional<T>&) -> T& = {

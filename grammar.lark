@@ -78,8 +78,7 @@ UNSIGNED_HEX_CONSTANT: "0x" HEXDIGIT+
 _inner_list_without_names: _expression ("," _expression)* ","?
 struct_initializer_without_names: _inner_list_without_names?
 
-_inner_list_with_names: IDENTIFIER ":" _expression ("," IDENTIFIER ":" _expression)* ","?
-inner_list_with_names: _inner_list_with_names
+_inner_list_with_names: "." IDENTIFIER "=" _expression ("," "." IDENTIFIER "=" _expression)* ","?
 struct_initializer_with_names: _inner_list_with_names
 
 accessed_variable_name: IDENTIFIER
@@ -123,9 +122,6 @@ ADD_SUB_TOKEN: "+" | "-"
 MULT_DIV_TOKEN: "*" | "@" | "/" | "//" | "%"
 UNARY_OPERATOR_TOKEN: "!" | "-" | "+" | "~"
 POWER_TOKEN: "**"
-
-// TODO: add support for arbitrary operators
-// Alternatively we can prevent user defined operators not in this list
 
 !?logical_or: logical_and
             | logical_and "||" logical_or -> operator_use

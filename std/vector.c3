@@ -15,9 +15,9 @@ function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
     /* TODO: It'd be kinda nice to NOT allocate by default
              atm it would be hard to make `Span` support this */
     return {
-        allocator : &allocator,
-        memory : allocator:allocate_span<T>(DEFAULT_VECTOR_CAPACITY()),
-        length : 0,
+        .allocator = &allocator,
+        .memory = allocator:allocate_span<T>(DEFAULT_VECTOR_CAPACITY()),
+        .length = 0,
     };
 }
 
@@ -89,8 +89,8 @@ function [T] deallocate : (self : Vector<T>&) -> void = {
 
 function [T] data : (self : Vector<T>&) -> Span<T> = {
     return {
-        data : &self.memory.data,
-        length : self.length,
+        .data = &self.memory.data,
+        .length = self.length,
     };
 }
 
