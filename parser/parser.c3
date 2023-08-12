@@ -29,11 +29,13 @@ typedef ArrayType : { base_type : Type, size : Vector<CompileTimeConstant>, is_h
 typedef RefType : { type : Type }
 typedef NamedType : { name : ProgramSlice, specialization : Vector<Specialization> }
 typedef StructType : { members : Vector<TypedMember> }
+typedef PackType : { type : Type }
 
 typedef GenericDefinition : {
     // TODO: variant
     type : int, // 0: type, 1: numeric generic
     value : ProgramSlice,
+    is_packed : bool,
 }
 
 typedef Specialization : {
@@ -44,7 +46,7 @@ typedef Specialization : {
 
 typedef Type : {
     // TODO: variant
-    type: int, // 0: function, 1: array, 2: ref, 4: named type, 5: struct type
+    type: int, // 0: function, 1: array, 2: ref, 4: named type, 5: struct type, 6: parameter pack
     pointer : iptr,
 }
 
@@ -113,36 +115,64 @@ typedef Declaration : {
 }
 
 typedef Expression : {
-    // TODO: this is a poor mans variant
+    // TODO: this is a poor man's variant
     // TODO: use an enum here
 
-    // 0: function call, 1: constant, 2: named init list, 3: unnamed init list, 4: variable, 5: array index access, 6: struct index access, 7: ufcs
+    // 0: function call, 1: constant, 2: named init list, 3: unnamed init list, 4: variable, 5: array index access, 6: struct index access, 7: ufcs, 8: operator, 9: unary operator, 10: pack expansion
     type : int,
     pointer : iptr,
 }
 
+typedef NamedExpression : {
+    name : ProgramSlice,
+    expression : Expression,
+}
+
+typedef Operator : {
+    // TODO: this can probably be unified with the function call type
+    name : StringView,
+    lhs : Expression,
+    rhs : Expression,
+}
+
+typedef UnaryOperator : {
+    name : ProgramSlice,
+    rhs : Expression,
+}
+
 typedef FunctionCall : {
     name : ProgramSlice,
+    specialization : Vector<Specialization>,
     arguments : Vector<Expression>,
+}
+
+typedef UFCS_Call : {
+    expression : Expression,
+    function_name : ProgramSlice,
+    specialization : Vector<Specialization>,
+    args : Vector<Expression>,
+}
+
+typedef PackExpansion : {
+    expression : Expression,
 }
 
 typedef Constant : {
     // TODO: enum
-    type : int, // 0: String, 1: float, 2: int, 3: bool, 4: generic identifier, 5: hex
+    type : int, // 0: String, 1: float, 2: int, 3: bool, 4: generic identifier
     value : ProgramSlice,
 }
 
 typedef NamedInitializerList : {
-    names : Vector<ProgramSlice>,
-    values : Vector<Expression>,
+    args : Vector<NamedExpression>,
 }
 
 typedef UnnamedInitializerList : {
     args : Vector<Expression>
 }
 
-typedef VariableName : {
-    value : ProgramSlice
+typedef VariableAccess : {
+    name : ProgramSlice
 }
 
 typedef ArrayIndexAccess : {
@@ -153,12 +183,6 @@ typedef ArrayIndexAccess : {
 typedef StructIndexAccess : {
     expression : Expression,
     member : ProgramSlice,
-}
-
-typedef UFCS_Call : {
-    expression : Expression,
-    function_name : ProgramSlice,
-    args : Vector<Expression>,
 }
 
 typedef Cursor : {
@@ -193,28 +217,42 @@ function get_char_at_offset : (cursor : Cursor&, offset : isize) -> u8 = {
     return cursor.program.data[cursor.position + offset];
 }
 
-function [@Len] is_next : (cursor : Cursor&, string : u8[@Len]&) -> bool = {
-    return cursor:is_next(sv(&string));
+function [@Len] is_next : (cursor : Cursor&, token : u8[@Len]&) -> bool = {
+    return cursor:is_next(sv(&token));
 }
 
-function is_next : (cursor : Cursor&, string : StringView) -> bool = {
-    for i in range(string.length) {
-        if cursor:get_char_at_offset(i) != string.data[i] {
+function is_next : (cursor : Cursor&, token : StringView) -> bool = {
+    for i in range(token.length) {
+        if cursor:get_char_at_offset(i) != token.data[i] {
             return false;
         }
+    }
+
+    if ascii_is_text_token_start_char(token.data[0]) {
+        // Avoid matching a substring in a larger text token
+        return !ascii_is_text_token_char(cursor:get_char_at_offset(token.length));
     }
     return true;
 }
 
-function [@Len] try_skip_next_and_surrounding_white_space : (cursor : Cursor&, string : u8[@Len]&) -> bool = {
-    return cursor:try_skip_next_and_surrounding_white_space(sv(&string));
+function [@Len] try_skip_next_and_surrounding_white_space : (cursor : Cursor&, token : u8[@Len]&) -> bool = {
+    return cursor:try_skip_next_and_surrounding_white_space(sv(&token));
 }
 
-function try_skip_next_and_surrounding_white_space : (cursor : Cursor&, string : StringView) -> bool = {
+function try_skip_next_and_surrounding_white_space : (cursor : Cursor&, token : StringView) -> bool = {
     cursor:try_skip_white_space();
-    let result : bool = cursor:try_skip_next(string);
+    let result : bool = cursor:try_skip_next(token);
     cursor:try_skip_white_space();
     return result;
+}
+
+function try_skip_next_operator_and_ws : (cursor : Cursor&, operator: StringView) -> bool = {
+    // The small lookahead exists so we don't capture the operator part of an assignment
+    cursor:try_skip_white_space();
+    if cursor:get_char_at_offset(operator.length) == "="[0] {
+        return false;
+    }
+    return cursor:try_skip_next_and_surrounding_white_space(operator);
 }
 
 function [@Len] try_skip_next : (cursor : Cursor&, string : u8[@Len]&) -> bool = {
@@ -222,10 +260,8 @@ function [@Len] try_skip_next : (cursor : Cursor&, string : u8[@Len]&) -> bool =
 }
 
 function try_skip_next : (cursor : Cursor&, string : StringView) -> bool = {
-    for i in range(string.length) {
-        if cursor:get_char_at_offset(i) != string.data[i] {
-            return false;
-        }
+    if !cursor:is_next(string) {
+        return false;
     }
     cursor.position += string.length;
     return true;
@@ -305,9 +341,15 @@ function try_skip_white_space : (cursor : Cursor&) -> bool = {
 }
 
 function [@Len] expect_next : (cursor : Cursor&, next : u8[@Len]&) -> void = {
-    if !cursor:try_skip_next_and_surrounding_white_space(&next) {
+    if !cursor:try_skip_next(&next) {
         syntax_error(&cursor, sv("Expected a '%'"), sv(&next));
     }
+}
+
+function [@Len] expect_next_skipping_ws : (cursor : Cursor&, next : u8[@Len]&) -> void = {
+    cursor:try_skip_white_space();
+    cursor:expect_next(&next);
+    cursor:try_skip_white_space();
 }
 
 function is_end_of_token : (cursor : Cursor&) -> bool = {
@@ -348,6 +390,18 @@ function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
     }
     // TODO: check that the token's length != 2
     return token;
+}
+
+function get_next_bool_token : (cursor : Cursor&) -> ProgramSlice = {
+    runtime_assert(cursor:is_next("true") | cursor:is_next("false"));
+
+    let start_position : isize = cursor.position;
+    if cursor:try_skip_next_and_surrounding_white_space("true") {
+        return {start_position, start_position + 4};
+    }
+
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("false"));
+    return {start_position, start_position + 5};
 }
 
 function get_next_decimal_token : (cursor : Cursor&) -> ProgramSlice = {
@@ -400,7 +454,9 @@ function get_next_string_literal_token : (cursor : Cursor&) -> ProgramSlice = {
     }
     // The string has been terminated
     cursor.position += 1;
-    return {start_offset, cursor.position};
+    let result : ProgramSlice = {start_offset, cursor.position};
+    cursor:try_skip_white_space();
+    return result;
 }
 
 function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
@@ -465,10 +521,9 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
         return {start_position, start_position + 2};
     }
 
-    syntax_error(&cursor, sv("TODO"));
+    syntax_error(&cursor, sv("TODO unexpected symbol"));
     return {0, 0};
 }
-
 
 function get_next_ascii_only_identifier : (cursor : Cursor&) -> ProgramSlice = {
     if !ascii_is_text_token_start_char(cursor:get_char()) {
@@ -510,7 +565,7 @@ function parse_comma_separated_named_members : (cursor : Cursor&, matched_pair :
 
         // Argument name
         let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-        cursor:expect_next(":");
+        cursor:expect_next_skipping_ws(":");
 
         // Argument type
         let type : Type = cursor:parse_type();
@@ -518,20 +573,17 @@ function parse_comma_separated_named_members : (cursor : Cursor&, matched_pair :
         result:push_back<TypedMember>({name, type});
 
         // Argument separators
-        if !cursor:try_skip_next_and_surrounding_white_space(",") {
-            is_missing_comma = true;
-        }
+        is_missing_comma = !cursor:try_skip_next_and_surrounding_white_space(",");
     }
     return result;
 }
 
 function parse_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDefinition> = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
+    let generics : Vector<GenericDefinition> = make_vector<GenericDefinition>(&cursor.allocator);
 
     let is_missing_comma : bool = false;
-
-    let generics : Vector<GenericDefinition> = make_vector<GenericDefinition>(&cursor.allocator);
-    while cursor:try_skip_next_and_surrounding_white_space("]") {
+    while !cursor:try_skip_next_and_surrounding_white_space("]") {
         if cursor:get_char() == "\0"[0] {
             syntax_error(&cursor, sv("Unterminated generic definition list"));
         }
@@ -539,36 +591,34 @@ function parse_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDef
             syntax_error(&cursor, sv("TODO: missing comma"));
         }
 
+        // TODO: this is a little ugly, should be refactored
+        let type : int;
+        let name : ProgramSlice;
         if cursor:get_char() == "@"[0] {
-            // TODO: deduce the type here
-            generics:push_back<GenericDefinition>({
-                1 /* generic numeric */,
-                cursor:get_next_at_identifier(),
-            });
+            type = /* generic numeric */ 1;
+            name = cursor:get_next_at_identifier();
         } else {
-            generics:push_back<GenericDefinition>({
-                0 /* generic type */,
-                cursor:get_next_ascii_only_identifier(),
-            });
+            type = /* generic type */ 0;
+            name = cursor:get_next_ascii_only_identifier();
         }
 
-        if !cursor:try_skip_next_and_surrounding_white_space(",") {
-            is_missing_comma = true;
+        if cursor:try_skip_next_and_surrounding_white_space("...") {
+            // We've encountered the parameter pack, this must be the last generic
+            // TODO: infer this type
+            generics:push_back<GenericDefinition>({type, name, true});
+            cursor:expect_next_skipping_ws("]");
+            return generics;
         }
+
+        generics:push_back<GenericDefinition>({type, name, false});
+        is_missing_comma = !cursor:try_skip_next_and_surrounding_white_space(",");
     }
     return generics;
 }
 
 function parse_named_type : (cursor : Cursor&) -> NamedType = {
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-
-    let specialization_list : Vector<Specialization>;
-    if cursor:is_next("<") {
-        specialization_list = cursor:parse_specialization_list();
-    } else {
-        specialization_list = make_vector<Specialization>(&cursor.allocator);
-    }
-
+    let specialization_list : Vector<Specialization> = cursor:parse_optional_specialization_list();
     return {name, specialization_list};
 }
 
@@ -594,7 +644,7 @@ function parse_compile_time_constant_list : (cursor : Cursor&) -> Vector<Compile
     let is_missing_comma : bool = false;
 
     let constants : Vector<CompileTimeConstant> = make_vector<CompileTimeConstant>(&cursor.allocator);
-    while cursor:try_skip_next_and_surrounding_white_space("]") {
+    while !cursor:try_skip_next_and_surrounding_white_space("]") {
         if cursor:get_char() == "\0"[0] {
             syntax_error(&cursor, sv("Unterminated constant list"));
         }
@@ -610,6 +660,14 @@ function parse_compile_time_constant_list : (cursor : Cursor&) -> Vector<Compile
         }
     }
     return constants;
+}
+
+function parse_optional_specialization_list : (cursor : Cursor&) -> Vector<Specialization> = {
+    if cursor:is_next("<") {
+        return cursor:parse_specialization_list();
+    } else {
+        return make_vector<Specialization>(&cursor.allocator);
+    }
 }
 
 function parse_specialization_list : (cursor : Cursor&) -> Vector<Specialization> = {
@@ -683,10 +741,12 @@ function parse_array_type : (cursor : Cursor&, prefix : Type) -> Type = {
     // TODO: this would be cleaner with a short-circuit `and`
     if is_heap_array {
         // A heap array may/ may not have further dimensions specified
+        // TODO: I'm using `if ... {full} else {allocate empty}` pattern a lot... is there a nicer way
         if cursor:try_skip_next_and_surrounding_white_space(",") {
             sizes = cursor:parse_compile_time_constant_list();
         } else {
             sizes = make_vector<CompileTimeConstant>(&cursor.allocator);
+            cursor:expect_next_skipping_ws("]");
         }
     } else {
         // A stack array must have a known size
@@ -711,6 +771,12 @@ function parse_type : (cursor : Cursor&) -> Type = {
         prefix = cursor:parse_array_type(prefix);
     }
 
+    if cursor:try_skip_next_and_surrounding_white_space("...") {
+        let pack_type : PackType& = &cursor.allocator:allocate<PackType>();
+        pack_type = {prefix};
+        return {6, ref_to_addr(&pack_type)};
+    }
+
     if cursor:try_skip_next_and_surrounding_white_space("&") {
         let ref_type : RefType& = &cursor.allocator:allocate<RefType>();
         ref_type = {prefix};
@@ -732,23 +798,294 @@ function parse_typedef : (cursor : Cursor&) -> Typedef = {
     }
 
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization_list();
 
-    cursor:expect_next(":");
-
-    // TODO: I'm using `if ... {full} else {allocate empty}` pattern a lot... is there a nicer way
-    let specialization : Vector<Specialization>;
-    if cursor:is_next("<") {
-        specialization = cursor:parse_specialization_list();
-    } else {
-        specialization = make_vector<Specialization>(&cursor.allocator);
-    }
+    cursor:expect_next_skipping_ws(":");
 
     return {name, generics, specialization, cursor:parse_type()};
 }
 
-function parse_expression : (cursor : Cursor&) -> Expression = {
-    runtime_assert(false);
+function parse_list_of_expressions : (cursor : Cursor&, end : StringView) -> Vector<Expression> = {
+    let result : Vector<Expression> = make_vector<Expression>(&cursor.allocator);
+
+    let is_missing_comma : bool = false;
+    while !cursor:try_skip_next_and_surrounding_white_space(end) {
+        // TODO: I've done this logic like 5 times, function pointers would eliminate this
+        if cursor:get_char() == "\0"[0] {
+            syntax_error(&cursor, sv("Unterminated list of expressions"));
+        }
+        if is_missing_comma {
+            syntax_error(&cursor, sv("TODO: missing comma"));
+        }
+        result:push_back(cursor:parse_expression());
+        is_missing_comma = !cursor:try_skip_next_and_surrounding_white_space(",");
+    }
+    return result;
+}
+
+function parse_list_of_named_expressions : (cursor : Cursor&, end : StringView) -> Vector<NamedExpression> = {
+    let result : Vector<NamedExpression> = make_vector<NamedExpression>(&cursor.allocator);
+
+    let is_missing_comma : bool = false;
+    while !cursor:try_skip_next_and_surrounding_white_space(end) {
+        if cursor:get_char() == "\0"[0] {
+            syntax_error(&cursor, sv("Unterminated list of named expressions"));
+        }
+        if is_missing_comma {
+            syntax_error(&cursor, sv("TODO: missing comma"));
+        }
+
+        cursor:expect_next(".");
+        let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+
+        cursor:expect_next_skipping_ws("=");
+
+        let expression : Expression = cursor:parse_expression();
+        result:push_back<NamedExpression>({name, expression});
+        is_missing_comma = !cursor:try_skip_next_and_surrounding_white_space(",");
+    }
+    return result;
+}
+
+function parse_initializer_list : (cursor : Cursor&) -> Expression = {
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("{"));
+    if cursor:is_next(".") {
+        let named_expressions : Vector<NamedExpression> = cursor:parse_list_of_named_expressions(sv("}"));
+        let memory : NamedInitializerList& = &cursor.allocator:allocate<NamedInitializerList>();
+        memory = {named_expressions};
+        return {2, ref_to_addr(&memory)};
+    } else {
+        let expressions : Vector<Expression> = cursor:parse_list_of_expressions(sv("}"));
+        let memory : UnnamedInitializerList& = &cursor.allocator:allocate<UnnamedInitializerList>();
+        memory = {expressions};
+        return {3, ref_to_addr(&memory)};
+    }
+}
+
+function parse_ufcs_call : (cursor : Cursor&, prefix : Expression) -> UFCS_Call = {
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space(":"));
+
+    let fn_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization_list();
+    cursor:expect_next_skipping_ws("(");
+    let arguments : Vector<Expression> = cursor:parse_list_of_expressions(sv(")"));
+    return {prefix, fn_name, specialization, arguments};
+}
+
+function parse_array_index_access : (cursor : Cursor&, prefix : Expression) -> ArrayIndexAccess = {
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
+    let indicies : Vector<Expression> = cursor:parse_list_of_expressions(sv("]"));
+    return {prefix, indicies};
+}
+
+function parse_struct_index_access : (cursor : Cursor&, prefix : Expression) -> StructIndexAccess = {
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("."));
+
+    let member_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    return {prefix, member_name};
+}
+
+function parse_callable_call : (cursor : Cursor&, prefix : Expression) -> FunctionCall = {
+    // TODO: SUPPORT CALLABLES, correct signature!!!!!
+    // atm. this is just a hacky way to call (non-specialized) functions
+    runtime_assert(cursor:is_next("("));
+    return cursor:parse_function_call(prefix);
+}
+
+function parse_function_call : (cursor : Cursor&, prefix : Expression) -> FunctionCall = {
+    if prefix.type != /* variable */ 4 {
+        syntax_error(&cursor, sv("Callable types are not currently supported"));
+    }
+
+    let fn_name : ProgramSlice;
+    {
+        // TODO: this is a temporary work around since we do not have proper callables
+        let lhs_variable : VariableAccess& = &addr_to_ref<VariableAccess>(prefix.pointer);
+        fn_name = lhs_variable.name;
+        cursor.allocator:deallocate(&lhs_variable);
+    }
+
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization_list();
+
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("("));
+    let arguments : Vector<Expression> = cursor:parse_list_of_expressions(sv(")"));
+    return {fn_name, specialization, arguments};
+}
+
+function is_likely_the_start_of_a_specialized_function : (cursor : Cursor&) -> bool = {
+    // XXX: this is a stub
+    if !cursor:is_next("<") {
+        return false;
+    }
+    return true;
+}
+
+function parse_expression_postfix : (cursor : Cursor&, prefix : Expression) -> Expression = {
+    if cursor:try_skip_next_and_surrounding_white_space("...") {
+        // TODO: is this right? Do we support expanding expressions?
+        let memory : PackExpansion& = &cursor.allocator:allocate<PackExpansion>();
+        memory = {prefix};
+        // TODO: Do we support postfixes after expansions?
+        return cursor:parse_expression_postfix({10, ref_to_addr(&memory)});
+    }
+    if cursor:is_next(":") {
+        let memory : UFCS_Call& = &cursor.allocator:allocate<UFCS_Call>();
+        memory = cursor:parse_ufcs_call(prefix);
+        return cursor:parse_expression_postfix({7, ref_to_addr(&memory)});
+    }
+    if cursor:is_next("[") {
+        let memory : ArrayIndexAccess& = &cursor.allocator:allocate<ArrayIndexAccess>();
+        memory = cursor:parse_array_index_access(prefix);
+        return cursor:parse_expression_postfix({5, ref_to_addr(&memory)});
+    }
+    if cursor:is_next(".") {
+        let memory : StructIndexAccess& = &cursor.allocator:allocate<StructIndexAccess>();
+        memory = cursor:parse_struct_index_access(prefix);
+        return cursor:parse_expression_postfix({6, ref_to_addr(&memory)});
+    }
+    if cursor:is_next("(") {
+        // TODO: this should be a special callable type
+        let memory : FunctionCall& = &cursor.allocator:allocate<FunctionCall>();
+        memory = cursor:parse_callable_call(prefix);
+        return cursor:parse_expression_postfix({0, ref_to_addr(&memory)});
+    }
+    if cursor:is_likely_the_start_of_a_specialized_function() {
+        let memory : FunctionCall& = &cursor.allocator:allocate<FunctionCall>();
+        memory = cursor:parse_function_call(prefix);
+        return cursor:parse_expression_postfix({0, ref_to_addr(&memory)});
+    }
+    return prefix;
+}
+
+function parse_non_operator_expression : (cursor : Cursor&) -> Expression = {
+    let prefix : Expression = cursor:parse_non_operator_expression_prefix();
+    return cursor:parse_expression_postfix(prefix);
+}
+
+function parse_non_operator_expression_prefix : (cursor : Cursor&) -> Expression = {
+    if cursor:try_skip_next_and_surrounding_white_space("(") {
+        let expression : Expression = cursor:parse_expression();
+        cursor:expect_next_skipping_ws(")");
+        return expression;
+    }
+
+    // Constants
+    if cursor:is_next("true") | cursor:is_next("false") {
+        let constant : Constant& = &cursor.allocator:allocate<Constant>();
+        constant = {3, cursor:get_next_bool_token()};
+        return {1, ref_to_addr(&constant)};
+    }
+    if ascii_is_digit(cursor:get_char()) {
+        // TODO: float support
+        let constant : Constant& = &cursor.allocator:allocate<Constant>();
+        constant = {2, cursor:get_next_numeric_token()};
+        return {1, ref_to_addr(&constant)};
+    }
+    if cursor:is_next("\"") {
+        let constant : Constant& = &cursor.allocator:allocate<Constant>();
+        constant = {0, cursor:get_next_string_literal_token()};
+        return {1, ref_to_addr(&constant)};
+    }
+    if cursor:is_next("@") {
+        let constant : Constant& = &cursor.allocator:allocate<Constant>();
+        constant = {4, cursor:get_next_at_identifier()};
+        return {1, ref_to_addr(&constant)};
+    }
+
+    // Everything else
+    if cursor:is_next("{") {
+        return cursor:parse_initializer_list();
+    }
+
+    if ascii_is_text_token_start_char(cursor:get_char()) {
+        let variable_access : VariableAccess& = &cursor.allocator:allocate<VariableAccess>();
+
+        let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+        variable_access = {name};
+        return {4, ref_to_addr(&variable_access)};
+    }
+
+    syntax_error(&cursor, sv("TODO: Unexpected symbol '%'"), as_arithmetic(cursor:get_char()));
     return {0, 0};
+}
+
+function parse_maybe_unary_expression : (cursor : Cursor&) -> Expression = {
+    if is_one_of(cursor:get_char(), "!"[0], "-"[0], "+"[0], "~"[0], "&"[0]) {
+        let name : ProgramSlice = {cursor.position, cursor.position + 1};
+        cursor.position += 1;
+        cursor:try_skip_white_space();
+
+        let rhs : Expression = cursor:parse_maybe_unary_expression();
+
+        let operator_call : UnaryOperator& = &cursor.allocator:allocate<UnaryOperator>();
+        operator_call = {name, rhs};
+
+        return {9, ref_to_addr(&operator_call)};
+    }
+    return cursor:parse_non_operator_expression();
+}
+
+function [T] parse_next_operator_subexpression : (cursor: Cursor&, op_iter : T) -> Expression = {
+    if op_iter:has_next() {
+        return cursor:parse_expression_with_order_of_operator(op_iter);
+    } else {
+        return cursor:parse_maybe_unary_expression();
+    }
+}
+
+function [T] parse_expression_with_order_of_operator : (cursor : Cursor&, op_iter : T) -> Expression = {
+    // TODO: make the pattern matching robust enough to put this in the standard library
+    let current_op : StringView = op_iter:__builtin_get_next();
+    let has_next_op : bool = op_iter:has_next();
+
+    let lhs : Expression = cursor:parse_next_operator_subexpression(op_iter);
+    while cursor:try_skip_next_operator_and_ws(current_op) {
+        let rhs : Expression = cursor:parse_next_operator_subexpression(op_iter);
+
+        let operator_call : Operator& = &cursor.allocator:allocate<Operator>();
+        operator_call = {current_op, lhs, rhs};
+
+        lhs = {8, ref_to_addr(&operator_call)};
+    }
+    return lhs;
+}
+
+function parse_expression : (cursor : Cursor&) -> Expression = {
+    // TODO: this size argument needs to somehow be automatic
+    // TODO: all items on the same line should have the same priority
+    let order_of_operation : StringView[21] = {
+        sv("or"),
+        sv("and"),
+        sv("=="), sv("<"), sv(">"), sv(">="), sv("<="), sv("!="), sv("<=>"),
+        sv("|"),
+        sv("^"),
+        sv("&"),
+        sv("<<"), sv(">>"),
+        sv("+"), sv("-"),
+        sv("@"), sv("*"), sv("/"), sv("%"),
+        sv("**"),
+    };
+    return cursor:parse_expression_with_order_of_operator(order_of_operation:get_iter());
+}
+
+function parse_either_assignment_or_expression : (cursor : Cursor&) -> Line = {
+    let lhs : Expression = cursor:parse_expression();
+    if cursor:try_skip_next_and_surrounding_white_space(";") {
+        // We've reached the end of the line, this must just be an expression
+        let expression_memory : Expression& = &cursor.allocator:allocate<Expression>();
+        expression_memory = lhs;
+        return {0, ref_to_addr(&expression_memory)};
+    }
+
+    // The line hasn't finished, this must be an assignment
+    let assignment_operator : ProgramSlice = cursor:get_next_assignment();
+    let rhs : Expression = cursor:parse_expression();
+
+    let assignment_memory : Assignment& = &cursor.allocator:allocate<Assignment>();
+    assignment_memory = {lhs, assignment_operator, rhs};
+
+    cursor:expect_next_skipping_ws(";");
+    return {1, ref_to_addr(&assignment_memory)};
 }
 
 function parse_if : (cursor : Cursor&) -> If = {
@@ -778,7 +1115,7 @@ function parse_for : (cursor : Cursor&) -> For = {
     // TODO: accept type hints
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
-    cursor:expect_next("in");
+    cursor:expect_next_skipping_ws("in");
 
     let expression : Expression = cursor:parse_expression();
     let scope : Scope = cursor:parse_scope();
@@ -790,12 +1127,17 @@ function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
-    cursor:expect_next(":");
+    cursor:expect_next_skipping_ws(":");
 
     let type : Type = cursor:parse_type();
+
+    if !cursor:try_skip_next_and_surrounding_white_space("=") {
+        syntax_error(&cursor, sv("TODO: a constant variable cannot be left uninitialized"));
+    }
+
     let expression : Expression = cursor:parse_expression();
 
-    cursor:expect_next(";");
+    cursor:expect_next_skipping_ws(";");
     return {true, variable_name, type, make_optional(expression)};
 }
 
@@ -804,26 +1146,25 @@ function parse_let_declaration : (cursor : Cursor&) -> Declaration = {
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
-    cursor:expect_next(":");
+    cursor:expect_next_skipping_ws(":");
 
     let type : Type = cursor:parse_type();
 
     let expression_opt : Optional<Expression>;
-    if cursor:is_next(";") {
-        expression_opt = make_optional<Expression>();
-    } else {
+    if cursor:try_skip_next_and_surrounding_white_space("=") {
         expression_opt = make_optional(cursor:parse_expression());
+    } else {
+        expression_opt = make_optional<Expression>();
     }
 
-    cursor:expect_next(";");
+    cursor:expect_next_skipping_ws(";");
     return {false, variable_name, type, expression_opt};
 }
-
 
 function parse_return : (cursor : Cursor&) -> Return = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("return"));
     let expression : Expression = cursor:parse_expression();
-    cursor:expect_next(";");
+    cursor:expect_next_skipping_ws(";");
     return {expression};
 }
 
@@ -866,10 +1207,7 @@ function parse_line : (cursor : Cursor&) -> Line = {
         return {7, ref_to_addr(&pointer)};
     }
 
-    // The line is not a statement, it must be an expression or an assignment
-    // TODO:
-    runtime_assert(false);
-    return {0, 0};
+    return cursor:parse_either_assignment_or_expression();
 }
 
 function parse_scope : (cursor : Cursor&) -> Scope = {
@@ -885,7 +1223,7 @@ function parse_scope : (cursor : Cursor&) -> Scope = {
     return result;
 }
 
-function parse_function_generics : (cursor : Cursor&) -> Vector<GenericDefinition> = {
+function parse_function_definition_generics_definition : (cursor : Cursor&) -> Vector<GenericDefinition> = {
     let generics : Vector<GenericDefinition>; // Uninitialized
 
     if cursor:is_next("[") {
@@ -897,81 +1235,81 @@ function parse_function_generics : (cursor : Cursor&) -> Vector<GenericDefinitio
     return generics;
 }
 
-function parse_function_args : (cursor : Cursor&) -> Vector<TypedMember> = {
-    cursor:expect_next(":");
-    cursor:expect_next("(");
+function parse_function_definition_args : (cursor : Cursor&) -> Vector<TypedMember> = {
+    cursor:expect_next_skipping_ws(":");
+    cursor:expect_next_skipping_ws("(");
     return cursor:parse_comma_separated_named_members(sv(")"));
 }
 
-function parse_function_return_type : (cursor : Cursor&) -> Type = {
-    cursor:expect_next("->");
+function parse_function_definition_return_type : (cursor : Cursor&) -> Type = {
+    cursor:expect_next_skipping_ws("->");
     return cursor:parse_type();
 }
 
 function parse_function_body : (cursor : Cursor&) -> Scope = {
-    cursor:expect_next("=");
+    cursor:expect_next_skipping_ws("=");
     return cursor:parse_scope();
 }
 
-function parse_graphene_function : (cursor : Cursor&) -> FunctionDefinition = {
+function parse_graphene_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("function"));
 
-    let generics : Vector<GenericDefinition> = cursor:parse_function_generics();
+    let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    let args : Vector<TypedMember> = cursor:parse_function_args();
-    let return_type : Type = cursor:parse_function_return_type();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
+    let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
     return {0, name, generics, args, return_type, scope};
 }
 
-function parse_implicit_function : (cursor : Cursor&) -> FunctionDefinition = {
+function parse_implicit_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@implicit"));
 
-    let generics : Vector<GenericDefinition> = cursor:parse_function_generics();
+    let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
     if !is_one_of(name:to_string_view(cursor.program), sv("has_next"), sv("get_next"), sv("destruct")) {
         syntax_error(&cursor, sv("TODO: Only 'has_next', 'get_next', and 'destruct' are valid implicit functions"));
     }
 
-    let args : Vector<TypedMember> = cursor:parse_function_args();
-    let return_type : Type = cursor:parse_function_return_type();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
+    let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
     return {1, name, generics, args, return_type, scope};
 }
 
-function parse_operator_function : (cursor : Cursor&) -> FunctionDefinition = {
+function parse_operator_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@operator"));
 
-    let generics : Vector<GenericDefinition> = cursor:parse_function_generics();
+    let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
     let name : ProgramSlice = cursor:get_next_operator();
-    let args : Vector<TypedMember> = cursor:parse_function_args();
-    let return_type : Type = cursor:parse_function_return_type();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
+    let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
     return {2, name, generics, args, return_type, scope};
 }
 
-function parse_assignment_function : (cursor : Cursor&) -> FunctionDefinition = {
+function parse_assignment_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@assignment"));
 
-    let generics : Vector<GenericDefinition> = cursor:parse_function_generics();
+    let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
     let name : ProgramSlice = cursor:get_next_assignment();
-    let args : Vector<TypedMember> = cursor:parse_function_args();
-    let return_type : Type = cursor:parse_function_return_type();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
+    let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
     return {4, name, generics, args, return_type, scope};
 }
 
-function parse_foreign_function : (cursor : Cursor&) -> FunctionDefinition = {
+function parse_foreign_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("foreign"));
 
-    let name : ProgramSlice = cursor:get_next_assignment();
-    let args : Vector<TypedMember> = cursor:parse_function_args();
-    let return_type : Type = cursor:parse_function_return_type();
+    let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
+    let return_type : Type = cursor:parse_function_definition_return_type();
 
     let empty_generics : Vector<GenericDefinition> = make_vector<GenericDefinition>(&cursor.allocator);
     let empty_scope : Scope = { make_vector<Line>(&cursor.allocator) };
@@ -1004,33 +1342,24 @@ function parse_next_top_level_feature : (cursor : Cursor&) -> TopLevelFeature = 
     {
         let memory : FunctionDefinition& = &cursor.allocator:allocate<FunctionDefinition>();
 
-        // function
         if cursor:is_next("function") {
-            memory = cursor:parse_graphene_function();
+            memory = cursor:parse_graphene_function_definition();
             return {1, ref_to_addr(&memory)};
         }
-
-        // foreign
         if cursor:is_next("foreign") {
-            memory = cursor:parse_foreign_function();
+            memory = cursor:parse_foreign_function_definition();
             return {1, ref_to_addr(&memory)};
         }
-
-        // @implicit
         if cursor:is_next("@implicit") {
-            memory = cursor:parse_implicit_function();
+            memory = cursor:parse_implicit_function_definition();
             return {1, ref_to_addr(&memory)};
         }
-
-        // @assignment
         if cursor:is_next("@assignment") {
-            memory = cursor:parse_assignment_function();
+            memory = cursor:parse_assignment_function_definition();
             return {1, ref_to_addr(&memory)};
         }
-
-        // @operator
         if cursor:is_next("@operator") {
-            memory = cursor:parse_graphene_function();
+            memory = cursor:parse_operator_function_definition();
             return {1, ref_to_addr(&memory)};
         }
 
