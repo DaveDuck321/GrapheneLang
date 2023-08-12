@@ -84,3 +84,19 @@ function ascii_to_upper : (char : u8) -> u8 = {
     }
     return char;
 }
+
+function ascii_is_matched_pair : (lhs : u8, rhs : u8) -> bool = {
+    if (lhs == "("[0]) & (rhs == ")"[0]) {
+        return true;
+    }
+    if (lhs == "["[0]) & (rhs == "]"[0]) {
+        return true;
+    }
+    if (lhs == "<"[0]) & (rhs == ">"[0]) {
+        return true;
+    }
+    if (lhs == "{"[0]) & (rhs == "}"[0]) {
+        return true;
+    }
+    return false;
+}
