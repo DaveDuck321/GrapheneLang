@@ -88,6 +88,39 @@ function stringify : (buffer : u8[&], number : isize) -> StringView = {
     return result;
 }
 
+function stringify : (buffer : u8[&], number : u32) -> StringView = {
+    if number == 0x0 {
+        buffer[0] = "0"[0];
+        return {&buffer, 1};
+    }
+
+    let lookup_table : u8[16] = {
+        "0"[0], "1"[0], "2"[0], "3"[0], "4"[0], "5"[0], "6"[0], "7"[0], "8"[0], "9"[0], "A"[0], "B"[0], "C"[0], "D"[0], "E"[0], "F"[0]
+    };
+
+    let length : isize = 0;
+    while number != 0x0 {
+        buffer[length] = lookup_table[as_arithmetic(number & 0xF)];
+
+        number >>= 4;
+        length += 1;
+    }
+
+    let result : StringView = {&buffer, length};
+
+    // XXX: its a bit unfair to call it a `StringView` when its mutated in-place
+    result:reverse();
+    return result;
+}
+
+function stringify : (buffer : u8[&], value : bool) -> StringView = {
+    if value {
+        return sv("true");
+    } else {
+        return sv("false");
+    }
+}
+
 /* TODO: these overloads fail an assert
 function [@Len, Args...] printf : (format_string : u8[@Len], args : Args...) -> void = {
     printf(make_span(&format_string), args...);
