@@ -49,10 +49,6 @@ class DriverArguments(Tap):
     target: str = "x86_64_linux"
     """Specify the architecture and platform to build for."""
 
-    static: bool = False
-    """Prevent linking with any shared libaries, generate a static executable
-    instead."""
-
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
 
@@ -136,8 +132,6 @@ def main() -> None:
         # being linked with the executable.
         extra_flags.append("-nostdlib")
         extra_flags.append(str(parent_dir / "std" / get_target() / "runtime.S"))
-    if args.static:
-        extra_flags.append("-static")
 
     if will_emit_binary:
         subprocess.run(
@@ -145,6 +139,7 @@ def main() -> None:
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 f"-O{args.optimize}",
                 "-fuse-ld=lld",  # Use the LLVM cross-linker.
+                "-static",
                 "-target",
                 get_target_triple(),
                 "-o",
