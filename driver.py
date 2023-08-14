@@ -102,12 +102,14 @@ def main() -> None:
     # Use clang to finish compile
     assert args.optimize != "2", "@DaveDuck321's coward assert!"
 
+    clang = getenv("GRAPHENE_CLANG_CMD", "clang")
+
     if will_emit_optimized_llvm:
         # TODO: the llvm optimization pipeline is run twice if we also want a
         # binary
         subprocess.run(
             [
-                getenv("GRAPHENE_CLANG_CMD", "clang"),
+                clang,
                 "-S",
                 "-emit-llvm",
                 f"-O{args.optimize}",
@@ -136,7 +138,7 @@ def main() -> None:
     if will_emit_binary:
         subprocess.run(
             [
-                getenv("GRAPHENE_CLANG_CMD", "clang"),
+                clang,
                 f"-O{args.optimize}",
                 "-fuse-ld=lld",  # Use the LLVM cross-linker.
                 "-static",
