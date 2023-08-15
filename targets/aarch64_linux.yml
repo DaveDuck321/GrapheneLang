@@ -1,0 +1,44 @@
+arch: aarch64
+# All general-purpose registers are 64-bit, but can also be accessed in a 32-bit
+# context.
+# https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#611general-purpose-registers
+# To add 8-bit or 16-bit numbers, the processor has to use shift instructions
+# (sxt{b,h} after the add instruction to clear the additional (carry out) bit
+# of the sum.
+arch_native_widths:
+  - 4
+  - 8
+# https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst
+abi: aapcs64
+endianness: little
+mangling: elf
+# The stack must always be quad-word aligned (note that a word is 4 bytes).
+# https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#6451universal-stack-constraints
+stack_align: 16
+# The int type is a word.
+# https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#1011arithmetic-types
+int_type:
+  size: 4
+  align: 4
+llvm_target_triple: aarch64-unknown-linux-gnu
+# The ABI defines the size and alignment of all fundamental data types.
+# https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#51fundamental-data-types
+llvm_types:
+  ptr:
+    size: 8
+    align: 8
+  i1:
+    size: 1
+    align: 1
+  i8:
+    size: 1
+    align: 1
+  i16:
+    size: 2
+    align: 2
+  i32:
+    size: 4
+    align: 4
+  i64:
+    size: 8
+    align: 8
