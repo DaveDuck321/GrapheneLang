@@ -1,4 +1,5 @@
 import fnmatch
+import platform
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
@@ -203,8 +204,11 @@ def run_tests(tests: list[Path], workers: int) -> int:
 
 
 def build_jit_dependencies() -> None:
-    # TODO auto-detect host's target.
-    runtime_src_path = PARENT_DIR.parent / "std" / "x86_64_linux" / "runtime.S"
+    # XXX this is kinda jank.
+    host_target = f"{platform.machine()}_{platform.system()}".lower()
+    print("Auto-detected", host_target, "target")
+
+    runtime_src_path = PARENT_DIR.parent / "std" / host_target / "runtime.S"
     assert runtime_src_path.is_file()
 
     # Don't compile the runtime again if it's up-to-date.
