@@ -10,9 +10,9 @@ jobs:
     strategy:
       matrix:
         llvm-version: [15, 16]
-        runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
+        # runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
 
-    runs-on: ${{ matrix.runner }}
+    runs-on: buildjet-4vcpu-ubuntu-2204
 
     env:
       GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
