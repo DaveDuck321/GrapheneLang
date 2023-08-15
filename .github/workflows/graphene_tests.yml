@@ -7,11 +7,12 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-
     strategy:
       matrix:
         llvm-version: [15, 16]
+        runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
+
+    runs-on: ${{ matrix.runner }}
 
     env:
       GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
