@@ -31,23 +31,24 @@ _start:
     ldr     x0, [sp]
     add     x1, sp, #8
 
+    # Zero the frame pointer and the link register to indicate the end of the
+    # frame record chain. Technically, we are supposed to push these on the
+    # stack, but the prologue of main can do that if it wants too (clang omits
+    # frame pointers by default, so only the link register would be saved).
+    # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#646the-frame-pointer
+    mov     lr, xzr
+    mov     fp, xzr
+
     # lli thinks it called main(), so argc and argv are already in r0 and r1,
     # respectively. Thus, skip the code that retrieves them from the stack.
 .global _lli_start
 _lli_start:
 
-    # TODO 6.2.1.4 The Frame Pointer
-
-    # The stack must be double-word aligned at a public interface. [aapcs32]
-    # FIXME
-    # and     sp, sp, #-16
-    # mov     fp, sp
-
     # Call main.
     bl      main
 
     # exit(int status)
-    mov     w8, 93
+    mov     w8, #93
     svc     #0
 
 # For arm64 on Linux:
