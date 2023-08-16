@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
 from sys import stderr
-from typing import Any, Optional
+from typing import Optional
 
 import yaml
 
@@ -45,11 +45,15 @@ class ManglingStyle(Enum):
 
 class ABI(Enum):
     SystemV_AMD64 = 0
+    ARM_EABI = 1
+    AAPCS64 = 2
 
     def compute_struct_size(
         self, member_sizes: list[int], member_aligns: list[int]
     ) -> int:
-        if self != self.SystemV_AMD64:
+        # Reuse the System V AMD64 ABI implementation for AAPCS64.
+        # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#59composite-types
+        if self not in (self.SystemV_AMD64, self.AAPCS64):
             raise NotImplementedError
 
         # Return the size of the struct as set by the System V AMD64 ABI.
@@ -86,7 +90,9 @@ class ABI(Enum):
         return struct_size
 
     def compute_struct_alignment(self, member_aligns: list[int]) -> int:
-        if self != self.SystemV_AMD64:
+        # Reuse the System V AMD64 ABI implementation for AAPCS64.
+        # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#591aggregates
+        if self not in (self.SystemV_AMD64, self.AAPCS64):
             raise NotImplementedError
 
         # Structures and unions assume the alignment of their most strictly
@@ -94,19 +100,29 @@ class ABI(Enum):
         return max(member_aligns) if member_aligns else 1
 
     def compute_stack_array_alignment(self, array_size: int, member_align: int) -> int:
-        if self != self.SystemV_AMD64:
-            raise NotImplementedError
+        if self == self.SystemV_AMD64:
+            # An array uses the same alignment as its elements, except that a
+            # local or global array variable of length at least 16 bytes or a
+            # C99 variable-length array variable always has alignment of at
+            # least 16 bytes. [docs/abi.pdf, Section 3.1.2]
+            return member_align if array_size < 16 else max(member_align, 16)
 
-        # An array uses the same alignment as its elements, except that a local
-        # or global array variable of length at least 16 bytes or a C99
-        # variable-length array variable always has alignment of at least 16
-        # bytes. [docs/abi.pdf, Section 3.1.2]
-        return member_align if array_size < 16 else max(member_align, 16)
+        if self == self.AAPCS64:
+            # The alignment of an array shall be the alignment of its base type.
+            # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#593arrays
+            return member_align
+
+        raise NotImplementedError()
 
     @classmethod
     def from_str(cls, string: str) -> "ABI":
         if string == "SystemV_AMD64":
             return cls.SystemV_AMD64
+        if string == "arm_eabi":
+            # FIXME actually implement the ABI...
+            return cls.ARM_EABI
+        if string == "aapcs64":
+            return cls.AAPCS64
         raise NotImplementedError()
 
 
