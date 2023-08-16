@@ -1,5 +1,4 @@
 import fnmatch
-import platform
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +18,13 @@ TESTS_DIR = PARENT_DIR
 OUT_DIR = TESTS_DIR / "out"
 RUNTIME_OBJ_PATH = OUT_DIR / "runtime.o"
 DRIVER_PATH = PARENT_DIR.parent / "glang"
+
+HOST_TARGET = subprocess.run(
+    [DRIVER_PATH, "--print-host-target"],
+    check=True,
+    stdout=subprocess.PIPE,
+    text=True,
+).stdout.strip()
 
 
 class TestFailure(RuntimeError):
@@ -115,9 +121,14 @@ def run_command(
     return result.stdout
 
 
-def run_test(file_path: Path) -> None:
+def run_test(file_path: Path) -> bool:
     assert file_path.exists()
     config = parse_file(file_path)
+
+    # @FOR
+    if config.for_target is not None and config.for_target != HOST_TARGET:
+        # Skip this test.
+        return False
 
     # @COMPILE (mandatory)
     assert config.compile
@@ -168,6 +179,8 @@ def run_test(file_path: Path) -> None:
             ir_output,
         )
 
+    return True
+
 
 # Mutex to ensure prints remain ordered (within each test)
 io_lock = Lock()
@@ -177,10 +190,12 @@ def run_test_print_result(test_path: Path) -> bool:
     test_name = str(test_path.relative_to(PARENT_DIR))
 
     try:
-        run_test(test_path)
-
-        with io_lock:
-            print(f"PASSED '{test_name}'")
+        if run_test(test_path):
+            with io_lock:
+                print(f"PASSED '{test_name}'")
+        else:
+            with io_lock:
+                print(f"SKIPPED '{test_name}'")
         return True
     except TestFailure as error:
         with io_lock:
@@ -194,6 +209,7 @@ def run_tests(tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
         passed = sum(executor.map(run_test_print_result, tests))
 
+    # TODO print skipped test count.
     failed = len(tests) - passed
     if failed:
         print(f"FAILED {failed}/{len(tests)} TESTS!")
@@ -204,14 +220,7 @@ def run_tests(tests: list[Path], workers: int) -> int:
 
 
 def build_jit_dependencies() -> None:
-    host_target = subprocess.run(
-        [DRIVER_PATH, "--print-host-target"],
-        check=True,
-        stdout=subprocess.PIPE,
-        text=True,
-    ).stdout.strip()
-
-    runtime_src_path = PARENT_DIR.parent / "std" / host_target / "runtime.S"
+    runtime_src_path = PARENT_DIR.parent / "std" / HOST_TARGET / "runtime.S"
     assert runtime_src_path.is_file()
 
     # Don't compile the runtime again if it's up-to-date.
