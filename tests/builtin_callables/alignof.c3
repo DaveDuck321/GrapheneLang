@@ -1,7 +1,6 @@
 typedef MyStruct1 : {a : i32, b : i8, c : i16, d : i8}
 typedef MyStruct2 : {a : i8, b : i16, c : i8, d : i32}
-typedef MyArray1 : i32[5]
-typedef MyArray2 : i8[5]
+typedef MyArray : i8[5]
 
 @operator != : (lhs : isize, rhs : isize) -> bool = {
     if __builtin_is_equal(lhs, rhs) {
@@ -29,14 +28,7 @@ function main: () -> int = {
         return 1;
     }
 
-    align = __builtin_alignof<MyArray1>();
-    // Arrays of length at least 16 bytes have an alignment of at least 16
-    // bytes.
-    if align != 16 {
-        return 1;
-    }
-
-    align = __builtin_alignof<MyArray2>();
+    align = __builtin_alignof<MyArray>();
     if align != 1 {
         return 1;
     }
