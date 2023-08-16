@@ -29,7 +29,6 @@ class PrintHostTargetAction(Action):
 
 class DriverArguments(Tap):
     # TODO support multiple source files.
-    # TODO target the host by default.
     input: Path
     output: Optional[Path] = None
 
@@ -63,7 +62,7 @@ class DriverArguments(Tap):
     use_crt: bool = False
     """Link with the C runtime and standard library instead of Graphene's."""
 
-    target: str = "x86_64_linux"
+    target: str = get_host_target()
     """Specify the architecture and platform to build for."""
 
     print_host_target: bool = False
