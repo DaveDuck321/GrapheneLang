@@ -23,26 +23,6 @@ function sys_fork : () -> i64 = {
     return _syscall_0(/* fork */ 57);
 }
 
-// TODO: support enums (or similar)
-function SYS_PROT_READ : () -> u32 = {
-    // https://sites.uclouvain.be/SystInfo/usr/include/bits/mman.h.html
-    return 0x01;
-}
-function SYS_PROT_WRITE : () -> u32 = {
-    // https://sites.uclouvain.be/SystInfo/usr/include/bits/mman.h.html
-    return 0x02;
-}
-
-function SYS_MAP_PRIVATE : () -> u32 = {
-    // https://sites.uclouvain.be/SystInfo/usr/include/bits/mman.h.html
-    return 0x02;
-}
-
-function SYS_MAP_ANONYMOUS : () -> u32 = {
-    // https://sites.uclouvain.be/SystInfo/usr/include/bits/mman.h.html
-    return 0x20;
-}
-
 function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
     return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, 9);
 }

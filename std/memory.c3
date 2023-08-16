@@ -1,6 +1,7 @@
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
 @require_once "logical.c3"
+@require_once "sys/mman.c3"
 @require_once "syscalls.c3"
 @require_once "util.c3"
 @require_once "wrappers.c3"
