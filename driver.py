@@ -1,13 +1,30 @@
 import subprocess
 import sys
+from argparse import Action, ArgumentParser, Namespace
+from collections.abc import Sequence
 from os import getenv
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from tap import Tap
 
 from graphene_parser import generate_ir_from_source
-from target import get_target, get_target_triple, load_target_config
+from target import get_host_target, get_target, get_target_triple, load_target_config
+
+
+class PrintHostTargetAction(Action):
+    def __call__(
+        self,
+        parser: ArgumentParser,
+        namespace: Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
+        # Stop parsing and exit after printing the host's target. If we keep
+        # parsing, then the parser complains that `input`, a required position
+        # argument, is missing.
+        print(get_host_target())
+        parser.exit()
 
 
 class DriverArguments(Tap):
@@ -49,6 +66,9 @@ class DriverArguments(Tap):
     target: str = "x86_64_linux"
     """Specify the architecture and platform to build for."""
 
+    print_host_target: bool = False
+    """Print the target corresponding to the host."""
+
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
 
@@ -58,6 +78,7 @@ class DriverArguments(Tap):
         self.add_argument("-c", "--compile_to_object")
         self.add_argument("-I", "--include_path")
         self.add_argument("-O", "--optimize")
+        self.add_argument("--print_host_target", nargs=0, action=PrintHostTargetAction)
 
 
 def main() -> None:
