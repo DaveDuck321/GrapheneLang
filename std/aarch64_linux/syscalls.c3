@@ -26,3 +26,7 @@ function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
 function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
     return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, /* mmap */ 222);
 }
+
+function sys_munmap : (addr: isize, length : isize) -> void = {
+    _syscall_2(addr, length, /* munmap */ 215);
+}
