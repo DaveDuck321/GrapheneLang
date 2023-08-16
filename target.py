@@ -1,3 +1,4 @@
+import platform
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -280,3 +281,7 @@ def get_int_type_info() -> TypeInfo:
 
 def get_abi() -> ABI:
     return _get_config().abi
+
+
+def get_host_target() -> str:
+    return f"{platform.machine()}_{platform.system()}".lower()
