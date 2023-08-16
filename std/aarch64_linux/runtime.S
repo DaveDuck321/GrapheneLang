@@ -19,14 +19,17 @@
 
 .global _start
 _start:
-    # The first value on the stack is the argument count (argc). Pop it and
-    # place it into r0, the register that stores the first argument to be
-    # passed into main().
+    # The first value on the stack is the argument count (argc). Load it into
+    # r0, the register that stores the first argument to be passed into main().
     # Next on the stack is the argument pointers array (argv). Set r1, the
     # register that stores the second argument of main(), to its address.
-    # This is not part of the EABI, but it matches the SystemV AMD64 ABI.
-    # pop     {r0}
-    # mov     r1, sp
+    # NOTE the stack is (presumably!) already aligned to a 16-byte boundary at
+    # this point. If we deallocate argc (i.e. set sp = sp + 8), then the stack
+    # will no longer be aligned. If we then try to re-align the stack, we'll end
+    # up re-allocating those 8 bytes. Therefore, don't bother popping argc off
+    # the stack.
+    ldr     x0, [sp]
+    add     x1, sp, #8
 
     # lli thinks it called main(), so argc and argv are already in r0 and r1,
     # respectively. Thus, skip the code that retrieves them from the stack.
