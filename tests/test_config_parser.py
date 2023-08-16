@@ -22,6 +22,7 @@ class ExpectedOutput:
 
 @dataclass
 class TestConfig:
+    for_target: Optional[str]
     compile: Optional[ExpectedOutput]
     compile_args: list[str]
     grep_ir_strs: list[str]
@@ -39,7 +40,7 @@ class ConfigInterpreter(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.config = TestConfig(None, [], [], None, [])
+        self.config = TestConfig(None, None, [], [], None, [])
 
     @staticmethod
     def _format_msg(msg: str) -> list[str]:
@@ -75,6 +76,12 @@ class ConfigInterpreter(Interpreter):
             expected_output.status = 1
 
         return expected_output
+
+    @v_args(inline=True)
+    def for_cmd(self, target: str) -> None:
+        assert self.config.for_target is None
+
+        self.config.for_target = target
 
     @v_args(inline=True)
     def compile_cmd(self, *trees: Tree) -> None:

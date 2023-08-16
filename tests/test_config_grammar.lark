@@ -1,14 +1,16 @@
 %import common.INT
+%import common.CNAME
 
 %ignore " "
 %ignore "\n"
 
-start: compile_cmd (grep_ir_cmd)* (run_cmd)?
+start: (for_cmd)? compile_cmd (grep_ir_cmd)* (run_cmd)?
 
 ARG: /[-\w]+/  // Doesn't match ;
 
 expect_status: "EXPECT" INT
 expect_msg: "EXPECT" (/OUT/ | /ERR/) /([^@].*\n?)+/
+for_cmd: "@FOR" CNAME
 compile_cmd: "@COMPILE" ARG* [";" expect_status] [";" expect_msg]
 grep_ir_cmd: "@GREP_IR" /.+\n?/
 run_cmd: "@RUN" ARG* [";" expect_status] [";" expect_msg]
