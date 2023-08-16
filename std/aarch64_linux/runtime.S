@@ -28,6 +28,11 @@ _start:
     # pop     {r0}
     # mov     r1, sp
 
+    # lli thinks it called main(), so argc and argv are already in r0 and r1,
+    # respectively. Thus, skip the code that retrieves them from the stack.
+.global _lli_start
+_lli_start:
+
     # TODO 6.2.1.4 The Frame Pointer
 
     # The stack must be double-word aligned at a public interface. [aapcs32]
