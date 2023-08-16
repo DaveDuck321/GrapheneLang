@@ -51,27 +51,16 @@ _lli_start:
     mov     w8, #93
     svc     #0
 
-# For arm64 on Linux:
+# For aarch64 on Linux:
 # - pass arguments with x0-x5
 # - pass the system call number on w8
 # - do the syscall with `svc #0`
 # - the two return values are on x0 and x1
 #
-# FIXME all below
-# However, user space only uses r0-r3 to pass arguments. Any other arguments are
-# pushed on the stack (in order, so 4th argument first, then 5th argument below,
-# etc). Therefore, the syscall helpers need to save r4-r7 first and then pop
-# the rest of the arguments from the stack.
-
-# Syscall number is passed via r7, but r7 must be preserved, so save it on the
-# stack.
-# This helper is only appropriate for syscalls with less than 3 arguments, as
-# it assumes that the caller has not passed any arguments with the stack.
-
-# FIXME we're implicitly using the red zone, but I don't think the EABI allows
-# for that. 6.2.1.1 A process may only store data in the closed interval of the
-# entire stack delimited by [SP, stack base - 1] (where SP is the value of
-# register r13).
+# User space passes the first eight arguments using registers r0-r7. Therefore,
+# there are sufficient registers for all possible syscalls, and the helpers only
+# need to move the syscall number into w8. Register r8 is not callee-saved, so
+# we should be able to just overwrite it.
 
 #define MAKE_SYSCALL(arg_count, syscall_number_reg) \
     .global _syscall_ ## arg_count;                 \
