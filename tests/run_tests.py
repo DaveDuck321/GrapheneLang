@@ -204,9 +204,12 @@ def run_tests(tests: list[Path], workers: int) -> int:
 
 
 def build_jit_dependencies() -> None:
-    # XXX this is kinda jank.
-    host_target = f"{platform.machine()}_{platform.system()}".lower()
-    print("Auto-detected", host_target, "target")
+    host_target = subprocess.run(
+        [DRIVER_PATH, "--print-host-target"],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
 
     runtime_src_path = PARENT_DIR.parent / "std" / host_target / "runtime.S"
     assert runtime_src_path.is_file()
