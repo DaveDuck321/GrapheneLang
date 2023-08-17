@@ -4,6 +4,7 @@ import sys
 from os import getenv
 from pathlib import Path
 
+from parser.lexer_parser import init_lexer_parser
 from graphene_parser import generate_ir_from_source
 from target import get_target_triple, load_target_config
 
@@ -81,6 +82,7 @@ def main() -> None:
 
     # Compile to ir
     load_target_config(args.target)
+    init_lexer_parser(False)
     ir = generate_ir_from_source(args.input[0], include_path, args.debug_compiler)
 
     if will_emit_llvm:

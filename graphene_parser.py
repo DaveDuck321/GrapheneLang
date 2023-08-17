@@ -5,11 +5,14 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Iterable, Optional, TypeGuard
 
-from lark import Lark, Token, Tree
-from lark.exceptions import UnexpectedInput, VisitError
-from lark.visitors import Interpreter, Transformer, v_args
-
 import codegen as cg
+from parser.lexer_parser import (
+    Interpreter,
+    run_lexer_parser,
+    Token,
+    Transformer,
+    Tree,
+)
 from codegen.user_facing_errors import (
     CircularImportException,
     ErrorWithLineInfo,
@@ -20,7 +23,6 @@ from codegen.user_facing_errors import (
     GenericHasGenericAnnotation,
     GrapheneError,
     InvalidMainReturnType,
-    InvalidSyntax,
     MissingFunctionReturn,
     PatternMatchDeductionFailure,
     RepeatedGenericName,
@@ -50,18 +52,30 @@ def get_optional_children(tree: Optional[Tree]) -> list[Any]:
     return tree.children
 
 
-def inline_and_wrap_user_facing_errors(context: str):
-    def wrapper(func, _, children, meta):
-        try:
-            func(*children)
-        except GrapheneError as exc:
-            raise ErrorWithLineInfo(
-                exc.message,
-                meta.line,
-                context,
-            ) from exc
+def inline_arguments(func):
+    def wrapper(obj, arg: Tree | Token):
+        if isinstance(arg, Token):
+            return func(obj, arg)
+        return func(obj, *arg.children)
 
-    return v_args(wrapper=wrapper)
+    return wrapper
+
+
+def inline_and_wrap_user_facing_errors(context: str):
+    def wrapper(func):
+        def wrap_user_facing_errors(obj, arg: Tree | Token):
+            try:
+                return inline_arguments(func)(obj, arg)
+            except GrapheneError as exc:
+                raise ErrorWithLineInfo(
+                    exc.message,
+                    arg.meta.start.line,
+                    context,
+                ) from exc
+
+        return wrap_user_facing_errors
+
+    return wrapper
 
 
 def search_include_path_for_file(
@@ -83,7 +97,7 @@ def search_include_path_for_file(
 
 
 def parse_generic_definition(definition: Token) -> cg.GenericArgument:
-    assert definition.type == "GENERIC_IDENTIFIER"
+    assert definition.name == "GENERIC_IDENTIFIER"
     return cg.GenericArgument(definition.value, definition.value[0] == "@")
 
 
@@ -92,18 +106,18 @@ class TypeTransformer(Transformer):
         super().__init__(visit_tokens=True)
         self._generic_args = generic_args
 
-    @v_args(inline=True)
+    @inline_arguments
     def compile_time_constant(
         self, constant: cg.CompileTimeConstant
     ) -> cg.CompileTimeConstant:
         assert isinstance(constant, cg.CompileTimeConstant)
         return constant
 
-    @v_args(inline=True)
+    @inline_arguments
     def SIGNED_INT(self, token: Token) -> cg.CompileTimeConstant:
-        return cg.NumericLiteralConstant(int(token))
+        return cg.NumericLiteralConstant(int(token.value))
 
-    @v_args(inline=True)
+    @inline_arguments
     def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> cg.CompileTimeConstant:
         if not token.value in self._generic_args:
             raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
@@ -112,12 +126,12 @@ class TypeTransformer(Transformer):
         assert isinstance(result, cg.CompileTimeConstant)  # TODO: user facing error
         return result
 
-    @v_args(inline=True)
+    @inline_arguments
     def type(self, child: cg.UnresolvedType) -> cg.UnresolvedType:
         assert isinstance(child, cg.UnresolvedType)
         return child
 
-    @v_args(inline=True)
+    @inline_arguments
     def type_name(
         self, name: Token, specialization_tree: Optional[Tree]
     ) -> cg.UnresolvedType:
@@ -135,40 +149,41 @@ class TypeTransformer(Transformer):
         assert is_unresolved_specialization_list(specialization)
         return cg.UnresolvedNamedType(name.value, specialization)
 
-    @v_args(inline=True)
+    @inline_arguments
     def ref_type(self, value_type: cg.UnresolvedType) -> cg.UnresolvedType:
         return cg.UnresolvedReferenceType(value_type)
 
-    @v_args(inline=True)
+    @inline_arguments
     def stack_array_type(
         self, element_type: cg.UnresolvedType, *dimensions: cg.CompileTimeConstant
     ) -> cg.UnresolvedType:
         return cg.UnresolvedStackArrayType(element_type, list(dimensions))
 
-    @v_args(inline=True)
+    @inline_arguments
     def heap_array_type(
         self, element_type: cg.UnresolvedType, *known_dimensions: cg.CompileTimeConstant
     ) -> cg.UnresolvedType:
         return cg.UnresolvedHeapArrayType(element_type, list(known_dimensions))
 
+    @inline_arguments
     def struct_type(
-        self, member_trees: list[Token | cg.UnresolvedType]
+        self, *member_trees: Token | cg.UnresolvedType
     ) -> cg.UnresolvedType:
         members: dict[str, cg.UnresolvedType] = {}
 
-        for member_name, member_type in in_pairs(member_trees):
-            assert isinstance(member_name, Token)
+        for member_token, member_type in in_pairs(member_trees):
+            assert isinstance(member_token, Token)
             assert isinstance(member_type, cg.UnresolvedType)
+            member_name = member_token.value
 
             if member_name in members:
-                assert isinstance(member_name.line, int)
                 raise StructMemberRedeclaration(
                     member_name,
                     members[member_name].format_for_output_to_user(),
-                    member_name.line,
+                    member_token.meta.start.line,
                 )
 
-            members[member_name.value] = member_type
+            members[member_name] = member_type
 
         # As of Python 3.7, dict preserves insertion order.
         return cg.UnresolvedStructType([(n, t) for n, t in members.items()])
@@ -188,10 +203,7 @@ class TypeTransformer(Transformer):
                 assert isinstance(item, int)
                 unresolved_mapping[name] = cg.NumericLiteralConstant(item)
 
-        try:
-            result = cls(unresolved_mapping).transform(tree)
-        except VisitError as exc:
-            raise exc.orig_exc
+        result = cls(unresolved_mapping).transform(tree)
 
         if isinstance(result, cg.CompileTimeConstant):
             return result.resolve()
@@ -203,22 +215,14 @@ class TypeTransformer(Transformer):
     def parse(
         cls, tree: Tree, generic_mapping: cg.UnresolvedGenericMapping
     ) -> cg.UnresolvedType:
-        try:
-            result = cls(generic_mapping).transform(tree)
-        except VisitError as exc:
-            raise exc.orig_exc
-
+        result = cls(generic_mapping).transform(tree)
         assert isinstance(result, cg.UnresolvedType)
         return result
 
     @classmethod
     def parse_specialization(cls, tree: Tree) -> cg.UnresolvedSpecializationItem:
-        try:
-            result = cls({}).transform(tree)
-        except VisitError as exc:
-            raise exc.orig_exc
-
-        assert isinstance(result, (cg.UnresolvedType, cg.UnresolvedSpecializationItem))
+        result = cls({}).transform(tree)
+        assert isinstance(result, cg.UnresolvedSpecializationItem)
         return result
 
 
@@ -235,8 +239,10 @@ class ParseTypeDefinitions(Interpreter):
     def _generic_typedef(
         self, prefix: Token, generic_definitions_tree: Tree, rhs_tree: Tree
     ) -> None:
-        assert prefix.line is not None
-        loc = SourceLocation(prefix.line, self._file, self._include_hierarchy)
+        assert prefix.meta.start.line is not None
+        loc = SourceLocation(
+            prefix.meta.start.line, self._file, self._include_hierarchy
+        )
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
         generic_definitions = []
@@ -247,8 +253,12 @@ class ParseTypeDefinitions(Interpreter):
             generic_definitions.append(definition)
 
             if definition.name in generic_mapping:
-                assert generic_tree.line is not None
-                raise RepeatedGenericName(generic_tree.value, generic_tree.line, prefix)
+                assert generic_tree.meta.start.line is not None
+                raise RepeatedGenericName(
+                    generic_tree.value,
+                    generic_tree.meta.start.line,
+                    prefix.value,
+                )
 
             generic_mapping[definition.name] = (
                 cg.GenericValueReference(definition.name)
@@ -267,8 +277,10 @@ class ParseTypeDefinitions(Interpreter):
         specialization: list[cg.UnresolvedSpecializationItem],
         rhs_tree: Tree,
     ) -> None:
-        assert prefix.line is not None
-        loc = SourceLocation(prefix.line, self._file, self._include_hierarchy)
+        assert prefix.meta.start.line is not None
+        loc = SourceLocation(
+            prefix.meta.start.line, self._file, self._include_hierarchy
+        )
 
         rhs_type = TypeTransformer.parse(rhs_tree, {})
         self._program.add_type_alias(
@@ -290,10 +302,11 @@ class ParseTypeDefinitions(Interpreter):
         self, type_name: Token, specialization_tree: Tree, rhs_tree: Tree
     ) -> None:
         # Note: partial specializations are not allowed, generic mapping is empty
-        specialization = [
-            TypeTransformer.parse_specialization(tree)
-            for tree in specialization_tree.children
-        ]
+        specialization = []
+        for tree in specialization_tree.children:
+            assert isinstance(tree, Tree)
+            specialization.append(TypeTransformer.parse_specialization(tree))
+
         self._specialized_typedef(type_name, specialization, rhs_tree)
 
 
@@ -327,14 +340,14 @@ class ParseFunctionSignatures(Interpreter):
     def generic_named_function(
         self,
         generic_definitions_tree: Tree,
-        generic_name: Token,
+        generic_token: Token,
         args_tree: Tree,
         return_type_tree: Tree,
         body_tree: Tree,
     ) -> None:
-        assert isinstance(generic_name, str)
+        assert isinstance(generic_token, Token)
         self._parse_generic_function_impl(
-            generic_name,
+            generic_token.value,
             generic_definitions_tree,
             args_tree,
             return_type_tree,
@@ -405,7 +418,7 @@ class ParseFunctionSignatures(Interpreter):
         assert self._current_file is not None
         assert self._include_hierarchy is not None
         location = SourceLocation(
-            args_tree.meta.line, self._current_file, self._include_hierarchy
+            args_tree.meta.start.line, self._current_file, self._include_hierarchy
         )
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
@@ -417,7 +430,7 @@ class ParseFunctionSignatures(Interpreter):
 
         for generic_token in generic_definitions_tree.children:
             assert isinstance(generic_token, Token)
-            if generic_token.type == "GENERIC_IDENTIFIER":
+            if generic_token.name == "GENERIC_IDENTIFIER":
                 generic = parse_generic_definition(generic_token)
                 generic_definitions.append(generic)
 
@@ -430,7 +443,7 @@ class ParseFunctionSignatures(Interpreter):
                         generic.name
                     )
             else:
-                assert generic_token.type == "GENERIC_PACK_IDENTIFIER"
+                assert generic_token.name == "GENERIC_PACK_IDENTIFIER"
                 # NOTE enforced by the grammar. We might want to relax this
                 # later and allow more than one pack per function.
                 assert variadic_type_pack_name is None
@@ -691,7 +704,7 @@ class ParseFunctionSignatures(Interpreter):
             assert self._current_file is not None
             assert self._include_hierarchy is not None
             location = SourceLocation(
-                args_tree.meta.line, self._current_file, self._include_hierarchy
+                args_tree.meta.start.line, self._current_file, self._include_hierarchy
             )
             self._function_body_trees.append((location, func, body_tree, {}))
 
@@ -732,7 +745,6 @@ class ParseFunctionSignatures(Interpreter):
 class ParseImports(Interpreter):
     def __init__(
         self,
-        lark: Lark,
         program: cg.Program,
         fn_parser: ParseFunctionSignatures,
         include_path: list[Path],
@@ -741,7 +753,6 @@ class ParseImports(Interpreter):
     ) -> None:
         super().__init__()
 
-        self._lark = lark
         self._program = program
         self._fn_parser = fn_parser
         self._include_path = include_path
@@ -753,10 +764,12 @@ class ParseImports(Interpreter):
         assert isinstance(path_token, Token)
 
         try:
-            self._require_once_impl(path_token[1:-1])
+            self._require_once_impl(path_token.value[1:-1])
         except GrapheneError as exc:
             raise ErrorWithLineInfo(
-                exc.message, path_tree.meta.line, f"@require_once {path_token}"
+                exc.message,
+                path_tree.meta.start.line,
+                f"@require_once {path_token.value}",
             )
 
     def _require_once_impl(self, path_str: str) -> None:
@@ -779,7 +792,6 @@ class ParseImports(Interpreter):
             return
 
         append_file_to_program(
-            self._lark,
             self._program,
             self._fn_parser,
             file_path,
@@ -843,38 +855,37 @@ class ExpressionParser(Interpreter):
         self._scope = scope
         self._generic_mapping = generic_mapping
 
-    def visit(self, thing: Tree | Token) -> FlattenedExpression:
-        if isinstance(thing, Token):
-            # The interpreter cannot visit tokens by default
-            return getattr(self, thing.type)(thing)
-        return super().visit(thing)
+    def visit(self, tree: Tree | Token) -> FlattenedExpression:
+        result = super().visit(tree)
+        assert isinstance(result, FlattenedExpression)
+        return result
 
-    @v_args(inline=True)
+    @inline_arguments
     def expression(self, expr_tree: Tree) -> FlattenedExpression:
         return self.visit(expr_tree)
 
-    def UNSIGNED_HEX_CONSTANT(self, value: Token) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.UIntType(), value)
+    def UNSIGNED_HEX_CONSTANT(self, token: Token) -> FlattenedExpression:
+        const_expr = cg.ConstantExpression(cg.UIntType(), token.value)
         return FlattenedExpression([const_expr])
 
-    def NUMERIC_GENERIC_IDENTIFIER(self, value: Token) -> FlattenedExpression:
-        if value not in self._generic_mapping:
-            raise FailedLookupError("numeric generic", f"[{value}, ...]")
+    def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> FlattenedExpression:
+        if token.value not in self._generic_mapping:
+            raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
-        mapped_value = self._generic_mapping[value]
+        mapped_value = self._generic_mapping[token.value]
         assert isinstance(mapped_value, int)  # TODO: user facing error
         const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value))
         return FlattenedExpression([const_expr])
 
-    def SIGNED_INT(self, value: Token) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.IntType(), value)
+    def SIGNED_INT(self, token: Token) -> FlattenedExpression:
+        const_expr = cg.ConstantExpression(cg.IntType(), token.value)
         return FlattenedExpression([const_expr])
 
-    def BOOL_CONSTANT(self, value: Token) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.BoolType(), value)
+    def BOOL_CONSTANT(self, token: Token) -> FlattenedExpression:
+        const_expr = cg.ConstantExpression(cg.BoolType(), token.value)
         return FlattenedExpression([const_expr])
 
-    @v_args(inline=True)
+    @inline_arguments
     def operator_use(
         self, lhs_tree: Tree, operator: Token, rhs_tree: Tree
     ) -> FlattenedExpression:
@@ -894,7 +905,7 @@ class ExpressionParser(Interpreter):
         )
         return flattened_expr.add_parent(call_expr)
 
-    @v_args(inline=True)
+    @inline_arguments
     def unary_operator_use(
         self, operator: Token, rhs_tree: Tree
     ) -> FlattenedExpression:
@@ -950,28 +961,30 @@ class ExpressionParser(Interpreter):
 
         return [*arg_trees], pack_name
 
-    @v_args(inline=True)
+    @inline_arguments
     def function_call(self, name_tree: Tree, *all_args: Any) -> FlattenedExpression:
         fn_name, specialization_tree = name_tree.children
+        assert isinstance(fn_name, Token)
+
         arg_trees, pack_name = self._split_function_call_args(*all_args)
 
         args = [self.visit(tree) for tree in arg_trees]
 
-        if pack_name:
-            variadic_vars = self._scope.search_for_generic_pack(pack_name)
+        if pack_name is not None:
+            variadic_vars = self._scope.search_for_generic_pack(pack_name.value)
             for var in variadic_vars:
                 args.append(FlattenedExpression([cg.VariableReference(var)]))
 
-        assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
 
-        return self._function_call_impl(fn_name, specialization_tree, args)
+        return self._function_call_impl(fn_name.value, specialization_tree, args)
 
-    @v_args(inline=True)
+    @inline_arguments
     def ufcs_call(
         self, this_tree: Tree, name_tree: Tree, *all_args: Any
     ) -> FlattenedExpression:
         # TODO support unpacking.
+        # TODO `pack_name` is unused
         arg_trees, pack_name = self._split_function_call_args(*all_args)
 
         # TODO perhaps we shouldn't always borrow this, although this is a bit
@@ -986,14 +999,16 @@ class ExpressionParser(Interpreter):
         borrowed_this = this.add_parent(cg.BorrowExpression(this.expression(), False))
 
         fn_name, specialization_tree = name_tree.children
-        assert isinstance(fn_name, str)
+        assert isinstance(fn_name, Token)
 
         fn_args = (borrowed_this, *args)
         assert is_flattened_expression_iterable(fn_args)
 
-        return self._function_call_impl(fn_name, specialization_tree, fn_args)
+        return self._function_call_impl(fn_name.value, specialization_tree, fn_args)
 
-    def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
+    def ESCAPED_STRING(self, string_token: Token) -> FlattenedExpression:
+        string = string_token.value
+
         assert string[0] == '"' and string[-1] == '"'
         str_static_storage = self._program.add_static_string(string[1:-1])
         expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
@@ -1001,11 +1016,11 @@ class ExpressionParser(Interpreter):
         # Implicitly take reference to string literal
         return expr.add_parent(cg.BorrowExpression(expr.expression(), True))
 
-    @v_args(inline=True)
+    @inline_arguments
     def accessed_variable_name(self, var_name: Token) -> FlattenedExpression:
-        var = self._scope.search_for_variable(var_name)
+        var = self._scope.search_for_variable(var_name.value)
         if var is None:
-            raise FailedLookupError("variable", var_name)
+            raise FailedLookupError("variable", var_name.value)
 
         return FlattenedExpression([cg.VariableReference(var)])
 
@@ -1022,7 +1037,7 @@ class ExpressionParser(Interpreter):
         expr.subexpressions.append(cg.VariableAssignment(temp_var, expr.expression()))
         return expr.add_parent(cg.VariableReference(temp_var))
 
-    @v_args(inline=True)
+    @inline_arguments
     def array_index_access(
         self, lhs_tree: Tree, *index_expr_trees: Tree
     ) -> FlattenedExpression:
@@ -1039,23 +1054,23 @@ class ExpressionParser(Interpreter):
 
         return lhs.add_parent(cg.ArrayIndexAccess(lhs_expr, cg_indices))
 
-    @v_args(inline=True)
+    @inline_arguments
     def struct_member_access(
         self, lhs_tree: Tree, member_name: Token
     ) -> FlattenedExpression:
         lhs = self.visit(lhs_tree)
         assert isinstance(member_name, Token)
 
-        struct_access = cg.StructMemberAccess(lhs.expression(), member_name)
+        struct_access = cg.StructMemberAccess(lhs.expression(), member_name.value)
         return lhs.add_parent(struct_access)
 
-    @v_args(inline=True)
+    @inline_arguments
     def borrow_operator_use(self, lhs_tree: Tree) -> FlattenedExpression:
         lhs = self.visit(lhs_tree)
         borrow = cg.BorrowExpression(lhs.expression(), False)
         return lhs.add_parent(borrow)
 
-    @v_args(inline=True)
+    @inline_arguments
     def const_borrow_operator_use(self, lhs_tree: Tree) -> FlattenedExpression:
         lhs = self.visit(lhs_tree)
         borrow = cg.BorrowExpression(lhs.expression(), True)
@@ -1064,7 +1079,11 @@ class ExpressionParser(Interpreter):
     def struct_initializer_without_names(
         self, member_trees: Tree
     ) -> FlattenedExpression:
-        members = [self.visit(tree) for tree in member_trees.children]
+        members = []
+        for member_tree in member_trees.children:
+            assert member_tree is not None
+            members.append(self.visit(member_tree))
+
         member_exprs: list[cg.TypedExpression] = []
         combined_flattened = FlattenedExpression([])
 
@@ -1096,7 +1115,7 @@ class ExpressionParser(Interpreter):
             cg.NamedInitializerList(member_exprs, names)
         )
 
-    @v_args(inline=True)
+    @inline_arguments
     def adhoc_struct_initialization(self, expr_tree: Tree) -> FlattenedExpression:
         return self.visit(expr_tree)
 
@@ -1141,6 +1160,7 @@ def generate_return_statement(
         return
 
     (expr,) = body.children
+    assert isinstance(expr, Tree)
     flattened_expr = ExpressionParser.parse(
         program, function, scope, generic_mapping, expr
     )
@@ -1162,23 +1182,25 @@ def generate_variable_declaration(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     var_name, type_tree, rhs_tree = body.children
-    rhs: Optional[FlattenedExpression] = (
-        ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
-        if rhs_tree is not None
-        else None
-    )
-
     assert isinstance(var_name, Token)
     assert isinstance(type_tree, Tree)
+
+    if rhs_tree is not None:
+        assert isinstance(rhs_tree, Tree)
+        rhs = ExpressionParser.parse(
+            program, function, scope, generic_mapping, rhs_tree
+        )
+    else:
+        rhs = None
 
     var_type = TypeTransformer.parse_and_resolve(program, type_tree, generic_mapping)
     assert isinstance(var_type, cg.Type)
     if var_type.definition.is_void:
         raise VoidVariableDeclaration(
-            "variable", var_name, var_type.format_for_output_to_user()
+            "variable", var_name.value, var_type.format_for_output_to_user()
         )
 
-    var = cg.StackVariable(var_name, var_type, is_const, rhs is not None)
+    var = cg.StackVariable(var_name.value, var_type, is_const, rhs is not None)
     scope.add_variable(var)
 
     if rhs is None:
@@ -1196,6 +1218,8 @@ def generate_if_statement(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     condition_tree, if_scope_tree, else_scope_tree = body.children
+    assert isinstance(condition_tree, Tree)
+    assert isinstance(if_scope_tree, Tree)
     assert len(condition_tree.children) == 1
 
     condition_expr = ExpressionParser.parse(
@@ -1212,6 +1236,7 @@ def generate_if_statement(
     #       the else branch (eg. if it was moved in the if)
     else_scope = cg.Scope(function.get_next_scope_id(), scope)
     if else_scope_tree is not None:
+        assert isinstance(else_scope_tree, Tree)
         generate_body(program, function, else_scope, else_scope_tree, generic_mapping)
 
     if_statement = cg.IfElseStatement(condition_expr.expression(), if_scope, else_scope)
@@ -1226,6 +1251,8 @@ def generate_while_statement(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     condition_tree, inner_scope_tree = body.children
+    assert isinstance(condition_tree, Tree)
+    assert isinstance(inner_scope_tree, Tree)
     assert len(condition_tree.children) == 1
 
     condition_expr = ExpressionParser.parse(
@@ -1260,6 +1287,8 @@ def generate_for_statement(
         inner_scope_tree,
     ) = body.children
     assert isinstance(variable_name, Token)
+    assert isinstance(inner_scope_tree, Tree)
+    assert isinstance(iterator_expression_tree, Tree)
 
     # Outer scope
     outer_scope = cg.Scope(function.get_next_scope_id(), scope)
@@ -1293,7 +1322,7 @@ def generate_for_statement(
     inner_scope.add_generatable(get_next_expr)
 
     iter_result_variable = cg.StackVariable(
-        variable_name, get_next_expr.underlying_type, False, True
+        variable_name.value, get_next_expr.underlying_type, False, True
     )
     inner_scope.add_variable(iter_result_variable)
     inner_scope.add_generatable(
@@ -1317,13 +1346,16 @@ def generate_assignment(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     lhs_tree, operator, rhs_tree = body.children
+    assert isinstance(operator, Token)
+    assert isinstance(lhs_tree, Tree)
+    assert isinstance(rhs_tree, Tree)
+
     lhs = ExpressionParser.parse(program, function, scope, generic_mapping, lhs_tree)
     rhs = ExpressionParser.parse(program, function, scope, generic_mapping, rhs_tree)
 
     scope.add_generatable(lhs.subexpressions)
     scope.add_generatable(rhs.subexpressions)
 
-    assert isinstance(operator, Token)
     if operator.value == "=":
         scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
     else:
@@ -1331,7 +1363,7 @@ def generate_assignment(
         scope.add_generatable(borrowed_lhs)
         scope.add_generatable(
             program.lookup_call_expression(
-                operator, [], [borrowed_lhs, rhs.expression()]
+                operator.value, [], [borrowed_lhs, rhs.expression()]
             )
         )
 
@@ -1368,20 +1400,14 @@ def generate_body(
     }
 
     for line in body.children:
+        assert line is not None
         try:
-            generators[line.data](program, function, scope, line, generic_mapping)
-        except VisitError as exc:
-            if isinstance(exc.orig_exc, GrapheneError):
-                raise ErrorWithLineInfo(
-                    exc.orig_exc.message,
-                    line.meta.line,
-                    function.get_signature().user_facing_name,
-                ) from exc.orig_exc
-            raise exc.orig_exc
+            generators[line.name](program, function, scope, line, generic_mapping)
         except GrapheneError as exc:
+            # TODO: more granular error messages
             raise ErrorWithLineInfo(
                 exc.message,
-                line.meta.line,
+                line.meta.start.line,
                 function.get_signature().user_facing_name,
             ) from exc
 
@@ -1403,12 +1429,11 @@ def generate_function_body(
         else:
             raise MissingFunctionReturn(
                 function.get_signature().user_facing_name,
-                body.meta.end_line,
+                body.meta.end.line,
             )
 
 
 def append_file_to_program(
-    lark: Lark,
     program: cg.Program,
     function_parser: ParseFunctionSignatures,
     file_path: ResolvedPath,
@@ -1419,10 +1444,9 @@ def append_file_to_program(
     already_processed.add(file_path)
 
     try:
-        tree = parse_file_into_lark_tree(lark, file_path)
+        tree = parse_file_into_lark_tree(file_path)
 
         ParseImports(
-            lark,
             program,
             function_parser,
             include_path + [Path(file_path).parent],
@@ -1445,62 +1469,18 @@ def append_file_to_program(
         ) from exc
 
 
-def parse_file_into_lark_tree(lark: Lark, file_path: ResolvedPath) -> Tree:
-    with open(file_path, encoding="utf-8") as source_file:
-        file_content = source_file.read()
-
-    try:
-        return lark.parse(file_content)
-    except UnexpectedInput as exc:
-        assert isinstance(exc.pos_in_stream, int)
-        error_pos = exc.pos_in_stream
-
-        this_line_start_pos = file_content[:error_pos].rfind("\n")
-        this_line_end_pos = error_pos + file_content[error_pos:].find("\n")
-
-        error_message_context = [
-            file_content[this_line_start_pos + 1 : this_line_end_pos]
-        ]
-
-        # Is there only white space on this line before the error message?
-        if file_content[this_line_start_pos:error_pos].isspace():
-            # Then we should also print the previous line (where the error probably occurred)
-            previous_line = " "
-            previous_line_end = error_pos - 1
-            while previous_line.isspace():
-                line_end = file_content[:previous_line_end].rfind("\n")
-                if line_end == -1:
-                    break
-
-                previous_line = file_content[line_end + 1 : previous_line_end]
-                previous_line_end = line_end
-
-            if not previous_line.isspace():
-                error_message_context.insert(0, previous_line)
-
-        caret_pos = error_pos - this_line_start_pos - 1
-        error_message_context.append(caret_pos * " " + "^")
-
-        raise InvalidSyntax(error_message_context, exc.line)
+def parse_file_into_lark_tree(file_path: ResolvedPath) -> Tree:
+    # TODO: handle errors
+    return run_lexer_parser(Path(file_path))
 
 
 def generate_ir_from_source(
     file_path: Path, include_path: list[Path], debug_compiler: bool = False
 ) -> str:
-    grammar_path = Path(__file__).parent / "grammar.lark"
-    lark = Lark.open(
-        str(grammar_path),
-        parser="earley",
-        ambiguity="resolve",
-        start="program",
-        propagate_positions=True,
-    )
-
     program = cg.Program()
     try:
         fn_parser = ParseFunctionSignatures(program)
         append_file_to_program(
-            lark,
             program,
             fn_parser,
             ResolvedPath(file_path),
