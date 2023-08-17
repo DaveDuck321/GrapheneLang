@@ -16,6 +16,10 @@
 
 .global _start
 _start:
+    # The the user code should mark the deepest stack frame by setting the
+    # frame pointer to zero. [Section 3.4.1 of docs/abi.pdf]
+    xor     %ebp, %ebp
+
     # The first value of the stack is the argument count (argc). Pop it and
     # place it into %rdi, the register that stores the first argument to be
     # passed into main().
@@ -31,12 +35,6 @@ _start:
 .global _lli_start
 _lli_start:
 
-    # Terminate the stack frame linked list; useful when compiling with
-    # -fno-omit-frame-pointer.
-    xor     %ebp, %ebp
-    push    %rbp                    # rip = 0
-    push    %rbp                    # rbp = 0
-
     # The stack needs to be 16 byte aligned immediately before the call
     # instruction is executed. Therefore, AND %rsp with a sign-extended 0xf0 to
     # clear the 4 LSBs.
@@ -45,7 +43,6 @@ _lli_start:
     # respectively. Right now, the widest built-in type is i128.
     # See Section 3.2.2 of docs/abi.pdf for more.
     and     $-0x10, %rsp
-    mov     %rsp, %rbp
 
     # System V AMD64 ABI dictates that the first two arguments are stored in
     # rdi and rsi. The Graphene main() should use the same convention.
