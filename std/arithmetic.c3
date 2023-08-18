@@ -55,7 +55,7 @@ typedef HasTrivialAssignments<i128> : TrueType
 @operator [U, V] % : (lhs: U, rhs : V) -> CommonArithmeticType<U, V> = {
     let lhs_widen: CommonArithmeticType<U, V> = lhs;
     let rhs_widen: CommonArithmeticType<U, V> = rhs;
-    return __builtin_mod(lhs_widen, rhs_widen);
+    return __builtin_remainder(lhs_widen, rhs_widen);
 }
 
 @operator [U, V] == : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {

@@ -3,13 +3,14 @@
 
 typedef [T] Range : {lower : T, upper : T, step : T}
 
-@implicit [T] get_next : (range: Range<T>&) -> T = {
+// TODO: I should be able to remove this SFINAE right?
+@implicit [T] get_next : (range: Range<T>&) -> TypeIf<T, IsIntegral<T>> = {
     let next : T = range.lower;
     range.lower += range.step;
     return next;
 }
 
-@implicit [T] has_next : (range : Range<T>&) -> bool = {
+@implicit [T] has_next : (range : Range<T>&) -> TypeIf<bool, IsIntegral<T>> = {
     return range.lower < range.upper;
 }
 
