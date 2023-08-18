@@ -21,7 +21,7 @@ function get : (struct : MyStruct3) -> int = {
 
 
 function main : () -> int = {
-    get({a : 11, y : 12});
+    get({.a = 11, .y = 12});
     return 0;
 }
 
