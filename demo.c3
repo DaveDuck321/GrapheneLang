@@ -1,7 +1,7 @@
 @require_once "std/arithmetic.c3";
 @require_once "std/memory.c3";
 @require_once "std/io.c3";
-@require_once "std/syscalls.c3";
+@require_once "syscalls.c3";
 
 function[T] pack_len: (curr: T) -> int = {
     // Base case

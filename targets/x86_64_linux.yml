@@ -1,0 +1,33 @@
+arch: x86_64
+arch_native_widths:
+  - 1
+  - 2
+  - 4
+  - 8
+abi: SystemV_AMD64
+endianness: little
+mangling: elf
+stack_align: 16
+int_type:
+  size: 4
+  align: 4
+llvm_target_triple: x86_64-unknown-linux-gnu
+llvm_types:
+  ptr:
+    size: 8
+    align: 8
+  i1:
+    size: 1
+    align: 1
+  i8:
+    size: 1
+    align: 1
+  i16:
+    size: 2
+    align: 2
+  i32:
+    size: 4
+    align: 4
+  i64:
+    size: 8
+    align: 8

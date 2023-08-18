@@ -1,6 +1,6 @@
-@require_once "sys/enums.c3"
-@require_once "sys/uio.c3"
-@require_once "util.c3"
+@require_once "../sys/enums.c3"
+@require_once "../sys/uio.c3"
+@require_once "../util.c3"
 
 foreign _syscall_0 : (syscall_number: i64) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64

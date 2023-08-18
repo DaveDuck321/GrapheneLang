@@ -1,77 +1,87 @@
-import argparse
 import subprocess
 import sys
 from os import getenv
 from parser.lexer_parser import init_lexer_parser
 from pathlib import Path
+from typing import Optional
+
+from tap import Tap
 
 from graphene_parser import generate_ir_from_source
-from target import get_target_triple, load_target_config
+from target import get_target, get_target_triple, load_target_config
 
 
-def extract_include_paths(args: list[str]) -> tuple[list[Path], list[str]]:
-    include_path = []
-    filtered_args = []
-    for arg in args:
-        if arg.startswith("-I"):
-            path = Path(arg[2:])
-            include_path.append(path)
-        else:
-            filtered_args.append(arg)
+class DriverArguments(Tap):
+    # TODO support multiple source files.
+    # TODO target the host by default.
+    input: Path
+    output: Optional[Path] = None
 
-    return include_path, filtered_args
+    compile_to_object: bool = False
+    """Do not run the linker, generate a target ".o" object file instead."""
 
+    include_path: list[Path] = []
+    """Add the specified directories to the search path for include files."""
 
-def extract_optimization_level(args: list[str]) -> tuple[str, list[str]]:
-    level = "0"  # Default
-    filtered_args = []
-    for arg in args:
-        if arg.startswith("-O"):
-            level = arg[2:]
-        else:
-            filtered_args.append(arg)
+    optimize: str = "0"
+    """Optimization setting forwarded to clang."""
 
-    assert level != "2"  # Coward assert
-    return level, filtered_args
+    emit_llvm: bool = False
+    """Output generated IR to a file."""
+
+    emit_llvm_to_stdout: bool = False
+    """Output generated IR to stdout."""
+
+    emit_optimized_llvm: bool = False
+    """Output IR optimized by clang to a file."""
+
+    emit_everything: bool = False
+    """Output generated IR, optimized IR, and the binary."""
+
+    debug_compiler: bool = False
+    """Print full exception traces."""
+
+    nostdlib: bool = False
+    """Do not add the Graphene standard library to the include search path."""
+
+    use_crt: bool = False
+    """Link with the C runtime and standard library instead of Graphene's."""
+
+    target: str = "x86_64_linux"
+    """Specify the architecture and platform to build for."""
+
+    def __init__(self):
+        super().__init__(underscores_to_dashes=True)
+
+    def configure(self) -> None:
+        self.add_argument("input")
+        self.add_argument("-o", "--output")
+        self.add_argument("-c", "--compile_to_object")
+        self.add_argument("-I", "--include_path")
+        self.add_argument("-O", "--optimize")
 
 
 def main() -> None:
-    include_path, sys_args = extract_include_paths(sys.argv[1:])
-    opt_level, sys_args = extract_optimization_level(sys_args)
+    args = DriverArguments().parse_args()
 
-    parser = argparse.ArgumentParser("python driver.py")
-    # TODO: support multiple source files
-    parser.add_argument("input", nargs=1, type=Path)
-    parser.add_argument("-o", "--output", required=False, type=Path)
-    parser.add_argument("-c", "--compile-to-object", action="store_true")
-    parser.add_argument("-I<include path>", action="store_true")  # Dummy arg
-    parser.add_argument("-O<level>", action="store_true")  # Dummy arg
-    parser.add_argument("--emit-llvm", action="store_true")
-    parser.add_argument("--emit-llvm-to-stdout", action="store_true")
-    parser.add_argument("--emit-optimized-llvm", action="store_true")
-    parser.add_argument("--emit-everything", action="store_true")
-    parser.add_argument("--debug-compiler", action="store_true")
-    parser.add_argument("--nostdlib", action="store_true")
-    parser.add_argument("--use-crt", action="store_true")
-    # TODO target the host by default.
-    parser.add_argument("--target", required=False, type=str, default="x86_64_linux")
-    args = parser.parse_args(sys_args)
-
-    will_emit_llvm: bool = args.emit_llvm or args.emit_everything
-    will_emit_llvm_to_stdout: bool = args.emit_llvm_to_stdout
-    will_emit_optimized_llvm: bool = args.emit_optimized_llvm or args.emit_everything
-    will_emit_binary: bool = (
+    will_emit_llvm = args.emit_llvm or args.emit_everything
+    will_emit_llvm_to_stdout = args.emit_llvm_to_stdout
+    will_emit_optimized_llvm = args.emit_optimized_llvm or args.emit_everything
+    will_emit_binary = (
         not (args.emit_llvm or args.emit_llvm_to_stdout) or args.emit_everything
     )
 
-    llvm_output: Path = args.input[0].with_suffix(".ll")
-    optimized_llvm_output: Path = llvm_output.with_suffix(".opt.ll")
+    llvm_output = args.input.with_suffix(".ll")
+    optimized_llvm_output = llvm_output.with_suffix(".opt.ll")
     binary_output = Path("a.out")
+
+    load_target_config(args.target)
 
     parent_dir = Path(__file__).parent.resolve()
 
     if not args.nostdlib:
-        include_path.append(parent_dir)
+        args.include_path.append(parent_dir)
+        args.include_path.append(parent_dir / "std" / get_target())
 
     # -o defaults to binary output path
     if args.output:
@@ -81,9 +91,8 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
-    load_target_config(args.target)
     init_lexer_parser(False)
-    ir = generate_ir_from_source(args.input[0], include_path, args.debug_compiler)
+    ir = generate_ir_from_source(args.input, args.include_path, args.debug_compiler)
 
     if will_emit_llvm:
         with llvm_output.open("w", encoding="utf-8") as file:
@@ -93,16 +102,19 @@ def main() -> None:
         sys.stdout.write(ir)
 
     # Use clang to finish compile
+    assert args.optimize != "2", "@DaveDuck321's coward assert!"
+
+    clang = getenv("GRAPHENE_CLANG_CMD", "clang")
 
     if will_emit_optimized_llvm:
         # TODO: the llvm optimization pipeline is run twice if we also want a
         # binary
         subprocess.run(
             [
-                getenv("GRAPHENE_CLANG_CMD", "clang"),
+                clang,
                 "-S",
                 "-emit-llvm",
-                f"-O{opt_level}",
+                f"-O{args.optimize}",
                 "-target",
                 get_target_triple(),
                 "-o",
@@ -123,13 +135,15 @@ def main() -> None:
         # -nostdlib prevents both the standard library and the start files from
         # being linked with the executable.
         extra_flags.append("-nostdlib")
-        extra_flags.append(str(parent_dir / "std" / "runtime.S"))
+        extra_flags.append(str(parent_dir / "std" / get_target() / "runtime.S"))
 
     if will_emit_binary:
         subprocess.run(
             [
-                getenv("GRAPHENE_CLANG_CMD", "clang"),
-                f"-O{opt_level}",
+                clang,
+                f"-O{args.optimize}",
+                "-fuse-ld=lld",  # Use the LLVM cross-linker.
+                "-static",
                 "-target",
                 get_target_triple(),
                 "-o",
