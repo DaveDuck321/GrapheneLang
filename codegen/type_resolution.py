@@ -500,6 +500,7 @@ class TypeSymbolTable:
         if self._unresolved_visiting_state[name] == 2:
             return  # Already finished
 
+        # TODO: we can trip this assert with a MaybePtr??
         # TODO: user facing error message (cyclic type)
         assert self._unresolved_visiting_state[name] == 0
         self._unresolved_visiting_state[name] = 1  # In-progress
