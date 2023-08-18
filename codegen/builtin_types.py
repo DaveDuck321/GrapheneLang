@@ -378,7 +378,7 @@ class StackArrayDefinition(TypeDefinition):
         self.member = member
         self.dimensions = dimensions
 
-        if any(dim <= 0 for dim in self.dimensions):
+        if any(dim < 0 for dim in self.dimensions):
             raise ArrayDimensionError(self.format_for_output_to_user())
 
         if self.member.definition.is_void:
@@ -426,7 +426,7 @@ class HeapArrayDefinition(TypeDefinition):
         self.member = member
         self.known_dimensions = known_dimensions
 
-        if any(dim <= 0 for dim in self.known_dimensions):
+        if any(dim < 0 for dim in self.known_dimensions):
             raise ArrayDimensionError(self.format_for_output_to_user())
 
         if self.member.definition.is_void:
