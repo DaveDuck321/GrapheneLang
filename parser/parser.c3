@@ -1,189 +1,12 @@
 @require_once "file_info.c3"
+@require_once "syntax_tree.c3"
+
 @require_once "std/algorithms.c3"
 @require_once "std/arithmetic.c3"
 @require_once "std/io.c3"
 @require_once "std/iterators.c3"
 @require_once "std/memory.c3"
-@require_once "std/string.c3"
 @require_once "std/syscalls.c3"
-@require_once "std/vector.c3"
-
-typedef TopLevelFeature : {
-    type : int, // 0: typedef, 1: function, 2: require once
-    pointer : iptr, // TODO: the indirection here is unneeded... a union would be better
-}
-
-typedef ProgramSlice : {
-    start : isize,
-    end : isize,
-}
-
-typedef CompileTimeConstant : {
-    // TODO: variant
-    is_identifier : bool,
-    value : ProgramSlice,
-}
-
-typedef FunctionType : { /* TODO */ }
-typedef ArrayType : { base_type : Type, size : Vector<CompileTimeConstant>, is_heap_array : bool }
-typedef RefType : { type : Type }
-typedef NamedType : { name : ProgramSlice, specialization : Vector<Specialization> }
-typedef StructType : { members : Vector<TypedMember> }
-typedef PackType : { type : Type }
-
-typedef GenericDefinition : {
-    // TODO: variant
-    type : int, // 0: type, 1: numeric generic
-    value : ProgramSlice,
-    is_packed : bool,
-}
-
-typedef Specialization : {
-    // TODO: variant
-    type : int, // 0: type, 1: compile time constant
-    pointer : iptr,
-}
-
-typedef Type : {
-    // TODO: variant
-    type: int, // 0: function, 1: array, 2: ref, 4: named type, 5: struct type, 6: parameter pack
-    pointer : iptr,
-}
-
-typedef TypedMember : {
-    name : ProgramSlice,
-    type : Type,
-}
-
-typedef FunctionDefinition : {
-    // TODO: enum
-    type : int, // 0: graphene, 1: implicit, 2: operator, 3: foreign, 4: assignment
-    name : ProgramSlice,
-    generic_definitions : Vector<GenericDefinition>,
-    args : Vector<TypedMember>,
-    return_type : Type,
-    scope : Scope,
-}
-
-typedef RequireOnce : {
-    file_path : ProgramSlice
-}
-
-typedef Typedef : {
-    name : ProgramSlice,
-    generic_definitions : Vector<GenericDefinition>,
-    specialization : Vector<Specialization>,
-    type : Type,
-}
-
-typedef Scope : { lines : Vector<Line> }
-typedef Line : {
-    // TODO: enum
-    type : int, // 0: expression, 1: assignment, 2: return, 3: if, 4: while, 5: for, 6: scope, 7: declaration
-    pointer : iptr
-}
-
-typedef If : {
-    condition : Expression,
-    if_scope : Scope,
-    else_scope : Scope,
-}
-
-typedef While : {
-    condition : Expression,
-    scope : Scope,
-}
-
-typedef For : {
-    variable : ProgramSlice,
-    iterator_expression : Expression,
-    scope : Scope,
-}
-
-typedef Return : { expression : Expression }
-
-typedef Assignment : {
-    lhs : Expression,
-    operator : ProgramSlice,
-    rhs : Expression,
-}
-typedef Declaration : {
-    is_const : bool,
-    variable : ProgramSlice,
-    type : Type,
-    expression : Optional<Expression>,
-}
-
-typedef Expression : {
-    // TODO: this is a poor man's variant
-    // TODO: use an enum here
-
-    // 0: function call, 1: constant, 2: named init list, 3: unnamed init list, 4: variable, 5: array index access, 6: struct index access, 7: ufcs, 8: operator, 9: unary operator, 10: pack expansion
-    type : int,
-    pointer : iptr,
-}
-
-typedef NamedExpression : {
-    name : ProgramSlice,
-    expression : Expression,
-}
-
-typedef Operator : {
-    // TODO: this can probably be unified with the function call type
-    name : StringView,
-    lhs : Expression,
-    rhs : Expression,
-}
-
-typedef UnaryOperator : {
-    name : ProgramSlice,
-    rhs : Expression,
-}
-
-typedef FunctionCall : {
-    name : ProgramSlice,
-    specialization : Vector<Specialization>,
-    arguments : Vector<Expression>,
-}
-
-typedef UFCS_Call : {
-    expression : Expression,
-    function_name : ProgramSlice,
-    specialization : Vector<Specialization>,
-    args : Vector<Expression>,
-}
-
-typedef PackExpansion : {
-    expression : Expression,
-}
-
-typedef Constant : {
-    // TODO: enum
-    type : int, // 0: String, 1: float, 2: int, 3: bool, 4: generic identifier
-    value : ProgramSlice,
-}
-
-typedef NamedInitializerList : {
-    args : Vector<NamedExpression>,
-}
-
-typedef UnnamedInitializerList : {
-    args : Vector<Expression>
-}
-
-typedef VariableAccess : {
-    name : ProgramSlice
-}
-
-typedef ArrayIndexAccess : {
-    expression : Expression,
-    indicies: Vector<Expression>,
-}
-
-typedef StructIndexAccess : {
-    expression : Expression,
-    member : ProgramSlice,
-}
 
 typedef Cursor : {
     program : StringView,
@@ -191,10 +14,14 @@ typedef Cursor : {
     allocator: Allocator&, // TODO: this should be somewhere else?
 }
 
-function to_string_view : (slice : ProgramSlice&, program : StringView) -> StringView = {
-    // TODO: there NEEDS to be a better way to do this
-    let data : u8[&] = &addr_to_heap_array<u8>(ref_to_addr(&program.data[slice.start]));
-    return {&data, slice.end - slice.start};
+function slice : (cursor : Cursor&, length : isize) -> StringView = {
+    let data : u8[&] = &addr_to_heap_array<u8>(ref_to_addr(&cursor.program.data[cursor.position]));
+    return {&data, length};
+}
+
+function slice : (cursor : Cursor&, start : isize, length : isize) -> StringView = {
+    let data : u8[&] = &addr_to_heap_array<u8>(ref_to_addr(&cursor.program.data[start]));
+    return {&data, length};
 }
 
 function ascii_is_text_token_start_char : (char : u8) -> bool = {
@@ -366,10 +193,10 @@ function is_end_of_token : (cursor : Cursor&) -> bool = {
     return false;
 }
 
-function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_hex_token : (cursor : Cursor&) -> StringView = {
     runtime_assert(cursor:is_next("0x"));
 
-    let token : ProgramSlice = {cursor.position, cursor.position+2};
+    let token : StringView = cursor:slice(2);
     cursor.position += 2;
 
     while !cursor:is_end_of_token() {
@@ -382,7 +209,7 @@ function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
           (next_char == "e"[0]) |
           (next_char == "f"[0]) {
             cursor.position += 1;
-            token.end += 1;
+            token.length += 1;
         } else {
             // Otherwise its a syntax error
             // TODO: format string
@@ -393,26 +220,25 @@ function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
     return token;
 }
 
-function get_next_bool_token : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_bool_token : (cursor : Cursor&) -> StringView = {
     runtime_assert(cursor:is_next("true") | cursor:is_next("false"));
 
-    let start_position : isize = cursor.position;
     if cursor:try_skip_next_and_surrounding_white_space("true") {
-        return {start_position, start_position + 4};
+        return sv("true");
     }
 
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("false"));
-    return {start_position, start_position + 5};
+    return sv("false");
 }
 
-function get_next_decimal_token : (cursor : Cursor&) -> ProgramSlice = {
-    let token : ProgramSlice = {cursor.position, cursor.position};
+function get_next_decimal_token : (cursor : Cursor&) -> StringView = {
+    let token : StringView = cursor:slice(0);
 
     while !cursor:is_end_of_token() {
         let next_char : u8 = ascii_to_lower(cursor:get_char());
         if ascii_is_digit(next_char) {
             cursor.position += 1;
-            token.end += 1;
+            token.length += 1;
         } else {
             // Otherwise its a syntax error
             // TODO: format string
@@ -423,9 +249,7 @@ function get_next_decimal_token : (cursor : Cursor&) -> ProgramSlice = {
     return token;
 }
 
-function get_next_numeric_token : (cursor : Cursor&) -> ProgramSlice = {
-    let token : ProgramSlice = {cursor.position, cursor.position};
-
+function get_next_numeric_token : (cursor : Cursor&) -> StringView = {
     // Is this number hex?
     // TODO: binary/ octal
     if cursor:is_next("0x") {
@@ -434,7 +258,7 @@ function get_next_numeric_token : (cursor : Cursor&) -> ProgramSlice = {
     return cursor:get_next_decimal_token();
 }
 
-function get_next_string_literal_token : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_string_literal_token : (cursor : Cursor&) -> StringView = {
     runtime_assert(cursor:get_char() == "\""[0]);
     let start_offset : isize = cursor.position;
     cursor.position += 1;
@@ -455,12 +279,12 @@ function get_next_string_literal_token : (cursor : Cursor&) -> ProgramSlice = {
     }
     // The string has been terminated
     cursor.position += 1;
-    let result : ProgramSlice = {start_offset, cursor.position};
+    let result : StringView = cursor:slice(start_offset, cursor.position - cursor.offset);
     cursor:try_skip_white_space();
     return result;
 }
 
-function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_operator : (cursor : Cursor&) -> StringView = {
     let start_position : isize = cursor.position;
 
     if cursor:try_skip_next_and_surrounding_white_space("==")
@@ -471,7 +295,7 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space(">>")
         | cursor:try_skip_next_and_surrounding_white_space("**")
     {
-        return {start_position, start_position + 2};
+        return cursor:slice(start_position, 2);
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("<")
@@ -488,14 +312,14 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space("@")
         | cursor:try_skip_next_and_surrounding_white_space("&")
     {
-        return {start_position, start_position + 1};
+        return cursor:slice(start_position, 1);
     }
 
     syntax_error(&cursor, sv("TODO"));
     return {0, 0};
 }
 
-function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_assignment : (cursor : Cursor&) -> StringView = {
     let start_position : isize = cursor.position;
 
     if cursor:try_skip_next_and_surrounding_white_space("=") {
@@ -506,7 +330,7 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space(">>=")
         | cursor:try_skip_next_and_surrounding_white_space("**=")
     {
-        return {start_position, start_position + 3};
+        return cursor:slice(start_position, 3);
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("+=")
@@ -519,35 +343,35 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space("@=")
         | cursor:try_skip_next_and_surrounding_white_space("&=")
     {
-        return {start_position, start_position + 2};
+        return cursor:slice(start_position, 2);
     }
 
     syntax_error(&cursor, sv("TODO unexpected symbol"));
     return {0, 0};
 }
 
-function get_next_ascii_only_identifier : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_ascii_only_identifier : (cursor : Cursor&) -> StringView = {
     if !ascii_is_text_token_start_char(cursor:get_char()) {
         syntax_error(&cursor, sv("TODO: Expected an alphabetic character"));
     }
 
-    let result : ProgramSlice  = {cursor.position, cursor.position};
+    let result : StringView  = cursor:slice(0);
     while !cursor:is_end_of_token() {
         if !ascii_is_text_token_char(cursor:get_char()) {
             syntax_error(&cursor, sv("TODO: Expected an alphanumeric character"));
         }
 
         cursor.position += 1;
-        result.end += 1;
+        result.length += 1;
     }
     // Assert length != 0
     return result;
 }
 
-function get_next_at_identifier : (cursor : Cursor&) -> ProgramSlice = {
+function get_next_at_identifier : (cursor : Cursor&) -> StringView = {
+    let identifier : StringView = cursor:slice(1);
     runtime_assert(cursor:try_skip_next("@"));
-    let identifier : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    identifier.start -= 1;
+    identifier.length += cursor:get_next_ascii_only_identifier().length;
     return identifier;
 }
 
@@ -565,7 +389,7 @@ function parse_comma_separated_named_members : (cursor : Cursor&, matched_pair :
         }
 
         // Argument name
-        let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+        let name : StringView = cursor:get_next_ascii_only_identifier();
         cursor:expect_next_skipping_ws(":");
 
         // Argument type
@@ -594,7 +418,7 @@ function parse_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDef
 
         // TODO: this is a little ugly, should be refactored
         let type : int;
-        let name : ProgramSlice;
+        let name : StringView;
         if cursor:get_char() == "@"[0] {
             type = /* generic numeric */ 1;
             name = cursor:get_next_at_identifier();
@@ -618,7 +442,7 @@ function parse_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDef
 }
 
 function parse_named_type : (cursor : Cursor&) -> NamedType = {
-    let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let name : StringView = cursor:get_next_ascii_only_identifier();
     let specialization_list : Vector<Specialization> = cursor:parse_optional_specialization_list();
     return {name, specialization_list};
 }
@@ -631,10 +455,10 @@ function parse_compile_time_constant : (cursor : Cursor&) -> CompileTimeConstant
     runtime_assert(cursor:is_at_start_of_compile_time_constant());
 
     if cursor:is_next("@") {
-        let identifier : ProgramSlice = cursor:get_next_at_identifier();
+        let identifier : StringView = cursor:get_next_at_identifier();
         return {true, identifier};
     } else {
-        let number : ProgramSlice = cursor:get_next_numeric_token();
+        let number : StringView = cursor:get_next_numeric_token();
         return {false, number};
     }
 }
@@ -798,7 +622,7 @@ function parse_typedef : (cursor : Cursor&) -> Typedef = {
         generics = make_vector<GenericDefinition>(&cursor.allocator);
     }
 
-    let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let name : StringView = cursor:get_next_ascii_only_identifier();
     let specialization : Vector<Specialization> = cursor:parse_optional_specialization_list();
 
     cursor:expect_next_skipping_ws(":");
@@ -837,7 +661,7 @@ function parse_list_of_named_expressions : (cursor : Cursor&, end : StringView) 
         }
 
         cursor:expect_next(".");
-        let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+        let name : StringView = cursor:get_next_ascii_only_identifier();
 
         cursor:expect_next_skipping_ws("=");
 
@@ -866,7 +690,7 @@ function parse_initializer_list : (cursor : Cursor&) -> Expression = {
 function parse_ufcs_call : (cursor : Cursor&, prefix : Expression) -> UFCS_Call = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space(":"));
 
-    let fn_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let fn_name : StringView = cursor:get_next_ascii_only_identifier();
     let specialization : Vector<Specialization> = cursor:parse_optional_specialization_list();
     cursor:expect_next_skipping_ws("(");
     let arguments : Vector<Expression> = cursor:parse_list_of_expressions(sv(")"));
@@ -882,7 +706,7 @@ function parse_array_index_access : (cursor : Cursor&, prefix : Expression) -> A
 function parse_struct_index_access : (cursor : Cursor&, prefix : Expression) -> StructIndexAccess = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("."));
 
-    let member_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let member_name : StringView = cursor:get_next_ascii_only_identifier();
     return {prefix, member_name};
 }
 
@@ -898,7 +722,7 @@ function parse_function_call : (cursor : Cursor&, prefix : Expression) -> Functi
         syntax_error(&cursor, sv("Callable types are not currently supported"));
     }
 
-    let fn_name : ProgramSlice;
+    let fn_name : StringView;
     {
         // TODO: this is a temporary work around since we do not have proper callables
         let lhs_variable : VariableAccess& = &addr_to_ref<VariableAccess>(prefix.pointer);
@@ -1041,7 +865,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor&) -> Expression
     if ascii_is_text_token_start_char(cursor:get_char()) {
         let variable_access : VariableAccess& = &cursor.allocator:allocate<VariableAccess>();
 
-        let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+        let name : StringView = cursor:get_next_ascii_only_identifier();
         variable_access = {name};
         return {4, ref_to_addr(&variable_access)};
     }
@@ -1052,7 +876,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor&) -> Expression
 
 function parse_maybe_unary_expression : (cursor : Cursor&) -> Expression = {
     if is_one_of(cursor:get_char(), "!"[0], "-"[0], "+"[0], "~"[0], "&"[0]) {
-        let name : ProgramSlice = {cursor.position, cursor.position + 1};
+        let name : StringView = cursor:slice(1);
         cursor.position += 1;
         cursor:try_skip_white_space();
 
@@ -1119,7 +943,7 @@ function parse_either_assignment_or_expression : (cursor : Cursor&) -> Line = {
     }
 
     // The line hasn't finished, this must be an assignment
-    let assignment_operator : ProgramSlice = cursor:get_next_assignment();
+    let assignment_operator : StringView = cursor:get_next_assignment();
     let rhs : Expression = cursor:parse_expression();
 
     let assignment_memory : Assignment& = &cursor.allocator:allocate<Assignment>();
@@ -1154,7 +978,7 @@ function parse_while : (cursor : Cursor&) -> While = {
 function parse_for : (cursor : Cursor&) -> For = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("for"));
     // TODO: accept type hints
-    let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let variable_name : StringView = cursor:get_next_ascii_only_identifier();
 
     cursor:expect_next_skipping_ws("in");
 
@@ -1166,7 +990,7 @@ function parse_for : (cursor : Cursor&) -> For = {
 function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("const"));
 
-    let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let variable_name : StringView = cursor:get_next_ascii_only_identifier();
 
     cursor:expect_next_skipping_ws(":");
 
@@ -1185,7 +1009,7 @@ function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
 function parse_let_declaration : (cursor : Cursor&) -> Declaration = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
 
-    let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let variable_name : StringView = cursor:get_next_ascii_only_identifier();
 
     cursor:expect_next_skipping_ws(":");
 
@@ -1296,7 +1120,7 @@ function parse_graphene_function_definition : (cursor : Cursor&) -> FunctionDefi
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("function"));
 
     let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
-    let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let name : StringView = cursor:get_next_ascii_only_identifier();
     let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
@@ -1308,9 +1132,9 @@ function parse_implicit_function_definition : (cursor : Cursor&) -> FunctionDefi
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@implicit"));
 
     let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
-    let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let name : StringView = cursor:get_next_ascii_only_identifier();
 
-    if !is_one_of(name:to_string_view(cursor.program), sv("has_next"), sv("get_next"), sv("destruct")) {
+    if !is_one_of(name, sv("has_next"), sv("get_next"), sv("destruct")) {
         syntax_error(&cursor, sv("TODO: Only 'has_next', 'get_next', and 'destruct' are valid implicit functions"));
     }
 
@@ -1325,7 +1149,7 @@ function parse_operator_function_definition : (cursor : Cursor&) -> FunctionDefi
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@operator"));
 
     let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
-    let name : ProgramSlice = cursor:get_next_operator();
+    let name : StringView = cursor:get_next_operator();
     let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
@@ -1337,7 +1161,7 @@ function parse_assignment_function_definition : (cursor : Cursor&) -> FunctionDe
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@assignment"));
 
     let generics : Vector<GenericDefinition> = cursor:parse_function_definition_generics_definition();
-    let name : ProgramSlice = cursor:get_next_assignment();
+    let name : StringView = cursor:get_next_assignment();
     let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
@@ -1348,7 +1172,7 @@ function parse_assignment_function_definition : (cursor : Cursor&) -> FunctionDe
 function parse_foreign_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("foreign"));
 
-    let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
+    let name : StringView = cursor:get_next_ascii_only_identifier();
     let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
 
@@ -1361,7 +1185,7 @@ function parse_foreign_function_definition : (cursor : Cursor&) -> FunctionDefin
 function parse_require_once : (cursor : Cursor&) -> RequireOnce = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@require_once"));
 
-    let path : ProgramSlice = cursor:get_next_string_literal_token();
+    let path : StringView = cursor:get_next_string_literal_token();
     cursor:try_skip_white_space();
     return {path};
 }
