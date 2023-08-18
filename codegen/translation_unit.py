@@ -420,7 +420,9 @@ class Program:
 
         encoded_str, encoded_length = encode_string(string)
         str_type = AnonymousType(CharArrayDefinition(encoded_str, encoded_length))
-        static_storage = StaticVariable(str_type, True, encoded_str)
+        static_storage = StaticVariable(
+            f'string literal: "{string}"', str_type, True, encoded_str
+        )
         self.add_static_variable(static_storage)
 
         self._string_cache[string] = static_storage
