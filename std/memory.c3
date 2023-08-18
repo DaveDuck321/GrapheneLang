@@ -69,8 +69,8 @@ function [T] allocate : (allocator : Allocator&) -> T& = {
 
 function [T] allocate_span : (allocator : Allocator&, length: isize) -> Span<T> = {
     return {
-        data : &addr_to_heap_array<T>(allocator:allocate_impl(sizeof<T>() * length)),
-        length : length,
+        .data = &addr_to_heap_array<T>(allocator:allocate_impl(sizeof<T>() * length)),
+        .length = length,
     };
 }
 
