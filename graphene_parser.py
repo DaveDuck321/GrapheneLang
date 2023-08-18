@@ -105,7 +105,7 @@ class TypeTransformer(Transformer):
     @v_args(inline=True)
     def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> cg.CompileTimeConstant:
         if not token.value in self._generic_args:
-            assert False  # TODO: user facing error
+            raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
         result = self._generic_args[token.value]
         assert isinstance(result, cg.CompileTimeConstant)  # TODO: user facing error
@@ -854,8 +854,8 @@ class ExpressionParser(Interpreter):
         return FlattenedExpression([const_expr])
 
     def NUMERIC_GENERIC_IDENTIFIER(self, value: Token) -> FlattenedExpression:
-        # TODO: user facing error
-        assert value in self._generic_mapping
+        if value not in self._generic_mapping:
+            raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
         mapped_value = self._generic_mapping[value]
         assert isinstance(mapped_value, int)  # TODO: user facing error
