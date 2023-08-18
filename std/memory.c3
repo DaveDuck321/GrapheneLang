@@ -3,7 +3,6 @@
 @require_once "iterators.c3"
 @require_once "logical.c3"
 @require_once "sys/mman.c3"
-@require_once "syscalls.c3"
 @require_once "util.c3"
 @require_once "wrappers.c3"
 
@@ -11,11 +10,11 @@ function allocate_page_and_return_address : (length : isize) -> iptr = {
     let prot : u32 = SYS_PROT_READ() | SYS_PROT_WRITE();
     let flags : u32 = SYS_MAP_PRIVATE() | SYS_MAP_ANONYMOUS();
 
-    return sys_mmap(0, length, prot, flags, -1, 0);
+    return mmap(0, length, prot, flags, -1, 0);
 }
 
 function deallocate_page : (addr: iptr, length : isize) -> void = {
-    sys_munmap(addr, length);
+    munmap(addr, length);
 }
 
 function PAGE_SIZE : () -> isize = {

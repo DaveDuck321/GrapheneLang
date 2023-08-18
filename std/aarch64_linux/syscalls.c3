@@ -1,5 +1,6 @@
 @require_once "../util.c3"
 @require_once "../sys/uio.c3"
+@require_once "../sys/types.c3"
 
 foreign _syscall_0 : (syscall_number: i32) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i32) -> i64
@@ -19,12 +20,20 @@ function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
     return _syscall_3(fd, iov_addr, iovcnt, /* writev */ 66);
 }
 
-function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
-    return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, /* mmap */ 222);
+function sys_mmap : (
+    addr: iptr,
+    length: isize,
+    prot: int,
+    flags: int,
+    fd: int,
+    offset: off_t
+) -> iptr = {
+    return _syscall_6(addr, length, prot, flags,
+                      fd, offset, /* mmap */ 222);
 }
 
-function sys_munmap : (addr: isize, length : isize) -> void = {
-    _syscall_2(addr, length, /* munmap */ 215);
+function sys_munmap : (addr: iptr, length: isize) -> i64 = {
+    return _syscall_2(addr, length, /* munmap */ 215);
 }
 
 function sys_exit : (code : int) -> void = {
