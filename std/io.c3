@@ -8,11 +8,11 @@ function EOF : () -> int = {
     return -1;
 }
 
-function[@Len] puts : (str: u8[@Len]&) -> int = {
+function puts : (str : StringView) -> int = {
     // puts - put a string on standard output
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/puts.html
     let iov : iovec[2] = {
-        {&str, @Len},
+        {&str.data, str.length},
         {"\n", 1}
     };
 
@@ -28,4 +28,14 @@ function[@Len] puts : (str: u8[@Len]&) -> int = {
     // TODO: shall set an error indicator for the stream,
     // TODO: and errno shall be set to indicate the error.
     return EOF();
+}
+
+function[@Len] puts : (str: u8[@Len]&) -> int = {
+    return puts(make_span(&str));
+}
+
+function puts : (str: CString) -> int = {
+    // TODO: why is this intermediate variable needed?
+    let span : Span<u8> = {&str.data, str:length()};
+    return puts(span);
 }
