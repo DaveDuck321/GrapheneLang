@@ -1,6 +1,6 @@
 @require_once "../sys/mman.c3"
 @require_once "../sys/uio.c3"
-@require_once "../util.c3"
+@require_once "../sys/types.c3"
 
 foreign _syscall_0 : (syscall_number: i64) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64
@@ -32,12 +32,20 @@ function sys_fork : () -> i64 = {
     return _syscall_0(/* fork */ 57);
 }
 
-function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32, offset: isize) -> iptr = {
-    return _syscall_6(addr, length, as_arithmetic(prot), as_arithmetic(flags), fd, offset, 9);
+function sys_mmap : (
+    addr: iptr,
+    length: isize,
+    prot: int,
+    flags: int,
+    fd: int,
+    offset: off_t
+) -> iptr = {
+    return _syscall_6(addr, length, prot, flags,
+                      fd, offset, /* mmap */ 9);
 }
 
 function sys_munmap : (addr: isize, length : isize) -> int = {
-    let result : isize = _syscall_2(addr, length, 11);
+    let result : i64 = _syscall_2(addr, length, /* munmap */ 11);
     return __builtin_narrow<int>(result);
 }
 
