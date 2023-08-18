@@ -125,7 +125,7 @@ class Type(ABC):
 class Variable(ABC):
     # TODO much of this interface is common with TypedExpression. Maybe they
     # should have a shared base class.
-    def __init__(self, name: Optional[str], var_type: Type, constant: bool) -> None:
+    def __init__(self, name: str, var_type: Type, constant: bool) -> None:
         super().__init__()
 
         self._name = name
@@ -136,7 +136,6 @@ class Variable(ABC):
 
     @property
     def user_facing_name(self) -> str:
-        assert self._name is not None
         return self._name
 
     @property

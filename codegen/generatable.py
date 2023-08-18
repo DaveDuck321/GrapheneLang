@@ -60,10 +60,12 @@ class StackVariable(Variable):
 
 
 class StaticVariable(Variable):
-    def __init__(self, var_type: Type, constant: bool, graphene_literal: str) -> None:
+    def __init__(
+        self, name: str, var_type: Type, constant: bool, graphene_literal: str
+    ) -> None:
         assert not var_type.is_reference
         self._graphene_literal = graphene_literal
-        super().__init__(None, var_type, constant)
+        super().__init__(name, var_type, constant)
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
