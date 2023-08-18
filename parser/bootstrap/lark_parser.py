@@ -1,11 +1,9 @@
 import json
-
 from pathlib import Path
 from typing import Any
 
-from lark import Lark, Tree, Token
+from lark import Lark, Token, Tree
 from lark.tree import Meta
-
 
 GRAMMAR_PATH = Path(__file__).parent / "grammar.lark"
 lark = Lark.open(

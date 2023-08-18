@@ -2,17 +2,11 @@ import sys
 import traceback
 from dataclasses import dataclass
 from functools import partial
+from parser.lexer_parser import Interpreter, Token, Transformer, Tree, run_lexer_parser
 from pathlib import Path
 from typing import Any, Iterable, Optional, TypeGuard
 
 import codegen as cg
-from parser.lexer_parser import (
-    Interpreter,
-    run_lexer_parser,
-    Token,
-    Transformer,
-    Tree,
-)
 from codegen.user_facing_errors import (
     CircularImportException,
     ErrorWithLineInfo,

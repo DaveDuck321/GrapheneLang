@@ -2,9 +2,9 @@ import argparse
 import subprocess
 import sys
 from os import getenv
+from parser.lexer_parser import init_lexer_parser
 from pathlib import Path
 
-from parser.lexer_parser import init_lexer_parser
 from graphene_parser import generate_ir_from_source
 from target import get_target_triple, load_target_config
 
