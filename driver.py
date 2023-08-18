@@ -3,6 +3,7 @@ import sys
 from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from os import getenv
+from parser.lexer_parser import init_lexer_parser
 from pathlib import Path
 from typing import Any, Optional
 
@@ -110,6 +111,7 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
+    init_lexer_parser(self_hosted=False)
     ir = generate_ir_from_source(args.input, args.include_path, args.debug_compiler)
 
     if will_emit_llvm:
