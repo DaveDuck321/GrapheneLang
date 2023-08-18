@@ -7,10 +7,6 @@ foreign _syscall_2 : (a: i64, b: i64, syscall_number: i32) -> i64
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i32) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i32) -> i64
 
-function sys_exit : (code : int) -> void = {
-    _syscall_1(code, /* exit */ 93);
-}
-
 function sys_write : (fd: int, buffer: u8[&], count: isize) -> isize = {
     const buffer_addr : iptr = __builtin_ptr_to_int(buffer);
 
@@ -29,4 +25,8 @@ function sys_mmap : (addr: isize, length : isize, prot: u32, flags: u32, fd: i32
 
 function sys_munmap : (addr: isize, length : isize) -> void = {
     _syscall_2(addr, length, /* munmap */ 215);
+}
+
+function sys_exit : (code : int) -> void = {
+    _syscall_1(code, /* exit */ 93);
 }
