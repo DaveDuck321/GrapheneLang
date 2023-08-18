@@ -1,6 +1,72 @@
+@require_once "algorithms.c3"
 @require_once "arithmetic.c3"
-@require_once "syscalls.c3"
+@require_once "assert.c3"
+@require_once "iterators.c3"
+@require_once "math.c3"
+@require_once "string.c3"
 @require_once "sys/uio.c3"
+@require_once "syscalls.c3"
+@require_once "wrappers.c3"
+
+typedef UnbufferedFile : { fd : int }
+
+typedef IsStreamableTextIO<BufferedFile> : TrueType
+typedef BufferedFile : {
+    underlying_file : UnbufferedFile,
+    buffer : u8[1024],
+    buffer_pointer : isize,
+}
+
+function get_stdout_io : () -> BufferedFile = {
+    let result : BufferedFile;
+    result.underlying_file = {1 /* stdout */};
+    result.buffer_pointer = 0;
+    return result;
+}
+
+function flush : (io : BufferedFile&) -> void = {
+    io.underlying_file:write({&io.buffer, io.buffer_pointer});
+    io.buffer_pointer = 0;
+}
+
+function request_buffer : (io : BufferedFile&, length : isize) -> Span<u8> = {
+    runtime_assert(length <= io.buffer:length());
+
+    if io.buffer_pointer + length < io.buffer:length() {
+        // TODO: slice function
+        let addr : iptr = ref_to_addr(&io.buffer[io.buffer_pointer]);
+        return {&addr_to_heap_array<u8>(addr), length};
+    }
+
+    // The remaining buffer is too small, flush to make more space
+    io:flush();
+    return {&io.buffer, length};
+}
+
+function consume_length : (io : BufferedFile&, length : isize) -> void = {
+    io.buffer_pointer += length;
+}
+
+function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
+    // BUG: try removing the '&' here... the error message is nonsense
+    let fd : int = __builtin_narrow<int>(sys_open(&file_path.data, mode, 0x00));
+    runtime_assert(fd > 0);
+
+    return {fd};
+}
+
+function read : (file : UnbufferedFile&, buffer: Span<u8>) -> Span<u8> = {
+    let bytes_read: isize = sys_read(file.fd, &buffer.data, buffer.length);
+    return {&buffer.data, bytes_read};
+}
+
+function read : (file : BufferedFile&, buffer: Span<u8>) -> Span<u8> = {
+    return file.underlying_file:read(buffer);
+}
+
+function write : (file : UnbufferedFile&, buffer : Span<u8>) -> void = {
+    sys_write(file.fd, &buffer.data, buffer.length);
+}
 
 function EOF : () -> int = {
     // EOF - end-of-file return value
