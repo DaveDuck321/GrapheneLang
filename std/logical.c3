@@ -37,7 +37,7 @@ typedef HasTrivialAssignments<u128> : TrueType
     return __builtin_shift_left(value, ushift);
 }
 
-@operator [L, A] >> : (value: L, shift_amount: A) -> TypeIf<L, Both<IsLogical<T>, IsIntegral<A>>> = {
+@operator [L, A] >> : (value: L, shift_amount: A) -> TypeIf<L, Both<IsLogical<L>, IsIntegral<A>>> = {
     let ushift : L = as_logical(shift_amount);
     return __builtin_shift_right(value, ushift);
 }
