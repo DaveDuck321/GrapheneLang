@@ -2,20 +2,76 @@
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
 @require_once "iterators.c3"
+@require_once "math.c3"
 @require_once "string.c3"
 @require_once "sys/uio.c3"
 @require_once "syscalls.c3"
 @require_once "wrappers.c3"
 
+typedef UnbufferedFile : { fd : int }
+
+typedef IsStreamableTextIO<BufferedFile> : TrueType
+typedef BufferedFile : {
+    underlying_file : UnbufferedFile,
+    buffer : u8[1024],
+    buffer_pointer : isize,
+}
+
+function get_stdout_io : () -> BufferedFile = {
+    let result : BufferedFile;
+    result.underlying_file = {1 /* stdout */};
+    result.buffer_pointer = 0;
+    return result;
+}
+
+function flush : (io : BufferedFile&) -> void = {
+    io.underlying_file:write({&io.buffer, io.buffer_pointer});
+    io.buffer_pointer = 0;
+}
+
+function request_buffer : (io : BufferedFile&, length : isize) -> Span<u8> = {
+    runtime_assert(length <= io.buffer:length());
+
+    if io.buffer_pointer + length < io.buffer:length() {
+        // TODO: slice function
+        let addr : iptr = ref_to_addr(&io.buffer[io.buffer_pointer]);
+        return {&addr_to_heap_array<u8>(addr), length};
+    }
+
+    // The remaining buffer is too small, flush to make more space
+    io:flush();
+    return {&io.buffer, length};
+}
+
+function consume_length : (io : BufferedFile&, length : isize) -> void = {
+    io.buffer_pointer += length;
+}
+
+function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
+    // BUG: try removing the '&' here... the error message is nonsense
+    let fd : int = __builtin_narrow<int>(sys_open(&file_path.data, mode, 0x00));
+    runtime_assert(fd > 0);
+
+    return {fd};
+}
+
+function read : (file : UnbufferedFile&, buffer: Span<u8>) -> Span<u8> = {
+    let bytes_read: isize = sys_read(file.fd, &buffer.data, buffer.length);
+    return {&buffer.data, bytes_read};
+}
+
+function read : (file : BufferedFile&, buffer: Span<u8>) -> Span<u8> = {
+    return file.underlying_file:read(buffer);
+}
+
+function write : (file : UnbufferedFile&, buffer : Span<u8>) -> void = {
+    sys_write(file.fd, &buffer.data, buffer.length);
+}
+
 function EOF : () -> int = {
     // EOF - end-of-file return value
     // An integer constant expression with type int and a negative value.
     return -1;
-}
-
-function write_to_stdout : (str : StringView) -> void = {
-    // TODO: correct signature to match libc
-    sys_write(/* stdout */ 1, &str.data, str.length);
 }
 
 function puts : (str : StringView) -> int = {
@@ -48,156 +104,4 @@ function puts : (str: CString) -> int = {
     // TODO: why is this intermediate variable needed?
     let span : Span<u8> = {&str.data, str:length()};
     return puts(span);
-}
-
-function stringify : (buffer : u8[&], string : StringView) -> StringView = {
-    return string;
-}
-
-function stringify : (buffer : u8[&], number : isize) -> StringView = {
-    if number == 0 {
-        buffer[0] = "0"[0];
-        return {&buffer, 1};
-    }
-
-    let is_negative : bool = number < 0;
-    if is_negative {
-        number *= -1;
-    }
-
-    let length : isize = 0;
-    while number != 0 {
-        // 0 -> 48 ascii
-        let next_digit: u8 = as_logical(__builtin_narrow<i8>(number % 10 + 48));
-
-        buffer[length] = next_digit;
-
-        number /= 10;
-        length += 1;
-    }
-
-    if is_negative {
-        buffer[length] = "-"[0];
-        length += 1;
-    }
-
-    let result : StringView = {&buffer, length};
-
-    // XXX: its a bit unfair to call it a `StringView` when its mutated in-place
-    result:reverse();
-    return result;
-}
-
-function stringify : (buffer : u8[&], number : u32) -> StringView = {
-    if number == 0x0 {
-        buffer[0] = "0"[0];
-        return {&buffer, 1};
-    }
-
-    let lookup_table : u8[16] = {
-        "0"[0], "1"[0], "2"[0], "3"[0], "4"[0], "5"[0], "6"[0], "7"[0], "8"[0], "9"[0], "A"[0], "B"[0], "C"[0], "D"[0], "E"[0], "F"[0]
-    };
-
-    let length : isize = 0;
-    while number != 0x0 {
-        buffer[length] = lookup_table[as_arithmetic(number & 0xF)];
-
-        number >>= 4;
-        length += 1;
-    }
-
-    let result : StringView = {&buffer, length};
-
-    // XXX: its a bit unfair to call it a `StringView` when its mutated in-place
-    result:reverse();
-    return result;
-}
-
-function stringify : (buffer : u8[&], value : bool) -> StringView = {
-    if value {
-        return sv("true");
-    } else {
-        return sv("false");
-    }
-}
-
-/* TODO: these overloads fail an assert
-function [@Len, Args...] printf : (format_string : u8[@Len], args : Args...) -> void = {
-    printf(make_span(&format_string), args...);
-}
-
-function [@Len] printf : (format_string : u8[@Len]) -> void = {
-    printf(make_span(&format_string));
-}
-*/
-
-function printf : (format_string : StringView) -> void = {
-    // TODO: assert no format specificers
-    puts(format_string);
-}
-
-function [Args...] printf : (format_string : StringView, args : Args...) -> void = {
-    let buffer : u8[1024];
-    impl_printf(&buffer, format_string, args...);
-}
-
-function [Arg] impl_printf_print_until_next_format : (buffer : u8[&], format_string : StringView, next_arg : Arg) -> StringView = {
-    let insertion_index : isize = format_string:index_of("%"[0]);
-    if (insertion_index == -1) {
-        // TODO: this error looks kinda janky if something has already been printed
-        puts("\nprintf format string has mismatched numbers of '%' specifiers and arguments");
-        runtime_assert(false);
-    }
-
-    write_to_stdout({&format_string.data, insertion_index});
-
-    // TODO: this NEEDS to be improved
-    let continuation_addr : iptr = ref_to_addr(&format_string.data[insertion_index + 1]);
-
-    // XXX: our bidmas is wrong :-|
-    let next_format_string : StringView = {&addr_to_heap_array<u8>(continuation_addr), ((format_string.length - insertion_index) - 1)};
-
-    let formatted_arg : StringView = buffer:stringify(next_arg);
-    write_to_stdout(formatted_arg);
-
-    return next_format_string;
-}
-
-function [NextArg] impl_printf : (buffer : u8[&], format_string : StringView, next_arg : NextArg) -> void = {
-    let next_format_string : StringView = impl_printf_print_until_next_format(&buffer, format_string, next_arg);
-    puts(next_format_string); // NOTE: intentional new line (c bad)
-}
-
-function [NextArg, Args...] impl_printf : (buffer : u8[&], format_string : StringView, next_arg: NextArg, args : Args...) -> void = {
-    let next_format_string : StringView = impl_printf_print_until_next_format(&buffer, format_string, next_arg);
-    impl_printf(&buffer, next_format_string, args...);
-}
-
-function [NextArg] impl_print : (buffer : u8[&], next_arg: NextArg) -> void = {
-    write_to_stdout(buffer:stringify(next_arg));
-}
-
-function [NextArg, OtherArgs...] impl_print : (buffer : u8[&], next_arg: NextArg, other_args : OtherArgs...) -> void = {
-    write_to_stdout(buffer:stringify(next_arg));
-    impl_print(&buffer, other_args...);
-}
-
-function [Args...] print : (args : Args...) -> void = {
-    let buffer : u8[1024];
-    impl_print(&buffer, args...);
-}
-
-typedef File : { fd : int }
-
-function open : (file_path: CString, mode: u32) -> File = {
-    // BUG: try removing the '&' here... the error message is nonsense
-    let fd : int = __builtin_narrow<int>(sys_open(&file_path.data, mode, 0x00));
-    runtime_assert(fd > 0);
-
-    return {fd};
-}
-
-function read : (file : File&, buffer: Span<u8>) -> Span<u8> = {
-    let bytes_read: isize = sys_read(file.fd, &buffer.data, buffer.length);
-    return {&buffer.data, bytes_read};
 }
