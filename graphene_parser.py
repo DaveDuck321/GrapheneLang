@@ -857,11 +857,11 @@ class ExpressionParser(Interpreter):
         const_expr = cg.ConstantExpression(cg.UIntType(), value)
         return FlattenedExpression([const_expr])
 
-    def NUMERIC_GENERIC_IDENTIFIER(self, value: Token) -> FlattenedExpression:
-        if value not in self._generic_mapping:
+    def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> FlattenedExpression:
+        if token.value not in self._generic_mapping:
             raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
-        mapped_value = self._generic_mapping[value]
+        mapped_value = self._generic_mapping[token.value]
         assert isinstance(mapped_value, int)  # TODO: user facing error
         const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value))
         return FlattenedExpression([const_expr])
