@@ -1,3 +1,4 @@
+@require_once "../util.c3"
 @require_once "../sys/mman.c3"
 @require_once "../sys/uio.c3"
 @require_once "../sys/types.c3"
@@ -18,9 +19,11 @@ function sys_write : (fd: int, buffer: u8[&], count: isize) -> isize = {
     return _syscall_3(fd, buffer_addr, count, /* write */ 1);
 }
 
-function sys_open : (filename: u8[&], flags: u32, mode: u32) -> isize = {
+function sys_open : (filename: u8[&], flags: u32, mode: u32) -> int = {
     const filename_addr : iptr = __builtin_ptr_to_int(filename);
-    return _syscall_3(filename_addr, as_arithmetic(flags), as_arithmetic(mode), /* open */ 2);
+    const result : i64 =  _syscall_3(filename_addr, as_arithmetic(flags),
+                                     as_arithmetic(mode), /* open */ 2);
+    return Narrow<int>(result);
 }
 
 function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
@@ -45,8 +48,8 @@ function sys_mmap : (
 }
 
 function sys_munmap : (addr: isize, length : isize) -> int = {
-    let result : i64 = _syscall_2(addr, length, /* munmap */ 11);
-    return __builtin_narrow<int>(result);
+    const result : i64 = _syscall_2(addr, length, /* munmap */ 11);
+    return Narrow<int>(result);
 }
 
 function sys_exit : (code : int) -> void = {
