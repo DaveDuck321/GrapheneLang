@@ -971,7 +971,6 @@ class ExpressionParser(Interpreter):
     def ufcs_call(
         self, this_tree: Tree, name_tree: Tree, *all_args: Any
     ) -> FlattenedExpression:
-        # TODO support unpacking.
         arg_trees, pack_name = self._split_function_call_args(*all_args)
 
         # TODO perhaps we shouldn't always borrow this, although this is a bit
@@ -980,10 +979,17 @@ class ExpressionParser(Interpreter):
         # otherwise pass an unborrowed/const-reference and let overload
         # resolution figure it out, although this isn't very explicit.
         this = self.visit(this_tree)
-        args: list[FlattenedExpression] = [self.visit(tree) for tree in arg_trees]
-        assert is_flattened_expression_iterable(args)
         assert isinstance(this, FlattenedExpression)
         borrowed_this = this.add_parent(cg.BorrowExpression(this.expression(), False))
+
+        args = [self.visit(tree) for tree in arg_trees]
+
+        if pack_name:
+            variadic_vars = self._scope.search_for_generic_pack(pack_name)
+            for var in variadic_vars:
+                args.append(FlattenedExpression([cg.VariableReference(var)]))
+
+        assert is_flattened_expression_iterable(args)
 
         fn_name, specialization_tree = name_tree.children
         assert isinstance(fn_name, str)
