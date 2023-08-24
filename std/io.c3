@@ -49,7 +49,7 @@ function consume_length : (io : BufferedFile&, length : isize) -> void = {
 
 function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
     // BUG: try removing the '&' here... the error message is nonsense
-    let fd : int = __builtin_narrow<int>(sys_open(&file_path.data, mode, 0x00));
+    const fd : int = sys_open(&file_path.data, mode, 0x00);
     runtime_assert(fd > 0);
 
     return {fd};
