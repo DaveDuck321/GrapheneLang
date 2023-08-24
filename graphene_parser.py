@@ -910,7 +910,7 @@ class ExpressionParser(Interpreter):
         )
         return flattened_expr.add_parent(call_expr)
 
-    def _function_call_impl(
+    def _function_call_inner(
         self,
         fn_name: str,
         specialization_tree: Optional[Tree],
@@ -950,8 +950,9 @@ class ExpressionParser(Interpreter):
 
         return [*arg_trees], pack_name
 
-    @v_args(inline=True)
-    def function_call(self, name_tree: Tree, *all_args: Any) -> FlattenedExpression:
+    def _function_call_outer(
+        self, name_tree: Tree, is_ufcs_call: bool, *all_args: Any
+    ) -> FlattenedExpression:
         fn_name, specialization_tree = name_tree.children
         arg_trees, pack_name = self._split_function_call_args(*all_args)
 
@@ -959,45 +960,34 @@ class ExpressionParser(Interpreter):
 
         if pack_name:
             variadic_vars = self._scope.search_for_generic_pack(pack_name)
-            for var in variadic_vars:
-                args.append(FlattenedExpression([cg.VariableReference(var)]))
-
-        assert isinstance(fn_name, Token)
-        assert is_flattened_expression_iterable(args)
-
-        return self._function_call_impl(fn_name, specialization_tree, args)
-
-    @v_args(inline=True)
-    def ufcs_call(
-        self, this_tree: Tree, name_tree: Tree, *all_args: Any
-    ) -> FlattenedExpression:
-        arg_trees, pack_name = self._split_function_call_args(*all_args)
+            args.extend(
+                FlattenedExpression([cg.VariableReference(var)])
+                for var in variadic_vars
+            )
 
         # TODO perhaps we shouldn't always borrow this, although this is a bit
         # tricky as we haven't done overload resolution yet (which depends on
         # whether we borrow or not). A solution would be to borrow if we can,
         # otherwise pass an unborrowed/const-reference and let overload
         # resolution figure it out, although this isn't very explicit.
-        this = self.visit(this_tree)
-        assert isinstance(this, FlattenedExpression)
-        borrowed_this = this.add_parent(cg.BorrowExpression(this.expression(), False))
+        if is_ufcs_call:
+            this_arg = args[0]
+            this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
 
-        args = [self.visit(tree) for tree in arg_trees]
-
-        if pack_name:
-            variadic_vars = self._scope.search_for_generic_pack(pack_name)
-            for var in variadic_vars:
-                args.append(FlattenedExpression([cg.VariableReference(var)]))
-
+        assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
 
-        fn_name, specialization_tree = name_tree.children
-        assert isinstance(fn_name, str)
+        return self._function_call_inner(fn_name, specialization_tree, args)
 
-        fn_args = (borrowed_this, *args)
-        assert is_flattened_expression_iterable(fn_args)
+    @v_args(inline=True)
+    def function_call(self, name_tree: Tree, *all_args: Any) -> FlattenedExpression:
+        return self._function_call_outer(name_tree, False, *all_args)
 
-        return self._function_call_impl(fn_name, specialization_tree, fn_args)
+    @v_args(inline=True)
+    def ufcs_call(
+        self, this_tree: Tree, name_tree: Tree, *all_args: Any
+    ) -> FlattenedExpression:
+        return self._function_call_outer(name_tree, True, this_tree, *all_args)
 
     def ESCAPED_STRING(self, string: Token) -> FlattenedExpression:
         assert string[0] == '"' and string[-1] == '"'
