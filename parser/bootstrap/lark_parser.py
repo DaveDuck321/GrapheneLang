@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from lark import Lark, Token, Tree, UnexpectedInput
+from lark.tree import Meta
 
 from codegen.user_facing_errors import InvalidSyntax
 
@@ -16,45 +17,36 @@ lark = Lark.open(
 )
 
 
-def token_to_dict(token: Token) -> dict[str, Any]:
+def meta_to_dict(meta: Meta | Token) -> dict[str, Any]:
+    if not hasattr(meta, "line"):
+        # If a tree has no tokens the meta is empty, default to 0,0
+        return meta_to_dict(Token("", ""))
+
     return {
-        "name": token.type,
-        "value": token.value,
-        "meta": {
-            "start": {"line": token.line, "column": token.column},
-            "end": {"line": token.end_line, "column": token.end_column},
-        },
+        "start": {"line": meta.line, "column": meta.column},
+        "end": {"line": meta.end_line, "column": meta.end_column},
     }
+
+
+def token_to_dict(token: Token) -> dict[str, Any]:
+    return {"name": token.type, "value": token.value, "meta": meta_to_dict(token)}
 
 
 def tree_to_dict(tree: Tree) -> dict[str, Any]:
-    if hasattr(tree.meta, "line"):
-        start = {"line": tree.meta.line, "column": tree.meta.column}
-        end = {"line": tree.meta.end_line, "column": tree.meta.end_column}
-    else:
-        # IDK why this happens but it is very rare, might be a lark bug?
-        # No use fixing it if we're just gonna remove lark tho
-        start = {"line": 0, "column": 0}
-        end = {"line": 0, "column": 0}
-
-    item = {
-        "name": tree.data.value if isinstance(tree.data, Token) else tree.data,
-        "children": [],
-        "meta": {
-            "start": start,
-            "end": end,
-        },
-    }
-
+    children = []
     for child in tree.children:
         if isinstance(child, Token):
-            item["children"].append(token_to_dict(child))
-        elif child is None:
-            item["children"].append(None)
+            children.append(token_to_dict(child))
+        elif isinstance(child, Tree):
+            children.append(tree_to_dict(child))
         else:
-            item["children"].append(tree_to_dict(child))
+            children.append(None)
 
-    return item
+    return {
+        "name": tree.data.value if isinstance(tree.data, Token) else tree.data,
+        "children": children,
+        "meta": meta_to_dict(tree.meta),
+    }
 
 
 def parse_and_wrap_errors(lark: Lark, path: Path) -> Tree:
