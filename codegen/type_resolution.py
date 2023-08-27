@@ -21,6 +21,7 @@ from .user_facing_errors import (
     NonDeterminableSize,
     RedefinitionError,
     SourceLocation,
+    SpecializationFailed,
     SubstitutionFailure,
 )
 
@@ -118,7 +119,12 @@ class GenericValueReference(CompileTimeConstant):
         assert self.argument_name in specialization_map
 
         specialized_value = specialization_map[self.argument_name]
-        assert isinstance(specialized_value, int)
+        if not isinstance(specialized_value, int):
+            raise SpecializationFailed(
+                self.format_for_output_to_user(),
+                specialized_value.format_for_output_to_user(),
+            )
+
         return NumericLiteralConstant(specialized_value)
 
     def resolve(self) -> int:
@@ -260,7 +266,11 @@ class UnresolvedGenericType(UnresolvedType):
         assert self.name in specialization_map
 
         specialized_type = specialization_map[self.name]
-        assert isinstance(specialized_type, Type)
+        if not isinstance(specialized_type, Type):
+            raise SpecializationFailed(
+                self.format_for_output_to_user(), str(specialized_type)
+            )
+
         return UnresolvedTypeWrapper(specialized_type)
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
@@ -500,6 +510,7 @@ class TypeSymbolTable:
         if self._unresolved_visiting_state[name] == 2:
             return  # Already finished
 
+        # TODO: we can trip this assert with a MaybePtr??
         # TODO: user facing error message (cyclic type)
         assert self._unresolved_visiting_state[name] == 0
         self._unresolved_visiting_state[name] = 1  # In-progress
