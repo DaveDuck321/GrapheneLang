@@ -37,5 +37,7 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ matrix.llvm-version }}
         sudo apt-get install -y llvm-${{ matrix.llvm-version }}-runtime
+    - name: Bootstrap the parser
+      run: ./bootstrap.sh
     - name: Run tests
       run: python tests/run_tests.py
