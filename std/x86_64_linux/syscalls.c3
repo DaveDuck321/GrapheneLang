@@ -26,6 +26,10 @@ function sys_open : (filename: u8[&], flags: u32, mode: u32) -> int = {
     return Narrow<int>(result);
 }
 
+function sys_close : (fd : int) -> int = {
+    return Narrow<int>(_syscall_1(fd, /* close */ 3));
+}
+
 function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
     const iov_addr : iptr = __builtin_ptr_to_int(iov);
     return _syscall_3(fd, iov_addr, iovcnt, /* writev */ 20);

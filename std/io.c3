@@ -1,6 +1,7 @@
 @require_once "algorithms.c3"
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
+@require_once "fcntl.c3"
 @require_once "iterators.c3"
 @require_once "math.c3"
 @require_once "string.c3"
@@ -25,8 +26,14 @@ function get_stdout_io : () -> BufferedFile = {
 }
 
 function flush : (io : BufferedFile&) -> void = {
-    io.underlying_file:write({&io.buffer, io.buffer_pointer});
+    let data_to_write : StringView = {&io.buffer, io.buffer_pointer};
+    io.underlying_file:write(data_to_write);
     io.buffer_pointer = 0;
+}
+
+function close : (io : BufferedFile&) -> void = {
+    io:flush();
+    io.underlying_file:close();
 }
 
 function request_buffer : (io : BufferedFile&, length : isize) -> Span<u8> = {
@@ -51,8 +58,14 @@ function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
     // BUG: try removing the '&' here... the error message is nonsense
     const fd : int = sys_open(&file_path.data, mode, 0x00);
     runtime_assert(fd > 0);
-
     return {fd};
+}
+
+function close : (file : UnbufferedFile&) -> void = {
+    if file.fd >= 3 {
+        // Don't close std{in,out,err}
+        runtime_assert(sys_close(file.fd) > 0);
+    }
 }
 
 function read : (file : UnbufferedFile&, buffer: Span<u8>) -> Span<u8> = {

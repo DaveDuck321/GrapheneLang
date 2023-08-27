@@ -33,6 +33,10 @@ function sys_open : (filename: u8[&], flags: u32, mode: u32) -> int = {
     return sys_openat(AT_FDCWD(), &filename, flags, mode);
 }
 
+function sys_close : (fd : int) -> int = {
+    return Narrow<int>(_syscall_1(fd, /* close */ 57));
+}
+
 function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
     const iov_addr : iptr = __builtin_ptr_to_int(iov);
 
