@@ -88,8 +88,15 @@ class SubstitutionFailure(GrapheneError):
 
 class PatternMatchFailed(SubstitutionFailure):
     def __init__(self, target: str, actual: str) -> None:
-        super(GrapheneError).__init__(
+        super(GrapheneError, self).__init__(
             f"Error: cannot pattern match '{actual}' to '{target}'"
+        )
+
+
+class SpecializationFailed(SubstitutionFailure):
+    def __init__(self, target: str, actual: str) -> None:
+        super(GrapheneError, self).__init__(
+            f"Error: cannot specialize '{target}' with '{actual}'"
         )
 
 

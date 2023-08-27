@@ -489,12 +489,15 @@ class ParseFunctionSignatures(Interpreter):
 
             specialization_arg_names = arg_names.copy()
 
-            specialized_args = [
-                arg.produce_specialized_copy(specialization_map)
-                if isinstance(arg, cg.UnresolvedType)
-                else arg
-                for arg in signature_args
-            ]
+            try:
+                specialized_args = [
+                    arg.produce_specialized_copy(specialization_map)
+                    if isinstance(arg, cg.UnresolvedType)
+                    else arg
+                    for arg in signature_args
+                ]
+            except SubstitutionFailure:
+                return None  # SFINAE
 
             if variadic_type_pack_name:
                 # Consume remaining specializations. Our type system can't deal

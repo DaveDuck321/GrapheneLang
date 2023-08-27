@@ -20,6 +20,7 @@ from .interfaces import (
     SpecializationItem,
     Type,
     TypedExpression,
+    do_specializations_match,
 )
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
@@ -214,7 +215,9 @@ class FunctionSymbolTable:
             matching_functions = []
             for candidate_function in self._specialized_functions[fn_name]:
                 candidate_signature = candidate_function.get_signature()
-                if candidate_signature.specialization == fn_specialization:
+                if do_specializations_match(
+                    candidate_signature.specialization, fn_specialization
+                ):
                     matching_functions.append(candidate_function)
 
             if matching_functions:
@@ -261,13 +264,20 @@ class FunctionSymbolTable:
 
         # Implicit generic instantiation
         candidate_specializations: list[list[SpecializationItem]] = []
+
+        def in_candidates(
+            specialization: list[SpecializationItem],
+        ) -> bool:
+            for candidate in candidate_specializations:
+                if do_specializations_match(specialization, candidate):
+                    return True
+
+            return False
+
         for candidate_generic in self._generic_parsers[fn_name]:
             fn_specialization = candidate_generic.try_deduce_specialization(fn_args)
 
-            if (
-                fn_specialization is not None
-                and fn_specialization not in candidate_specializations
-            ):
+            if fn_specialization is not None and not in_candidates(fn_specialization):
                 candidate_specializations.append(fn_specialization)
                 candidate_functions.extend(
                     self.generate_functions_with_specialization(

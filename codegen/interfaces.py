@@ -275,6 +275,22 @@ SpecializationItem = Type | int
 GenericMapping = dict[str, SpecializationItem]
 
 
+def do_specializations_match(
+    s1: list[SpecializationItem], s2: list[SpecializationItem]
+) -> bool:
+    if len(s1) != len(s2):
+        return False
+
+    for item1, item2 in zip(s1, s2):
+        if isinstance(item1, Type) != isinstance(item2, Type):
+            return False
+
+        if item1 != item2:
+            return False
+
+    return True
+
+
 def format_specialization(specialization: list[SpecializationItem]) -> str:
     if len(specialization) == 0:
         return ""
