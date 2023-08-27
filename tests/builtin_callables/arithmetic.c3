@@ -25,6 +25,10 @@
     return __builtin_divide(lhs, rhs);
 }
 
+@operator - : (rhs: int) -> int = {
+    return __builtin_subtract(0, rhs);
+}
+
 @operator - : (lhs: int, rhs: int) -> int = {
     return __builtin_subtract(lhs, rhs);
 }
