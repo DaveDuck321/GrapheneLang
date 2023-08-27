@@ -176,7 +176,7 @@ while_statement: "while" expression scope
 for_statement: "for" IDENTIFIER "in" expression scope
 // This needs a higher priority, otherwise `return -1` is parsed as an
 // operator_use with a variable called `return`.
-return_statement.1: "return" expression?
+return_statement.1: "return" [expression]
 
 
 //
