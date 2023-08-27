@@ -1143,7 +1143,8 @@ def generate_return_statement(
     body: Tree,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-    if not body.children:
+    (expr,) = body.children
+    if expr is None:
         expr = cg.ReturnStatement(cg.VoidType())
         scope.add_generatable(expr)
         return
