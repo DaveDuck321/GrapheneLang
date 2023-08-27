@@ -3,6 +3,14 @@
 @require_once "type_traits.c3"
 @require_once "util.c3"
 
+function [IO] write : (io : IO&, char : Rune) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+    return io:write_char(char.codepoint);
+}
+
+function [IO, @Len] write : (io : IO&, string : u8[@Len]&) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+    return io:write(sv(&string));
+}
+
 function [IO] write : (io : IO&, string : StringView) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
     let buffer : Span<u8> = io:request_buffer(string.length);
 
@@ -20,6 +28,8 @@ function [IO] write : (io : IO&, number : isize) -> TypeIf<StringView, IsStreama
     let buffer : Span<u8> = io:request_buffer(21); // len(INT_64_MIN) == 21
     if number == 0 {
         buffer.data[0] = "0"[0];
+        io:consume_length(1);
+
         // BUG: WE CAN RETURN VOID??
         return {&buffer.data, 1};
     }
@@ -27,8 +37,7 @@ function [IO] write : (io : IO&, number : isize) -> TypeIf<StringView, IsStreama
     let is_negative : bool = number < 0;
     let length : isize = 0;
     while number != 0 {
-        // 0 -> 48 ascii
-        let next_digit: u8 = as_logical(__builtin_narrow<i8>(abs(number % 10) + 48));
+        let next_digit: u8 = as_logical(__builtin_narrow<i8>(abs(number % 10) + as_arithmetic("0"[0])));
 
         buffer.data[length] = next_digit;
 
@@ -84,6 +93,13 @@ function [IO] write : (io : IO&, value : bool) -> TypeIf<StringView, IsStreamabl
     } else {
         return io:write(sv("false"));
     }
+}
+
+function [IO] write_char : (io : IO&, char : u8) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+    let buffer : Span<u8> = io:request_buffer(1);
+    buffer.data[0] = char;
+    io:consume_length(1);
+    return buffer;
 }
 
 function [Args...] print : (args : Args...) -> void = {

@@ -5,6 +5,12 @@
 @require_once "wrappers.c3"
 
 typedef StringView : Span<u8>
+typedef Rune : {codepoint : u8 /* TODO: unicode support */}
+
+function decode_rune : (char : u8) -> Rune = {
+    // TODO: this just supports ascii atm
+    return {char};
+}
 
 function [@Len] sv : (string : u8[@Len]&) -> StringView = {
     return make_span(&string);
