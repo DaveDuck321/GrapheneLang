@@ -167,3 +167,4 @@ cython_debug/
 
 # Compilation output
 a.out
+parser/parser
