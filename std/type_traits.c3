@@ -36,5 +36,5 @@ typedef IsLogical<u128> : TrueType
 
 typedef[T] HasTrivialAssignments : FalseType
 
-// Needs to implement `flush`, `consume_length` and `request_buffer`
+// Needs to implement `flush`, `close`, `consume_length` and `request_buffer`
 typedef[T] IsStreamableTextIO : FalseType
