@@ -44,13 +44,22 @@ typedef [T] SpanIter : {
     index : isize,
 }
 
-function [T] slice_from_offset : (span : Span<T>&, start_offset : iptr) -> Span<T> = {
+function [T] slice_from_offset : (span : Span<T>&, start_offset : isize) -> Span<T> = {
     // TODO: this should probably be a language feature
     let start_addr : iptr = ref_to_addr(&span.data[start_offset]);
     let new_length : isize = span.length - start_offset;
 
     // TODO: bounds check
     return {&addr_to_heap_array<T>(start_addr), new_length};
+}
+
+function [T] slice_between : (span : Span<T>&, start_offset : iptr, end_offset : isize) -> Span<T> = {
+    // TODO: this should probably be a language feature
+    let start_addr : iptr = ref_to_addr(&span.data[start_offset]);
+    if end_offset > span.length {
+        end_offset = span.length;
+    }
+    return {&addr_to_heap_array<T>(start_addr), end_offset - start_offset};
 }
 
 // BUG: the error from `function [T, @Len] make_span : (data : T[@Len]&) -> Span` gives the wrong line number
