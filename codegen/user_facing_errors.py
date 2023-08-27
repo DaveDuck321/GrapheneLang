@@ -360,9 +360,11 @@ class InvalidMainReturnType(GrapheneError):
 
 
 class InvalidSyntax(ErrorWithLineInfo):
-    def __init__(self, context_lines: list[str], line_number: int) -> None:
-        message = "\n    ".join(context_lines)
-        message += "\nError: invalid syntax, unexpected symbol"
+    def __init__(
+        self, context_lines: list[str], line_number: int, hint: str = ""
+    ) -> None:
+        message = "    ".join(context_lines)
+        message += f"\nError: invalid syntax, {hint}"
         super().__init__(message, line_number)
 
 

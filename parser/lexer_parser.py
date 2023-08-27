@@ -102,7 +102,7 @@ def init_lexer_parser(self_hosted: bool):
     global parse_fn
 
     if self_hosted:
-        raise NotImplementedError()
+        from .self_hosted_parser import parse
     else:
         from .bootstrap.lark_parser import parse
 
@@ -111,4 +111,5 @@ def init_lexer_parser(self_hosted: bool):
 
 def run_lexer_parser(path: Path) -> Tree:
     assert parse_fn is not None, "The lexer parser is uninitialized"
-    return json_to_tree(parse_fn(path))
+    parse_result = parse_fn(path)
+    return json_to_tree(parse_result)
