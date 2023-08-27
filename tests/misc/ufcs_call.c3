@@ -2,6 +2,10 @@
     return __builtin_add(a, b);
 }
 
+@operator -: (val : int) -> int = {
+    return __builtin_subtract(0, val);
+}
+
 function add: (this: int&, that: int) -> int& = {
     this = this + that;
     return &this;

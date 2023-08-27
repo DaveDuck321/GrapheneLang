@@ -8,4 +8,4 @@ function main : () -> int = {
 /// return 0
 /// }
 /// ^
-/// Error: invalid syntax, unexpected symbol
+/// Error: invalid syntax, expected ';'

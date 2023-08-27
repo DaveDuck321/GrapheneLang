@@ -8,4 +8,4 @@ function main : () -> int = {
 /// File '*.c3', line 3
 /// let hello int = 0;
 /// ^
-/// Error: invalid syntax, unexpected symbol
+/// Error: invalid syntax, expected ':'
