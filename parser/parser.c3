@@ -23,10 +23,6 @@ function slice : (cursor : Cursor&, length : isize) -> ProgramSlice = {
     return {cursor.position, cursor.position + length};
 }
 
-function slice : (cursor : Cursor&, start : isize, length : isize) -> ProgramSlice = {
-    return {start, start + length};
-}
-
 function ascii_is_text_token_start_char : (char : u8) -> bool = {
     return ascii_is_alpha(char) | (char == "_"[0]);
 }
@@ -243,14 +239,17 @@ function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
 }
 
 function get_next_bool_token : (cursor : Cursor&) -> ProgramSlice = {
-    runtime_assert(cursor:is_next("true") | cursor:is_next("false"));
+    let true_str : StringView = sv("true");
+    let false_str : StringView = sv("false");
+
+    runtime_assert(cursor:is_next(true_str) | cursor:is_next(false_str));
 
     let start_offset : isize = cursor.position;
-    if cursor:try_skip_next_and_surrounding_white_space("true") {
-        return {start_offset, start_offset + 4};
+    if cursor:try_skip_next_and_surrounding_white_space(true_str) {
+        return {start_offset, start_offset + true_str.length};
     } else {
-        runtime_assert(cursor:try_skip_next_and_surrounding_white_space("false"));
-        return {start_offset, start_offset + 5};
+        runtime_assert(cursor:try_skip_next_and_surrounding_white_space(false_str));
+        return {start_offset, start_offset + false_str.length};
     }
 }
 
@@ -261,7 +260,7 @@ function get_next_decimal_token : (cursor : Cursor&) -> ProgramSlice = {
     }
 
     while !cursor:is_end_of_token() {
-        let next_char : u8 = ascii_to_lower(cursor:get_char());
+        let next_char : u8 = cursor:get_char();
         if ascii_is_digit(next_char) {
             cursor.position += 1;
             token.end_offset += 1;
@@ -324,7 +323,7 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space(">>")
         | cursor:try_skip_next_and_surrounding_white_space("**")
     {
-        return cursor:slice(start_position, 2);
+        return {start_position, start_position + 2};
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("<")
@@ -341,7 +340,7 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space("@")
         | cursor:try_skip_next_and_surrounding_white_space("&")
     {
-        return cursor:slice(start_position, 1);
+        return {start_position, start_position + 1};
     }
 
     syntax_error(&cursor, sv("illegal operator '%'"), decode_rune(cursor:get_char()));
@@ -352,14 +351,14 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
     let start_position : isize = cursor.position;
 
     if cursor:try_skip_next_and_surrounding_white_space("=") {
-        return cursor:slice(start_position, 1);
+        return {start_position, start_position + 1};
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("<<=")
         | cursor:try_skip_next_and_surrounding_white_space(">>=")
         | cursor:try_skip_next_and_surrounding_white_space("**=")
     {
-        return cursor:slice(start_position, 3);
+        return {start_position, start_position + 3};
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("+=")
@@ -372,7 +371,7 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
         | cursor:try_skip_next_and_surrounding_white_space("@=")
         | cursor:try_skip_next_and_surrounding_white_space("&=")
     {
-        return cursor:slice(start_position, 2);
+        return {start_position, start_position + 2};
     }
 
     syntax_error(&cursor, sv("illegal assignment operator"));
