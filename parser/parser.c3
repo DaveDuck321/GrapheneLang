@@ -228,7 +228,7 @@ function get_next_hex_token : (cursor : Cursor&) -> ProgramSlice = {
             token.end_offset += 1;
         } else {
             // Otherwise its a syntax error
-            syntax_error(&cursor, sv("illegal digit '%' in hex constant"), decode_rune(next_char));
+            syntax_error(&cursor, sv("illegal digit '%' in hex constant"), decode_utf8(next_char));
         }
     }
     if token.end_offset - token.start_offset == 2 {
@@ -266,8 +266,7 @@ function get_next_decimal_token : (cursor : Cursor&) -> ProgramSlice = {
             token.end_offset += 1;
         } else {
             // Otherwise its a syntax error
-            let char : Rune = {next_char};
-            syntax_error(&cursor, sv("illegal digit '%' in decimal constant"), char);
+            syntax_error(&cursor, sv("illegal digit '%' in decimal constant"), decode_utf8(next_char));
         }
     }
     if token.end_offset - token.start_offset == 0 {
@@ -343,7 +342,7 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
         return {start_position, start_position + 1};
     }
 
-    syntax_error(&cursor, sv("illegal operator '%'"), decode_rune(cursor:get_char()));
+    syntax_error(&cursor, sv("illegal operator '%'"), decode_utf8(cursor:get_char()));
     return {0, 0};
 }
 
@@ -587,7 +586,7 @@ function parse_type_prefix : (cursor : Cursor&) -> Type = {
         return {5, ref_to_addr(&struct_type), meta(start_offset, struct_type.meta.end_offset)};
     }
 
-    syntax_error(&cursor, sv("unexpected symbol '%', this cannot be used at the start of a type"), decode_rune(cursor:get_char()));
+    syntax_error(&cursor, sv("unexpected symbol '%', this cannot be used at the start of a type"), decode_utf8(cursor:get_char()));
 
     // Unreachable
     // TODO: maybe allow `undefined` return
@@ -927,7 +926,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor&) -> Expression
         return {4, ref_to_addr(&variable_access), get_meta(name)};
     }
 
-    syntax_error(&cursor, sv("unexpected symbol '%', cannot start an expression"), decode_rune(cursor:get_char()));
+    syntax_error(&cursor, sv("unexpected symbol '%', cannot start an expression"), decode_utf8(cursor:get_char()));
     return {0, 0, meta(0, 0)};
 }
 

@@ -3,7 +3,7 @@
 @require_once "type_traits.c3"
 @require_once "util.c3"
 
-function [IO] write : (io : IO&, char : Rune) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO&, char : UTF32Codepoint) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
     return io:write_char(char.codepoint);
 }
 
