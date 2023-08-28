@@ -26,8 +26,7 @@ function generate_position_lookup_table : (program : StringView, allocator: Allo
 }
 
 function lookup_zero_indexed_line_number : (table : PositionLookupTable&, offset : isize) -> isize = {
-    // FIXME can't use UFCS here.
-    return bisect_left(table.offsets:data(), offset);
+    return table.offsets:data():bisect_left(offset);
 }
 
 function lookup_position : (table: PositionLookupTable&, offset : isize) -> FilePosition = {

@@ -1007,7 +1007,8 @@ class ExpressionParser(Interpreter):
         # resolution figure it out, although this isn't very explicit.
         if is_ufcs_call:
             this_arg = args[0]
-            this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
+            if this_arg.expression().is_indirect_pointer_to_type:
+                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
 
         assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
