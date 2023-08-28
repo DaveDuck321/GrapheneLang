@@ -21,9 +21,6 @@ function main : () -> int = {
     } else {
         return 1;
     }
-
-    // FIXME https://github.com/DaveDuck321/GrapheneLang/issues/72
-    return 0;
 }
 
 /// @COMPILE
