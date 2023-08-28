@@ -416,7 +416,7 @@ function [Others...] write_key_list_pair : (stream : JSON_Stream&, key : StringV
     stream:write_json_value(&key);
     stream:write(":");
     stream:write("[");
-    write_inner_list(&stream, values...);
+    stream:write_inner_list(values...);
     stream:write("]");
 }
 
@@ -427,9 +427,7 @@ function [Next] write_inner_list : (stream : JSON_Stream&, next : Next) -> void 
 function [Next, Others...] write_inner_list : (stream : JSON_Stream&, next : Next, others : Others...) -> void = {
     stream:write_json_value(&next);
     stream:write(",");
-
-    // TODO: UFCS with parameter packs
-    write_inner_list(&stream, others...);
+    stream:write_inner_list(others...);
 }
 
 function [T] write_token : (stream : JSON_Stream&, name : StringView, meta : Meta, value : T) -> void = {
@@ -446,8 +444,7 @@ function [Children...] write_tree : (stream : JSON_Stream&, name : StringView, m
     stream:write("{");
     stream:write_key_value_pair(sv("name"), name);
     stream:write(",");
-    // TODO: ufcs and parameter packs
-    write_key_list_pair(&stream, sv("children"), children...);
+    stream:write_key_list_pair(sv("children"), children...);
     stream:write(",");
     stream:write_key_value_pair(sv("meta"), meta);
     stream:write("}");
