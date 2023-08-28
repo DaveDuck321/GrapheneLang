@@ -58,14 +58,12 @@ function [T] pop_back : (self : Vector<T>&) -> T = {
 }
 
 function [T] get : (self : Vector<T>&, index : isize) -> T& = {
-    runtime_assert(index >= 0);
-    runtime_assert(index < self.length); // TODO: && in previous line
+    runtime_assert(index >= 0 and index < self.length);
     return &self.memory.data[index];
 }
 
 function [T] set : (self : Vector<T>&, index : isize, data : T) -> void = {
-    runtime_assert(index >= 0);
-    runtime_assert(index < self.length);  // TODO: && in previous line
+    runtime_assert(index >= 0 and index < self.length);
     self.memory.data[index] = data;
 }
 
