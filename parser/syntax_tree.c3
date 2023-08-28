@@ -134,7 +134,10 @@ typedef Expression : {
     // TODO: this is a poor man's variant
     // TODO: use an enum here
 
-    // 0: function call, 1: constant, 2: named init list, 3: unnamed init list, 4: variable, 5: array index access, 6: struct index access, 7: ufcs, 8: operator, 9: unary operator, 10: pack expansion, 11: borrow
+    // 0: function call, 1: constant, 2: named init list, 3: unnamed init list,
+    // 4: variable, 5: array index access, 6: struct index access, 7: ufcs, 8:
+    // operator, 9: unary operator, 10: pack expansion, 11: borrow, 12: logical
+    // operator
     type : int,
     pointer : iptr,
     meta : Meta,
@@ -155,6 +158,13 @@ typedef Operator : {
 
 typedef UnaryOperator : {
     name : ProgramSlice,
+    rhs : Expression,
+    meta : Meta,
+}
+
+typedef LogicalOperator : {
+    name : ProgramSlice,
+    lhs : Expression,
     rhs : Expression,
     meta : Meta,
 }
@@ -773,6 +783,10 @@ function write_json_value : (stream : JSON_Stream&, node : Expression&) -> void 
         stream:write_tree(sv("expression"), node.meta, &addr_to_ref<Borrow>(node.pointer));
         return;
     }
+    if node.type == 12 {
+        stream:write_tree(sv("expression"), node.meta, &addr_to_ref<LogicalOperator>(node.pointer));
+        return;
+    }
     runtime_assert(false);
 }
 
@@ -790,6 +804,10 @@ function write_json_value : (stream : JSON_Stream&, node : Operator&) -> void = 
 
 function write_json_value : (stream : JSON_Stream&, node : UnaryOperator&) -> void = {
     stream:write_tree(sv("unary_operator_use"), node.meta, stream:get_named_token(sv("UNARY_OPERATOR_TOKEN"), node.name), node.rhs);
+}
+
+function write_json_value : (stream : JSON_Stream&, node : LogicalOperator&) -> void = {
+    stream:write_tree(sv("logical_operator_use"), node.meta, node.lhs, stream:get_named_token(sv("LOGICAL_OPERATOR"), node.name), node.rhs);
 }
 
 function write_json_value : (stream : JSON_Stream&, node : Borrow&) -> void = {

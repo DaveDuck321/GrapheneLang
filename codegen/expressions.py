@@ -2,6 +2,7 @@ from abc import abstractmethod
 from typing import Iterator, Optional
 
 from .builtin_types import (
+    BoolType,
     FunctionSignature,
     HeapArrayDefinition,
     IntType,
@@ -10,7 +11,7 @@ from .builtin_types import (
     StructDefinition,
     format_array_dims_for_ir,
 )
-from .interfaces import Type, TypedExpression, Variable
+from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
@@ -637,3 +638,121 @@ class UnnamedInitializerList(InitializerList):
         # If other is not a stack array, then delegate to the parent class. It
         # can handle all other cases.
         return super().try_convert_to_type(other)
+
+
+class LogicalOperator(TypedExpression):
+    def __init__(
+        self,
+        operator: str,
+        label_id: int,
+        lhs_expression: TypedExpression,
+        rhs_generatables: list[Generatable],
+        rhs_expression: TypedExpression,
+    ) -> None:
+        super().__init__(BoolType(), False)
+
+        assert operator in ("and", "or")
+
+        # FIXME these errors are not great.
+        lhs_expression.assert_can_read_from()
+        assert_is_implicitly_convertible(
+            lhs_expression, BoolType(), f"logical {operator}"
+        )
+
+        rhs_expression.assert_can_read_from()
+        assert_is_implicitly_convertible(
+            rhs_expression, BoolType(), f"logical {operator}"
+        )
+
+        self.result_reg: Optional[int] = None
+
+        self.operator = operator
+        self.label_id = label_id
+        self.lhs_expression = lhs_expression
+        self.rhs_generatables = rhs_generatables
+        self.rhs_expression = rhs_expression
+
+    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+        # https://llvm.org/docs/LangRef.html#br-instruction
+        # https://llvm.org/docs/LangRef.html#phi-instruction
+        ir: list[str] = []
+
+        lhs_label = f"l{self.operator}{self.label_id}.lhs"
+        rhs_label = f"l{self.operator}{self.label_id}.rhs"
+        end_label = f"l{self.operator}{self.label_id}.end"
+
+        # Logical and evaluates the RHS condition only if the LHS evaluates to
+        # true. Logical or evaluates the RHS condition only if the LHS evaluates
+        # to false.
+        label_if_true = rhs_label if self.operator == "and" else end_label
+        label_if_false = end_label if self.operator == "and" else rhs_label
+
+        # Start by branching to a known label name. This would have been
+        # entirely unnecessary if we knew what the current label name was, but
+        # we don't!
+        # br label <dest>
+        ir.append(f"br label %{lhs_label}")
+
+        # lhs body.
+        ir.append(f"{lhs_label}:")
+
+        # Cast lhs to bool.
+        conv_lhs, extra_lhs_exprs = do_implicit_conversion(
+            self.lhs_expression, BoolType()
+        )
+        ir.extend(self.expand_ir(extra_lhs_exprs, reg_gen))
+
+        # Jump to either rhs_label or end_label.
+        # br i1 <cond>, label <iftrue>, label <iffalse>
+        ir.append(
+            f"br {conv_lhs.ir_ref_with_type_annotation}, "
+            f"label %{label_if_true}, label %{label_if_false}"
+        )
+
+        # rhs body.
+        ir.append(f"{rhs_label}:")
+        ir.extend(self.expand_ir(self.rhs_generatables, reg_gen))
+        ir.extend(self.rhs_expression.generate_ir(reg_gen))
+
+        # Cast rhs to bool.
+        conv_rhs, extra_rhs_exprs = do_implicit_conversion(
+            self.rhs_expression, BoolType()
+        )
+        ir.extend(self.expand_ir(extra_rhs_exprs, reg_gen))
+
+        # We always go to end_label.
+        # br label <dest>
+        ir.append(f"br label %{end_label}")
+
+        # end body.
+        ir.append(f"{end_label}:")
+
+        # The IR is in SSA form, so we need a phi node to obtain the result of
+        # the operator in a single register.
+        self.result_reg = next(reg_gen)
+        # <result> = phi [fast-math-flags] <ty> [ <val0>, <label0> ], ...
+        ir.append(
+            f"{self.ir_ref_without_type_annotation} = phi {self.ir_type_annotation} "
+            f"[ {conv_lhs.ir_ref_without_type_annotation}, %{lhs_label} ], "
+            f"[ {conv_rhs.ir_ref_without_type_annotation}, %{rhs_label} ]"
+        )
+
+        return ir
+
+    def __repr__(self) -> str:
+        return (
+            f"LogicalOperator({self.operator}, {self.label_id}, "
+            f"{self.lhs_expression}, {self.rhs_expression})"
+        )
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert self.result_reg
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        # TODO user-facing error.
+        assert False

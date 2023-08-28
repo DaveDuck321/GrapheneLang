@@ -4,6 +4,7 @@ from .expressions import (
     BorrowExpression,
     ConstantExpression,
     InitializerList,
+    LogicalOperator,
     NamedInitializerList,
     StructMemberAccess,
     UnnamedInitializerList,
