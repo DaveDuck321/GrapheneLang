@@ -118,7 +118,6 @@ function [IO] write_syntax_error_location : (io : IO&, cursor : Cursor&, positio
 }
 
 function [Args...] syntax_error : (cursor : Cursor&, format_args : Args...) -> void = {
-    // TODO: return breaks codegen
     syntax_error_at_position(&cursor, cursor.position, format_args...);
 }
 
