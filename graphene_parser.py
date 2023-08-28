@@ -1148,11 +1148,9 @@ def generate_return_statement(
 ) -> None:
     (expr,) = body.children
     if expr is None:
-        expr = cg.ReturnStatement(cg.VoidType())
-        scope.add_generatable(expr)
+        scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
         return
 
-    (expr,) = body.children
     assert isinstance(expr, Tree)
     flattened_expr = ExpressionParser.parse(
         program, function, scope, generic_mapping, expr
