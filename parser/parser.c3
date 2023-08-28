@@ -24,11 +24,11 @@ function slice : (cursor : Cursor&, length : isize) -> ProgramSlice = {
 }
 
 function ascii_is_text_token_start_char : (char : u8) -> bool = {
-    return ascii_is_alpha(char) | (char == "_"[0]);
+    return ascii_is_alpha(char) or char == "_"[0];
 }
 
 function ascii_is_text_token_char : (char : u8) -> bool = {
-    return ascii_is_alphanumeric(char) | (char == "_"[0]);
+    return ascii_is_alphanumeric(char) or char == "_"[0];
 }
 
 function get_char : (cursor : Cursor&) -> u8 = {
@@ -82,7 +82,7 @@ function try_skip_next_operator : (cursor : Cursor&, operator: StringView) -> bo
     if cursor:get_char_at_offset(operator.length) == "="[0] {
         return false;
     }
-    if cursor:is_next("<<=") | cursor:is_next(">>=") | cursor:is_next("**=") {
+    if cursor:is_next("<<=") or cursor:is_next(">>=") or cursor:is_next("**=") {
         return false;
     }
     return cursor:try_skip_next(operator);
@@ -141,7 +141,7 @@ function [Args...] syntax_error_at_position : (cursor : Cursor&, position : isiz
 function try_skip_comment : (cursor : Cursor&) -> bool = {
     // Single line comment
     if cursor:is_next("//") {
-        while !cursor:is_next("\n") & !cursor:is_next("\0") {
+        while !cursor:is_next("\n") and !cursor:is_next("\0") {
             cursor.position += 1;
         }
         cursor.position += 1;
@@ -150,7 +150,7 @@ function try_skip_comment : (cursor : Cursor&) -> bool = {
 
     // Multi-line comment
     if cursor:is_next("/*") {
-        while !cursor:is_next("*/") & !cursor:is_next("\0") {
+        while !cursor:is_next("*/") and !cursor:is_next("\0") {
             cursor.position += 1;
         }
         cursor.position += 2;
@@ -242,7 +242,7 @@ function get_next_bool_token : (cursor : Cursor&) -> ProgramSlice = {
     let true_str : StringView = sv("true");
     let false_str : StringView = sv("false");
 
-    runtime_assert(cursor:is_next(true_str) | cursor:is_next(false_str));
+    runtime_assert(cursor:is_next(true_str) or cursor:is_next(false_str));
 
     let start_offset : isize = cursor.position;
     if cursor:try_skip_next_and_surrounding_white_space(true_str) {
@@ -315,29 +315,29 @@ function get_next_operator : (cursor : Cursor&) -> ProgramSlice = {
     let start_position : isize = cursor.position;
 
     if cursor:try_skip_next_and_surrounding_white_space("==")
-        | cursor:try_skip_next_and_surrounding_white_space("<=")
-        | cursor:try_skip_next_and_surrounding_white_space(">=")
-        | cursor:try_skip_next_and_surrounding_white_space("!=")
-        | cursor:try_skip_next_and_surrounding_white_space("<<")
-        | cursor:try_skip_next_and_surrounding_white_space(">>")
-        | cursor:try_skip_next_and_surrounding_white_space("**")
+        or cursor:try_skip_next_and_surrounding_white_space("<=")
+        or cursor:try_skip_next_and_surrounding_white_space(">=")
+        or cursor:try_skip_next_and_surrounding_white_space("!=")
+        or cursor:try_skip_next_and_surrounding_white_space("<<")
+        or cursor:try_skip_next_and_surrounding_white_space(">>")
+        or cursor:try_skip_next_and_surrounding_white_space("**")
     {
         return {start_position, start_position + 2};
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("<")
-        | cursor:try_skip_next_and_surrounding_white_space(">")
-        | cursor:try_skip_next_and_surrounding_white_space("!")
-        | cursor:try_skip_next_and_surrounding_white_space("~")
-        | cursor:try_skip_next_and_surrounding_white_space("+")
-        | cursor:try_skip_next_and_surrounding_white_space("-")
-        | cursor:try_skip_next_and_surrounding_white_space("*")
-        | cursor:try_skip_next_and_surrounding_white_space("/")
-        | cursor:try_skip_next_and_surrounding_white_space("%")
-        | cursor:try_skip_next_and_surrounding_white_space("|")
-        | cursor:try_skip_next_and_surrounding_white_space("^")
-        | cursor:try_skip_next_and_surrounding_white_space("@")
-        | cursor:try_skip_next_and_surrounding_white_space("&")
+        or cursor:try_skip_next_and_surrounding_white_space(">")
+        or cursor:try_skip_next_and_surrounding_white_space("!")
+        or cursor:try_skip_next_and_surrounding_white_space("~")
+        or cursor:try_skip_next_and_surrounding_white_space("+")
+        or cursor:try_skip_next_and_surrounding_white_space("-")
+        or cursor:try_skip_next_and_surrounding_white_space("*")
+        or cursor:try_skip_next_and_surrounding_white_space("/")
+        or cursor:try_skip_next_and_surrounding_white_space("%")
+        or cursor:try_skip_next_and_surrounding_white_space("|")
+        or cursor:try_skip_next_and_surrounding_white_space("^")
+        or cursor:try_skip_next_and_surrounding_white_space("@")
+        or cursor:try_skip_next_and_surrounding_white_space("&")
     {
         return {start_position, start_position + 1};
     }
@@ -354,21 +354,21 @@ function get_next_assignment : (cursor : Cursor&) -> ProgramSlice = {
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("<<=")
-        | cursor:try_skip_next_and_surrounding_white_space(">>=")
-        | cursor:try_skip_next_and_surrounding_white_space("**=")
+        or cursor:try_skip_next_and_surrounding_white_space(">>=")
+        or cursor:try_skip_next_and_surrounding_white_space("**=")
     {
         return {start_position, start_position + 3};
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("+=")
-        | cursor:try_skip_next_and_surrounding_white_space("-=")
-        | cursor:try_skip_next_and_surrounding_white_space("*=")
-        | cursor:try_skip_next_and_surrounding_white_space("/=")
-        | cursor:try_skip_next_and_surrounding_white_space("%=")
-        | cursor:try_skip_next_and_surrounding_white_space("|=")
-        | cursor:try_skip_next_and_surrounding_white_space("^=")
-        | cursor:try_skip_next_and_surrounding_white_space("@=")
-        | cursor:try_skip_next_and_surrounding_white_space("&=")
+        or cursor:try_skip_next_and_surrounding_white_space("-=")
+        or cursor:try_skip_next_and_surrounding_white_space("*=")
+        or cursor:try_skip_next_and_surrounding_white_space("/=")
+        or cursor:try_skip_next_and_surrounding_white_space("%=")
+        or cursor:try_skip_next_and_surrounding_white_space("|=")
+        or cursor:try_skip_next_and_surrounding_white_space("^=")
+        or cursor:try_skip_next_and_surrounding_white_space("@=")
+        or cursor:try_skip_next_and_surrounding_white_space("&=")
     {
         return {start_position, start_position + 2};
     }
@@ -473,7 +473,7 @@ function parse_named_type : (cursor : Cursor&) -> NamedType = {
 }
 
 function is_at_start_of_compile_time_constant : (cursor : Cursor&) -> bool = {
-    return cursor:is_next("@") | ascii_is_digit(cursor:get_char()) | cursor:is_next("-");
+    return cursor:is_next("@") or ascii_is_digit(cursor:get_char()) or cursor:is_next("-");
 }
 
 function parse_compile_time_constant : (cursor : Cursor&) -> CompileTimeConstant = {
@@ -886,7 +886,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor&) -> Expression
     }
 
     // Constants
-    if cursor:is_next("true") | cursor:is_next("false") {
+    if cursor:is_next("true") or cursor:is_next("false") {
         let constant : Constant& = &cursor.allocator:allocate<Constant>();
         constant = {3, cursor:get_next_bool_token()};
         return {1, ref_to_addr(&constant), get_meta(constant.value)};
