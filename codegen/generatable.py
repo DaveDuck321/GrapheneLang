@@ -1,6 +1,6 @@
 from typing import Iterable, Iterator, Optional
 
-from .builtin_types import BoolType, CharArrayDefinition
+from .builtin_types import BoolType, CharArrayDefinition, VoidType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
@@ -345,7 +345,10 @@ class ReturnStatement(Generatable):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#i-ret
 
-        if self.returned_expr is None:
+        # We have to use return_type instead of returned_expr.underlying_type,
+        # as returned_expr might be an initializer list, which throws when its
+        # type is accesssed.
+        if self.returned_expr is None or self.return_type == VoidType():
             # ret void; Return from void function
             return ["ret void"]
 
