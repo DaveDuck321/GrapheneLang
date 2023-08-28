@@ -34,8 +34,6 @@ jobs:
         pip install -r requirements.txt
     - name: Install clang and lli
       run: |
-        # XXX workaround for https://github.com/llvm/llvm-project/issues/64182
-        sudo apt-get purge --auto-remove llvm python3-lldb-14 llvm-14
         wget https://apt.llvm.org/llvm.sh
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ matrix.llvm-version }}
