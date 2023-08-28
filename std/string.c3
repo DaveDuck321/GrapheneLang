@@ -5,9 +5,9 @@
 @require_once "wrappers.c3"
 
 typedef StringView : Span<u8>
-typedef Rune : {codepoint : u8 /* TODO: unicode support */}
+typedef UTF32Codepoint : {codepoint : u8 /* TODO: unicode support */}
 
-function decode_rune : (char : u8) -> Rune = {
+function decode_utf8 : (char : u8) -> UTF32Codepoint = {
     // TODO: this just supports ascii atm
     return {char};
 }
