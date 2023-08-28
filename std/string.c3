@@ -53,55 +53,50 @@ function [@Len] make_cstring : (literal : u8[@Len]&) -> CString = {
 }
 
 function ascii_is_white_space : (char : u8) -> bool = {
-    // TODO: ||
     // TODO: all other white spaces
-    return (char == "\n"[0]) | (char == " "[0]);
+    return char == "\n"[0] or char == " "[0];
 }
 
 function ascii_is_digit : (char : u8) -> bool = {
-    // TODO: &&
-    return (as_arithmetic(char) >= as_arithmetic("0"[0])) & (as_arithmetic(char) <= as_arithmetic("9"[0]));
+    return as_arithmetic(char) >= as_arithmetic("0"[0]) and as_arithmetic(char) <= as_arithmetic("9"[0]);
 }
 
 function ascii_is_alpha : (char : u8) -> bool = {
-    // TODO: &&
     let lower : i8 = as_arithmetic(ascii_to_lower(char));
-    return (lower >= as_arithmetic("a"[0])) & (lower <= as_arithmetic("z"[0]));
+    return lower >= as_arithmetic("a"[0]) and lower <= as_arithmetic("z"[0]);
 }
 
 function ascii_is_alphanumeric : (char : u8) -> bool = {
-    return ascii_is_digit(char) | ascii_is_alpha(char);
+    return ascii_is_digit(char) or ascii_is_alpha(char);
 }
 
 function ascii_to_lower : (char : u8) -> u8 = {
-    // TODO: support &&
     // TODO: support char literals
-    if (as_arithmetic(char) >= as_arithmetic("A"[0])) & (as_arithmetic(char) <= as_arithmetic("Z"[0])) {
+    if as_arithmetic(char) >= as_arithmetic("A"[0]) and as_arithmetic(char) <= as_arithmetic("Z"[0]) {
         return char | __builtin_narrow<u8>(0x20);
     }
     return char;
 }
 
 function ascii_to_upper : (char : u8) -> u8 = {
-    // TODO: support &&
     // TODO: support char literals
-    if (as_arithmetic(char) >= as_arithmetic("a"[0])) | (as_arithmetic(char) <= as_arithmetic("z"[0])) {
+    if as_arithmetic(char) >= as_arithmetic("a"[0]) or as_arithmetic(char) <= as_arithmetic("z"[0]) {
         return char ^ __builtin_narrow<u8>(0x20);
     }
     return char;
 }
 
 function ascii_is_matched_pair : (lhs : u8, rhs : u8) -> bool = {
-    if (lhs == "("[0]) & (rhs == ")"[0]) {
+    if lhs == "("[0] and rhs == ")"[0] {
         return true;
     }
-    if (lhs == "["[0]) & (rhs == "]"[0]) {
+    if lhs == "["[0] and rhs == "]"[0] {
         return true;
     }
-    if (lhs == "<"[0]) & (rhs == ">"[0]) {
+    if lhs == "<"[0] and rhs == ">"[0] {
         return true;
     }
-    if (lhs == "{"[0]) & (rhs == "}"[0]) {
+    if lhs == "{"[0] and rhs == "}"[0] {
         return true;
     }
     return false;
