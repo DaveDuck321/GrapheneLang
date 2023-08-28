@@ -36,3 +36,22 @@ function [T] reverse : (buffer : Span<T>&) -> void = {
         lhs += 1;
     }
 }
+
+function [T] bisect_left : (span : Span<T>, elem : T) -> isize = {
+    let lo : isize = 0;
+    let hi : isize = span.length;
+
+    while lo < hi {
+        // Avoid overflows when averaging.
+        const mid : isize = lo + (hi - lo) / 2;
+
+        if span.data[mid] < elem {
+            lo = mid + 1;
+        }
+        else {
+            hi = mid;
+        }
+    }
+
+    return lo;
+}
