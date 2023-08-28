@@ -138,7 +138,6 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
         }
 
         return ref_to_addr(&node_to_pop);
-
     } else {
         // We don't have any bins left, split one from the bin above us
         let this_size : isize = get_block_size_from_bin_index(bin);
@@ -154,9 +153,6 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
 
         return new_bin_location_1;
     }
-
-    // FIXME: we generate invalid code without this return
-    return 0;
 }
 
 function initialize_allocator : () -> Allocator = {
