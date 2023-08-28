@@ -104,23 +104,23 @@ function [IO] write_char : (io : IO&, char : u8) -> TypeIf<StringView, IsStreama
 
 function [Args...] print : (args : Args...) -> void = {
     let io : BufferedFile = get_stdout_io();
-    print_impl(&io, args...);
+    io:print_impl(args...);
     io:write(sv("\n"));
     io:flush();
 }
 
 function [NextArg] print_impl : (io : BufferedFile&, next : NextArg) -> void = {
-    write(&io, next);
+    io:write(next);
 }
 
 function [NextArg, OtherArgs...] print_impl : (io : BufferedFile&, next : NextArg, args : OtherArgs...) -> void = {
-    write(&io, next);
-    print_impl(&io, args...);
+    io:write(next);
+    io:print_impl(args...);
 }
 
 function [Args...] printf : (args : Args...) -> void = {
     let io : BufferedFile = get_stdout_io();
-    writef(&io, args...);
+    io:writef(args...);
     io:write(sv("\n"));
     io:flush();
 }
@@ -135,14 +135,12 @@ function [IO] writef : (io : IO&, format_string : StringView) -> void = {
 
 function [IO, NextArg] writef : (io : IO&, format_string : StringView, next : NextArg) -> void = {
     let next_format_string : StringView = write_next_format_pair(&io, format_string, next);
-    writef(&io, next_format_string);
+    io:writef(next_format_string);
 }
 
 function [IO, NextArg, Args...] writef : (io : IO&, format_string : StringView, next_arg: NextArg, args : Args...) -> void = {
     let next_format_string : StringView = write_next_format_pair(&io, format_string, next_arg);
-
-    // UFCS breaks with parameter packs!!
-    writef(&io, next_format_string, args...);
+    io:writef(next_format_string, args...);
 }
 
 function [IO, Arg] write_next_format_pair : (io : IO&, format_string : StringView, next_arg : Arg) -> StringView = {
