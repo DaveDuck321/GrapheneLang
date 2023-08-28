@@ -56,6 +56,8 @@ class Function:
             is_foreign,
         )
 
+        # These two counters could be merged.
+        self.label_id_iter = count()
         self.scope_id_iter = count()
         self.top_level_scope = Scope(self.get_next_scope_id())
 
@@ -86,6 +88,9 @@ class Function:
 
     def is_foreign(self) -> bool:
         return self._signature.is_foreign()
+
+    def get_next_label_id(self) -> int:
+        return next(self.label_id_iter)
 
     def get_next_scope_id(self) -> int:
         return next(self.scope_id_iter)

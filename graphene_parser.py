@@ -918,6 +918,31 @@ class ExpressionParser(Interpreter):
         )
         return flattened_expr.add_parent(call_expr)
 
+    @inline_arguments
+    def logical_operator_use(
+        self, lhs_tree: Tree, operator: Token, rhs_tree: Tree
+    ) -> FlattenedExpression:
+        assert operator.value in ("and", "or")
+
+        lhs = self.visit(lhs_tree)
+        rhs = self.visit(rhs_tree)
+        assert isinstance(lhs, FlattenedExpression)
+        assert isinstance(rhs, FlattenedExpression)
+
+        flattened_expr = FlattenedExpression([])
+        flattened_expr.subexpressions.extend(lhs.subexpressions)
+        flattened_expr.add_parent(
+            cg.LogicalOperator(
+                operator.value,
+                self._function.get_next_label_id(),
+                lhs.expression(),
+                rhs.subexpressions[:-1],
+                rhs.expression(),
+            )
+        )
+
+        return flattened_expr
+
     def _function_call_inner(
         self,
         fn_name: str,

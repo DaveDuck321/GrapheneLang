@@ -978,10 +978,21 @@ function [T] parse_expression_with_order_of_operator : (cursor : Cursor&, op_ite
         let rhs : Expression = cursor:parse_next_operator_subexpression(op_iter);
 
         let meta : Meta = meta(lhs.meta.start_offset, cursor.position);
-        let operator_call : Operator& = &cursor.allocator:allocate<Operator>();
-        operator_call = {op_name, lhs, rhs, meta};
 
-        lhs = {8, ref_to_addr(&operator_call), meta};
+        if is_one_of(cursor:get_sv(op_name), sv("and"), sv("or")) {
+            // This is currently very similar to the binary operator code.
+            // However, binary operators will be parsed directly as function
+            // calls in the future, so the code will diverge.
+            let logical_operator : LogicalOperator& = &cursor.allocator:allocate<LogicalOperator>();
+            logical_operator = {op_name, lhs, rhs, meta};
+            lhs = {12, ref_to_addr(&logical_operator), meta};
+        }
+        else {
+            let operator_call : Operator& = &cursor.allocator:allocate<Operator>();
+            operator_call = {op_name, lhs, rhs, meta};
+            lhs = {8, ref_to_addr(&operator_call), meta};
+        }
+
         last_operator_start = cursor.position;
     }
     return lhs;

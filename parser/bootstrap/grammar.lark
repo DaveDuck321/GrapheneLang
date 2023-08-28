@@ -124,10 +124,10 @@ UNARY_OPERATOR_TOKEN: "!" | "-" | "+" | "~"
 POWER_TOKEN: "**"
 
 !?logical_or: logical_and
-            | logical_and "||" logical_or -> operator_use
+            | logical_and "or" logical_or -> logical_operator_use
 
 !?logical_and: comparison_op
-             | comparison_op "&&" logical_and -> operator_use
+             | comparison_op "and" logical_and -> logical_operator_use
 
 ?comparison_op: bitwise_or
               | bitwise_or COMPARE_TOKEN comparison_op -> operator_use
