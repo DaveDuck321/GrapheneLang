@@ -194,14 +194,14 @@ class FunctionSymbolTable:
                 fn_to_add_signature.user_facing_name,
             )
 
-        for target in matched_functions:
-            if target.is_foreign():
+        for target_fn in matched_functions:
+            if target_fn.is_foreign():
                 raise RedefinitionError(
                     "non-overloadable foreign function",
-                    target.get_signature().user_facing_name,
+                    target_fn.get_signature().user_facing_name,
                 )
 
-            if target.get_signature().arguments == fn_to_add_signature.arguments:
+            if target_fn.get_signature().arguments == fn_to_add_signature.arguments:
                 raise RedefinitionError(
                     "function", fn_to_add_signature.user_facing_name
                 )

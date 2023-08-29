@@ -10,16 +10,16 @@ import yaml
 
 
 class Endianess(Enum):
-    Big = 0
-    Little = 1
+    BIG = 0
+    LITTLE = 1
 
     @property
     def llvm_datalayout_spec(self) -> str:
-        return "E" if self == self.Big else "e"
+        return "E" if self == self.BIG else "e"
 
     @classmethod
     def from_str(cls, string: str) -> "Endianess":
-        return cls.Big if string == "big" else cls.Little
+        return cls.BIG if string == "big" else cls.LITTLE
 
 
 class ManglingStyle(Enum):
@@ -45,7 +45,7 @@ class ManglingStyle(Enum):
 
 
 class ABI(Enum):
-    SystemV_AMD64 = 0
+    SYSTEMV_AMD64 = 0
     ARM_EABI = 1
     AAPCS64 = 2
 
@@ -54,7 +54,7 @@ class ABI(Enum):
     ) -> int:
         # Reuse the System V AMD64 ABI implementation for AAPCS64.
         # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#59composite-types
-        if self not in (self.SystemV_AMD64, self.AAPCS64):
+        if self not in (self.SYSTEMV_AMD64, self.AAPCS64):
             raise NotImplementedError
 
         # Return the size of the struct as set by the System V AMD64 ABI.
@@ -93,7 +93,7 @@ class ABI(Enum):
     def compute_struct_alignment(self, member_aligns: list[int]) -> int:
         # Reuse the System V AMD64 ABI implementation for AAPCS64.
         # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#591aggregates
-        if self not in (self.SystemV_AMD64, self.AAPCS64):
+        if self not in (self.SYSTEMV_AMD64, self.AAPCS64):
             raise NotImplementedError
 
         # Structures and unions assume the alignment of their most strictly
@@ -101,7 +101,7 @@ class ABI(Enum):
         return max(member_aligns) if member_aligns else 1
 
     def compute_stack_array_alignment(self, array_size: int, member_align: int) -> int:
-        if self == self.SystemV_AMD64:
+        if self == self.SYSTEMV_AMD64:
             # An array uses the same alignment as its elements, except that a
             # local or global array variable of length at least 16 bytes or a
             # C99 variable-length array variable always has alignment of at
@@ -118,7 +118,7 @@ class ABI(Enum):
     @classmethod
     def from_str(cls, string: str) -> "ABI":
         if string == "SystemV_AMD64":
-            return cls.SystemV_AMD64
+            return cls.SYSTEMV_AMD64
         if string == "arm_eabi":
             # FIXME actually implement the ABI...
             return cls.ARM_EABI
@@ -205,7 +205,7 @@ def load_target_config(target: str) -> None:
         print(f"Could not find a configuration file for target '{target}'", file=stderr)
         sys_exit(1)
 
-    with open(config_path) as config_file:
+    with open(config_path, encoding="utf-8") as config_file:
         config_data = yaml.safe_load(config_file)
 
     # The __init__ function checks that all specified fields are in the
@@ -217,15 +217,11 @@ def load_target_config(target: str) -> None:
 
 def _get_config() -> TargetConfig:
     # NOTE the dataclass shouldn't be part of the public API.
-    global _target_config
-
     assert _target_config is not None
     return _target_config
 
 
 def get_target() -> str:
-    global _target
-
     assert _target is not None
     return _target
 

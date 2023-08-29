@@ -604,7 +604,7 @@ class TypeSymbolTable:
                 except GrapheneError as exc:
                     raise ErrorWithLocationInfo(
                         exc.message, unresolved_type.loc, "typedef"
-                    )
+                    ) from exc
 
         # Ensure we only resolve each type once
         self._unresolved_types.clear()

@@ -12,14 +12,16 @@ def is_whitespace(string: str) -> bool:
 
 
 def parse(path: Path) -> str:
-    result = subprocess.run([PARSER_PATH, path], encoding="utf8", capture_output=True)
+    result = subprocess.run(
+        [PARSER_PATH, path], encoding="utf8", capture_output=True, check=False
+    )
     if result.returncode == 0:
         # Success!
         return result.stdout
 
     # The parser failed, display the error
     error = json.loads(result.stdout)
-    assert error["success"] == False
+    assert error["success"] is False
 
     line = error["location"]["line"]
     column = error["location"]["column"]
