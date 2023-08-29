@@ -8,7 +8,7 @@ from lark.tree import Meta
 from codegen.user_facing_errors import InvalidSyntax
 
 GRAMMAR_PATH = Path(__file__).parent / "grammar.lark"
-lark = Lark.open(
+lark_instance = Lark.open(
     str(GRAMMAR_PATH),
     parser="earley",
     ambiguity="resolve",
@@ -85,9 +85,9 @@ def parse_and_wrap_errors(lark: Lark, path: Path) -> Tree:
         caret_pos = error_pos - this_line_start_pos - 1
         error_message_context.append(caret_pos * " " + "^")
 
-        raise InvalidSyntax(error_message_context, exc.line)
+        raise InvalidSyntax(error_message_context, exc.line) from exc
 
 
 def parse(path: Path) -> str:
-    tree = parse_and_wrap_errors(lark, path)
+    tree = parse_and_wrap_errors(lark_instance, path)
     return json.dumps(tree_to_dict(tree))

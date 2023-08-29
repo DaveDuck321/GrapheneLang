@@ -17,9 +17,6 @@ from .user_facing_errors import (
 
 
 class PlaceholderDefinition(TypeDefinition):
-    def __init__(self) -> None:
-        super().__init__()
-
     def are_equivalent(self, other: TypeDefinition) -> bool:
         assert False
 
@@ -89,7 +86,10 @@ class NamedType(Type):
         if not full:
             return self.get_name() + reference_suffix
 
-        return f"typedef {self.get_name()} = {self.definition.format_for_output_to_user()}{reference_suffix}"
+        return (
+            f"typedef {self.get_name()} = "
+            f"{self.definition.format_for_output_to_user()}{reference_suffix}"
+        )
 
     @property
     def ir_mangle(self) -> str:

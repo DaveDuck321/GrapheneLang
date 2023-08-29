@@ -532,7 +532,7 @@ class ParseFunctionSignatures(Interpreter):
                         include_hierarchy,
                     ),
                     "function return type",
-                )
+                ) from exc
 
             try:
                 resolved_args = [
@@ -785,7 +785,7 @@ class ParseImports(Interpreter):
                 exc.message,
                 path_tree.meta.start.line,
                 f"@require_once {path_token.value}",
-            )
+            ) from exc
 
     def _require_once_impl(self, path_str: str) -> None:
         file_path = search_include_path_for_file(path_str, self._include_path)
@@ -1529,7 +1529,7 @@ def generate_ir_from_source(
                 generate_function_body(program, fn, body, specialization)
             except ErrorWithLineInfo as exc:
                 location = SourceLocation(exc.line, loc.file, loc.include_hierarchy)
-                raise ErrorWithLocationInfo(exc.message, location, exc.context)
+                raise ErrorWithLocationInfo(exc.message, location, exc.context) from exc
 
     except ErrorWithLocationInfo as exc:
         if debug_compiler:
