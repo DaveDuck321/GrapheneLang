@@ -411,8 +411,12 @@ class ParseFunctionSignatures(Interpreter):
     ):
         assert self._current_file is not None
         assert self._include_hierarchy is not None
+        # Save these for later.
+        current_file = self._current_file
+        include_hierarchy = self._include_hierarchy
+
         location = SourceLocation(
-            args_tree.meta.start.line, self._current_file, self._include_hierarchy
+            args_tree.meta.start.line, current_file, include_hierarchy
         )
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
@@ -517,6 +521,20 @@ class ParseFunctionSignatures(Interpreter):
                 resolved_return = self._program.resolve_type(
                     unresolved_return.produce_specialized_copy(specialization_map)
                 )
+            except SubstitutionFailure:
+                return None  # SFINAE
+            except GrapheneError as exc:
+                raise ErrorWithLocationInfo(
+                    exc.message,
+                    SourceLocation(
+                        return_type_tree.meta.start.line,
+                        current_file,
+                        include_hierarchy,
+                    ),
+                    "function return type",
+                )
+
+            try:
                 resolved_args = [
                     self._program.resolve_type(arg)
                     if isinstance(arg, cg.UnresolvedType)

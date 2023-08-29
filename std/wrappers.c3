@@ -62,7 +62,6 @@ function [T] slice_between : (span : Span<T>&, start_offset : iptr, end_offset :
     return {&addr_to_heap_array<T>(start_addr), end_offset - start_offset};
 }
 
-// BUG: the error from `function [T, @Len] make_span : (data : T[@Len]&) -> Span` gives the wrong line number
 function [T, @Len] make_span : (data : T[@Len]&) -> Span<T> = {
     return {&data, @Len};
 }
