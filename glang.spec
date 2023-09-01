@@ -29,7 +29,8 @@ Summary: A Graphene front-end for LLVM
 # Upstream URL
 Url: %{giturl}/
 # URL where to obtain the sources
-Source0: %{giturl}/archive/refs/tags/%{version}.tar.gz
+Source0: https://github.com/DaveDuck321/GrapheneLang/archive/refs/heads/main.zip
+# Source0: %{giturl}/archive/refs/tags/%{version}.tar.gz
 # You can add multiple source files by adding this more than once,
 # appending a new number, i.e. SourceN. These values are available
 # later in the %%{SOURCE0}, %%{SOURCE1}, ... macros.
@@ -44,13 +45,8 @@ Source0: %{giturl}/archive/refs/tags/%{version}.tar.gz
 # BuildArch: noarch
 
 # List of packages required for building this package
-%if 0%{?el6}
-BuildRequires: python34-devel
-BuildRequires: python34-setuptools
-%else
 BuildRequires: python3-devel
 BuildRequires: python3-setuptools
-%endif
 
 # List of packages required by the package at runtime
 # Requires: ...
@@ -75,7 +71,7 @@ packaging using tito and Fedora's Copr user repository.
 # tarball does not extract to a directory of the same name, you can specify
 # the directory using the -n <dir> switch. You can also pass the -p option of
 # the patch utility
-%autosetup
+%autosetup -n GrapheneLang-main
 
 # The %%build stage is used to build the software. Most common build commands
 # have macros that take care of setting the appropriate environment, directories,
@@ -84,7 +80,7 @@ packaging using tito and Fedora's Copr user repository.
 # This stage contains everything that needs to be done in the source directory before
 # installing the software on a target system
 %build
-%py3_build
+# %%py3_build
 
 # the %%install stage is used to install the software. This
 # uses the actual installation paths using %%{buildroot} as the root, i.e.
@@ -103,7 +99,7 @@ packaging using tito and Fedora's Copr user repository.
 # special flags, like %%doc, %%license or %%dir that tell RPM what kind of
 # file it is dealing with.
 %files
-%doc README.md
+# %%doc README.md
 %license LICENSE
 %{_bindir}/hellocopr
 %{python3_sitelib}/%{name}-*.egg-info/
