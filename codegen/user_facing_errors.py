@@ -379,3 +379,13 @@ class StructMemberRedeclaration(ErrorWithLineInfo):
             line,
             "struct definition",
         )
+
+
+class CyclicType(ErrorWithLocationInfo):
+    def __init__(self, type_name: str, location: SourceLocation) -> None:
+        super().__init__(
+            "Error: cannot solve type hierarchy; "
+            f"type '{type_name}' has a cyclic definition",
+            location,
+            "typedef",
+        )

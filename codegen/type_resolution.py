@@ -13,6 +13,7 @@ from .builtin_types import (
 )
 from .interfaces import GenericMapping, SpecializationItem, Type, format_specialization
 from .user_facing_errors import (
+    CyclicType,
     DoubleReferenceError,
     ErrorWithLocationInfo,
     FailedLookupError,
@@ -511,8 +512,11 @@ class TypeSymbolTable:
             return  # Already finished
 
         # TODO: we can trip this assert with a MaybePtr??
-        # TODO: user facing error message (cyclic type)
-        assert self._unresolved_visiting_state[name] == 0
+        if self._unresolved_visiting_state[name] != 0:
+            # We have already visited this type. This can only happen when the
+            # type hierarchy contains cycles---nothing we can do but fail.
+            raise CyclicType(name, self._unresolved_types[name][0].loc)
+
         self._unresolved_visiting_state[name] = 1  # In-progress
 
         # Recurse into dependencies
