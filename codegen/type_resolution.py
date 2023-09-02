@@ -427,7 +427,9 @@ class UnresolvedHeapArrayType(UnresolvedType):
         return f"{member_format}[&, {dimensions_format}]"
 
     def get_typedef_dependencies(self) -> list[str]:
-        return self.member_type.get_typedef_dependencies()
+        # XXX similar to a reference type, heap arrays are pointers. Therefore,
+        # type T should be able to contain a T[&] heap array.
+        return []
 
     def produce_specialized_copy(
         self, specialization_map: dict[str, SpecializationItem]
