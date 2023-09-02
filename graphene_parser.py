@@ -1372,7 +1372,6 @@ def append_file_to_program(
             already_processed,
         ).visit(tree)
         # TODO: these stages can be combined if we require forward declaration
-        # FIXME: allow recursive types
         ParseTypeDefinitions(
             str(file_path), list(map(str, included_from)), program
         ).visit(tree)
@@ -1427,8 +1426,8 @@ def generate_ir_from_source(
 
     except ErrorWithLocationInfo as exc:
         if debug_compiler:
-            traceback.print_exc()
-            print("~~~ User-facing error message ~~~")
+            traceback.print_exc(file=sys.stderr)
+            print("~~~ User-facing error message ~~~", file=sys.stderr)
 
         context = f", in '{exc.context}'" if exc.context else ""
         print(f"{exc.loc}{context}", file=sys.stderr)
