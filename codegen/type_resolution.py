@@ -177,9 +177,11 @@ class UnresolvedNamedType(UnresolvedType):
         return f"{self.name}<{specialization_format}>"
 
     def get_typedef_dependencies(self) -> list[str]:
+        return [self.name]
         specialization_depends = []
         for specialization in self.specialization:
             if isinstance(specialization, UnresolvedType):
+                # BUG
                 specialization_depends.extend(specialization.get_typedef_dependencies())
 
         return [self.name, *specialization_depends]

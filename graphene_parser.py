@@ -1027,6 +1027,8 @@ class ExpressionParser(Interpreter):
             this_arg = args[0]
             if this_arg.expression().is_indirect_pointer_to_type:
                 this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
+            else:
+                print("not borrowing", fn_name, this_arg)
 
         assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
