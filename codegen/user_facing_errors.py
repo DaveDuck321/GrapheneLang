@@ -2,11 +2,13 @@ from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
 
 
-@dataclass
 class SourceLocation:
     line: int
     file: str
     include_hierarchy: list[str]
+
+    def __str__(self):
+        return f"File '{self.file}', line {self.line}"
 
 
 class GrapheneError(ValueError):

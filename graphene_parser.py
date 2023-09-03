@@ -1493,7 +1493,7 @@ def generate_ir_from_source(
             print("~~~ User-facing error message ~~~")
 
         context = f", in '{exc.context}'" if exc.context else ""
-        print(f"File '{exc.loc.file}', line {exc.loc.line}{context}", file=sys.stderr)
+        print(f"{exc.loc}{context}", file=sys.stderr)
         print(f"    {exc.message}", file=sys.stderr)
 
         if exc.loc.include_hierarchy:
