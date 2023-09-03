@@ -21,7 +21,8 @@ class PlaceholderDefinition(TypeDefinition):
         super().__init__()
 
     def are_equivalent(self, other: TypeDefinition) -> bool:
-        assert False
+        assert other is self
+        return True
 
     def format_for_output_to_user(self) -> str:
         assert False
