@@ -313,7 +313,7 @@ class ParseFunctionSignatures(Interpreter):
         self._include_hierarchy: Optional[list[str]] = None
 
         self._program = program
-        self._function_mapping: dict[cg.FnDeclaration, Tree] = {}
+        self._function_mapping: dict[cg.FunctionDeclaration, Tree] = {}
 
     def parse_file(
         self, file_name: str, include_hierarchy: list[str], tree: Tree
@@ -328,7 +328,10 @@ class ParseFunctionSignatures(Interpreter):
         self,
     ) -> Generator[
         tuple[
-            cg.FnDeclaration, cg.FunctionSignature, cg.GenericMapping, Optional[Tree]
+            cg.FunctionDeclaration,
+            cg.FunctionSignature,
+            cg.GenericMapping,
+            Optional[Tree],
         ],
         None,
         None,
@@ -480,7 +483,7 @@ class ParseFunctionSignatures(Interpreter):
                     TypeTransformer.parse(type_tree, generic_mapping)
                 )
 
-        fn_declaration = cg.FnDeclaration.construct(
+        fn_declaration = cg.FunctionDeclaration.construct(
             fn_name,
             False,
             tuple(generic_definitions),
@@ -599,7 +602,7 @@ class ParseFunctionSignatures(Interpreter):
             unresolved_args.append(TypeTransformer.parse(type_tree, {}))
             arg_names.append(name.value)
 
-        func = cg.FnDeclaration.construct(
+        func = cg.FunctionDeclaration.construct(
             fn_name,
             foreign,
             tuple(),
@@ -1285,7 +1288,7 @@ def generate_body(
 
 def generate_function(
     program: cg.Program,
-    declaration: cg.FnDeclaration,
+    declaration: cg.FunctionDeclaration,
     signature: cg.FunctionSignature,
     body: Optional[Tree],
     generic_mapping: cg.GenericMapping,

@@ -166,8 +166,8 @@ class Program:
     def add_static_variable(self, var: StaticVariable) -> None:
         self._static_variables.append(var)
 
-    def add_function_body(self, fn: Function) -> None:
-        self._fn_bodies.append(fn)
+    def add_function_body(self, function: Function) -> None:
+        self._fn_bodies.append(function)
 
     def generate_ir(self) -> list[str]:
         lines: list[str] = []

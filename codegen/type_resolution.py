@@ -65,9 +65,7 @@ class UnresolvedType:
         pass
 
     @abstractmethod
-    def produce_specialized_copy(
-        self, specialization_map: GenericMapping
-    ) -> "UnresolvedType":
+    def produce_specialized_copy(self, generics: GenericMapping) -> "UnresolvedType":
         pass
 
     @abstractmethod
@@ -93,7 +91,7 @@ class CompileTimeConstant:
 
     @abstractmethod
     def produce_specialized_copy(
-        self, specialization_map: GenericMapping
+        self, generics: GenericMapping
     ) -> "CompileTimeConstant":
         pass
 
@@ -133,7 +131,7 @@ class NumericLiteralConstant(CompileTimeConstant):
         return set()
 
     def pattern_match(
-        self, target: int, mapping_out: GenericMapping, depth: int
+        self, target: int, _: GenericMapping, depth: int
     ) -> Optional[int]:
         if target != self.value:
             return None
@@ -151,12 +149,10 @@ class GenericValueReference(CompileTimeConstant):
     def format_for_output_to_user(self) -> str:
         return self.name
 
-    def produce_specialized_copy(
-        self, specialization: GenericMapping
-    ) -> CompileTimeConstant:
-        assert self.argument in specialization.mapping
+    def produce_specialized_copy(self, generics: GenericMapping) -> CompileTimeConstant:
+        assert self.argument in generics.mapping
 
-        specialized_value = specialization.mapping[self.argument]
+        specialized_value = generics.mapping[self.argument]
         if not isinstance(specialized_value, int):
             raise SpecializationFailed(
                 self.format_for_output_to_user(),
@@ -221,14 +217,12 @@ class UnresolvedNamedType(UnresolvedType):
         )
         return f"{self.name}<{specialization_format}>"
 
-    def produce_specialized_copy(
-        self, specialization: GenericMapping
-    ) -> UnresolvedType:
-        specializations = []
+    def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
+        specialization = []
         for item in self.specialization:
-            specializations.append(item.produce_specialized_copy(specialization))
+            specialization.append(item.produce_specialized_copy(generics))
 
-        return UnresolvedNamedType(self.name, tuple(specializations))
+        return UnresolvedNamedType(self.name, tuple(specialization))
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         resolved_specialization = []
@@ -313,12 +307,10 @@ class UnresolvedGenericType(UnresolvedType):
     def format_for_output_to_user(self) -> str:
         return self.name
 
-    def produce_specialized_copy(
-        self, specialization: GenericMapping
-    ) -> UnresolvedType:
-        assert self.argument in specialization.mapping
+    def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
+        assert self.argument in generics.mapping
 
-        specialized_type = specialization.mapping[self.argument]
+        specialized_type = generics.mapping[self.argument]
         if not isinstance(specialized_type, Type):
             raise SpecializationFailed(
                 self.format_for_output_to_user(), str(specialized_type)
@@ -350,8 +342,10 @@ class UnresolvedReferenceType(UnresolvedType):
     def format_for_output_to_user(self) -> str:
         return self.value_type.format_for_output_to_user() + "&"
 
-    def produce_specialized_copy(self, out: GenericMapping) -> UnresolvedType:
-        return UnresolvedReferenceType(self.value_type.produce_specialized_copy(out))
+    def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
+        return UnresolvedReferenceType(
+            self.value_type.produce_specialized_copy(generics)
+        )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         # TODO: support circular references
@@ -386,12 +380,10 @@ class UnresolvedStructType(UnresolvedType):
         )
         return "{" + ", ".join(member_format) + "}"
 
-    def produce_specialized_copy(
-        self, specialization: GenericMapping
-    ) -> UnresolvedType:
+    def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedStructType(
             tuple(
-                (name, member_type.produce_specialized_copy(specialization))
+                (name, member_type.produce_specialized_copy(generics))
                 for name, member_type in self.members
             )
         )
@@ -408,7 +400,7 @@ class UnresolvedStructType(UnresolvedType):
             *(member[1].get_components_to_match() for member in self.members)
         )
 
-    def pattern_match(self, target: Type, out: GenericMapping) -> bool:
+    def pattern_match(self, _1: Type, _2: GenericMapping, _3: int) -> Optional[int]:
         assert False  # TODO
 
 
@@ -424,14 +416,10 @@ class UnresolvedStackArrayType(UnresolvedType):
         )
         return f"{member_format}[{dimensions_format}]"
 
-    def produce_specialized_copy(
-        self, specialization: GenericMapping
-    ) -> UnresolvedType:
+    def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedStackArrayType(
-            self.member_type.produce_specialized_copy(specialization),
-            tuple(
-                dim.produce_specialized_copy(specialization) for dim in self.dimensions
-            ),
+            self.member_type.produce_specialized_copy(generics),
+            tuple(dim.produce_specialized_copy(generics) for dim in self.dimensions),
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
@@ -488,14 +476,11 @@ class UnresolvedHeapArrayType(UnresolvedType):
         )
         return f"{member_format}[&, {dimensions_format}]"
 
-    def produce_specialized_copy(
-        self, specialization: GenericMapping
-    ) -> UnresolvedType:
+    def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedHeapArrayType(
-            self.member_type.produce_specialized_copy(specialization),
+            self.member_type.produce_specialized_copy(generics),
             tuple(
-                dim.produce_specialized_copy(specialization)
-                for dim in self.known_dimensions
+                dim.produce_specialized_copy(generics) for dim in self.known_dimensions
             ),
         )
 
@@ -514,7 +499,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
         )
 
     def pattern_match(
-        self, target: Type, mapping_out: GenericMapping, depth: int
+        self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         if not isinstance(target.definition, HeapArrayDefinition):
             return None
@@ -526,12 +511,12 @@ class UnresolvedHeapArrayType(UnresolvedType):
         for target_dim, our_dim in zip(
             target.definition.known_dimensions, self.known_dimensions
         ):
-            result = our_dim.pattern_match(target_dim, mapping_out, depth + 1)
+            result = our_dim.pattern_match(target_dim, out, depth + 1)
             if result is None:
                 return None
 
         result = self.member_type.pattern_match(
-            target.definition.member, mapping_out, depth + 1
+            target.definition.member, out, depth + 1
         )
         if result is None:
             return None
@@ -611,12 +596,12 @@ class Typedef:
 
         return cost
 
-    def produce_specialized_copy(self, specialization: GenericMapping) -> "Typedef":
+    def produce_specialized_copy(self, generics: GenericMapping) -> "Typedef":
         new_specialization = tuple(
-            item.produce_specialized_copy(specialization)
+            item.produce_specialized_copy(generics)
             for item in self.expanded_specialization
         )
-        new_alias = self.aliased.produce_specialized_copy(specialization)
+        new_alias = self.aliased.produce_specialized_copy(generics)
 
         return Typedef(self.name, tuple(), new_specialization, new_alias, self.loc)
 
@@ -665,37 +650,35 @@ class UnresolvedFunctionSignature:
 
     def produce_specialized_copy(
         self,
-        specialization: GenericMapping,
+        generics: GenericMapping,
     ) -> "UnresolvedFunctionSignature":
-        unmatched_generics = (
-            self.get_components_to_match() - specialization.mapping.keys()
-        )
+        unmatched_generics = self.get_components_to_match() - generics.mapping.keys()
         if len(unmatched_generics) != 0:
             raise PatternMatchDeductionFailure(self.name, unmatched_generics.pop().name)
 
-        specialization_items: list[UnresolvedSpecializationItem] = []
+        new_specialization: list[UnresolvedSpecializationItem] = []
         for item in self.expanded_specialization:
-            specialization_items.append(item.produce_specialized_copy(specialization))
+            new_specialization.append(item.produce_specialized_copy(generics))
 
         arguments: list[UnresolvedType] = []
         for arg in self.arguments:
-            arguments.append(arg.produce_specialized_copy(specialization))
+            arguments.append(arg.produce_specialized_copy(generics))
 
         if self.parameter_pack_argument_name is not None:
             arguments.extend(
-                [UnresolvedTypeWrapper(pack_item) for pack_item in specialization.pack]
+                [UnresolvedTypeWrapper(pack_item) for pack_item in generics.pack]
             )
 
-        specialization_items.extend(
-            [UnresolvedTypeWrapper(pack_type) for pack_type in specialization.pack]
+        new_specialization.extend(
+            [UnresolvedTypeWrapper(pack_type) for pack_type in generics.pack]
         )
 
         return UnresolvedFunctionSignature(
             self.name,
-            tuple(specialization_items),
+            tuple(new_specialization),
             tuple(arguments),
             None,  # We have just expanded the parameter pack
-            self.return_type.produce_specialized_copy(specialization),
+            self.return_type.produce_specialized_copy(generics),
         )
 
     def pattern_match(
@@ -774,7 +757,7 @@ class UnresolvedFunctionSignature:
 
 
 @dataclass(frozen=True)
-class FnDeclaration:
+class FunctionDeclaration:
     is_foreign: bool
     arg_names: tuple[str]
     pack_arg_name: Optional[str]
@@ -822,7 +805,7 @@ class FnDeclaration:
             parameter_pack_argument_name,
             return_type,
         )
-        return FnDeclaration(
+        return FunctionDeclaration(
             is_foreign, arg_names, pack_arg_name, generics, signature, location
         )
 
@@ -839,28 +822,32 @@ class FnDeclaration:
         return self.signature.pattern_match(target_args, target_specialization, out, 0)
 
     def produce_specialized_copy(
-        self, specialization_map: GenericMapping
+        self, generics: GenericMapping
     ) -> UnresolvedFunctionSignature:
-        return self.signature.produce_specialized_copy(specialization_map)
+        return self.signature.produce_specialized_copy(generics)
 
 
 class SymbolTable:
     def __init__(self) -> None:
         self._base_typedefs: dict[str, BaseSymbol] = {}
 
-        self._unresolved_fndefs: dict[str, list[FnDeclaration]] = defaultdict(list)
+        self._unresolved_fndefs: dict[str, list[FunctionDeclaration]] = defaultdict(
+            list
+        )
         self._unresolved_typedefs: dict[tuple[str, int], list[Typedef]] = defaultdict(
             list
         )
 
         # Remember the order that symbols are added so we can give sane error messages
         self._newly_added_unresolved_typedefs: list[Typedef] = []
-        self._newly_added_unresolved_functions: list[FnDeclaration] = []
+        self._newly_added_unresolved_functions: list[FunctionDeclaration] = []
 
         # Symbols requiring codegen + cache for future lookup
         self._resolved_types: dict[tuple[str, int], list[NamedType]] = defaultdict(list)
         self._resolved_functions: dict[str, list[FunctionSignature]] = defaultdict(list)
-        self._remaining_to_codegen: list[tuple[FnDeclaration, FunctionSignature]] = []
+        self._remaining_to_codegen: list[
+            tuple[FunctionDeclaration, FunctionSignature]
+        ] = []
 
     def resolve_specialization_item(
         self, unresolved: UnresolvedSpecializationItem
@@ -904,7 +891,7 @@ class SymbolTable:
         return resolved_type
 
     def resolve_function(
-        self, fn: UnresolvedFunctionSignature, declaration: FnDeclaration
+        self, fn: UnresolvedFunctionSignature, declaration: FunctionDeclaration
     ) -> FunctionSignature:
         resolved_specialization: list[SpecializationItem] = []
         for arg in fn.expanded_specialization:
@@ -943,10 +930,10 @@ class SymbolTable:
     def select_function_with_least_implicit_conversion_cost(
         self,
         fn_name: str,
-        candidate_functions: list[tuple[FunctionSignature, FnDeclaration]],
+        candidate_functions: list[tuple[FunctionSignature, FunctionDeclaration]],
         fn_args: list[TypedExpression] | list[Type],
     ) -> Optional[FunctionSignature]:
-        functions_by_cost: list[tuple[int, FunctionSignature, FnDeclaration]] = []
+        functions_by_cost: list[tuple[int, FunctionSignature, FunctionDeclaration]] = []
 
         for function, declaration in candidate_functions:
             total_cost = 0
@@ -1025,7 +1012,7 @@ class SymbolTable:
             )
 
         all_candidates: list[
-            tuple[int, UnresolvedFunctionSignature, FnDeclaration]
+            tuple[int, UnresolvedFunctionSignature, FunctionDeclaration]
         ] = []
         for candidate in self._unresolved_fndefs[name]:
             generics = GenericMapping({}, [])
@@ -1041,7 +1028,9 @@ class SymbolTable:
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])
         for _, candidates in groupby(all_candidates, key=lambda item: item[0]):
-            resolved_candidates: list[tuple[FunctionSignature, FnDeclaration]] = []
+            resolved_candidates: list[
+                tuple[FunctionSignature, FunctionDeclaration]
+            ] = []
             for _, candidate, declaration in candidates:
                 try:
                     resolved_candidates.append(
@@ -1121,7 +1110,9 @@ class SymbolTable:
                 except SubstitutionFailure:
                     pass  # SFINAE
                 except GrapheneError as e:
-                    raise ErrorWithLocationInfo(e.message, candidate.loc, "typedef")
+                    raise ErrorWithLocationInfo(
+                        e.message, candidate.loc, "typedef"
+                    ) from e
 
             if len(resolved_candidates) == 0:
                 continue
@@ -1140,7 +1131,7 @@ class SymbolTable:
 
         raise SubstitutionFailure(prefix + format_specialization(specialization))
 
-    def add_function(self, fn_to_add: FnDeclaration) -> None:
+    def add_function(self, fn_to_add: FunctionDeclaration) -> None:
         matched_functions = self._unresolved_fndefs[fn_to_add.signature.name]
 
         for target in matched_functions:
@@ -1183,7 +1174,7 @@ class SymbolTable:
                 ]
                 self.lookup_named_type(typedef.name, resolved_specialization)
             except GrapheneError as e:
-                raise ErrorWithLocationInfo(e.message, typedef.loc, "typedef")
+                raise ErrorWithLocationInfo(e.message, typedef.loc, "typedef") from e
 
         for fn in self._newly_added_unresolved_functions:
             if len(fn.generics) != 0 or fn.pack_arg_name is not None:
@@ -1201,14 +1192,16 @@ class SymbolTable:
                     fn.signature.name, resolved_specialization, resolved_args
                 )
             except GrapheneError as e:
-                raise ErrorWithLocationInfo(e.message, fn.loc, "function declaration")
+                raise ErrorWithLocationInfo(
+                    e.message, fn.loc, "function declaration"
+                ) from e
 
         self._newly_added_unresolved_typedefs.clear()
         self._newly_added_unresolved_functions.clear()
 
     def get_next_function_to_codegen(
         self,
-    ) -> Optional[tuple[FnDeclaration, FunctionSignature]]:
+    ) -> Optional[tuple[FunctionDeclaration, FunctionSignature]]:
         try:
             return self._remaining_to_codegen.pop()
         except IndexError:

@@ -125,7 +125,8 @@ class PatternMatchDeductionFailure(GrapheneError):
 class NonDeterminableSize(GrapheneError):
     def __init__(self, type_name: str) -> None:
         super().__init__(
-            f"Error: cannot construct recursive type '{type_name}' since it has a non-determinable size"
+            f"Error: cannot construct recursive type '{type_name}' "
+            "since it has a non-determinable size"
         )
 
 
@@ -193,15 +194,6 @@ class InvalidIntSize(GrapheneError):
         super().__init__(
             f"Error: {type_name} cannot store value {actual_value}, permitted range"
             f" [{expected_lower}, {expected_upper})"
-        )
-
-
-class GenericArgumentCountError(GrapheneError):
-    def __init__(self, name: str, actual: int, expected: int) -> None:
-        arguments = "argument" if expected == 1 else "arguments"
-
-        super().__init__(
-            f"Error: generic '{name}' expects {expected} {arguments} but received {actual}"
         )
 
 
@@ -351,7 +343,8 @@ class VoidStructDeclaration(GrapheneError):
         member_type: str,
     ) -> None:
         super().__init__(
-            f"Error: struct '{struct_type}' cannot have member '{member_name}' of type '{member_type}'"
+            f"Error: struct '{struct_type}' cannot have member "
+            f"'{member_name}' of type '{member_type}'"
         )
 
 
