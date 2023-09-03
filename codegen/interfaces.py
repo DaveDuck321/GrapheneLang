@@ -272,7 +272,18 @@ class TypedExpression(Generatable):
 
 
 SpecializationItem = Type | int
-GenericMapping = dict[str, SpecializationItem]
+
+
+@dataclass(frozen=True)
+class GenericArgument:
+    name: str
+    is_value_arg: bool
+
+
+@dataclass
+class GenericMapping:
+    mapping: dict[GenericArgument, SpecializationItem]
+    pack: list[Type]
 
 
 def do_specializations_match(
@@ -300,6 +311,11 @@ def format_specialization(specialization: list[SpecializationItem]) -> str:
         for item in specialization
     )
     return f"<{items}>"
+
+
+def format_arguments(args: list[Type] | list[TypedExpression]) -> str:
+    items = ", ".join(item.format_for_output_to_user() for item in args)
+    return f"({items})"
 
 
 @dataclass

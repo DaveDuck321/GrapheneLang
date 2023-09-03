@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from parser.lexer_parser import Interpreter, Token, Transformer, Tree, run_lexer_parser
 from pathlib import Path
-from typing import Any, Iterable, Optional, TypeGuard
+from typing import Any, Generator, Iterable, Optional, TypeGuard
 
 import codegen as cg
 from codegen.user_facing_errors import (
@@ -16,13 +16,10 @@ from codegen.user_facing_errors import (
     FileIsAmbiguousException,
     GenericHasGenericAnnotation,
     GrapheneError,
-    InvalidMainReturnType,
     MissingFunctionReturn,
-    PatternMatchDeductionFailure,
     RepeatedGenericName,
     SourceLocation,
     StructMemberRedeclaration,
-    SubstitutionFailure,
     VoidVariableDeclaration,
 )
 
@@ -40,10 +37,10 @@ def in_pairs(iterable: Iterable) -> Iterable:
     return zip(*chunks, strict=True)
 
 
-def get_optional_children(tree: Optional[Tree]) -> list[Any]:
+def get_optional_children(tree: Optional[Tree]) -> tuple[Any]:
     if tree is None:
-        return []
-    return tree.children
+        return tuple()
+    return tuple(tree.children)
 
 
 def inline_arguments(func):
@@ -141,7 +138,7 @@ class TypeTransformer(Transformer):
 
         specialization = get_optional_children(specialization_tree)
         assert is_unresolved_specialization_list(specialization)
-        return cg.UnresolvedNamedType(name.value, specialization)
+        return cg.UnresolvedNamedType(name.value, tuple(specialization))
 
     @inline_arguments
     def ref_type(self, value_type: cg.UnresolvedType) -> cg.UnresolvedType:
@@ -151,13 +148,13 @@ class TypeTransformer(Transformer):
     def stack_array_type(
         self, element_type: cg.UnresolvedType, *dimensions: cg.CompileTimeConstant
     ) -> cg.UnresolvedType:
-        return cg.UnresolvedStackArrayType(element_type, list(dimensions))
+        return cg.UnresolvedStackArrayType(element_type, dimensions)
 
     @inline_arguments
     def heap_array_type(
         self, element_type: cg.UnresolvedType, *known_dimensions: cg.CompileTimeConstant
     ) -> cg.UnresolvedType:
-        return cg.UnresolvedHeapArrayType(element_type, list(known_dimensions))
+        return cg.UnresolvedHeapArrayType(element_type, known_dimensions)
 
     @inline_arguments
     def struct_type(
@@ -180,7 +177,7 @@ class TypeTransformer(Transformer):
             members[member_name] = member_type
 
         # As of Python 3.7, dict preserves insertion order.
-        return cg.UnresolvedStructType([(n, t) for n, t in members.items()])
+        return cg.UnresolvedStructType(tuple((n, t) for n, t in members.items()))
 
     @classmethod
     def parse_and_resolve(
@@ -190,12 +187,12 @@ class TypeTransformer(Transformer):
         generic_mapping: cg.GenericMapping,
     ) -> cg.SpecializationItem:
         unresolved_mapping: cg.UnresolvedGenericMapping = {}
-        for name, item in generic_mapping.items():
+        for key, item in generic_mapping.mapping.items():
             if isinstance(item, cg.Type):
-                unresolved_mapping[name] = cg.UnresolvedTypeWrapper(item)
+                unresolved_mapping[key.name] = cg.UnresolvedTypeWrapper(item)
             else:
                 assert isinstance(item, int)
-                unresolved_mapping[name] = cg.NumericLiteralConstant(item)
+                unresolved_mapping[key.name] = cg.NumericLiteralConstant(item)
 
         result = cls(unresolved_mapping).transform(tree)
 
@@ -203,7 +200,7 @@ class TypeTransformer(Transformer):
             return result.resolve()
 
         assert isinstance(result, cg.UnresolvedType)
-        return program.resolve_type(result)
+        return program.symbol_table.resolve_type(result)
 
     @classmethod
     def parse(
@@ -235,11 +232,11 @@ class ParseTypeDefinitions(Interpreter):
     ) -> None:
         assert prefix.meta.start.line is not None
         loc = SourceLocation(
-            prefix.meta.start.line, self._file, self._include_hierarchy
+            prefix.meta.start.line, self._file, tuple(self._include_hierarchy)
         )
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
-        generic_definitions = []
+        generic_definitions: list[cg.GenericArgument] = []
 
         for generic_tree in generic_definitions_tree.children:
             assert isinstance(generic_tree, Token)
@@ -261,8 +258,10 @@ class ParseTypeDefinitions(Interpreter):
             )
 
         rhs_type = TypeTransformer.parse(rhs_tree, generic_mapping)
-        self._program.add_generic_type_alias(
-            cg.GenericTypedef(prefix.value, generic_definitions, rhs_type, loc)
+        self._program.symbol_table.add_type(
+            cg.Typedef.construct(
+                prefix.value, tuple(generic_definitions), tuple(), rhs_type, loc
+            )
         )
 
     def _specialized_typedef(
@@ -273,12 +272,14 @@ class ParseTypeDefinitions(Interpreter):
     ) -> None:
         assert prefix.meta.start.line is not None
         loc = SourceLocation(
-            prefix.meta.start.line, self._file, self._include_hierarchy
+            prefix.meta.start.line, self._file, tuple(self._include_hierarchy)
         )
 
         rhs_type = TypeTransformer.parse(rhs_tree, {})
-        self._program.add_type_alias(
-            cg.SpecializedTypedef(prefix.value, specialization, rhs_type, loc)
+        self._program.symbol_table.add_type(
+            cg.Typedef.construct(
+                prefix.value, tuple(), tuple(specialization), rhs_type, loc
+            )
         )
 
     @inline_and_wrap_user_facing_errors("typedef")
@@ -312,9 +313,7 @@ class ParseFunctionSignatures(Interpreter):
         self._include_hierarchy: Optional[list[str]] = None
 
         self._program = program
-        self._function_body_trees: list[
-            tuple[SourceLocation, cg.Function, Tree, cg.GenericMapping]
-        ] = []
+        self._function_mapping: dict[cg.FnDeclaration, Tree] = {}
 
     def parse_file(
         self, file_name: str, include_hierarchy: list[str], tree: Tree
@@ -325,10 +324,24 @@ class ParseFunctionSignatures(Interpreter):
         self._current_file = None
         self._include_hierarchy = None
 
-    def get_function_body_trees(
+    def get_functions_to_codegen(
         self,
-    ) -> list[tuple[SourceLocation, cg.Function, Tree, cg.GenericMapping]]:
-        return self._function_body_trees
+    ) -> Generator[
+        tuple[cg.FnDeclaration, cg.FunctionSignature, cg.GenericMapping, Tree],
+        None,
+        None,
+    ]:
+        while to_generate := self._program.symbol_table.get_next_function_to_codegen():
+            declaration, signature = to_generate
+            if declaration.is_foreign:
+                continue
+
+            mapping = cg.GenericMapping({}, [])
+            declaration.pattern_match(
+                signature.arguments, signature.specialization, mapping
+            )
+            body_tree = self._function_mapping[declaration]
+            yield declaration, signature, mapping, body_tree
 
     @inline_and_wrap_user_facing_errors("function[...] signature")
     def generic_named_function(
@@ -403,7 +416,7 @@ class ParseFunctionSignatures(Interpreter):
 
     def _parse_generic_function_impl(
         self,
-        generic_name: str,
+        fn_name: str,
         generic_definitions_tree: Tree,
         args_tree: Tree,
         return_type_tree: Tree,
@@ -412,7 +425,9 @@ class ParseFunctionSignatures(Interpreter):
         assert self._current_file is not None
         assert self._include_hierarchy is not None
         location = SourceLocation(
-            args_tree.meta.start.line, self._current_file, self._include_hierarchy
+            args_tree.meta.start.line,
+            self._current_file,
+            tuple(self._include_hierarchy),
         )
 
         generic_mapping: cg.UnresolvedGenericMapping = {}
@@ -441,12 +456,12 @@ class ParseFunctionSignatures(Interpreter):
                 # NOTE enforced by the grammar. We might want to relax this
                 # later and allow more than one pack per function.
                 assert variadic_type_pack_name is None
-
                 variadic_type_pack_name = generic_token.value
 
-        arg_names: list[str] = []
         unresolved_return = TypeTransformer.parse(return_type_tree, generic_mapping)
-        signature_args: list[cg.UnresolvedType | cg.Type] = []
+
+        arg_names: list[str] = []
+        unresolved_args: list[cg.UnresolvedType] = []
         for name, type_tree in in_pairs(args_tree.children):
             assert isinstance(name, Token)
             # TODO refactor, this is very ugly.
@@ -458,140 +473,24 @@ class ParseFunctionSignatures(Interpreter):
                 assert isinstance(type_tree, Tree)
                 arg_names.append(name.value)
 
-                unresolved_arg = TypeTransformer.parse(type_tree, generic_mapping)
-                try:
-                    signature_args.append(self._program.resolve_type(unresolved_arg))
-                except cg.GenericResolutionImpossible:
-                    # This must be a generic type, lets resolve it later
-                    signature_args.append(unresolved_arg)
-
-        def is_compatible(our_len: int, their_len: int) -> bool:
-            if variadic_type_pack_name:
-                # Must be strictly less than, as the variadic arguments cannot
-                # be empty.
-                return our_len < their_len
-
-            # Normal function, must match one-to-one.
-            return our_len == their_len
-
-        def try_parse_fn_from_specialization(
-            fn_name: str,
-            specializations: list[cg.SpecializationItem],
-        ) -> Optional[cg.Function]:
-            assert generic_name == fn_name
-            if not is_compatible(len(generic_definitions), len(specializations)):
-                return None  # SFINAE
-
-            specialization_map = {
-                generic.name: specialization
-                for generic, specialization in zip(generic_definitions, specializations)
-            }
-
-            specialization_arg_names = arg_names.copy()
-
-            try:
-                specialized_args = [
-                    arg.produce_specialized_copy(specialization_map)
-                    if isinstance(arg, cg.UnresolvedType)
-                    else arg
-                    for arg in signature_args
-                ]
-            except SubstitutionFailure:
-                return None  # SFINAE
-
-            if variadic_type_pack_name:
-                # Consume remaining specializations. Our type system can't deal
-                # with type packs, so convert them into single types.
-                for i, specialization in enumerate(
-                    specializations[len(generic_definitions) :]
-                ):
-                    specialization_map[f"{variadic_type_pack_name}{i}"] = specialization
-                    # TODO user-facing error. Can't have @Constants in type
-                    # packs.
-                    assert isinstance(specialization, cg.Type)
-                    specialized_args.append(cg.UnresolvedTypeWrapper(specialization))
-                    specialization_arg_names.append(f"{variadic_args_pack_name}{i}")
-
-            try:
-                # Resolve everything that depends on the specialization
-                resolved_return = self._program.resolve_type(
-                    unresolved_return.produce_specialized_copy(specialization_map)
-                )
-                resolved_args = [
-                    self._program.resolve_type(arg)
-                    if isinstance(arg, cg.UnresolvedType)
-                    else arg
-                    for arg in specialized_args
-                ]
-
-                function = self._build_function(
-                    fn_name,
-                    specialization_arg_names,
-                    resolved_args,
-                    resolved_return,
-                    False,
-                    specializations,
-                )
-            except SubstitutionFailure:
-                return None  # SFINAE
-
-            if variadic_args_pack_name:
-                function.top_level_scope.add_generic_pack(
-                    variadic_args_pack_name,
-                    len(specializations) - len(generic_definitions),
+                unresolved_args.append(
+                    TypeTransformer.parse(type_tree, generic_mapping)
                 )
 
-            self._function_body_trees.append(
-                (location, function, body_tree, specialization_map)
-            )
-            return function
-
-        def try_deduce_specialization(
-            fn_name: str, calling_args: list[cg.TypedExpression]
-        ) -> Optional[list[cg.SpecializationItem]]:
-            assert generic_name == fn_name
-
-            if not is_compatible(len(signature_args), len(calling_args)):
-                return None  # SFINAE
-
-            deduced_mapping: cg.GenericMapping = {}
-            for actual_arg, unresolved_arg in zip(calling_args, signature_args):
-                if isinstance(unresolved_arg, cg.Type):
-                    # This is a non-generic type, we use the normal overload resolution here
-                    continue
-
-                if not unresolved_arg.pattern_match(
-                    actual_arg.underlying_type, deduced_mapping
-                ):
-                    return None  # SFINAE
-
-            # Convert the deduced mapping into a specialization
-            deduced_specialization: list[cg.SpecializationItem] = []
-            for generic in generic_definitions:
-                if generic.name not in deduced_mapping:
-                    raise PatternMatchDeductionFailure(fn_name, generic.name)
-
-                deduced_specialization.append(deduced_mapping[generic.name])
-
-            assert len(deduced_specialization) == len(generic_definitions)
-
-            if variadic_type_pack_name:
-                # Now append the types of the remaining TypedExpressions's. They
-                # are also part of the specialization.
-                deduced_specialization.extend(
-                    arg.underlying_type for arg in calling_args[len(signature_args) :]
-                )
-
-            return deduced_specialization
-
-        self._program.add_generic_function(
-            generic_name,
-            cg.GenericFunctionParser(
-                generic_name,
-                try_parse_fn_from_specialization,
-                try_deduce_specialization,
-            ),
+        fn_declaration = cg.FnDeclaration.construct(
+            fn_name,
+            False,
+            tuple(generic_definitions),
+            [],
+            tuple(arg_names),
+            variadic_args_pack_name,
+            tuple(unresolved_args),
+            variadic_type_pack_name,
+            unresolved_return,
+            location,
         )
+        self._function_mapping[fn_declaration] = body_tree
+        self._program.symbol_table.add_function(fn_declaration)
 
     @inline_and_wrap_user_facing_errors("function signature")
     def specialized_named_function(
@@ -680,63 +579,40 @@ class ParseFunctionSignatures(Interpreter):
         body_tree: Optional[Tree],
         foreign: bool,
     ) -> None:
+        assert self._current_file is not None
+        assert self._include_hierarchy is not None
+
+        location = SourceLocation(
+            args_tree.meta.start.line,
+            self._current_file,
+            tuple(self._include_hierarchy),
+        )
+
         unresolved_return = TypeTransformer.parse(return_type_tree, {})
-        resolved_return = self._program.resolve_type(unresolved_return)
 
         arg_names: list[str] = []
-        resolved_arg: list[cg.Type] = []
+        unresolved_args: list[cg.UnresolvedType] = []
         for name, type_tree in in_pairs(args_tree.children):
-            unresolved_arg = TypeTransformer.parse(type_tree, {})
-            resolved_arg.append(self._program.resolve_type(unresolved_arg))
+            unresolved_args.append(TypeTransformer.parse(type_tree, {}))
             arg_names.append(name.value)
 
-        func = self._build_function(
-            fn_name, arg_names, resolved_arg, resolved_return, foreign, []
+        func = cg.FnDeclaration.construct(
+            fn_name,
+            foreign,
+            tuple(),
+            [],
+            tuple(arg_names),
+            None,
+            tuple(unresolved_args),
+            None,
+            unresolved_return,
+            location,
         )
-        self._program.add_function(func)
+        if not foreign:
+            assert body_tree is not None
+            self._function_mapping[func] = body_tree
 
-        # Save the body to parse later (TODO: maybe forward declarations
-        # should be possible?)
-        if body_tree is not None:
-            assert self._current_file is not None
-            assert self._include_hierarchy is not None
-            location = SourceLocation(
-                args_tree.meta.start.line, self._current_file, self._include_hierarchy
-            )
-            self._function_body_trees.append((location, func, body_tree, {}))
-
-    def _build_function(
-        self,
-        fn_name: str,
-        arg_names: list[str],
-        arg_types: list[cg.Type],
-        fn_return_type: cg.Type,
-        foreign: bool,
-        specialization: list[cg.SpecializationItem],
-    ) -> cg.Function:
-        fn_args: list[cg.Parameter] = []
-
-        for arg_name, arg_type in zip(arg_names, arg_types, strict=True):
-            assert isinstance(arg_type, cg.Type)
-            fn_args.append(cg.Parameter(arg_name, arg_type))
-
-            if arg_type.definition.is_void:
-                raise VoidVariableDeclaration(
-                    "argument", arg_name, arg_type.format_for_output_to_user()
-                )
-
-        fn_obj = cg.Function(fn_name, fn_args, fn_return_type, foreign, specialization)
-
-        # main() must always return an int
-        if (
-            fn_obj.get_signature().is_main()
-            and fn_obj.get_signature().return_type != cg.IntType()
-        ):
-            raise InvalidMainReturnType(
-                fn_obj.get_signature().return_type.format_for_output_to_user(True)
-            )
-
-        return fn_obj
+        self._program.symbol_table.add_function(func)
 
 
 class ParseImports(Interpreter):
@@ -830,9 +706,9 @@ def is_tree_or_token_iterable(
 
 def is_unresolved_specialization_list(
     lst: Any,
-) -> TypeGuard[list[cg.UnresolvedSpecializationItem]]:
+) -> TypeGuard[Iterable[cg.UnresolvedSpecializationItem]]:
     # https://github.com/python/mypy/issues/3497#issuecomment-1083747764
-    if not isinstance(lst, list):
+    if not isinstance(lst, Iterable):
         return False
     return all(isinstance(item, cg.UnresolvedSpecializationItem) for item in lst)
 
@@ -866,10 +742,10 @@ class ExpressionParser(Interpreter):
         return FlattenedExpression([const_expr])
 
     def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> FlattenedExpression:
-        if token.value not in self._generic_mapping:
+        if token.value not in self._generic_mapping.mapping:
             raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
-        mapped_value = self._generic_mapping[token.value]
+        mapped_value = self._generic_mapping.mapping[token.value]
         assert isinstance(mapped_value, int)  # TODO: user facing error
         const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value))
         return FlattenedExpression([const_expr])
@@ -1405,15 +1281,16 @@ def generate_body(
 
 def generate_function_body(
     program: cg.Program,
-    function: cg.Function,
+    declaration: cg.FnDeclaration,
+    signature: cg.FunctionSignature,
     body: Tree,
     generic_mapping: cg.GenericMapping,
-):
+) -> None:
+    function = cg.Function(declaration.arg_names, signature, declaration.pack_arg_name)
     generate_body(program, function, function.top_level_scope, body, generic_mapping)
 
     # We cannot omit the "ret" instruction from LLVM IR. If the function returns
     # void, then we can add it ourselves, otherwise the user needs to fix it.
-
     if not function.top_level_scope.is_return_guaranteed():
         if function.get_signature().return_type.definition.is_void:
             function.top_level_scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
@@ -1422,6 +1299,8 @@ def generate_function_body(
                 function.get_signature().user_facing_name,
                 body.meta.end.line,
             )
+
+    program.add_function_body(function)
 
 
 def append_file_to_program(
@@ -1449,13 +1328,13 @@ def append_file_to_program(
         ParseTypeDefinitions(
             str(file_path), list(map(str, included_from)), program
         ).visit(tree)
-        program.resolve_all_types()
 
         function_parser.parse_file(str(file_path), list(map(str, included_from)), tree)
+        program.symbol_table.resolve_all_non_generics()
     except ErrorWithLineInfo as exc:
         raise ErrorWithLocationInfo(
             exc.message,
-            SourceLocation(exc.line, str(file_path), list(map(str, included_from))),
+            SourceLocation(exc.line, str(file_path), tuple(map(str, included_from))),
             exc.context,
         ) from exc
 
@@ -1470,6 +1349,9 @@ def generate_ir_from_source(
 ) -> str:
     program = cg.Program()
     try:
+        # Initial pass resolves all builtin types
+        program.symbol_table.resolve_all_non_generics()
+
         fn_parser = ParseFunctionSignatures(program)
         append_file_to_program(
             program,
@@ -1480,11 +1362,19 @@ def generate_ir_from_source(
             set(),
         )
 
-        for loc, fn, body, specialization in fn_parser.get_function_body_trees():
+        for (
+            declaration,
+            signature,
+            mapping,
+            body,
+        ) in fn_parser.get_functions_to_codegen():
             try:
-                generate_function_body(program, fn, body, specialization)
+                generate_function_body(program, declaration, signature, body, mapping)
             except ErrorWithLineInfo as exc:
-                location = SourceLocation(exc.line, loc.file, loc.include_hierarchy)
+                assert isinstance(declaration.loc, SourceLocation)
+                location = SourceLocation(
+                    exc.line, declaration.loc.file, declaration.loc.include_hierarchy
+                )
                 raise ErrorWithLocationInfo(exc.message, location, exc.context)
 
     except ErrorWithLocationInfo as exc:
@@ -1496,11 +1386,12 @@ def generate_ir_from_source(
         print(f"{exc.loc}{context}", file=sys.stderr)
         print(f"    {exc.message}", file=sys.stderr)
 
-        if exc.loc.include_hierarchy:
-            print(file=sys.stderr)
+        if isinstance(exc.loc, SourceLocation):
+            if exc.loc.include_hierarchy:
+                print(file=sys.stderr)
 
-        for file in reversed(exc.loc.include_hierarchy):
-            print(f"Included from file '{file}'", file=sys.stderr)
+            for file in reversed(exc.loc.include_hierarchy):
+                print(f"Included from file '{file}'", file=sys.stderr)
 
         sys.exit(1)
 

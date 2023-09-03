@@ -2,13 +2,25 @@ from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
 
 
-class SourceLocation:
+@dataclass(frozen=True)
+class Location:
+    pass
+
+
+@dataclass(frozen=True)
+class SourceLocation(Location):
     line: int
     file: str
-    include_hierarchy: list[str]
+    include_hierarchy: tuple[str]
 
     def __str__(self):
         return f"File '{self.file}', line {self.line}"
+
+
+@dataclass(frozen=True)
+class BuiltinSourceLocation(Location):
+    def __str__(self) -> str:
+        return "builtin"
 
 
 class GrapheneError(ValueError):
@@ -34,7 +46,7 @@ class ErrorWithLineInfo(ValueError):
 
 class ErrorWithLocationInfo(ValueError):
     def __init__(
-        self, message: str, location: SourceLocation, context: Optional[str] = None
+        self, message: str, location: Location, context: Optional[str] = None
     ) -> None:
         super().__init__(message)
 
@@ -103,9 +115,9 @@ class SpecializationFailed(SubstitutionFailure):
 
 
 class PatternMatchDeductionFailure(GrapheneError):
-    def __init__(self, fn_name: str, unmatched_variable: str) -> None:
+    def __init__(self, fn_name: str, unmatched_generic: str) -> None:
         super().__init__(
-            f"Error: cannot deduce generic type '{unmatched_variable}' "
+            f"Error: cannot deduce generic type '{unmatched_generic}' "
             f"in function '{fn_name}', manual specialization is required"
         )
 
@@ -120,19 +132,10 @@ class NonDeterminableSize(GrapheneError):
 class OverloadResolutionError(GrapheneError):
     def __init__(
         self,
-        fn_name: str,
-        specialization: str,
-        arguments: str,
+        fn_call: str,
         available_overloads: list[str],
     ) -> None:
-        if specialization:
-            fn_call_string = f"{fn_name}<{specialization}>({arguments})"
-        else:
-            fn_call_string = f"{fn_name}({arguments})"
-
-        msg = [
-            f"Error: overload resolution for function call '{fn_call_string}' failed"
-        ]
+        msg = [f"Error: overload resolution for function call '{fn_call}' failed"]
 
         # TODO need a better way to indent these.
         if available_overloads:
@@ -146,15 +149,21 @@ class OverloadResolutionError(GrapheneError):
         super().__init__(str.join("\n", msg))
 
 
-class AmbiguousFunctionCall(GrapheneError):
+class AmbiguousInitialization(GrapheneError):
     def __init__(
-        self, fn_name: str, arguments: str, candidate_1: str, candidate_2: str
+        self,
+        thing: Literal["type", "function call"],
+        thing_format: str,
+        candidates: list[tuple[str, Location]],
     ) -> None:
+        longest_candidate = max(len(candidate[0]) for candidate in candidates)
+        candidates_fmt = "\n".join(
+            f"     - {candidate:{longest_candidate+5}} ({loc})"
+            for candidate, loc in candidates
+        )
         super().__init__(
-            f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous.\n"
-            "    Equally good candidates are\n"
-            f"     - {candidate_1}\n"
-            f"     - {candidate_2}"
+            f"Error: {thing} '{thing_format}' is ambiguous. "
+            "Equally good candidates are:\n" + candidates_fmt
         )
 
 
