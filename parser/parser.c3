@@ -1188,7 +1188,7 @@ function parse_function_definition_generics_definition : (cursor : Cursor&) -> G
 function parse_function_definition_args : (cursor : Cursor&) -> FunctionDefinitionArguments = {
     cursor:expect_next_skipping_ws(":");
 
-    let start_offset : isize = 0;
+    let start_offset : isize = cursor.position;
     cursor:expect_next_skipping_ws("(");
 
     // TODO: better line numbers here
