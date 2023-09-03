@@ -313,9 +313,20 @@ def format_specialization(specialization: list[SpecializationItem]) -> str:
     return f"<{items}>"
 
 
-def format_arguments(args: list[Type] | list[TypedExpression]) -> str:
+def format_arguments(args: Iterable[Type] | Iterable[TypedExpression]) -> str:
     items = ", ".join(item.format_for_output_to_user() for item in args)
     return f"({items})"
+
+
+def format_generics(args: Iterable[GenericArgument], pack_name: Optional[str]) -> str:
+    formatted_generics = [item.name for item in args]
+    if pack_name is not None:
+        format_generics.append(pack_name)
+
+    if len(formatted_generics) == 0:
+        return ""
+
+    return f" [{str.join(', ', formatted_generics)}]"
 
 
 @dataclass

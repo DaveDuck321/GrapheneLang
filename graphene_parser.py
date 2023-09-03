@@ -1324,7 +1324,7 @@ def generate_function(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     try:
-        fn = cg.Function(declaration.arg_names, signature, declaration.pack_arg_name)
+        fn = cg.Function(declaration.arg_names, signature, declaration.pack_type_name)
     except GrapheneError as e:
         assert isinstance(declaration.loc, SourceLocation)
         raise ErrorWithLineInfo(e.message, declaration.loc.line, "function declaration")

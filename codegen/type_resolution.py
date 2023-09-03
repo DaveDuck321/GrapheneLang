@@ -23,6 +23,7 @@ from .interfaces import (
     TypedExpression,
     do_specializations_match,
     format_arguments,
+    format_generics,
     format_specialization,
 )
 from .type_conversions import get_implicit_conversion_cost
@@ -760,7 +761,7 @@ class UnresolvedFunctionSignature:
 class FunctionDeclaration:
     is_foreign: bool
     arg_names: tuple[str]
-    pack_arg_name: Optional[str]
+    pack_type_name: Optional[str]
     generics: tuple[GenericArgument]
     signature: UnresolvedFunctionSignature
     loc: Location
@@ -772,7 +773,7 @@ class FunctionDeclaration:
         generics: tuple[GenericArgument],
         specialization: Iterable[UnresolvedSpecializationItem],
         arg_names: tuple[str],
-        pack_arg_name: Optional[str],
+        pack_type_name: Optional[str],
         arg_types: tuple[UnresolvedType],
         parameter_pack_argument_name: Optional[str],
         return_type: UnresolvedType,
@@ -806,12 +807,13 @@ class FunctionDeclaration:
             return_type,
         )
         return FunctionDeclaration(
-            is_foreign, arg_names, pack_arg_name, generics, signature, location
+            is_foreign, arg_names, pack_type_name, generics, signature, location
         )
 
     def format_for_output_to_user(self) -> str:
         prefix = "foreign" if self.is_foreign else "function"
-        return f"{prefix} {self.signature.format_for_output_to_user()}"
+        generic_format = format_generics(self.generics, self.pack_type_name)
+        return f"{prefix}{generic_format} {self.signature.format_for_output_to_user()}"
 
     def pattern_match(
         self,
@@ -834,9 +836,7 @@ class SymbolTable:
         self._unresolved_fndefs: dict[str, list[FunctionDeclaration]] = defaultdict(
             list
         )
-        self._unresolved_typedefs: dict[tuple[str, int], list[Typedef]] = defaultdict(
-            list
-        )
+        self._unresolved_typedefs: dict[str, list[Typedef]] = defaultdict(list)
 
         # Remember the order that symbols are added so we can give sane error messages
         self._newly_added_unresolved_typedefs: list[Typedef] = []
@@ -1070,7 +1070,7 @@ class SymbolTable:
         #   4) Minimize the number of 2nd level generic deductions
         #   N) Minimize the number of N level generic deductions
 
-        if (prefix, len(specialization)) not in self._unresolved_typedefs:
+        if prefix not in self._unresolved_typedefs:
             # Substitution impossible
             raise FailedLookupError(
                 "type",
@@ -1078,7 +1078,10 @@ class SymbolTable:
             )
 
         all_candidates: list[tuple[int, Typedef]] = []
-        for candidate in self._unresolved_typedefs[(prefix, len(specialization))]:
+        for candidate in self._unresolved_typedefs[prefix]:
+            if len(candidate.expanded_specialization) != len(specialization):
+                continue
+
             # Deduce the generic mapping by comparing (un)resolved specializations
             generics = GenericMapping({}, [])
             cost = candidate.pattern_match(specialization, generics)
@@ -1158,8 +1161,7 @@ class SymbolTable:
 
     def add_type(self, type_to_add: Typedef) -> None:
         # TODO: check for duplicates etc.
-        key = (type_to_add.name, len(type_to_add.expanded_specialization))
-        self._unresolved_typedefs[key].append(type_to_add)
+        self._unresolved_typedefs[type_to_add.name].append(type_to_add)
         self._newly_added_unresolved_typedefs.append(type_to_add)
 
     def resolve_all_non_generics(self) -> None:
@@ -1177,7 +1179,7 @@ class SymbolTable:
                 raise ErrorWithLocationInfo(e.message, typedef.loc, "typedef") from e
 
         for fn in self._newly_added_unresolved_functions:
-            if len(fn.generics) != 0 or fn.pack_arg_name is not None:
+            if len(fn.generics) != 0 or fn.pack_type_name is not None:
                 continue
 
             try:
