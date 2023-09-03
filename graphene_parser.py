@@ -327,20 +327,23 @@ class ParseFunctionSignatures(Interpreter):
     def get_functions_to_codegen(
         self,
     ) -> Generator[
-        tuple[cg.FnDeclaration, cg.FunctionSignature, cg.GenericMapping, Tree],
+        tuple[
+            cg.FnDeclaration, cg.FunctionSignature, cg.GenericMapping, Optional[Tree]
+        ],
         None,
         None,
     ]:
         while to_generate := self._program.symbol_table.get_next_function_to_codegen():
             declaration, signature = to_generate
-            if declaration.is_foreign:
-                continue
 
             mapping = cg.GenericMapping({}, [])
-            declaration.pattern_match(
-                signature.arguments, signature.specialization, mapping
-            )
-            body_tree = self._function_mapping[declaration]
+            body_tree = None
+            if not declaration.is_foreign:
+                declaration.pattern_match(
+                    signature.arguments, signature.specialization, mapping
+                )
+                body_tree = self._function_mapping[declaration]
+
             yield declaration, signature, mapping, body_tree
 
     @inline_and_wrap_user_facing_errors("function[...] signature")
@@ -742,10 +745,11 @@ class ExpressionParser(Interpreter):
         return FlattenedExpression([const_expr])
 
     def NUMERIC_GENERIC_IDENTIFIER(self, token: Token) -> FlattenedExpression:
-        if token.value not in self._generic_mapping.mapping:
+        argument = cg.GenericArgument(token.value, True)
+        if argument not in self._generic_mapping.mapping:
             raise FailedLookupError("numeric generic", f"[{token.value}, ...]")
 
-        mapped_value = self._generic_mapping.mapping[token.value]
+        mapped_value = self._generic_mapping.mapping[argument]
         assert isinstance(mapped_value, int)  # TODO: user facing error
         const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value))
         return FlattenedExpression([const_expr])
@@ -1279,28 +1283,37 @@ def generate_body(
             ) from exc
 
 
-def generate_function_body(
+def generate_function(
     program: cg.Program,
     declaration: cg.FnDeclaration,
     signature: cg.FunctionSignature,
-    body: Tree,
+    body: Optional[Tree],
     generic_mapping: cg.GenericMapping,
 ) -> None:
-    function = cg.Function(declaration.arg_names, signature, declaration.pack_arg_name)
-    generate_body(program, function, function.top_level_scope, body, generic_mapping)
+    try:
+        fn = cg.Function(declaration.arg_names, signature, declaration.pack_arg_name)
+    except GrapheneError as e:
+        assert isinstance(declaration.loc, SourceLocation)
+        raise ErrorWithLineInfo(e.message, declaration.loc.line, "function declaration")
+
+    if body is None:
+        assert declaration.is_foreign
+        return
+
+    generate_body(program, fn, fn.top_level_scope, body, generic_mapping)
 
     # We cannot omit the "ret" instruction from LLVM IR. If the function returns
     # void, then we can add it ourselves, otherwise the user needs to fix it.
-    if not function.top_level_scope.is_return_guaranteed():
-        if function.get_signature().return_type.definition.is_void:
-            function.top_level_scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
+    if not fn.top_level_scope.is_return_guaranteed():
+        if fn.get_signature().return_type.definition.is_void:
+            fn.top_level_scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
         else:
             raise MissingFunctionReturn(
-                function.get_signature().user_facing_name,
+                fn.get_signature().user_facing_name,
                 body.meta.end.line,
             )
 
-    program.add_function_body(function)
+    program.add_function_body(fn)
 
 
 def append_file_to_program(
@@ -1369,7 +1382,7 @@ def generate_ir_from_source(
             body,
         ) in fn_parser.get_functions_to_codegen():
             try:
-                generate_function_body(program, declaration, signature, body, mapping)
+                generate_function(program, declaration, signature, body, mapping)
             except ErrorWithLineInfo as exc:
                 assert isinstance(declaration.loc, SourceLocation)
                 location = SourceLocation(

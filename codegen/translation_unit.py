@@ -9,13 +9,16 @@ from .builtin_types import (
     AnonymousType,
     CharArrayDefinition,
     FunctionSignature,
+    IntType,
     get_builtin_types,
 )
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
-from .interfaces import Parameter, SpecializationItem, Type, TypedExpression
+from .interfaces import SpecializationItem, Type, TypedExpression
 from .strings import encode_string
+from .type_conversions import get_implicit_conversion_cost
 from .type_resolution import SymbolTable
+from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
 
 
 class Function:
@@ -25,7 +28,6 @@ class Function:
         signature: FunctionSignature,
         parameter_pack_name: Optional[str],
     ) -> None:
-        assert not signature.is_foreign
         if parameter_pack_name is None:
             assert len(parameter_names) == len(signature.arguments)
 
@@ -46,6 +48,19 @@ class Function:
 
             for i, param_type in enumerate(signature.arguments[len(parameter_names) :]):
                 self._add_parameter(f"{parameter_pack_name}{i}", param_type)
+
+        # Check the signature
+        if signature.is_main:
+            if get_implicit_conversion_cost(signature.return_type, IntType()) is None:
+                raise InvalidMainReturnType(
+                    signature.return_type.format_for_output_to_user(True)
+                )
+
+        for arg_name, arg in zip(parameter_names, self._signature.arguments):
+            if arg.definition.is_void:
+                raise VoidVariableDeclaration(
+                    "argument", arg_name, arg.format_for_output_to_user(True)
+                )
 
     def _add_parameter(self, param_name: str, param_type: Type):
         fn_param = FunctionParameter(param_type)
@@ -78,7 +93,7 @@ class Function:
     def generate_ir(self) -> list[str]:
         # https://llvm.org/docs/LangRef.html#functions
         assert not self.is_foreign
-        if not self.get_signature().return_type.definition.is_void:
+        if not self._signature.return_type.definition.is_void:
             assert self.top_level_scope.is_return_guaranteed()
 
         reg_gen = count(0)  # First register is %0

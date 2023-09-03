@@ -11,5 +11,5 @@ function main : () -> int = {
 }
 
 /// @COMPILE; EXPECT ERR
-/// File '*.c3', line 9, in 'function main: () -> int'
-/// Error: cannot construct recursive type 'typedef LinkedListNode<int> = {next: Ptr<LinkedListNode<int>>, data: int}' since it has a non-determinable size
+/// File '*.c3', line 3, in 'typedef'
+/// Error: cannot construct recursive type 'typedef LinkedListNode<int> : {next: Ptr<LinkedListNode<int>>, data: int}' since it has a non-determinable size

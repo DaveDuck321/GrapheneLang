@@ -133,8 +133,10 @@ class OverloadResolutionError(GrapheneError):
     def __init__(
         self,
         fn_call: str,
-        available_overloads: list[str],
+        available_overloads_unordered: Iterable[str],
     ) -> None:
+        # Sort for consistent error messages
+        available_overloads = sorted(available_overloads_unordered)
         msg = [f"Error: overload resolution for function call '{fn_call}' failed"]
 
         # TODO need a better way to indent these.
@@ -154,8 +156,10 @@ class AmbiguousInitialization(GrapheneError):
         self,
         thing: Literal["type", "function call"],
         thing_format: str,
-        candidates: list[tuple[str, Location]],
+        candidates_unordered: Iterable[tuple[str, Location]],
     ) -> None:
+        # Sort for consistent error messages
+        candidates = sorted(candidates_unordered, key=lambda item: item[0])
         longest_candidate = max(len(candidate[0]) for candidate in candidates)
         candidates_fmt = "\n".join(
             f"     - {candidate:{longest_candidate+5}} ({loc})"

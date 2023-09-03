@@ -35,11 +35,11 @@ from .user_facing_errors import (
     GrapheneError,
     Location,
     NonDeterminableSize,
+    OverloadResolutionError,
     PatternMatchDeductionFailure,
     RedefinitionError,
     SpecializationFailed,
     SubstitutionFailure,
-    OverloadResolutionError,
 )
 
 
@@ -79,15 +79,10 @@ class UnresolvedType:
         pass
 
     @abstractmethod
-    def pattern_match_impl(
-        self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
-        pass
-
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
-        return self.pattern_match_impl(target, out, depth)
+        pass
 
 
 @dataclass(frozen=True)
@@ -137,7 +132,7 @@ class NumericLiteralConstant(CompileTimeConstant):
     def get_components_to_match(self) -> set[GenericArgument]:
         return set()
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: int, mapping_out: GenericMapping, depth: int
     ) -> Optional[int]:
         if target != self.value:
@@ -147,17 +142,21 @@ class NumericLiteralConstant(CompileTimeConstant):
 
 @dataclass(frozen=True)
 class GenericValueReference(CompileTimeConstant):
-    argument_name: str
+    name: str
+
+    @property
+    def argument(self) -> GenericArgument:
+        return GenericArgument(self.name, True)
 
     def format_for_output_to_user(self) -> str:
-        return f"@{self.argument_name}"
+        return self.name
 
     def produce_specialized_copy(
         self, specialization: GenericMapping
     ) -> CompileTimeConstant:
-        assert self.argument_name in specialization.mapping
+        assert self.argument in specialization.mapping
 
-        specialized_value = specialization.mapping[self.argument_name]
+        specialized_value = specialization.mapping[self.argument]
         if not isinstance(specialized_value, int):
             raise SpecializationFailed(
                 self.format_for_output_to_user(),
@@ -170,17 +169,17 @@ class GenericValueReference(CompileTimeConstant):
         raise GenericResolutionImpossible("Generic value reference")
 
     def get_components_to_match(self) -> set[GenericArgument]:
-        return {GenericArgument(self.argument_name, True)}
+        return {self.argument}
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: int, out: GenericMapping, depth: int
     ) -> Optional[int]:
-        if self.argument_name in out.mapping:
+        if self.argument in out.mapping:
             # TODO: user facing error
-            if out.mapping[self.argument_name] != target:
+            if out.mapping[self.argument] != target:
                 return None
 
-        out.mapping[GenericArgument(self.argument_name, True)] = target
+        out.mapping[self.argument] = target
         return get_cost_at_pattern_match_depth(depth)
 
 
@@ -200,7 +199,7 @@ class UnresolvedTypeWrapper(UnresolvedType):
     def get_components_to_match(self) -> set[GenericArgument]:
         return set()
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         if self.resolved_type != target:
@@ -242,7 +241,7 @@ class UnresolvedNamedType(UnresolvedType):
 
         return lookup(self.name, resolved_specialization)
 
-    def _pattern_match_impl_impl(
+    def _pattern_match_impl(
         self, target: Type, mapping_out: GenericMapping, depth: int
     ) -> Optional[int]:
         if not isinstance(target, NamedType):
@@ -284,14 +283,14 @@ class UnresolvedNamedType(UnresolvedType):
             *(item.get_components_to_match() for item in self.specialization)
         )
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         curr = target
 
         while curr:
             curr_mapping = GenericMapping(out.mapping.copy(), out.pack.copy())
-            result = self._pattern_match_impl_impl(curr, curr_mapping, depth)
+            result = self._pattern_match_impl(curr, curr_mapping, depth)
 
             if result is not None:
                 out.mapping.update(curr_mapping.mapping)
@@ -333,7 +332,7 @@ class UnresolvedGenericType(UnresolvedType):
     def get_components_to_match(self) -> set[GenericArgument]:
         return {self.argument}
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         if self.name in out.mapping:
@@ -365,7 +364,7 @@ class UnresolvedReferenceType(UnresolvedType):
     def get_components_to_match(self) -> set[GenericArgument]:
         return self.value_type.get_components_to_match()
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         if not target.is_reference:
@@ -409,7 +408,7 @@ class UnresolvedStructType(UnresolvedType):
             *(member[1].get_components_to_match() for member in self.members)
         )
 
-    def pattern_match_impl(self, target: Type, out: GenericMapping) -> bool:
+    def pattern_match(self, target: Type, out: GenericMapping) -> bool:
         assert False  # TODO
 
 
@@ -449,7 +448,7 @@ class UnresolvedStackArrayType(UnresolvedType):
             *(dim.get_components_to_match() for dim in self.dimensions),
         )
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         if not isinstance(target.definition, StackArrayDefinition):
@@ -514,7 +513,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
             *(dim.get_components_to_match() for dim in self.known_dimensions),
         )
 
-    def pattern_match_impl(
+    def pattern_match(
         self, target: Type, mapping_out: GenericMapping, depth: int
     ) -> Optional[int]:
         if not isinstance(target.definition, HeapArrayDefinition):
@@ -657,7 +656,7 @@ class UnresolvedFunctionSignature:
 
         args_str = ", ".join(formatted_args)
         return_str = self.return_type.format_for_output_to_user()
-        return f"{self.name}{specialization_str}({args_str}) -> {return_str}"
+        return f"{self.name}{specialization_str} : ({args_str}) -> {return_str}"
 
     def get_components_to_match(self) -> set[GenericArgument]:
         return set().union(
