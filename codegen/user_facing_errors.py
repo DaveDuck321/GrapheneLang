@@ -125,8 +125,8 @@ class PatternMatchDeductionFailure(GrapheneError):
 class NonDeterminableSize(GrapheneError):
     def __init__(self, type_name: str) -> None:
         super().__init__(
-            f"Error: cannot construct recursive type '{type_name}' "
-            "since it has a non-determinable size"
+            f"Error: cannot construct recursive type '{type_name}' since it "
+            "has a non-determinable size"
         )
 
 
@@ -343,8 +343,8 @@ class VoidStructDeclaration(GrapheneError):
         member_type: str,
     ) -> None:
         super().__init__(
-            f"Error: struct '{struct_type}' cannot have member "
-            f"'{member_name}' of type '{member_type}'"
+            f"Error: struct '{struct_type}' cannot have member '{member_name}' "
+            f"of type '{member_type}'"
         )
 
 

@@ -1,6 +1,6 @@
 from typing import Iterable, Iterator, Optional
 
-from .builtin_types import BoolType, CharArrayDefinition
+from .builtin_types import BoolType, CharArrayDefinition, VoidType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
@@ -72,8 +72,7 @@ class StaticVariable(Variable):
         assert self.ir_reg is not None
         if isinstance(self.type.definition, CharArrayDefinition):
             return f"@.str.{self.ir_reg}"
-        else:
-            return f"@.{self.ir_reg}"
+        return f"@.{self.ir_reg}"
 
     @property
     def ir_ref(self) -> str:
@@ -165,13 +164,13 @@ class Scope(Generatable):
                 raise FailedLookupError("parameter pack", pack_name)
             return self._outer_scope.search_for_generic_pack(pack_name)
 
-        vars = [
+        pack_vars = [
             self.search_for_variable(f"{pack_name}{i}")
             for i in range(self._generic_pack[1])
         ]
 
-        assert all(vars)
-        return vars  # type: ignore
+        assert all(pack_vars)
+        return pack_vars  # type: ignore
 
     @property
     def start_label(self) -> str:
@@ -345,7 +344,10 @@ class ReturnStatement(Generatable):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#i-ret
 
-        if self.returned_expr is None:
+        # We have to use return_type instead of returned_expr.underlying_type,
+        # as returned_expr might be an initializer list, which throws when its
+        # type is accesssed.
+        if self.returned_expr is None or self.return_type == VoidType():
             # ret void; Return from void function
             return ["ret void"]
 
@@ -432,8 +434,9 @@ class Assignment(Generatable):
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         return [
             *conversion_ir,
-            f"store {converted_src.ir_ref_with_type_annotation}, {self._dst.ir_ref_with_type_annotation}"
-            f", align {self._dst.get_equivalent_pure_type().alignment}",
+            f"store {converted_src.ir_ref_with_type_annotation}, "
+            f"{self._dst.ir_ref_with_type_annotation}, "
+            f"align {self._dst.get_equivalent_pure_type().alignment}",
         ]
 
     def is_return_guaranteed(self) -> bool:

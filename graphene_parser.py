@@ -430,6 +430,10 @@ class ParseFunctionSignatures(Interpreter):
     ):
         assert self._current_file is not None
         assert self._include_hierarchy is not None
+        # Save these for later.
+        current_file = self._current_file
+        include_hierarchy = self._include_hierarchy
+
         location = SourceLocation(
             args_tree.meta.start.line,
             self._current_file,
@@ -649,7 +653,7 @@ class ParseImports(Interpreter):
                 exc.message,
                 path_tree.meta.start.line,
                 f"@require_once {path_token.value}",
-            )
+            ) from exc
 
     def _require_once_impl(self, path_str: str) -> None:
         file_path = search_include_path_for_file(path_str, self._include_path)
@@ -801,6 +805,31 @@ class ExpressionParser(Interpreter):
         )
         return flattened_expr.add_parent(call_expr)
 
+    @inline_arguments
+    def logical_operator_use(
+        self, lhs_tree: Tree, operator: Token, rhs_tree: Tree
+    ) -> FlattenedExpression:
+        assert operator.value in ("and", "or")
+
+        lhs = self.visit(lhs_tree)
+        rhs = self.visit(rhs_tree)
+        assert isinstance(lhs, FlattenedExpression)
+        assert isinstance(rhs, FlattenedExpression)
+
+        flattened_expr = FlattenedExpression([])
+        flattened_expr.subexpressions.extend(lhs.subexpressions)
+        flattened_expr.add_parent(
+            cg.LogicalOperator(
+                operator.value,
+                self._function.get_next_label_id(),
+                lhs.expression(),
+                rhs.subexpressions[:-1],
+                rhs.expression(),
+            )
+        )
+
+        return flattened_expr
+
     def _function_call_inner(
         self,
         fn_name: str,
@@ -865,7 +894,8 @@ class ExpressionParser(Interpreter):
         # resolution figure it out, although this isn't very explicit.
         if is_ufcs_call:
             this_arg = args[0]
-            this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
+            if this_arg.expression().is_indirect_pointer_to_type:
+                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
 
         assert isinstance(fn_name, Token)
         assert is_flattened_expression_iterable(args)
@@ -1391,7 +1421,7 @@ def generate_ir_from_source(
                 location = SourceLocation(
                     exc.line, declaration.loc.file, declaration.loc.include_hierarchy
                 )
-                raise ErrorWithLocationInfo(exc.message, location, exc.context)
+                raise ErrorWithLocationInfo(exc.message, location, exc.context) from exc
 
     except ErrorWithLocationInfo as exc:
         if debug_compiler:

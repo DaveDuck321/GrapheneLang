@@ -1,4 +1,5 @@
 @require_once "std/arithmetic.c3"
+@require_once "std/algorithms.c3"
 @require_once "std/memory.c3"
 @require_once "std/string.c3"
 @require_once "std/vector.c3"
@@ -25,13 +26,7 @@ function generate_position_lookup_table : (program : StringView, allocator: Allo
 }
 
 function lookup_zero_indexed_line_number : (table : PositionLookupTable&, offset : isize) -> isize = {
-    // TODO: this can be a binary search
-    for line in range(table.offsets.length) {
-        if table.offsets:get(line) >= offset {
-            return line;
-        }
-    }
-    return table.offsets.length;
+    return table.offsets:data():bisect_left(offset);
 }
 
 function lookup_position : (table: PositionLookupTable&, offset : isize) -> FilePosition = {
