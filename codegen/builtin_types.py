@@ -89,7 +89,7 @@ class NamedType(Type):
         if not full:
             return self.get_name() + reference_suffix
 
-        return f"typedef {self.get_name()} = {self.definition.format_for_output_to_user()}{reference_suffix}"
+        return f"typedef {self.get_name()} : {self.definition.format_for_output_to_user()}{reference_suffix}"
 
     @property
     def ir_mangle(self) -> str:
@@ -496,16 +496,18 @@ class FunctionSignature:
     specialization: list[SpecializationItem]
     foreign: bool = False
 
+    @property
     def is_main(self) -> bool:
         return self.name == "main"
 
+    @property
     def is_foreign(self) -> bool:
         return self.foreign
 
     @cached_property
     def mangled_name(self) -> str:
         # main() is immune to name mangling (irrespective of arguments)
-        if self.is_main() or self.is_foreign():
+        if self.is_main or self.is_foreign:
             return self.name
 
         arguments_mangle = "".join(arg.ir_mangle for arg in self.arguments)
@@ -534,7 +536,7 @@ class FunctionSignature:
         return f"{''.join(legal_name_mangle)}{specialization_mangle}{arguments_mangle}"
 
     def _repr_impl(self, key: Callable[[SpecializationItem], str]) -> str:
-        prefix = "foreign" if self.is_foreign() else "function"
+        prefix = "foreign" if self.is_foreign else "function"
 
         readable_arg_names = ", ".join(map(key, self.arguments))
 
@@ -560,6 +562,15 @@ class FunctionSignature:
     @cached_property
     def ir_ref(self) -> str:
         return f"{self.return_type.ir_type} @{self.mangled_name}"
+
+    def generate_declaration_ir(self) -> str:
+        args_ir = ", ".join(arg.ir_type for arg in self.arguments)
+
+        # XXX nounwind indicates that the function never raises an exception.
+        return (
+            f"declare dso_local {self.return_type.ir_type} "
+            f"@{self.mangled_name}({args_ir}) nounwind"
+        )
 
 
 def get_builtin_types() -> list[PrimitiveType]:
