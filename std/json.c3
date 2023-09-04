@@ -297,6 +297,9 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
             cursor:next();
         }
     }
+    else {
+        is_valid = true;
+    }
 
     // TODO parse fraction.
     // TODO parse exponent.
