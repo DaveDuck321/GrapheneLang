@@ -106,9 +106,9 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    cursor:eat_whitespace();
-
     let node : JSON_Node = new_json_node(/* object */ 6);
+
+    cursor:eat_whitespace();
 
     if cursor:eat(char("}")) {
         // Empty object.
@@ -119,6 +119,8 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
     node.children:store(cursor.allocator:make_vector<JSON_Node>());
 
     while true {
+        cursor:eat_whitespace();
+
         let string_node : Optional<JSON_Node> = cursor:parse_string();
 
         if !string_node:has_value() {
