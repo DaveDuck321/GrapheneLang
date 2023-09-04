@@ -45,10 +45,6 @@ from .user_facing_errors import (
 )
 
 
-class GenericResolutionImpossible(ValueError):
-    pass
-
-
 def get_cost_at_pattern_match_depth(depth: int) -> int:
     # TODO: maybe this should be a list for infinite precision?
     # ATM. only 16 generic deductions/ nested levels are allowed
@@ -158,7 +154,7 @@ class GenericValueReference(CompileTimeConstant):
         return NumericLiteralConstant(specialized_value)
 
     def resolve(self) -> int:
-        raise GenericResolutionImpossible("Generic value reference")
+        assert False
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
@@ -317,8 +313,8 @@ class UnresolvedGenericType(UnresolvedType):
 
         return UnresolvedTypeWrapper(specialized_type)
 
-    def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        raise GenericResolutionImpossible("Generic type")
+    def resolve(self, _: Callable[[str, list[SpecializationItem]], Type]) -> Type:
+        assert False
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}

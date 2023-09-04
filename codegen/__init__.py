@@ -40,7 +40,6 @@ from .translation_unit import Function, Program, Scope
 from .type_resolution import (
     CompileTimeConstant,
     FunctionDeclaration,
-    GenericResolutionImpossible,
     GenericValueReference,
     NumericLiteralConstant,
     Typedef,
