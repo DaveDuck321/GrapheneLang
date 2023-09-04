@@ -156,6 +156,7 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
     }
 
     // Unreachable.
+    runtime_assert(false);
     return make_optional(node);
 }
 
