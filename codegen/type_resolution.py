@@ -28,13 +28,14 @@ from .interfaces import (
 )
 from .type_conversions import get_implicit_conversion_cost
 from .user_facing_errors import (
-    AmbiguousInitialization,
+    AmbiguousFunctionCall,
     BuiltinSourceLocation,
     DoubleReferenceError,
     ErrorWithLocationInfo,
     FailedLookupError,
     GrapheneError,
     Location,
+    MultipleTypeDefinitions,
     NonDeterminableSize,
     OverloadResolutionError,
     PatternMatchDeductionFailure,
@@ -995,8 +996,7 @@ class SymbolTable:
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
-        raise AmbiguousInitialization(
-            "function call",
+        raise AmbiguousFunctionCall(
             f"{fn_name}{format_arguments(fn_args)}",
             [(fn.format_for_output_to_user(), fn.loc) for _, fn in best_functions],
         )
@@ -1146,8 +1146,7 @@ class SymbolTable:
                 return resolved_candidates[0][0]
 
             specialization_str = format_specialization(specialization)
-            raise AmbiguousInitialization(
-                "type",
+            raise MultipleTypeDefinitions(
                 f"{prefix}{specialization_str}",
                 [
                     (candidate.format_for_output_to_user(True), loc)

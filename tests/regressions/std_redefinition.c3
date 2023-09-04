@@ -5,6 +5,6 @@ typedef EnableIf<TrueType>: {}
 
 /// @COMPILE; EXPECT ERR
 /// File '*/std_redefinition.c3', line 4, in 'typedef'
-/// Error: type 'EnableIf<TrueType>' is ambiguous. Equally good candidates are:
+/// Error: multiple definitions of type 'EnableIf<TrueType>':
 /// - typedef EnableIf<TrueType> : {}      (File '*/std/type_traits.c3', line 3)
 /// - typedef EnableIf<TrueType> : {}      (File '*/std_redefinition.c3', line 4)

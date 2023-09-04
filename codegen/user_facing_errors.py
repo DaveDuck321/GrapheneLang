@@ -23,6 +23,16 @@ class BuiltinSourceLocation(Location):
         return "builtin"
 
 
+def format_list(items: Iterable[str]) -> str:
+    # Sort for consistent error messages
+    return "\n".join(f"     - {item}" for item in sorted(items))
+
+
+def format_list_with_locations(items: Iterable[tuple[str, Location]]) -> str:
+    longest_item = max(len(item[0]) for item in items)
+    return format_list((f"{item:{longest_item+5}} ({loc})" for item, loc in items))
+
+
 class GrapheneError(ValueError):
     def __init__(self, message: str) -> None:
         super().__init__(message)
@@ -152,23 +162,25 @@ class OverloadResolutionError(GrapheneError):
         super().__init__(str.join("\n", msg))
 
 
-class AmbiguousInitialization(GrapheneError):
+class MultipleTypeDefinitions(GrapheneError):
+    def __init__(
+        self, type_format: str, candidates: Iterable[tuple[str, Location]]
+    ) -> None:
+        super().__init__(
+            f"Error: multiple definitions of type '{type_format}':\n"
+            + format_list_with_locations(candidates)
+        )
+
+
+class AmbiguousFunctionCall(GrapheneError):
     def __init__(
         self,
-        thing: Literal["type", "function call"],
-        thing_format: str,
-        candidates_unordered: Iterable[tuple[str, Location]],
+        call_format: str,
+        candidates: Iterable[tuple[str, Location]],
     ) -> None:
-        # Sort for consistent error messages
-        candidates = sorted(candidates_unordered, key=lambda item: item[0])
-        longest_candidate = max(len(candidate[0]) for candidate in candidates)
-        candidates_fmt = "\n".join(
-            f"     - {candidate:{longest_candidate+5}} ({loc})"
-            for candidate, loc in candidates
-        )
         super().__init__(
-            f"Error: {thing} '{thing_format}' is ambiguous. "
-            "Equally good candidates are:\n" + candidates_fmt
+            f"Error: function call '{call_format}' is ambiguous. "
+            "Equally good candidates are:\n" + format_list_with_locations(candidates)
         )
 
 
@@ -296,13 +308,9 @@ class FileDoesNotExistException(GrapheneError):
 
 class FileIsAmbiguousException(GrapheneError):
     def __init__(self, relative_path: str, candidates: Iterable[str]) -> None:
-        candidate_output_list = []
-        for candidate in sorted(candidates):
-            candidate_output_list.append(f"     - {candidate}")
-
         super().__init__(
             f"Error: file '{relative_path}' is ambiguous, possible candidates are:\n"
-            + "\n".join(candidate_output_list)
+            + format_list(candidates)
         )
 
 
