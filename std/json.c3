@@ -221,12 +221,6 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return cursor:parse_array();
     }
 
-    // Numbers don't have a prefix character, so just try and parse them.
-    let node : Optional<JSON_Node> = cursor:parse_number();
-    if node:has_value() {
-        return node;
-    }
-
     if cursor:eat(sv("null")) {
         return make_optional(new_json_node(/* null */ 0));
     }
@@ -239,7 +233,8 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional(new_json_node(/* false */ 2));
     }
 
-    return make_optional<JSON_Node>();
+    // Numbers don't have a prefix character, so just try and parse them.
+    return cursor:parse_number();
 }
 
 function parse_element : (cursor : Cursor&) -> Optional<JSON_Node> = {
