@@ -66,8 +66,7 @@ function eat : (cursor : Cursor&, token : u8) -> bool = {
     // TODO this should be const (can't use with has_value() right now).
     let next_char : Optional<u8> = cursor:peak();
 
-    let next_char_data : u8 = next_char:data();
-    if next_char:has_value() and next_char_data == token {
+    if next_char:has_value() and next_char:data() == token {
         cursor:next();
         return true;
     }
