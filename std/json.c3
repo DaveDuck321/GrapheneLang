@@ -1,4 +1,5 @@
 @require_once "std/arithmetic.c3"
+@require_once "std/logical.c3"
 @require_once "std/string.c3"
 @require_once "std/memory.c3"
 @require_once "std/vector.c3"
@@ -9,6 +10,8 @@ typedef Cursor : {
     data      : StringView,
     position  : isize, // TODO should this be an iterator?
     allocator : Allocator,  // FIXME use global allocator.
+    // TODO when we get RAII working, add a max_depth field to prevent crashes
+    // when the input is too nested.
 }
 
 typedef JSON_Node : {
@@ -253,6 +256,15 @@ function parse_element : (cursor : Cursor&) -> Optional<JSON_Node> = {
     return value_node;
 }
 
+function is_control_character : (char : u8) -> bool = {
+    // All Unicode characters may be placed within the quotation marks, except
+    // for the characters that MUST be escaped: quotation mark, reverse
+    // solidus, and the control characters (U+0000 through U+001F). [RFC 8259]
+    // TODO maybe we should be able to compare unsigned values... char <= 0x1f
+    // is so much cleaner, although they both compile to the same code with -O3.
+    return (char & ~0x1f) == 0x0;
+}
+
 function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
     if !cursor:eat(char("\"")) {
         return make_optional<JSON_Node>();
@@ -274,7 +286,13 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
         // TODO escape characters.
 
-        cursor:next();
+        let char : Optional<u8> = cursor:next();
+        runtime_assert(char:has_value());
+
+        // Reject strings with control characters.
+        if is_control_character(char:data()) {
+            return make_optional<JSON_Node>();
+        }
     }
 
     return make_optional<JSON_Node>();
