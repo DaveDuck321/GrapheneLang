@@ -320,7 +320,21 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
         source, 0, initialize_allocator()
     };
 
-    return cursor:parse_element();
+    let result : Optional<JSON_Node> = cursor:parse_element();
+
+    if !result:has_value() {
+        return result;
+    }
+
+    // Only succeed if we have consumed the entire input.
+    // e.g. '[1, 2], 2' would parse up to the end of the array, but the
+    // remaining input makes this invalid json.
+    cursor:eat_whitespace();
+    if cursor:is_eof() {
+        return result;
+    }
+
+    return make_optional<JSON_Node>();
 }
 
 function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
