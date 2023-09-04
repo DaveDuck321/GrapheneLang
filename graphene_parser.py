@@ -23,6 +23,8 @@ from codegen.user_facing_errors import (
     VoidVariableDeclaration,
 )
 
+UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
+
 
 class ResolvedPath(str):
     def __new__(cls, path: Path) -> "ResolvedPath":
@@ -93,7 +95,7 @@ def parse_generic_definition(definition: Token) -> cg.GenericArgument:
 
 
 class TypeTransformer(Transformer):
-    def __init__(self, generic_args: cg.UnresolvedGenericMapping) -> None:
+    def __init__(self, generic_args: UnresolvedGenericMapping) -> None:
         super().__init__(visit_tokens=True)
         self._generic_args = generic_args
 
@@ -186,7 +188,7 @@ class TypeTransformer(Transformer):
         tree: Tree,
         generic_mapping: cg.GenericMapping,
     ) -> cg.SpecializationItem:
-        unresolved_mapping: cg.UnresolvedGenericMapping = {}
+        unresolved_mapping: UnresolvedGenericMapping = {}
         for key, item in generic_mapping.mapping.items():
             if isinstance(item, cg.Type):
                 unresolved_mapping[key.name] = cg.UnresolvedTypeWrapper(item)
@@ -204,7 +206,7 @@ class TypeTransformer(Transformer):
 
     @classmethod
     def parse(
-        cls, tree: Tree, generic_mapping: cg.UnresolvedGenericMapping
+        cls, tree: Tree, generic_mapping: UnresolvedGenericMapping
     ) -> cg.UnresolvedType:
         result = cls(generic_mapping).transform(tree)
         assert isinstance(result, cg.UnresolvedType)
@@ -235,7 +237,7 @@ class ParseTypeDefinitions(Interpreter):
             prefix.meta.start.line, self._file, tuple(self._include_hierarchy)
         )
 
-        generic_mapping: cg.UnresolvedGenericMapping = {}
+        generic_mapping: UnresolvedGenericMapping = {}
         generic_definitions: list[cg.GenericArgument] = []
 
         for generic_tree in generic_definitions_tree.children:
@@ -440,7 +442,7 @@ class ParseFunctionSignatures(Interpreter):
             tuple(self._include_hierarchy),
         )
 
-        generic_mapping: cg.UnresolvedGenericMapping = {}
+        generic_mapping: UnresolvedGenericMapping = {}
         generic_definitions: list[cg.GenericArgument] = []
 
         # One for the type and one for the actual args.

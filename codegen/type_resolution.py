@@ -48,11 +48,6 @@ class GenericResolutionImpossible(ValueError):
     pass
 
 
-@dataclass
-class BaseSymbol:
-    specialization_count: int
-
-
 def get_cost_at_pattern_match_depth(depth: int) -> int:
     # TODO: maybe this should be a list for infinite precision?
     # ATM. only 16 generic deductions/ nested levels are allowed
@@ -112,7 +107,6 @@ class CompileTimeConstant:
 
 
 UnresolvedSpecializationItem = UnresolvedType | CompileTimeConstant
-UnresolvedGenericMapping = dict[str, UnresolvedSpecializationItem]
 
 
 @dataclass(frozen=True)
@@ -657,6 +651,9 @@ class UnresolvedFunctionSignature:
         if len(unmatched_generics) != 0:
             raise PatternMatchDeductionFailure(self.name, unmatched_generics.pop().name)
 
+        if self.parameter_pack_argument_name is None:
+            assert len(generics.pack) == 0
+
         new_specialization: list[UnresolvedSpecializationItem] = []
         for item in self.expanded_specialization:
             new_specialization.append(item.produce_specialized_copy(generics))
@@ -665,14 +662,11 @@ class UnresolvedFunctionSignature:
         for arg in self.arguments:
             arguments.append(arg.produce_specialized_copy(generics))
 
-        if self.parameter_pack_argument_name is not None:
-            arguments.extend(
-                [UnresolvedTypeWrapper(pack_item) for pack_item in generics.pack]
-            )
-
-        new_specialization.extend(
-            [UnresolvedTypeWrapper(pack_type) for pack_type in generics.pack]
-        )
+        unresolved_packed_types = [
+            UnresolvedTypeWrapper(pack_type) for pack_type in generics.pack
+        ]
+        arguments.extend(unresolved_packed_types)
+        new_specialization.extend(unresolved_packed_types)
 
         return UnresolvedFunctionSignature(
             self.name,
@@ -831,8 +825,6 @@ class FunctionDeclaration:
 
 class SymbolTable:
     def __init__(self) -> None:
-        self._base_typedefs: dict[str, BaseSymbol] = {}
-
         self._unresolved_fndefs: dict[str, list[FunctionDeclaration]] = defaultdict(
             list
         )
@@ -945,37 +937,28 @@ class SymbolTable:
                 if cost is not None:
                     total_cost += cost
                 else:
-                    total_cost = None
-                    break
-
-            # Conversion might fail for some arguments. In that case, discard
-            # this candidate.
-            if total_cost is not None:
+                    break  # Conversion failed!
+            else:
+                # Discard this candidate if conversion fails
                 functions_by_cost.append((total_cost, function, declaration))
 
         functions_by_cost.sort(key=lambda t: t[0])
+        best_functions = [
+            fn[1:] for fn in functions_by_cost if fn[0] == functions_by_cost[0][0]
+        ]
 
-        if len(functions_by_cost) == 0:
+        if len(best_functions) == 0:
             return None
 
-        if len(functions_by_cost) == 1:
-            return functions_by_cost[0][1]
-
-        first, second, *_ = functions_by_cost
-        if first[0] < second[0]:
-            # The first function costs less than the second function
-            # We can unambiguously select the cheaper function
-            return functions_by_cost[0][1]
+        if len(best_functions) == 1:
+            return best_functions[0][0]
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
         raise AmbiguousInitialization(
             "function call",
             f"{fn_name}{format_arguments(fn_args)}",
-            [
-                (first[2].format_for_output_to_user(), first[2].loc),
-                (second[2].format_for_output_to_user(), second[2].loc),
-            ],
+            [(fn.format_for_output_to_user(), fn.loc) for _, fn in best_functions],
         )
 
     def lookup_function(

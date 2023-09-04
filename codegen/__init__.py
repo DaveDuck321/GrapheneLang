@@ -45,7 +45,6 @@ from .type_resolution import (
     NumericLiteralConstant,
     Typedef,
     UnresolvedFunctionSignature,
-    UnresolvedGenericMapping,
     UnresolvedGenericType,
     UnresolvedHeapArrayType,
     UnresolvedNamedType,
