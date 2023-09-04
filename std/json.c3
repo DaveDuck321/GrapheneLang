@@ -166,9 +166,9 @@ function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    cursor:eat_whitespace();
-
     let node : JSON_Node = new_json_node(/* array */ 5);
+
+    cursor:eat_whitespace();
 
     if cursor:eat(char("]")) {
         // Empty array.
@@ -180,6 +180,10 @@ function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
     while true {
         let value_node : Optional<JSON_Node> = cursor:parse_element();
+
+        if !value_node:has_value() {
+            return make_optional<JSON_Node>();
+        }
 
         node.children:data():push_back(value_node:data());
 
@@ -221,7 +225,7 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
     // Numbers don't have a prefix character, so just try and parse them.
     let node : Optional<JSON_Node> = cursor:parse_number();
     if node:has_value() {
-        return make_optional(node:data());
+        return node;
     }
 
     if cursor:eat(sv("null")) {
@@ -282,12 +286,14 @@ function is_digit_helper : (token : Optional<u8>) -> bool = {
 
 function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
     const start_pos : isize = cursor.position;
+    let is_valid : bool = false;
 
     // This is optional, so discard the return value.
     cursor:eat(char("-"));
 
     if !cursor:eat(char("0")) {
         while is_digit_helper(cursor:peak()) {
+            is_valid = true;
             cursor:next();
         }
     }
@@ -296,6 +302,10 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
     // TODO parse exponent.
 
     const end_pos : isize = cursor.position;
+
+    if !is_valid {
+        return make_optional<JSON_Node>();
+    }
 
     let node : JSON_Node = new_json_node(/* string */ 4);
     node.value = make_optional(cursor.data:slice_between(start_pos, end_pos));
