@@ -101,3 +101,7 @@ function ascii_is_matched_pair : (lhs : u8, rhs : u8) -> bool = {
     }
     return false;
 }
+
+function char : (literal : u8[1]&) -> u8 = {
+    return literal[0];
+}

@@ -31,10 +31,6 @@ function new_json_node : (node_type : int) -> JSON_Node = {
     };
 }
 
-function char : (literal : u8[1]&) -> u8 = {
-    return literal[0];
-}
-
 function is_eof : (cursor : Cursor&) -> bool = {
     return cursor.position >= cursor.data.length;
 }
