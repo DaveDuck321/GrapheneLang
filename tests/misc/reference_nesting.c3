@@ -10,5 +10,5 @@ function main: () -> int = {
 }
 
 /// @COMPILE; EXPECT ERR
-/// File '*/reference_nesting.c3', line 3, in 'function signature'
-/// Error: cannot construct reference type since 'typedef int_ref = int&' is already a reference
+/// File '*/reference_nesting.c3', line 3, in 'function declaration'
+/// Error: cannot construct reference type since 'typedef int_ref : int&' is already a reference

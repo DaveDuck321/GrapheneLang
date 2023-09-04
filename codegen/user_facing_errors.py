@@ -2,11 +2,35 @@ from dataclasses import dataclass
 from typing import Iterable, Literal, Optional
 
 
-@dataclass
-class SourceLocation:
+@dataclass(frozen=True)
+class Location:
+    pass
+
+
+@dataclass(frozen=True)
+class SourceLocation(Location):
     line: int
     file: str
-    include_hierarchy: list[str]
+    include_hierarchy: tuple[str]
+
+    def __str__(self):
+        return f"File '{self.file}', line {self.line}"
+
+
+@dataclass(frozen=True)
+class BuiltinSourceLocation(Location):
+    def __str__(self) -> str:
+        return "builtin"
+
+
+def format_list(items: Iterable[str]) -> str:
+    # Sort for consistent error messages
+    return "\n".join(f"     - {item}" for item in sorted(items))
+
+
+def format_list_with_locations(items: Iterable[tuple[str, Location]]) -> str:
+    longest_item = max(len(item[0]) for item in items)
+    return format_list((f"{item:{longest_item+5}} ({loc})" for item, loc in items))
 
 
 class GrapheneError(ValueError):
@@ -32,7 +56,7 @@ class ErrorWithLineInfo(ValueError):
 
 class ErrorWithLocationInfo(ValueError):
     def __init__(
-        self, message: str, location: SourceLocation, context: Optional[str] = None
+        self, message: str, location: Location, context: Optional[str] = None
     ) -> None:
         super().__init__(message)
 
@@ -101,9 +125,9 @@ class SpecializationFailed(SubstitutionFailure):
 
 
 class PatternMatchDeductionFailure(GrapheneError):
-    def __init__(self, fn_name: str, unmatched_variable: str) -> None:
+    def __init__(self, fn_name: str, unmatched_generic: str) -> None:
         super().__init__(
-            f"Error: cannot deduce generic type '{unmatched_variable}' "
+            f"Error: cannot deduce generic type '{unmatched_generic}' "
             f"in function '{fn_name}', manual specialization is required"
         )
 
@@ -119,19 +143,12 @@ class NonDeterminableSize(GrapheneError):
 class OverloadResolutionError(GrapheneError):
     def __init__(
         self,
-        fn_name: str,
-        specialization: str,
-        arguments: str,
-        available_overloads: list[str],
+        fn_call: str,
+        available_overloads_unordered: Iterable[str],
     ) -> None:
-        if specialization:
-            fn_call_string = f"{fn_name}<{specialization}>({arguments})"
-        else:
-            fn_call_string = f"{fn_name}({arguments})"
-
-        msg = [
-            f"Error: overload resolution for function call '{fn_call_string}' failed"
-        ]
+        # Sort for consistent error messages
+        available_overloads = sorted(available_overloads_unordered)
+        msg = [f"Error: overload resolution for function call '{fn_call}' failed"]
 
         # TODO need a better way to indent these.
         if available_overloads:
@@ -145,15 +162,25 @@ class OverloadResolutionError(GrapheneError):
         super().__init__(str.join("\n", msg))
 
 
-class AmbiguousFunctionCall(GrapheneError):
+class MultipleTypeDefinitions(GrapheneError):
     def __init__(
-        self, fn_name: str, arguments: str, candidate_1: str, candidate_2: str
+        self, type_format: str, candidates: Iterable[tuple[str, Location]]
     ) -> None:
         super().__init__(
-            f"Error: overload resolution for function call '{fn_name}({arguments})' is ambiguous.\n"
-            "    Equally good candidates are\n"
-            f"     - {candidate_1}\n"
-            f"     - {candidate_2}"
+            f"Error: multiple definitions of type '{type_format}':\n"
+            + format_list_with_locations(candidates)
+        )
+
+
+class AmbiguousFunctionCall(GrapheneError):
+    def __init__(
+        self,
+        call_format: str,
+        candidates: Iterable[tuple[str, Location]],
+    ) -> None:
+        super().__init__(
+            f"Error: function call '{call_format}' is ambiguous. "
+            "Equally good candidates are:\n" + format_list_with_locations(candidates)
         )
 
 
@@ -179,15 +206,6 @@ class InvalidIntSize(GrapheneError):
         super().__init__(
             f"Error: {type_name} cannot store value {actual_value}, permitted range"
             f" [{expected_lower}, {expected_upper})"
-        )
-
-
-class GenericArgumentCountError(GrapheneError):
-    def __init__(self, name: str, actual: int, expected: int) -> None:
-        arguments = "argument" if expected == 1 else "arguments"
-
-        super().__init__(
-            f"Error: generic '{name}' expects {expected} {arguments} but received {actual}"
         )
 
 
@@ -290,13 +308,9 @@ class FileDoesNotExistException(GrapheneError):
 
 class FileIsAmbiguousException(GrapheneError):
     def __init__(self, relative_path: str, candidates: Iterable[str]) -> None:
-        candidate_output_list = []
-        for candidate in sorted(candidates):
-            candidate_output_list.append(f"     - {candidate}")
-
         super().__init__(
             f"Error: file '{relative_path}' is ambiguous, possible candidates are:\n"
-            + "\n".join(candidate_output_list)
+            + format_list(candidates)
         )
 
 

@@ -256,10 +256,28 @@ def assert_is_implicitly_convertible(
 
 
 def get_implicit_conversion_cost(
-    src: TypedExpression, dest_type: Type
+    src: Type | TypedExpression, dest_type: Type
 ) -> Optional[int]:
+    class Wrapper(TypedExpression):
+        def __init__(self, expr_type: Type) -> None:
+            super().__init__(expr_type, False, False)
+
+        @property
+        def ir_ref_without_type_annotation(self) -> str:
+            assert False
+
+        def assert_can_read_from(self) -> None:
+            pass
+
+        def assert_can_write_to(self) -> None:
+            pass
+
+        def __repr__(self) -> str:
+            return self.underlying_type.format_for_output_to_user(False)
+
     try:
-        cost, _ = implicit_conversion_impl(src, dest_type)
+        expression = src if isinstance(src, TypedExpression) else Wrapper(src)
+        cost, _ = implicit_conversion_impl(expression, dest_type)
         return cost
     except TypeCheckerError:
         return None

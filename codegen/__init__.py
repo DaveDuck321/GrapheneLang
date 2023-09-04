@@ -1,4 +1,11 @@
-from .builtin_types import BoolType, IntType, StructDefinition, UIntType, VoidType
+from .builtin_types import (
+    BoolType,
+    FunctionSignature,
+    IntType,
+    StructDefinition,
+    UIntType,
+    VoidType,
+)
 from .expressions import (
     ArrayIndexAccess,
     BorrowExpression,
@@ -21,6 +28,7 @@ from .generatable import (
 )
 from .interfaces import (
     Generatable,
+    GenericArgument,
     GenericMapping,
     Parameter,
     SpecializationItem,
@@ -28,16 +36,14 @@ from .interfaces import (
     TypedExpression,
     Variable,
 )
-from .translation_unit import Function, GenericFunctionParser, Program, Scope
+from .translation_unit import Function, Program, Scope
 from .type_resolution import (
     CompileTimeConstant,
-    GenericArgument,
-    GenericResolutionImpossible,
-    GenericTypedef,
+    FunctionDeclaration,
     GenericValueReference,
     NumericLiteralConstant,
-    SpecializedTypedef,
-    UnresolvedGenericMapping,
+    Typedef,
+    UnresolvedFunctionSignature,
     UnresolvedGenericType,
     UnresolvedHeapArrayType,
     UnresolvedNamedType,

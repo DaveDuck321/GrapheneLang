@@ -10,4 +10,4 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 8, in 'function main: () -> int'
-/// Error: cannot deduce the destination type for initializer list '{int, int}' without a strongly typed context
+/// Error: cannot deduce generic type 'T' in function 'get_x', manual specialization is required

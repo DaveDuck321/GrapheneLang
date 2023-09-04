@@ -12,5 +12,5 @@ function main : () -> int = {
 }
 
 /// @COMPILE; EXPECT ERR
-/// File '*.c3', line 5, in 'function return type'
+/// File '*.c3', line 10, in 'function main: () -> int'
 /// Error: could not find type definition 'typedef Typo<i8> : ...'
