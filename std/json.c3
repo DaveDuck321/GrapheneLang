@@ -270,28 +270,59 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    const start_pos : isize = cursor.position;
+    let in_escape_seq : bool = false;
+    // FIXME stop leaking the vector.
+    let string : Vector<u8> = make_vector<u8>(&cursor.allocator);
 
     while !cursor:is_eof() {
-        if cursor:eat(char("\"")) {
-            const end_pos : isize = cursor.position - 1;
-
+        if !in_escape_seq and cursor:eat(char("\"")) {
             let node : JSON_Node = new_json_node(/* string */ 3);
-            node.value = make_optional(
-                cursor.data:slice_between(start_pos, end_pos)
-            );
+            node.value = make_optional(string:data());
 
             return make_optional(node);
         }
 
-        // TODO escape characters.
-
-        let char : Optional<u8> = cursor:next();
-        runtime_assert(char:has_value());
+        let char_opt : Optional<u8> = cursor:next();
+        runtime_assert(char_opt:has_value());
+        const char : u8 = char_opt:data();
 
         // Reject strings with control characters.
-        if is_control_character(char:data()) {
+        if is_control_character(char) {
             return make_optional<JSON_Node>();
+        }
+
+        if in_escape_seq {
+            in_escape_seq = false;
+
+            if char == char("\\") {
+                string:push_back(char("\\"));
+            }
+            if char == char("/") {
+                string:push_back(char("/"));
+            }
+            if char == char("b") {
+                string:push_back(char("\b"));
+            }
+            if char == char("f") {
+                string:push_back(char("\f"));
+            }
+            if char == char("n") {
+                string:push_back(char("\n"));
+            }
+            if char == char("r") {
+                string:push_back(char("\r"));
+            }
+            if char == char("t") {
+                string:push_back(char("\t"));
+            }
+        }
+        else {
+            if char == char("\\") {
+                in_escape_seq = true;
+            }
+            else {
+                string:push_back(char);
+            }
         }
     }
 
