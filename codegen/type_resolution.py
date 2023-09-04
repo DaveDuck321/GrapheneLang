@@ -644,7 +644,7 @@ class UnresolvedFunctionSignature:
 
         formatted_args = [arg.format_for_output_to_user() for arg in self.arguments]
         if self.parameter_pack_argument_name is not None:
-            format_arguments.append(self.parameter_pack_argument_name + "...")
+            formatted_args.append(self.parameter_pack_argument_name + "...")
 
         args_str = ", ".join(formatted_args)
         return_str = self.return_type.format_for_output_to_user()
