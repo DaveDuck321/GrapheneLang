@@ -69,7 +69,7 @@ class UnresolvedType:
         pass
 
     @abstractmethod
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         pass
 
     @abstractmethod
@@ -96,7 +96,7 @@ class CompileTimeConstant:
         pass
 
     @abstractmethod
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         pass
 
     @abstractmethod
@@ -122,7 +122,7 @@ class NumericLiteralConstant(CompileTimeConstant):
     def resolve(self) -> int:
         return self.value
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set()
 
     def pattern_match(
@@ -159,7 +159,7 @@ class GenericValueReference(CompileTimeConstant):
     def resolve(self) -> int:
         raise GenericResolutionImpossible("Generic value reference")
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
 
     def pattern_match(
@@ -187,7 +187,7 @@ class UnresolvedTypeWrapper(UnresolvedType):
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         return self.resolved_type
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set()
 
     def pattern_match(
@@ -267,9 +267,12 @@ class UnresolvedNamedType(UnresolvedType):
 
         return cost
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set().union(
-            *(item.get_components_to_match() for item in self.specialization)
+            *(
+                item.get_generics_taking_part_in_pattern_match()
+                for item in self.specialization
+            )
         )
 
     def pattern_match(
@@ -316,7 +319,7 @@ class UnresolvedGenericType(UnresolvedType):
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         raise GenericResolutionImpossible("Generic type")
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
 
     def pattern_match(
@@ -350,8 +353,8 @@ class UnresolvedReferenceType(UnresolvedType):
 
         return resolved_value.convert_to_reference_type()
 
-    def get_components_to_match(self) -> set[GenericArgument]:
-        return self.value_type.get_components_to_match()
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
+        return self.value_type.get_generics_taking_part_in_pattern_match()
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
@@ -390,9 +393,12 @@ class UnresolvedStructType(UnresolvedType):
 
         return AnonymousType(StructDefinition(resolved_members))
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set().union(
-            *(member[1].get_components_to_match() for member in self.members)
+            *(
+                member[1].get_generics_taking_part_in_pattern_match()
+                for member in self.members
+            )
         )
 
     def pattern_match(self, _1: Type, _2: GenericMapping, _3: int) -> Optional[int]:
@@ -425,10 +431,13 @@ class UnresolvedStackArrayType(UnresolvedType):
         resolved_member = self.member_type.resolve(lookup)
         return AnonymousType(StackArrayDefinition(resolved_member, resolved_dimensions))
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set().union(
-            self.member_type.get_components_to_match(),
-            *(dim.get_components_to_match() for dim in self.dimensions),
+            self.member_type.get_generics_taking_part_in_pattern_match(),
+            *(
+                dim.get_generics_taking_part_in_pattern_match()
+                for dim in self.dimensions
+            ),
         )
 
     def pattern_match(
@@ -487,10 +496,13 @@ class UnresolvedHeapArrayType(UnresolvedType):
         resolved_member = self.member_type.resolve(lookup)
         return AnonymousType(HeapArrayDefinition(resolved_member, resolved_dimensions))
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set().union(
-            self.member_type.get_components_to_match(),
-            *(dim.get_components_to_match() for dim in self.known_dimensions),
+            self.member_type.get_generics_taking_part_in_pattern_match(),
+            *(
+                dim.get_generics_taking_part_in_pattern_match()
+                for dim in self.known_dimensions
+            ),
         )
 
     def pattern_match(
@@ -535,7 +547,10 @@ class Typedef:
         loc: Location,
     ):
         explicitly_matched_generics = set().union(
-            *(item.get_components_to_match() for item in specialization)
+            *(
+                item.get_generics_taking_part_in_pattern_match()
+                for item in specialization
+            )
         )
 
         unmatched_generics = [
@@ -570,7 +585,7 @@ class Typedef:
             if isinstance(item, CompileTimeConstant) != isinstance(target, int):
                 return None
 
-            if len(item.get_components_to_match()) == 0:
+            if len(item.get_generics_taking_part_in_pattern_match()) == 0:
                 # Nothing to match, we rely on type equality instead
                 # This costs nothing
                 continue
@@ -638,16 +653,21 @@ class UnresolvedFunctionSignature:
         return_str = self.return_type.format_for_output_to_user()
         return f"{self.name}{specialization_str} : ({args_str}) -> {return_str}"
 
-    def get_components_to_match(self) -> set[GenericArgument]:
+    def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set().union(
-            *(item.get_components_to_match() for item in self.expanded_specialization)
+            *(
+                item.get_generics_taking_part_in_pattern_match()
+                for item in self.expanded_specialization
+            )
         )
 
     def produce_specialized_copy(
         self,
         generics: GenericMapping,
     ) -> "UnresolvedFunctionSignature":
-        unmatched_generics = self.get_components_to_match() - generics.mapping.keys()
+        unmatched_generics = (
+            self.get_generics_taking_part_in_pattern_match() - generics.mapping.keys()
+        )
         if len(unmatched_generics) != 0:
             raise PatternMatchDeductionFailure(self.name, unmatched_generics.pop().name)
 
@@ -692,7 +712,7 @@ class UnresolvedFunctionSignature:
             if isinstance(item, CompileTimeConstant) != isinstance(target_item, int):
                 return False
 
-            if len(item.get_components_to_match()) == 0:
+            if len(item.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
 
             result: Optional[int] = None
@@ -721,7 +741,7 @@ class UnresolvedFunctionSignature:
         for target_arg, unresolved_arg in zip(
             target_args[: len(self.arguments)], self.arguments
         ):
-            if len(unresolved_arg.get_components_to_match()) == 0:
+            if len(unresolved_arg.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
 
             if isinstance(target_arg, InitializerList):
@@ -774,7 +794,10 @@ class FunctionDeclaration:
         location: Location,
     ):
         explicitly_matched_generics = set().union(
-            *(item.get_components_to_match() for item in specialization)
+            *(
+                item.get_generics_taking_part_in_pattern_match()
+                for item in specialization
+            )
         )
 
         unmatched_generics = [
@@ -824,6 +847,23 @@ class FunctionDeclaration:
 
 
 class SymbolTable:
+    """
+    Definitions:
+        `(un)resolved`: an unresolved type is produced directly by the parser,
+        it may have placeholder generics and parameter packs. A resolved type
+        has no generics and is used directly by codegen.
+
+        `specialize`: before a type can be resolved, all its generic arguments
+        must be expanded. Specializing an UnresolvedType performs this
+        substitution: the result is still an UnresolvedType but it may now be
+        resolved -- specialization does not fail with SFINAE since no lookup has
+        been performed.
+
+        `lookup(name, specialization)`: the symbol table considers all
+        unresolved symbol definitions, it specializes, resolves, and returns the
+        type/ function which best matches the provided specialization.
+    """
+
     def __init__(self) -> None:
         self._unresolved_fndefs: dict[str, list[FunctionDeclaration]] = defaultdict(
             list
