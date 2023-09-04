@@ -48,7 +48,7 @@ class Function:
             packed_args = signature.arguments[len(parameter_names) :]
             self.top_level_scope.add_generic_pack(parameter_pack_name, len(packed_args))
 
-            for i, param_type in enumerate(signature.arguments[len(parameter_names) :]):
+            for i, param_type in enumerate(packed_args):
                 self._add_parameter(f"{parameter_pack_name}{i}", param_type)
 
         # Check the signature
