@@ -12,4 +12,4 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 6, in 'function outer<int, int, int>: (int, int, int) -> int'
-/// Error: could not find parameter pack definition 'undefined...'
+/// Error: could not find parameter pack definition 'undefined'

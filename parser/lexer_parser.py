@@ -1,115 +1,354 @@
 import json
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Optional
+from typing import Type as PyType
+from typing import TypeVar
 
-parse_fn: Callable[[Path], str] | None = None
+from .self_hosted_parser import parse
 
-
-@dataclass
-class JsonConvertible:
-    @classmethod
-    def is_convertible(cls, json_dict: dict) -> bool:
-        for field in fields(cls):
-            if field.name not in json_dict:
-                return False
-        return True
+# Mirrors the data structures in `syntax_tree.c3`
+# TODO: python bindings to automate this :-D
 
 
 @dataclass
-class FilePosition(JsonConvertible):
+class FilePosition:
     line: int
     column: int
 
 
 @dataclass
-class Meta(JsonConvertible):
+class Meta:
     start: FilePosition
     end: FilePosition
 
 
 @dataclass
-class Token(JsonConvertible):
-    # TODO: rename to token
-    name: str
-    value: str
+class ParsedNode:
     meta: Meta
 
 
 @dataclass
-class Tree(JsonConvertible):
+class TopLevelFeature(ParsedNode):
+    pass
+
+
+@dataclass
+class CompileTimeConstant(ParsedNode):
+    pass
+
+
+@dataclass
+class NumericGenericIdentifier(CompileTimeConstant):
+    value: str
+
+
+@dataclass
+class NumericIdentifier(CompileTimeConstant):
+    value: int
+
+
+@dataclass
+class Type(ParsedNode):
+    pass
+
+
+@dataclass
+class FunctionType(Type):
+    pass
+
+
+@dataclass
+class ArrayType(Type):
+    base_type: Type
+    size: list[CompileTimeConstant]
+
+
+@dataclass
+class HeapArrayType(ArrayType):
+    pass
+
+
+@dataclass
+class StackArrayType(ArrayType):
+    pass
+
+
+@dataclass
+class ReferenceType(Type):
+    value_type: Type
+
+
+@dataclass
+class NamedType(Type):
     name: str
-    children: list[Any]
-    meta: Meta
+    specialization: list[Type | CompileTimeConstant]
 
 
-class Transformer:
-    def __init__(self, visit_tokens=False) -> None:
-        self._visit_tokens = visit_tokens
+@dataclass
+class StructType(Type):
+    members: list[tuple[str, Type]]
 
-    def transform(self, tree: Tree):
-        my_children = []
-        for child in tree.children:
-            if child is None:
-                my_children.append(None)
-            elif isinstance(child, Token):
-                if self._visit_tokens and hasattr(self, child.name):
-                    my_children.append(getattr(self, child.name)(child))
-                else:
-                    my_children.append(child)
-            else:
-                assert isinstance(child, Tree)
-                my_children.append(self.transform(child))
 
-        new_tree = Tree(tree.name, my_children, tree.meta)
-        if not hasattr(self, tree.name):
-            return new_tree
+@dataclass
+class PackType(Type):
+    type_: Type
 
-        return getattr(self, tree.name)(new_tree)
+
+@dataclass
+class GenericDefinition(Type):
+    name: str
+    is_packed: bool
+
+
+@dataclass
+class NumericGenericDefinition(GenericDefinition):
+    pass
+
+
+@dataclass
+class TypeGenericDefinition(GenericDefinition):
+    pass
+
+
+@dataclass
+class FunctionDefinition(TopLevelFeature):
+    name: str
+    args: list[tuple[str, Type]]
+    return_: Type
+
+
+@dataclass
+class GenericFunctionDefinition(FunctionDefinition):
+    generic_definitions: list[GenericDefinition]
+    specialization: list[Type | CompileTimeConstant]
+    scope: "Scope"
+
+
+@dataclass
+class ImplicitFunction(GenericFunctionDefinition):
+    pass
+
+
+@dataclass
+class GrapheneFunction(GenericFunctionDefinition):
+    pass
+
+
+@dataclass
+class OperatorFunction(GenericFunctionDefinition):
+    pass
+
+
+@dataclass
+class AssignmentFunction(GenericFunctionDefinition):
+    pass
+
+
+@dataclass
+class ForeignFunction(FunctionDefinition):
+    pass
+
+
+@dataclass
+class RequireOnce(TopLevelFeature):
+    path: str
+
+
+@dataclass
+class Typedef(TopLevelFeature):
+    generic_definitions: list[GenericDefinition]
+    name: str
+    specialization: list[Type | CompileTimeConstant]
+    alias: Type
+
+
+@dataclass
+class LineOfCode(ParsedNode):
+    pass
+
+
+@dataclass
+class Scope(LineOfCode):
+    lines: list[LineOfCode]
+
+
+@dataclass
+class Expression(LineOfCode):
+    pass
+
+
+@dataclass
+class If(LineOfCode):
+    condition: Expression
+    if_scope: Scope
+    else_scope: Scope
+
+
+@dataclass
+class While(LineOfCode):
+    condition: Expression
+    scope: Scope
+
+
+@dataclass
+class For(LineOfCode):
+    variable: str
+    iterator: Expression
+    scope: Scope
+
+
+@dataclass
+class Return(LineOfCode):
+    expression: Optional[Expression]
+
+
+@dataclass
+class Assignment(LineOfCode):
+    lhs: Expression
+    operator: str
+    rhs: Expression
+
+
+@dataclass
+class VariableDeclaration(LineOfCode):
+    is_const: bool
+    variable: str
+    type_: Type
+    expression: Optional[Expression]
+
+
+@dataclass
+class OperatorUse(Expression):
+    name: str
+    lhs: Expression
+    rhs: Expression
+
+
+@dataclass
+class UnaryOperatorUse(Expression):
+    name: str
+    rhs: Expression
+
+
+@dataclass
+class LogicalOperatorUse(Expression):
+    name: str
+    lhs: Expression
+    rhs: Expression
+
+
+@dataclass
+class Borrow(Expression):
+    is_const: bool
+    expression: Expression
+
+
+@dataclass
+class FunctionCall(Expression):
+    name: str
+    specialization: list[Type | CompileTimeConstant]
+    args: list[Expression]
+
+
+@dataclass
+class UFCS_Call(Expression):
+    expression: Expression
+    name: str
+    specialization: list[Type | CompileTimeConstant]
+    args: list[Expression]
+
+
+@dataclass
+class PackExpansion(Expression):
+    expression: Expression
+
+
+@dataclass
+class Constant(Expression):
+    pass
+
+
+@dataclass
+class StringConstant(Constant):
+    value: str
+
+
+@dataclass
+class FloatConstant(Constant):
+    value: str
+
+
+@dataclass
+class IntConstant(Constant):
+    value: int
+
+
+@dataclass
+class BoolConstant(Constant):
+    value: bool
+
+
+@dataclass
+class GenericIdentifierConstant(Constant):
+    value: str
+
+
+@dataclass
+class HexConstant(Constant):
+    value: str
+
+
+@dataclass
+class NamedInitializerList(Expression):
+    args: list[tuple[str, Expression]]
+
+
+@dataclass
+class UnnamedInitializerList(Expression):
+    args: list[Expression]
+
+
+@dataclass
+class VariableAccess(Expression):
+    name: str
+
+
+@dataclass
+class ArrayIndexAccess(Expression):
+    expression: Expression
+    indexes: list[Expression]
+
+
+@dataclass
+class StructIndexAccess(Expression):
+    expression: Expression
+    member: str
 
 
 class Interpreter:
-    def __init__(self, visit_tokens=False) -> None:
-        self._visit_tokens = visit_tokens
+    T = TypeVar("T")
 
-    def visit(self, tree: Tree | Token):
-        if not hasattr(self, tree.name):
-            if isinstance(tree, Token):
-                return tree
+    def parse(self, thing: ParsedNode, ret_type: PyType[T] | None) -> T:
+        for fn_type in type(thing).mro():
+            if hasattr(self, fn_type.__name__):
+                fn = getattr(self, fn_type.__name__)
+                break
+        else:
+            assert False, f"{self} could not dispatch '{thing}'"
 
-            return self.visit_children(tree)
+        result = fn(thing)
+        if ret_type is not None:
+            assert isinstance(result, ret_type)
 
-        return getattr(self, tree.name)(tree)
-
-    def visit_children(self, tree: Tree):
-        for child in tree.children:
-            if child is not None:
-                self.visit(child)
-
-
-def json_to_tree(json_data: str) -> Tree:
-    def decoder(obj: dict):
-        for type_ in (Tree, Token, Meta, FilePosition):
-            if type_.is_convertible(obj):
-                return type_(**obj)
-
-        raise NotImplementedError()
-
-    return json.loads(json_data, object_hook=decoder)
+        return result
 
 
-def init_lexer_parser(self_hosted: bool):
-    global parse_fn
+def run_lexer_parser(path: Path) -> list[TopLevelFeature]:
+    def object_hook(obj: dict[str, Any]) -> ParsedNode:
+        class_ = globals()[obj["__type__"]]
+        del obj["__type__"]
+        return class_(**obj)
 
-    if self_hosted:
-        from .self_hosted_parser import parse
-    else:
-        from .bootstrap.lark_parser import parse
-
-    parse_fn = parse
-
-
-def run_lexer_parser(path: Path) -> Tree:
-    assert parse_fn is not None, "The lexer parser is uninitialized"
-    parse_result = parse_fn(path)
-    return json_to_tree(parse_result)
+    parse_result = parse(path)
+    return json.loads(parse_result, object_hook=object_hook)
