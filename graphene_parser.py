@@ -39,7 +39,7 @@ def in_pairs(iterable: Iterable) -> Iterable:
     return zip(*chunks, strict=True)
 
 
-def get_optional_children(tree: Optional[Tree]) -> tuple[Any]:
+def get_optional_children(tree: Optional[Tree]) -> tuple:
     if tree is None:
         return tuple()
     return tuple(tree.children)

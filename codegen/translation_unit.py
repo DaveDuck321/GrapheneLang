@@ -24,7 +24,7 @@ from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
 class Function:
     def __init__(
         self,
-        parameter_names: tuple[str],
+        parameter_names: tuple[str, ...],
         signature: FunctionSignature,
         parameter_pack_name: Optional[str],
     ) -> None:

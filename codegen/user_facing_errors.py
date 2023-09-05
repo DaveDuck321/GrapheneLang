@@ -11,7 +11,7 @@ class Location:
 class SourceLocation(Location):
     line: int
     file: str
-    include_hierarchy: tuple[str]
+    include_hierarchy: tuple[str, ...]
 
     def __str__(self):
         return f"File '{self.file}', line {self.line}"
