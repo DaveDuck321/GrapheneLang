@@ -59,7 +59,10 @@ class ParseType(lp.Interpreter):
         self._generic_args = generic_args
 
     def parse_type(self, node: lp.Type) -> cg.UnresolvedType:
-        return self.parse(node, cg.UnresolvedType)
+        try:
+            return self.parse(node, cg.UnresolvedType)
+        except GrapheneError as e:
+            raise ErrorWithLineInfo(e.message, node.meta.start.line) from e
 
     def parse_specialization(
         self, node: lp.Type | lp.CompileTimeConstant
@@ -375,7 +378,7 @@ class ParseImports(lp.Interpreter):
             raise ErrorWithLineInfo(
                 exc.message,
                 node.meta.start.line,
-                f"@require_once {node.path}",
+                f'@require_once "{node.path}"',
             ) from exc
 
     def _require_once_impl(self, path_str: str) -> None:
