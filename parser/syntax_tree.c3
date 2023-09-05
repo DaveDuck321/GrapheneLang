@@ -540,6 +540,8 @@ function write_json_value : (stream : JSON_Stream&, node : TypedMember&) -> void
 }
 
 function write_json_value : (stream : JSON_Stream&, fn_def : FunctionDefinition&) -> void = {
+    runtime_assert(0 <= fn_def.type and fn_def.type <= 4);
+
     let object : JSON_Object = stream:new_object();
     object
         :add("name", fn_def.name)
@@ -825,6 +827,8 @@ function write_json_value : (stream : JSON_Stream&, node : PackExpansion&) -> vo
 }
 
 function write_json_value : (stream : JSON_Stream&, node : Constant&) -> void = {
+    runtime_assert(0 <= node.type and node.type <= 5);
+
     let object : JSON_Object = stream:new_object();
     let meta : Meta = get_meta(node.value);
 
@@ -835,7 +839,7 @@ function write_json_value : (stream : JSON_Stream&, node : Constant&) -> void = 
     }
     if node.type == 1 {
         object:add_meta("FloatConstant", meta);
-        object:add("value", raw(node.value));
+        object:add("value", node.value);
     }
     if node.type == 2 {
         object:add_meta("IntConstant", meta);

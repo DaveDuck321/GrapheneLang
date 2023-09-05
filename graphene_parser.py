@@ -52,7 +52,7 @@ def parse_generic_definition(node: lp.GenericDefinition) -> cg.GenericArgument:
     return cg.GenericArgument(node.name, isinstance(node, lp.NumericGenericDefinition))
 
 
-class ParseType(lp.Interpreter):
+class TypeParser(lp.Interpreter):
     def __init__(self, generic_args: UnresolvedGenericMapping) -> None:
         super().__init__()
 
@@ -149,7 +149,7 @@ class ParseType(lp.Interpreter):
         return program.symbol_table.resolve_specialization_item(result)
 
 
-class ParseTypeDefinitions(lp.Interpreter):
+class TypeDefinitionsParser(lp.Interpreter):
     def __init__(
         self, file: str, include_hierarchy: list[str], program: cg.Program
     ) -> None:
@@ -187,7 +187,7 @@ class ParseTypeDefinitions(lp.Interpreter):
                 else cg.UnresolvedGenericType(definition.name)
             )
 
-        parser = ParseType(generic_mapping)
+        parser = TypeParser(generic_mapping)
         specialization = [
             parser.parse_specialization(item) for item in node.specialization
         ]
@@ -204,7 +204,7 @@ class ParseTypeDefinitions(lp.Interpreter):
         )
 
 
-class ParseFunctionSignatures(lp.Interpreter):
+class FunctionSignatureParser(lp.Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
@@ -294,7 +294,7 @@ class ParseFunctionSignatures(lp.Interpreter):
                 assert isinstance(generic, lp.NumericGenericDefinition)
                 generic_mapping[generic.name] = cg.GenericValueReference(generic.name)
 
-        parser = ParseType(generic_mapping)
+        parser = TypeParser(generic_mapping)
         specialization = [
             parser.parse_specialization(item) for item in node.specialization
         ]
@@ -331,7 +331,7 @@ class ParseFunctionSignatures(lp.Interpreter):
         assert self._current_file is not None
         assert self._include_hierarchy is not None
 
-        parser = ParseType({})
+        parser = TypeParser({})
         fn_declaration = cg.FunctionDeclaration.construct(
             node.name,
             True,
@@ -349,11 +349,11 @@ class ParseFunctionSignatures(lp.Interpreter):
         self._program.symbol_table.add_function(fn_declaration)
 
 
-class ParseImports(lp.Interpreter):
+class ImportParser(lp.Interpreter):
     def __init__(
         self,
         program: cg.Program,
-        fn_parser: ParseFunctionSignatures,
+        fn_parser: FunctionSignatureParser,
         include_path: list[Path],
         included_from: list[ResolvedPath],
         already_processed: set[ResolvedPath],
@@ -540,7 +540,7 @@ class ExpressionParser(lp.Interpreter):
             flattened_expr.subexpressions.extend(arg.subexpressions)
 
         specialization = [
-            ParseType.parse_and_resolve(
+            TypeParser.parse_and_resolve(
                 self._program,
                 item,
                 self._generic_mapping,
@@ -718,7 +718,7 @@ def generate_variable_declaration(
         parser = ExpressionParser(program, function, scope, generic_mapping)
         rhs = parser.parse_expr(node.expression)
 
-    var_type = ParseType.parse_and_resolve(program, node.type_, generic_mapping)
+    var_type = TypeParser.parse_and_resolve(program, node.type_, generic_mapping)
     assert isinstance(var_type, cg.Type)
     if var_type.definition.is_void:
         raise VoidVariableDeclaration(
@@ -950,7 +950,7 @@ def generate_function(
 
 def append_file_to_program(
     program: cg.Program,
-    function_parser: ParseFunctionSignatures,
+    function_parser: FunctionSignatureParser,
     file_path: ResolvedPath,
     include_path: list[Path],
     included_from: list[ResolvedPath],
@@ -961,7 +961,7 @@ def append_file_to_program(
     try:
         top_level_features = lp.run_lexer_parser(Path(file_path))
 
-        ParseImports(
+        ImportParser(
             program,
             function_parser,
             include_path + [Path(file_path).parent],
@@ -969,7 +969,7 @@ def append_file_to_program(
             already_processed,
         ).parse_file(top_level_features)
 
-        ParseTypeDefinitions(
+        TypeDefinitionsParser(
             str(file_path), list(map(str, included_from)), program
         ).parse_file(top_level_features)
 
@@ -993,7 +993,7 @@ def generate_ir_from_source(
         # Initial pass resolves all builtin types
         program.symbol_table.resolve_all_non_generics()
 
-        fn_parser = ParseFunctionSignatures(program)
+        fn_parser = FunctionSignatureParser(program)
         append_file_to_program(
             program,
             fn_parser,

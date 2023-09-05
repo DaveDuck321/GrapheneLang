@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 from typing import Type as PyType
@@ -276,7 +276,7 @@ class StringConstant(Constant):
 
 @dataclass
 class FloatConstant(Constant):
-    value: float
+    value: str
 
 
 @dataclass
