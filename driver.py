@@ -3,7 +3,6 @@ import sys
 from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from os import getenv
-from parser.lexer_parser import init_lexer_parser
 from pathlib import Path
 from typing import Any, Optional
 
@@ -69,9 +68,6 @@ class DriverArguments(Tap):
     print_host_target: bool = False
     """Print the target corresponding to the host."""
 
-    bootstrap: bool = False
-    """Parse with Lark rather than the self-hosted lexer-parser."""
-
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
 
@@ -114,7 +110,6 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
-    init_lexer_parser(self_hosted=not args.bootstrap)
     ir = generate_ir_from_source(args.input, args.include_path, args.debug_compiler)
 
     if will_emit_llvm:
