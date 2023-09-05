@@ -8,8 +8,8 @@ from typing import Any, Optional
 
 from tap import Tap
 
-from graphene_parser import generate_ir_from_source
-from target import get_host_target, get_target, get_target_triple, load_target_config
+from .graphene_parser import generate_ir_from_source
+from .target import get_host_target, get_target, get_target_triple, load_target_config
 
 
 class PrintHostTargetAction(Action):

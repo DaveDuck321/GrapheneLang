@@ -1,12 +1,11 @@
-import parser.lexer_parser as lp
 import sys
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Generator, Iterable, Optional, TypeGuard
 
-import codegen as cg
-from codegen.user_facing_errors import (
+from . import codegen as cg
+from .codegen.user_facing_errors import (
     CircularImportException,
     ErrorWithLineInfo,
     ErrorWithLocationInfo,
@@ -21,6 +20,7 @@ from codegen.user_facing_errors import (
     StructMemberRedeclaration,
     VoidVariableDeclaration,
 )
+from .parser import lexer_parser as lp
 
 UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
 
