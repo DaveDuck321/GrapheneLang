@@ -11,8 +11,8 @@ function checkout() {
 stage_1_dir=./bootstrap-1
 stage_2_dir=./bootstrap-2
 
-checkout bootstrap/2 $stage_2_dir
 checkout bootstrap/1 $stage_1_dir
+checkout bootstrap/2 $stage_2_dir
 
 # Stage 1; last commit where the Lark parser can parse the native parser.
 $stage_1_dir/glang $stage_1_dir/parser/parser.c3 -o $stage_2_dir/parser/parser --bootstrap
