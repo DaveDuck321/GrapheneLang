@@ -32,7 +32,7 @@ typedef ArrayType : { base_type : Type, size : Vector<CompileTimeConstant>, is_h
 typedef RefType : { type : Type, meta : Meta }
 typedef NamedType : { name : ProgramSlice, specialization : Vector<Specialization>, meta : Meta}
 typedef StructType : { members : Vector<TypedMember>, meta : Meta}
-typedef PackType : { type : Type, meta : Meta}
+typedef PackType : { type : Type, meta : Meta }
 
 typedef GenericDefinition : {
     // TODO: variant
@@ -409,18 +409,15 @@ function write_json_value : (stream : JSON_Stream&, feature : TopLevelFeature&) 
 }
 
 function write_json_value : (stream : JSON_Stream&, constant : CompileTimeConstant&) -> void = {
-    let name : StringView;
-    if constant.is_identifier {
-        name = sv("NumericGenericIdentifier");
-    } else {
-        name = sv("NumericIdentifier");
-    }
-
     let object : JSON_Object = stream:new_object();
-    object
-        :add_meta(name, get_meta(constant.value))
-        :add("value", constant.value)
-        :end();
+    if constant.is_identifier {
+        object:add_meta("NumericGenericIdentifier", get_meta(constant.value));
+        object:add("value", constant.value);
+    } else {
+        object:add_meta("NumericIdentifier", get_meta(constant.value));
+        object:add("value", raw(constant.value));
+    }
+    object:end();
 }
 
 function write_json_value : (stream : JSON_Stream&, fn : FunctionType&) -> void = {
@@ -753,12 +750,11 @@ function write_json_value : (stream : JSON_Stream&, node : Expression&) -> void 
 }
 
 function write_json_value : (stream : JSON_Stream&, node : NamedExpression&) -> void = {
-    let object : JSON_Object = stream:new_object();
-    object
-        :add_meta("NamedExpression", get_meta(node.name))
-        :add("name", node.name)
-        :add("expression", node.expression)
-        :end();
+    stream:write("[");
+    stream:write_json_value(&node.name);
+    stream:write(",");
+    stream:write_json_value(&node.expression);
+    stream:write("]");
 }
 
 function write_json_value : (stream : JSON_Stream&, node : Operator&) -> void = {
@@ -814,7 +810,7 @@ function write_json_value : (stream : JSON_Stream&, node : UFCS_Call&) -> void =
     object
         :add_meta("UFCS_Call", node.meta)
         :add("expression", node.expression)
-        :add("fn_name", node.fn_name)
+        :add("name", node.fn_name)
         :add("specialization", node.specialization)
         :add("args", node.args)
         :end();

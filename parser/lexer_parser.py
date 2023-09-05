@@ -1,9 +1,9 @@
 import json
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, TypeVar, Type as PyType
 
-from self_hosted_parser import parse
+from .self_hosted_parser import parse
 
 # Mirrors the data structures in `syntax_tree.c3`
 # TODO: python bindings to automate this :-D
@@ -43,7 +43,7 @@ class NumericGenericIdentifier(CompileTimeConstant):
 
 @dataclass
 class NumericIdentifier(CompileTimeConstant):
-    value: str
+    value: int
 
 
 @dataclass
@@ -80,7 +80,7 @@ class ReferenceType(Type):
 @dataclass
 class NamedType(Type):
     name: str
-    specialization: list[Type]
+    specialization: list[Type | CompileTimeConstant]
 
 
 @dataclass
@@ -157,7 +157,7 @@ class RequireOnce(TopLevelFeature):
 class Typedef(TopLevelFeature):
     generic_definitions: list[GenericDefinition]
     name: str
-    specialization : list[Type | CompileTimeConstant]
+    specialization: list[Type | CompileTimeConstant]
     alias: Type
 
 
@@ -252,7 +252,7 @@ class FunctionCall(Expression):
 @dataclass
 class UFCS_Call(Expression):
     expression: Expression
-    fn_name: str
+    name: str
     specialization: list[Type | CompileTimeConstant]
     args: list[Expression]
 
@@ -298,14 +298,8 @@ class HexConstant(Constant):
 
 
 @dataclass
-class NamedExpression(ParsedNode):
-    name: str
-    expression: Expression
-
-
-@dataclass
 class NamedInitializerList(Expression):
-    args: list[NamedExpression]
+    args: list[tuple[str, Expression]]
 
 
 @dataclass
@@ -328,6 +322,24 @@ class ArrayIndexAccess(Expression):
 class StructIndexAccess(Expression):
     expression: Expression
     member: str
+
+
+class Interpreter:
+    T = TypeVar("T")
+
+    def parse(self, thing: ParsedNode, ret_type: PyType[T] | None) -> T:
+        for fn_type in type(thing).mro():
+            if hasattr(self, fn_type.__name__):
+                fn = getattr(self, fn_type.__name__)
+                break
+        else:
+            assert False, f"{self} could not dispatch '{thing}'"
+
+        result = fn(thing)
+        if ret_type is not None:
+            assert isinstance(result, ret_type)
+
+        return result
 
 
 def run_lexer_parser(path: Path) -> list[TopLevelFeature]:
