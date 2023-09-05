@@ -22,7 +22,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        fetch-tags: true # This doesn't seem to work for some reason.
         show-progress: false
     - name: Install Python 3.11
       run: |
