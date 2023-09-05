@@ -321,7 +321,7 @@ def format_arguments(args: Iterable[Type] | Iterable[TypedExpression]) -> str:
 def format_generics(args: Iterable[GenericArgument], pack_name: Optional[str]) -> str:
     formatted_generics = [item.name for item in args]
     if pack_name is not None:
-        format_generics.append(pack_name)
+        formatted_generics.append(pack_name)
 
     if len(formatted_generics) == 0:
         return ""

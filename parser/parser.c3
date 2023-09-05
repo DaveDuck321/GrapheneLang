@@ -1164,7 +1164,7 @@ function parse_line : (cursor : Cursor&) -> Line = {
 
 function parse_scope : (cursor : Cursor&) -> Scope = {
     let start_offset : isize = cursor.position;
-    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("{"));
+    cursor:expect_next_skipping_ws("{");
 
     let lines : Vector<Line> = make_vector<Line>(&cursor.allocator);
     while !cursor:try_skip_next("}") {

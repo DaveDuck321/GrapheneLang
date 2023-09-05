@@ -968,6 +968,7 @@ def append_file_to_program(
             included_from + [file_path],
             already_processed,
         ).parse_file(top_level_features)
+
         ParseTypeDefinitions(
             str(file_path), list(map(str, included_from)), program
         ).parse_file(top_level_features)
@@ -1019,8 +1020,8 @@ def generate_ir_from_source(
 
     except ErrorWithLocationInfo as exc:
         if debug_compiler:
-            traceback.print_exc()
-            print("~~~ User-facing error message ~~~")
+            traceback.print_exc(file=sys.stderr)
+            print("~~~ User-facing error message ~~~", file=sys.stderr)
 
         context = f", in '{exc.context}'" if exc.context else ""
         print(f"{exc.loc}{context}", file=sys.stderr)

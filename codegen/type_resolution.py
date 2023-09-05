@@ -198,7 +198,7 @@ class UnresolvedTypeWrapper(UnresolvedType):
 @dataclass(frozen=True)
 class UnresolvedNamedType(UnresolvedType):
     name: str
-    specialization: tuple[UnresolvedSpecializationItem]
+    specialization: tuple[UnresolvedSpecializationItem, ...]
 
     def format_for_output_to_user(self) -> str:
         if len(self.specialization) == 0:
@@ -366,7 +366,7 @@ class UnresolvedReferenceType(UnresolvedType):
 
 @dataclass(frozen=True)
 class UnresolvedStructType(UnresolvedType):
-    members: tuple[tuple[str, UnresolvedType]]
+    members: tuple[tuple[str, UnresolvedType], ...]
 
     def format_for_output_to_user(self) -> str:
         member_format = ", ".join(
@@ -405,7 +405,7 @@ class UnresolvedStructType(UnresolvedType):
 @dataclass(frozen=True)
 class UnresolvedStackArrayType(UnresolvedType):
     member_type: UnresolvedType
-    dimensions: tuple[CompileTimeConstant]
+    dimensions: tuple[CompileTimeConstant, ...]
 
     def format_for_output_to_user(self) -> str:
         member_format = self.member_type.format_for_output_to_user()
@@ -465,7 +465,7 @@ class UnresolvedStackArrayType(UnresolvedType):
 @dataclass(frozen=True)
 class UnresolvedHeapArrayType(UnresolvedType):
     member_type: UnresolvedType
-    known_dimensions: tuple[CompileTimeConstant]
+    known_dimensions: tuple[CompileTimeConstant, ...]
 
     def format_for_output_to_user(self) -> str:
         member_format = self.member_type.format_for_output_to_user()
@@ -530,15 +530,15 @@ class UnresolvedHeapArrayType(UnresolvedType):
 @dataclass(frozen=True)
 class Typedef:
     name: str
-    generics: tuple[GenericArgument]
-    expanded_specialization: tuple[UnresolvedSpecializationItem]
+    generics: tuple[GenericArgument, ...]
+    expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
     aliased: UnresolvedType
     loc: Location
 
     @staticmethod
     def construct(
         name: str,
-        generics: tuple[GenericArgument],
+        generics: tuple[GenericArgument, ...],
         specialization: Iterable[UnresolvedSpecializationItem],
         aliased: UnresolvedType,
         loc: Location,
@@ -616,8 +616,8 @@ class Typedef:
 @dataclass(frozen=True)
 class UnresolvedFunctionSignature:
     name: str
-    expanded_specialization: tuple[UnresolvedSpecializationItem]
-    arguments: tuple[UnresolvedType]
+    expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
+    arguments: tuple[UnresolvedType, ...]
     parameter_pack_argument_name: Optional[str]
     return_type: UnresolvedType
 
@@ -644,7 +644,7 @@ class UnresolvedFunctionSignature:
 
         formatted_args = [arg.format_for_output_to_user() for arg in self.arguments]
         if self.parameter_pack_argument_name is not None:
-            format_arguments.append(self.parameter_pack_argument_name + "...")
+            formatted_args.append(self.parameter_pack_argument_name + "...")
 
         args_str = ", ".join(formatted_args)
         return_str = self.return_type.format_for_output_to_user()
@@ -771,9 +771,9 @@ class UnresolvedFunctionSignature:
 @dataclass(frozen=True)
 class FunctionDeclaration:
     is_foreign: bool
-    arg_names: tuple[str]
+    arg_names: tuple[str, ...]
     pack_type_name: Optional[str]
-    generics: tuple[GenericArgument]
+    generics: tuple[GenericArgument, ...]
     signature: UnresolvedFunctionSignature
     loc: Location
 
@@ -781,11 +781,11 @@ class FunctionDeclaration:
     def construct(
         name: str,
         is_foreign: bool,
-        generics: tuple[GenericArgument],
+        generics: tuple[GenericArgument, ...],
         specialization: Iterable[UnresolvedSpecializationItem],
-        arg_names: tuple[str],
+        arg_names: tuple[str, ...],
         pack_type_name: Optional[str],
-        arg_types: tuple[UnresolvedType],
+        arg_types: tuple[UnresolvedType, ...],
         parameter_pack_argument_name: Optional[str],
         return_type: UnresolvedType,
         location: Location,
@@ -891,7 +891,7 @@ class SymbolTable:
     def resolve_named_type(
         self,
         name: str,
-        unresolved_specialization: tuple[UnresolvedSpecializationItem],
+        unresolved_specialization: tuple[UnresolvedSpecializationItem, ...],
         alias: UnresolvedType,
     ) -> NamedType:
         specialization = [
