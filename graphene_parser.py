@@ -1,3 +1,4 @@
+import parser.lexer_parser as lp
 import sys
 import traceback
 from dataclasses import dataclass
@@ -5,7 +6,6 @@ from pathlib import Path
 from typing import Any, Generator, Iterable, Optional, TypeGuard
 
 import codegen as cg
-import parser.lexer_parser as lp
 from codegen.user_facing_errors import (
     CircularImportException,
     ErrorWithLineInfo,

@@ -1,7 +1,9 @@
 import json
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Optional, Any, TypeVar, Type as PyType
+from typing import Any, Optional
+from typing import Type as PyType
+from typing import TypeVar
 
 from .self_hosted_parser import parse
 
