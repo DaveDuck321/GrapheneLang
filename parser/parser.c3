@@ -285,27 +285,23 @@ function get_next_numeric_token : (cursor : Cursor&) -> ProgramSlice = {
 }
 
 function get_next_string_literal_token : (cursor : Cursor&) -> ProgramSlice = {
-    runtime_assert(cursor:get_char() == "\""[0]);
+    runtime_assert(cursor:try_skip_next("\""));
     let start_offset : isize = cursor.position;
-    cursor.position += 1;
 
-    let current_char : u8 = cursor:get_char();
-    while current_char != "\""[0] {
-        if current_char == "\0"[0] {
+    while !cursor:try_skip_next("\"") {
+        if cursor:is_next("\0") {
             syntax_error_at_position(&cursor, start_offset, sv("unterminated string literal"));
         }
 
-        if current_char == "\\"[0] {
+        if cursor:is_next("\\") {
             // Skip the character after an escape sequence
             // TODO: allow numeric escape sequences eg \789
             cursor.position += 1;
         }
         cursor.position += 1;
-        current_char = cursor:get_char();
     }
     // The string has been terminated
-    cursor.position += 1;
-    let result : ProgramSlice = {start_offset, cursor.position};
+    let result : ProgramSlice = {start_offset, cursor.position-1};
     cursor:try_skip_white_space();
     return result;
 }
@@ -425,14 +421,14 @@ function parse_comma_separated_named_members : (cursor : Cursor&, matched_pair :
     return result;
 }
 
-function parse_generic_definition_list : (cursor : Cursor&) -> GenericDefinitionList = {
+function parse_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDefinition> = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
 
     let generics : Vector<GenericDefinition> = make_vector<GenericDefinition>(&cursor.allocator);
 
     let is_missing_comma : bool = false;
-    while !cursor:try_skip_next("]") {
+    while !cursor:try_skip_next_and_surrounding_white_space("]") {
         if cursor:get_char() == "\0"[0] {
             syntax_error_at_position(&cursor, start_offset, sv("unterminated list, expected ']'"));
         }
@@ -455,20 +451,20 @@ function parse_generic_definition_list : (cursor : Cursor&) -> GenericDefinition
             // We've encountered the parameter pack, this must be the last generic
             // TODO: infer this type
             generics:push_back<GenericDefinition>({type, name, true, meta(name.start_offset, cursor.position)});
-            cursor:expect_next("]");
-            return {generics, meta(start_offset, cursor:skip_ws_return_offset())};
+            cursor:expect_next_skipping_ws("]");
+            return generics;
         }
 
         generics:push_back<GenericDefinition>({type, name, false, meta(name.start_offset, cursor.position)});
         is_missing_comma = !cursor:try_skip_next_and_surrounding_white_space(",");
     }
-    return {generics, meta(start_offset, cursor:skip_ws_return_offset())};
+    return generics;
 }
 
 function parse_named_type : (cursor : Cursor&) -> NamedType = {
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    let specialization_list : SpecializationList = cursor:parse_optional_specialization_list();
-    return {name, specialization_list, meta(name.start_offset, specialization_list.meta.end_offset)};
+    let specialization_list : Vector<Specialization> = cursor:parse_optional_specialization();
+    return {name, specialization_list, meta(name.start_offset, cursor.position)};
 }
 
 function is_at_start_of_compile_time_constant : (cursor : Cursor&) -> bool = {
@@ -518,22 +514,22 @@ function parse_compile_time_constant_list : (cursor : Cursor&) -> Vector<Compile
     return constants;
 }
 
-function parse_optional_specialization_list : (cursor : Cursor&) -> SpecializationList = {
+function parse_optional_specialization : (cursor : Cursor&) -> Vector<Specialization> = {
     if cursor:is_next("<") {
         return cursor:parse_specialization_list();
     } else {
-        return { make_vector<Specialization>(&cursor.allocator), meta(0, 0) };
+        return make_vector<Specialization>(&cursor.allocator);
     }
 }
 
-function parse_specialization_list : (cursor : Cursor&) -> SpecializationList = {
+function parse_specialization_list : (cursor : Cursor&) -> Vector<Specialization> = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("<"));
 
     let is_missing_comma : bool = false;
 
     let specializations : Vector<Specialization> = make_vector<Specialization>(&cursor.allocator);
-    while !cursor:try_skip_next(">") {
+    while !cursor:try_skip_next_and_surrounding_white_space(">") {
         if cursor:get_char() == "\0"[0] {
             syntax_error_at_position(&cursor, start_offset, sv("unterminated list, expected '>'"));
         }
@@ -544,18 +540,18 @@ function parse_specialization_list : (cursor : Cursor&) -> SpecializationList = 
         if cursor:is_at_start_of_compile_time_constant() {
             let constant : CompileTimeConstant& = &cursor.allocator:allocate<CompileTimeConstant>();
             constant = cursor:parse_compile_time_constant();
-            specializations:push_back<Specialization>({1, ref_to_addr(&constant), meta(start_offset, constant.value.end_offset)});
+            specializations:push_back<Specialization>({1, ref_to_addr(&constant)});
         } else {
             let type : Type& = &cursor.allocator:allocate<Type>();
             type = cursor:parse_type();
-            specializations:push_back<Specialization>({0, ref_to_addr(&type), meta(start_offset, type.meta.end_offset)});
+            specializations:push_back<Specialization>({0, ref_to_addr(&type)});
         }
 
         if !cursor:try_skip_next_and_surrounding_white_space(",") {
             is_missing_comma = true;
         }
     }
-    return {specializations, meta(start_offset, cursor:skip_ws_return_offset())};
+    return specializations;
 }
 
 function parse_struct_type : (cursor : Cursor&) -> StructType = {
@@ -653,21 +649,16 @@ function parse_type : (cursor : Cursor&) -> Type = {
 function parse_typedef : (cursor : Cursor&) -> Typedef = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("typedef"));
 
-    let generics : GenericDefinitionList;
-    if cursor:is_next("[") {
-        generics = cursor:parse_generic_definition_list();
-    } else {
-        generics = { make_vector<GenericDefinition>(&cursor.allocator), meta(0, 0) };
-    }
+    let generics : Vector<GenericDefinition> = cursor:parse_optional_generic_definition_list();
 
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    let specialization : SpecializationList = cursor:parse_optional_specialization_list();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
 
     cursor:expect_next_skipping_ws(":");
 
     let type : Type = cursor:parse_type();
 
-    return {name, generics, specialization, type, meta(name.start_offset, specialization.meta.end_offset)};
+    return {name, generics, specialization, type, meta(name.start_offset, type.meta.end_offset)};
 }
 
 function parse_list_of_expressions : (cursor : Cursor&, end : StringView) -> Vector<Expression> = {
@@ -740,7 +731,7 @@ function parse_ufcs_call : (cursor : Cursor&, prefix : Expression) -> UFCS_Call 
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space(":"));
 
     let fn_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    let specialization : SpecializationList = cursor:parse_optional_specialization_list();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
 
     cursor:expect_next_skipping_ws("(");
     let arguments : Vector<Expression> = cursor:parse_list_of_expressions(sv(")"));
@@ -749,8 +740,8 @@ function parse_ufcs_call : (cursor : Cursor&, prefix : Expression) -> UFCS_Call 
 
 function parse_array_index_access : (cursor : Cursor&, prefix : Expression) -> ArrayIndexAccess = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
-    let indicies : Vector<Expression> = cursor:parse_list_of_expressions(sv("]"));
-    return {prefix, indicies, meta(prefix.meta.start_offset, cursor.position)};
+    let indexes : Vector<Expression> = cursor:parse_list_of_expressions(sv("]"));
+    return {prefix, indexes, meta(prefix.meta.start_offset, cursor.position)};
 }
 
 function parse_struct_index_access : (cursor : Cursor&, prefix : Expression) -> StructIndexAccess = {
@@ -780,7 +771,7 @@ function parse_function_call : (cursor : Cursor&, prefix : Expression) -> Functi
         cursor.allocator:deallocate(&lhs_variable);
     }
 
-    let specialization : SpecializationList = cursor:parse_optional_specialization_list();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
 
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("("));
     let arguments : Vector<Expression> = cursor:parse_list_of_expressions(sv(")"));
@@ -1075,7 +1066,7 @@ function parse_for : (cursor : Cursor&) -> For = {
     return {variable_name, expression, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
-function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
+function parse_const_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("const"));
 
@@ -1095,7 +1086,7 @@ function parse_const_declaration : (cursor : Cursor&) -> Declaration = {
     return {true, variable_name, type, make_optional(expression), meta(start_offset, cursor:skip_ws_return_offset())};
 }
 
-function parse_let_declaration : (cursor : Cursor&) -> Declaration = {
+function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
 
@@ -1158,12 +1149,12 @@ function parse_line : (cursor : Cursor&) -> Line = {
         return {6, ref_to_addr(&pointer), pointer.meta};
     }
     if cursor:is_next("let") {
-        let pointer : Declaration& = &cursor.allocator:allocate<Declaration>();
+        let pointer : VariableDeclaration& = &cursor.allocator:allocate<VariableDeclaration>();
         pointer = cursor:parse_let_declaration();
         return {7, ref_to_addr(&pointer), pointer.meta};
     }
     if cursor:is_next("const") {
-        let pointer : Declaration& = &cursor.allocator:allocate<Declaration>();
+        let pointer : VariableDeclaration& = &cursor.allocator:allocate<VariableDeclaration>();
         pointer = cursor:parse_const_declaration();
         return {7, ref_to_addr(&pointer), pointer.meta};
     }
@@ -1186,24 +1177,18 @@ function parse_scope : (cursor : Cursor&) -> Scope = {
     return {lines, meta(start_offset, cursor:skip_ws_return_offset())};
 }
 
-function parse_function_definition_generics_definition : (cursor : Cursor&) -> GenericDefinitionList = {
+function parse_optional_generic_definition_list : (cursor : Cursor&) -> Vector<GenericDefinition> = {
     if cursor:is_next("[") {
         return cursor:parse_generic_definition_list();
     } else {
-        // Empty the vector if the function has no generic arguments
-        return {make_vector<GenericDefinition>(&cursor.allocator) , meta(0, 0)};
+        return make_vector<GenericDefinition>(&cursor.allocator);
     }
 }
 
-function parse_function_definition_args : (cursor : Cursor&) -> FunctionDefinitionArguments = {
+function parse_function_definition_args : (cursor : Cursor&) -> Vector<TypedMember> = {
     cursor:expect_next_skipping_ws(":");
-
-    let start_offset : isize = cursor.position;
     cursor:expect_next_skipping_ws("(");
-
-    // TODO: better line numbers here
-    let args : Vector<TypedMember> = cursor:parse_comma_separated_named_members(sv(")"));
-    return {args, meta(start_offset, cursor.position)};
+    return cursor:parse_comma_separated_named_members(sv(")"));
 }
 
 function parse_function_definition_return_type : (cursor : Cursor&) -> Type = {
@@ -1220,57 +1205,61 @@ function parse_graphene_function_definition : (cursor : Cursor&) -> FunctionDefi
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("function"));
 
-    let generics : GenericDefinitionList = cursor:parse_function_definition_generics_definition();
+    let generics : Vector<GenericDefinition> = cursor:parse_optional_generic_definition_list();
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    let args : FunctionDefinitionArguments = cursor:parse_function_definition_args();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
-    return {0, name, generics, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
+    return {0, generics, name, specialization, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
 function parse_implicit_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@implicit"));
 
-    let generics : GenericDefinitionList = cursor:parse_function_definition_generics_definition();
+    let generics : Vector<GenericDefinition> = cursor:parse_optional_generic_definition_list();
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
     if !is_one_of(cursor:get_sv(name), sv("has_next"), sv("get_next"), sv("destruct")) {
         syntax_error_at_position(&cursor, name.start_offset, sv("only 'has_next', 'get_next', and 'destruct' are valid implicit function names"));
     }
 
-    let args : FunctionDefinitionArguments = cursor:parse_function_definition_args();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
-    return {1, name, generics, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
+    return {1, generics, name, specialization, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
 function parse_operator_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@operator"));
 
-    let generics : GenericDefinitionList = cursor:parse_function_definition_generics_definition();
+    let generics : Vector<GenericDefinition> = cursor:parse_optional_generic_definition_list();
     let name : ProgramSlice = cursor:get_next_operator();
-    let args : FunctionDefinitionArguments = cursor:parse_function_definition_args();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
-    return {2, name, generics, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
+    return {2, generics, name, specialization, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
 function parse_assignment_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@assignment"));
 
-    let generics : GenericDefinitionList = cursor:parse_function_definition_generics_definition();
+    let generics : Vector<GenericDefinition> = cursor:parse_optional_generic_definition_list();
     let name : ProgramSlice = cursor:get_next_assignment();
-    let args : FunctionDefinitionArguments = cursor:parse_function_definition_args();
+    let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
-    return {4, name, generics, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
+    return {4, generics, name, specialization, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
 function parse_foreign_function_definition : (cursor : Cursor&) -> FunctionDefinition = {
@@ -1278,13 +1267,14 @@ function parse_foreign_function_definition : (cursor : Cursor&) -> FunctionDefin
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("foreign"));
 
     let name : ProgramSlice = cursor:get_next_ascii_only_identifier();
-    let args : FunctionDefinitionArguments = cursor:parse_function_definition_args();
+    let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
 
-    let empty_generics : GenericDefinitionList = {make_vector<GenericDefinition>(&cursor.allocator), meta(0, 0)};
+    let empty_specialization : Vector<Specialization> = make_vector<Specialization>(&cursor.allocator);
+    let empty_generics : Vector<GenericDefinition> = make_vector<GenericDefinition>(&cursor.allocator);
     let empty_scope : Scope = { make_vector<Line>(&cursor.allocator) , meta(0, 0)};
 
-    return {3, name, empty_generics, args, return_type, empty_scope, meta(start_offset, return_type.meta.end_offset)};
+    return {3, empty_generics, name, empty_specialization, args, return_type, empty_scope, meta(start_offset, return_type.meta.end_offset)};
 }
 
 function parse_require_once : (cursor : Cursor&) -> RequireOnce = {
@@ -1379,7 +1369,7 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
             .line_number_lookup = generate_position_lookup_table(program_text, &allocator),
             .file = get_stdout_io(),
         };
-        json_output:write_tree(sv("program"), meta(0, 0), program);
+        json_output:write_json_value(&program);
         json_output:close();
     }
 
