@@ -2,6 +2,7 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+
 [project]
 name = "glang"
 version = "0.1.0"
@@ -28,18 +29,25 @@ dependencies = ["PyYAML~=6.0.1", "typed-argument-parser~=1.8.1"]
 [project.scripts]
 glang = "glang.driver:main"
 
+
+# Development environment to be used with your IDE. Just set the venv path to
+# the output of `hatch env find dev`.
 [tool.hatch.envs.dev]
 dependencies = ["hatch~=1.7.0", "lark~=1.1.7"]
 
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
 
+
+# Test environment.
 [tool.hatch.envs.test]
 dependencies = ["interegular~=0.3.2", "lark~=1.1.7"]
 
 [tool.hatch.envs.test.scripts]
 run = "python tests/run_tests.py"
 
+
+# Style environment. Does not depend on the project.
 [tool.hatch.envs.style]
 detached = true
 skip-install = true
@@ -52,6 +60,9 @@ check = [
 ]
 fmt = ["isort --profile black .", "black ."]
 
+
+# Build configuration. Need a bunch of dependencies because the build process
+# bootstraps the compiler.
 [tool.hatch.build]
 # Exclude symlinks used for editable installs.
 exclude = ["src/glang/bin"]
