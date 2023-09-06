@@ -166,3 +166,4 @@ cython_debug/
 
 # Compilation output
 a.out
+src/glang/parser/parser

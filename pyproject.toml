@@ -28,6 +28,12 @@ dependencies = ["PyYAML==6.0.1", "typed-argument-parser==1.8.1"]
 [project.scripts]
 glang = "glang.driver:main"
 
+[tool.hatch.envs.dev]
+dependencies = ["hatchling==1.7.0", "lark==1.1.7"]
+
+[tool.hatch.envs.dev.scripts]
+bootstrap = "./bootstrap.sh"
+
 [tool.hatch.envs.test]
 dependencies = ["interegular==0.3.2", "lark==1.1.7"]
 
