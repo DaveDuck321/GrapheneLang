@@ -1,10 +1,9 @@
 import json
 import subprocess
+from importlib import resources
 from pathlib import Path
 
 from ..codegen.user_facing_errors import InvalidSyntax
-
-PARSER_PATH = Path(__file__).parent / "parser"
 
 
 def is_whitespace(string: str) -> bool:
@@ -12,9 +11,14 @@ def is_whitespace(string: str) -> bool:
 
 
 def parse(path: Path) -> str:
-    result = subprocess.run(
-        [PARSER_PATH, path], encoding="utf8", capture_output=True, check=False
-    )
+    with resources.as_file(resources.files("glang") / "bin" / "parser") as parser_path:
+        result = subprocess.run(
+            [parser_path, path],
+            encoding="utf8",
+            capture_output=True,
+            check=False,
+        )
+
     if result.returncode == 0:
         # Success!
         return result.stdout
