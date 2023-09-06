@@ -30,7 +30,7 @@ class CustomBuildHook(BuildHookInterface):
     def initialize(self, version: str, build_data: dict[str, Any]):
         self.app.display_waiting("Bootstrapping parser")
 
-        Platform().check_command(["hatch", "run", "dev:bootstrap"], shell=False)
+        Platform().check_command(["./bootstrap.sh"], shell=False)
 
         self.app.display_success("Done!")
 

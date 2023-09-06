@@ -9,6 +9,8 @@ function checkout() {
     echo "$dir"
 }
 
+mkdir -p ./dist
+
 stage_1_dir="$(checkout bootstrap/1)"
 stage_2_dir="$(checkout bootstrap/2)"
 
@@ -28,5 +30,6 @@ trap "rm -rf $stage_1_dir; rm -rf $stage_2_dir" EXIT INT QUIT TERM
 # available compiler. The location of the output has also changed.
 "$stage_2_dir/glang" ./src/glang/parser/parser.c3 -o ./dist/parser
 
-# Final Stage; build the native parser from the working tree
-glang ./src/glang/parser/parser.c3 -o ./dist/parser -O3
+# Final Stage; build the native parser from the working tree. Note that we need
+# to invoke the driver as a module.
+python -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
