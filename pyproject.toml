@@ -5,13 +5,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "glang"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   { name = "Antros Economides", email = "antroseconomides@hotmail.co.uk" },
   { name = "Tom Grant", email = "thomas.grant.mail@gmail.com" },
 ]
 description = "A Graphene front-end for LLVM"
 # TODO readme = "README.md"
+license = "AGPL-3.0-only"
 requires-python = ">=3.10"
 classifiers = [
   "Development Status :: 3 - Alpha",
