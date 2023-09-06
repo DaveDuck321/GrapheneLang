@@ -2,6 +2,7 @@ import subprocess
 import sys
 from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
+from importlib import resources
 from os import getenv
 from pathlib import Path
 from typing import Any, Optional
@@ -10,6 +11,15 @@ from tap import Tap
 
 from .graphene_parser import generate_ir_from_source
 from .target import get_host_target, get_target, get_target_triple, load_target_config
+
+
+def get_module_path() -> Path:
+    module_dir = resources.files("glang")
+    # The top-level directory is returned as a Path object instead of the
+    # annoying Traversable wrapper.
+    assert isinstance(module_dir, Path)
+
+    return module_dir.resolve()
 
 
 class PrintHostTargetAction(Action):
@@ -96,11 +106,12 @@ def main() -> None:
 
     load_target_config(args.target)
 
-    parent_dir = Path(__file__).parent.resolve()
+    lib_dir = get_module_path() / "lib"
+    target_dir = lib_dir / "std" / get_target()
 
     if not args.nostdlib:
-        args.include_path.append(parent_dir)
-        args.include_path.append(parent_dir / "std" / get_target())
+        args.include_path.append(lib_dir)
+        args.include_path.append(target_dir)
 
     # -o defaults to binary output path
     if args.output:
@@ -153,7 +164,7 @@ def main() -> None:
         # -nostdlib prevents both the standard library and the start files from
         # being linked with the executable.
         extra_flags.append("-nostdlib")
-        extra_flags.append(str(parent_dir / "std" / get_target() / "runtime.S"))
+        extra_flags.append(str(target_dir / "runtime.S"))
 
     if will_emit_binary:
         subprocess.run(
