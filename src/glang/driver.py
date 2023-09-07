@@ -163,6 +163,7 @@ def main() -> None:
                 clang,
                 f"-O{args.optimize}",
                 "-fuse-ld=lld",  # Use the LLVM cross-linker.
+                "-Wl,--build-id=sha1",
                 "-static",
                 "-target",
                 get_target_triple(),
