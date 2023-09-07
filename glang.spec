@@ -17,6 +17,7 @@ BuildRequires:  lld
 %global toolchain clang
 %global debug_package %{nil}
 
+%define source_dir GrapheneLang-dev_hatch
 
 %description
 A Graphene front-end for LLVM (TODO).
@@ -24,23 +25,20 @@ A Graphene front-end for LLVM (TODO).
 
 %prep
 # -n specifies the name of the top-level directory in the source archive.
-%autosetup -p1 -n glang-%{version}
+%autosetup -p1 -n %{source_dir}
 
 # Unpacks the nth source archive to the GrapheneLang-bootstrap-n subdirectory.
-%setup -D -T -n glang-%{version} -a 1
-%setup -D -T -n glang-%{version} -a 2
+%setup -D -T -n %{source_dir} -a 1
+%setup -D -T -n %{source_dir} -a 2
 
 # Go back to our build directory.
-cd %{_builddir}/glang-%{version}
+cd %{_builddir}/%{source_dir}
 
 %generate_buildrequires
 %pyproject_buildrequires
 
 
 %build
-export BOOTSTRAP_PYTHON_BIN=%{python3}
-%py3_shebang_fix glang-%{version}/GrapheneLang-bootstrap-1/glang
-%py3_shebang_fix glang-%{version}/GrapheneLang-bootstrap-2/glang
 %pyproject_wheel
 
 
