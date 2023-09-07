@@ -4,9 +4,14 @@ set -ex
 
 function checkout() {
     # Pass commit in $1. Output directory is returned.
-    dir="$(mktemp -d)"
-    git archive --worktree-attributes "$1" | tar -x -C "$dir"
-    echo "$dir"
+    rpm_dir="GrapheneLang-${1/\//-}"
+    if [ -d "$rpm_dir" ]; then
+        echo "$rpm_dir"
+    else
+        dir="$(mktemp -d)"
+        git archive --worktree-attributes "$1" | tar -x -C "$dir"
+        echo "$dir"
+    fi
 }
 
 mkdir -p ./dist
