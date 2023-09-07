@@ -5,11 +5,7 @@ Summary:        A Graphene front-end for LLVM
 
 License:        AGPL-3.0-only
 URL:            https://github.com/DaveDuck321/GrapheneLang
-# FIXME we are not supposed to use archives that omit the test suite.
-# (https://docs.fedoraproject.org/en-US/packaging-guidelines/Python/#_source_files_from_pypi)
-# We should instead get the source from GitHub, and run the full test suite with
-# the %%check directive.
-Source0:        %{pypi_source glang}
+Source0:        %{url}/archive/refs/heads/dev_hatch.tar.gz
 Source1:        %{url}/archive/refs/tags/bootstrap/1.tar.gz
 Source2:        %{url}/archive/refs/tags/bootstrap/2.tar.gz
 
@@ -42,6 +38,9 @@ cd %{_builddir}/glang-%{version}
 
 
 %build
+export BOOTSTRAP_PYTHON_BIN=%{python3}
+%py3_shebang_fix glang-%{version}/GrapheneLang-bootstrap-1/glang
+%py3_shebang_fix glang-%{version}/GrapheneLang-bootstrap-2/glang
 %pyproject_wheel
 
 
@@ -54,6 +53,7 @@ cd %{_builddir}/glang-%{version}
 
 %check
 %pyproject_check_import -t
+# TODO run the full test suite.
 
 
 %files -f %{pyproject_files}

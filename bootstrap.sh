@@ -25,6 +25,9 @@ stage_2_dir="$(checkout bootstrap/2)"
 # shellcheck disable=SC2064
 trap "rm -rf $stage_1_dir; rm -rf $stage_2_dir" EXIT INT QUIT TERM
 
+# Allow the caller to overwrite the Python executable used.
+python_bin="${BOOTSTRAP_PYTHON_BIN:-python}"
+
 # Stage 1; last commit where the Lark parser can parse the native parser.
 "$stage_1_dir/glang" "$stage_1_dir/parser/parser.c3" -o "$stage_2_dir/parser/parser" --bootstrap
 
@@ -37,4 +40,4 @@ trap "rm -rf $stage_1_dir; rm -rf $stage_2_dir" EXIT INT QUIT TERM
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
-python -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
+"$python_bin" -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
