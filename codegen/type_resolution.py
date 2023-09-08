@@ -34,6 +34,7 @@ from .user_facing_errors import (
     ErrorWithLocationInfo,
     FailedLookupError,
     GrapheneError,
+    IncorrectSpecializationCount,
     Location,
     MultipleTypeDefinitions,
     NonDeterminableSize,
@@ -43,7 +44,6 @@ from .user_facing_errors import (
     RedefinitionError,
     SpecializationFailed,
     SubstitutionFailure,
-    IncorrectSpecializationCount,
 )
 
 
