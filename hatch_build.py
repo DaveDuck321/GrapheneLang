@@ -1,5 +1,4 @@
 from pathlib import Path
-from sysconfig import get_platform
 from typing import Any
 
 from hatch.utils.platform import Platform
