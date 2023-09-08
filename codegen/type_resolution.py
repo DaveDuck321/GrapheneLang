@@ -557,11 +557,6 @@ class Typedef:
         ]
 
         expanded_specialization = [*specialization]
-        # Atm we don't support both generics and pattern matching simultaneously
-        # TODO: remove this
-        if len(generics) != 0:
-            assert len(expanded_specialization) == 0
-
         for generic in unmatched_generics:
             if generic.is_value_arg:
                 expanded_specialization.append(GenericValueReference(generic.name))
