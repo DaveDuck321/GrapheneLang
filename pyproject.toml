@@ -34,10 +34,11 @@ glang = "glang.driver:main"
 # Development environment to be used with your IDE. Just set the venv path to
 # the output of `hatch env find dev`.
 [tool.hatch.envs.dev]
-dependencies = ["hatch~=1.7.0", "lark~=1.1.7"]
+dependencies = ["hatch~=1.7.0", "lark~=1.1.7", "pylint"]
 
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
+lint = ["pylint $(git ls-files \\*.py)"]
 
 
 # Test environment.
