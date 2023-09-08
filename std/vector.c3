@@ -38,10 +38,7 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
             index += 1;
         }
 
-        if self.memory.length != 0 {
-            // BUG deallocating a null pointer segfaults.
-            self.allocator:deallocate_span(self.memory);
-        }
+        self:deallocate();
         self.memory = new_memory;
     }
     self.memory.data[self.length] = data;
@@ -88,7 +85,10 @@ function [T] clear : (self : Vector<T>&) -> void = {
 
 function [T] deallocate : (self : Vector<T>&) -> void = {
     // TODO: this aught to be a destructor
-    self.allocator:deallocate_span(self.memory);
+    if self.memory.length != 0 {
+        // BUG deallocating a null pointer segfaults.
+        self.allocator:deallocate_span(self.memory);
+    }
 }
 
 function [T] data : (self : Vector<T>&) -> Span<T> = {
