@@ -55,3 +55,11 @@ function [T] bisect_left : (span : Span<T>, elem : T) -> isize = {
 
     return lo;
 }
+
+function [T] max : (left : T, right : T) -> T = {
+    if left < right {
+        return right;
+    }
+
+    return left;
+}
