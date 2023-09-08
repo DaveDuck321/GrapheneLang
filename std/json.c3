@@ -18,16 +18,16 @@ typedef JSON_Node : {
     type     : int, // 0: null, 1: true, 2: false, 3: string, 4: number,
                     // 5: array, 6: object
     value    : Optional<StringView>,
-    children : Optional<Vector<JSON_Node>>,
+    children : Vector<JSON_Node>,
 }
 
 // TODO something like new<JSON_Node> would be nice, but we don't support
 // function specializations.
-function new_json_node : (node_type : int) -> JSON_Node = {
+function new_json_node : (node_type : int, allocator : Allocator&) -> JSON_Node = {
     return {
         node_type,
         make_optional<StringView>(),
-        make_optional<Vector<JSON_Node>>(),
+        make_vector<JSON_Node>(&allocator),
     };
 }
 
@@ -104,7 +104,7 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    let node : JSON_Node = new_json_node(/* object */ 6);
+    let node : JSON_Node = new_json_node(/* object */ 6, &cursor.allocator);
 
     cursor:eat_whitespace();
 
@@ -113,36 +113,33 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional(node);
     }
 
-    // Initialize children vector.
-    node.children:store(cursor.allocator:make_vector<JSON_Node>());
-
     while true {
         cursor:eat_whitespace();
 
         let string_node : Optional<JSON_Node> = cursor:parse_string();
 
         if !string_node:has_value() {
-            node.children:data():deallocate();
+            node.children:deallocate();
             return make_optional<JSON_Node>();
         }
 
-        node.children:data():push_back(string_node:data());
+        node.children:push_back(string_node:data());
 
         cursor:eat_whitespace();
 
         if !cursor:eat(char(":")) {
-            node.children:data():deallocate();
+            node.children:deallocate();
             return make_optional<JSON_Node>();
         }
 
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
         if !value_node:has_value() {
-            node.children:data():deallocate();
+            node.children:deallocate();
             return make_optional<JSON_Node>();
         }
 
-        node.children:data():push_back(value_node:data());
+        node.children:push_back(value_node:data());
 
         if cursor:eat(char("}")) {
             // We're done.
@@ -150,7 +147,7 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
         }
 
         if !cursor:eat(char(",")) {
-            node.children:data():deallocate();
+            node.children:deallocate();
             return make_optional<JSON_Node>();
         }
     }
@@ -165,7 +162,7 @@ function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    let node : JSON_Node = new_json_node(/* array */ 5);
+    let node : JSON_Node = new_json_node(/* array */ 5, &cursor.allocator);
 
     cursor:eat_whitespace();
 
@@ -174,9 +171,6 @@ function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional(node);
     }
 
-    // Initialize children vector.
-    node.children:store(cursor.allocator:make_vector<JSON_Node>());
-
     while true {
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
@@ -184,7 +178,7 @@ function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
             return make_optional<JSON_Node>();
         }
 
-        node.children:data():push_back(value_node:data());
+        node.children:push_back(value_node:data());
 
         if cursor:eat(char("]")) {
             // We're done.
@@ -192,7 +186,7 @@ function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
         }
 
         if !cursor:eat(char(",")) {
-            node.children:data():deallocate();
+            node.children:deallocate();
             return make_optional<JSON_Node>();
         }
     }
@@ -222,15 +216,15 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
     }
 
     if cursor:eat(sv("null")) {
-        return make_optional(new_json_node(/* null */ 0));
+        return make_optional(new_json_node(/* null */ 0, &cursor.allocator));
     }
 
     if cursor:eat(sv("true")) {
-        return make_optional(new_json_node(/* true */ 1));
+        return make_optional(new_json_node(/* true */ 1, &cursor.allocator));
     }
 
     if cursor:eat(sv("false")) {
-        return make_optional(new_json_node(/* false */ 2));
+        return make_optional(new_json_node(/* false */ 2, &cursor.allocator));
     }
 
     // Numbers don't have a prefix character, so just try and parse them.
@@ -267,7 +261,7 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
     while !cursor:is_eof() {
         if !in_escape_seq and cursor:eat(char("\"")) {
-            let node : JSON_Node = new_json_node(/* string */ 3);
+            let node : JSON_Node = new_json_node(/* string */ 3, &cursor.allocator);
             node.value = make_optional(string:data());
 
             return make_optional(node);
@@ -350,7 +344,7 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    let node : JSON_Node = new_json_node(/* string */ 4);
+    let node : JSON_Node = new_json_node(/* string */ 4, &cursor.allocator);
     node.value = make_optional(cursor.data:slice_between(start_pos, end_pos));
 
     return make_optional(node);
@@ -426,15 +420,15 @@ function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStrea
     if node.type == 5 {
         // FIXME we should be using a buffer here.
         io:write(sv("["));
-        if node.children:has_value() {
-            let iter : VectorIter<JSON_Node> = node.children:data():get_iter();
-            for element in &iter {
-                io:write(element);
-                if iter:has_next() {
-                    io:write(", ");
-                }
+
+        let iter : VectorIter<JSON_Node> = node.children:get_iter();
+        for element in &iter {
+            io:write(element);
+            if iter:has_next() {
+                io:write(", ");
             }
         }
+
         return io:write(sv("]"));
     }
 
@@ -442,25 +436,25 @@ function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStrea
     if node.type == 6 {
         // FIXME we should be using a buffer here.
         io:write(sv("{"));
-        if node.children:has_value() {
-            let iter : VectorIter<JSON_Node> = node.children:data():get_iter();
-            let flag : bool = true;
 
-            // XXX we have to borrow the iterator, otherwise it is not updated
-            // in place by the implicit call to get_next().
-            for element in &iter {
-                io:write(element);
+        let iter : VectorIter<JSON_Node> = node.children:get_iter();
+        let flag : bool = true;
 
-                if flag {
-                    io:write(sv(": "));
-                } else {
-                    if iter:has_next() {
-                        io:write(sv(", "));
-                    }
+        // XXX we have to borrow the iterator, otherwise it is not updated
+        // in place by the implicit call to get_next().
+        for element in &iter {
+            io:write(element);
+
+            if flag {
+                io:write(sv(": "));
+            } else {
+                if iter:has_next() {
+                    io:write(sv(", "));
                 }
-                flag ^= true;
             }
+            flag ^= true;
         }
+
         return io:write(sv("}"));
     }
 
