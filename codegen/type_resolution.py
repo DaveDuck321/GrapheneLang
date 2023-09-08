@@ -39,9 +39,11 @@ from .user_facing_errors import (
     NonDeterminableSize,
     OverloadResolutionError,
     PatternMatchDeductionFailure,
+    RedeclarationWithIncorrectSpecializationCount,
     RedefinitionError,
     SpecializationFailed,
     SubstitutionFailure,
+    IncorrectSpecializationCount,
 )
 
 
@@ -369,11 +371,16 @@ class UnresolvedStructType(UnresolvedType):
     members: tuple[tuple[str, UnresolvedType], ...]
 
     def format_for_output_to_user(self) -> str:
-        member_format = ", ".join(
-            f"{member_name}: {member_type.format_for_output_to_user()}"
-            for member_name, member_type in self.members
+        if len(self.members) == 0:
+            return "{}"
+
+        member_fmt = ", ".join(
+            (
+                f"{member_name}: {member_type.format_for_output_to_user()}"
+                for member_name, member_type in self.members
+            )
         )
-        return "{" + ", ".join(member_format) + "}"
+        return "{ " + member_fmt + " }"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedStructType(
@@ -529,11 +536,28 @@ class UnresolvedHeapArrayType(UnresolvedType):
 
 @dataclass(frozen=True)
 class Typedef:
+    # TODO: parameter packs
     name: str
     generics: tuple[GenericArgument, ...]
     expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
     aliased: UnresolvedType
     loc: Location
+
+    def format_name_for_output_to_user(self) -> str:
+        if len(self.expanded_specialization) == 0:
+            return self.name
+
+        specializations_fmt = ", ".join(
+            (item.format_for_output_to_user() for item in self.expanded_specialization)
+        )
+        return f"{self.name}<{specializations_fmt}>"
+
+    def format_for_output_to_user(self) -> str:
+        generics_fmt = format_generics(self.generics, None)
+        name_fmt = self.format_name_for_output_to_user()
+        aliased_fmt = self.aliased.format_for_output_to_user()
+
+        return f"typedef {generics_fmt} {name_fmt} : {aliased_fmt}"
 
     @staticmethod
     def construct(
@@ -1091,6 +1115,19 @@ class SymbolTable:
                 f"typedef {prefix}{format_specialization(specialization)} : ...",
             )
 
+        example_candidate = self._unresolved_typedefs[prefix][0]
+        if len(specialization) != len(example_candidate.expanded_specialization):
+            raise IncorrectSpecializationCount(
+                "type",
+                f"{prefix}{format_specialization(specialization)}",
+                len(specialization),
+                len(example_candidate.expanded_specialization),
+                [
+                    (thing.format_for_output_to_user(), thing.loc)
+                    for thing in self._unresolved_typedefs[prefix]
+                ],
+            )
+
         all_candidates: list[tuple[int, Typedef]] = []
         for candidate in self._unresolved_typedefs[prefix]:
             if len(candidate.expanded_specialization) != len(specialization):
@@ -1172,10 +1209,25 @@ class SymbolTable:
             )
         )
 
-    def add_type(self, type_to_add: Typedef) -> None:
-        # TODO: check for duplicates etc.
-        self._unresolved_typedefs[type_to_add.name].append(type_to_add)
-        self._newly_added_unresolved_typedefs.append(type_to_add)
+    def add_type(self, to_add: Typedef) -> None:
+        # Check for conflicting definitions
+        if to_add.name in self._unresolved_typedefs:
+            existing = self._unresolved_typedefs[to_add.name]
+
+            if len(to_add.expanded_specialization) != len(
+                existing[0].expanded_specialization
+            ):
+                raise RedeclarationWithIncorrectSpecializationCount(
+                    to_add.format_name_for_output_to_user(),
+                    len(to_add.expanded_specialization),
+                    len(existing[0].expanded_specialization),
+                    [(item.format_for_output_to_user(), item.loc) for item in existing],
+                    to_add.loc,
+                )
+
+        # Everything looks good for now, add the type
+        self._unresolved_typedefs[to_add.name].append(to_add)
+        self._newly_added_unresolved_typedefs.append(to_add)
 
     def resolve_all_non_generics(self) -> None:
         for typedef in self._newly_added_unresolved_typedefs:

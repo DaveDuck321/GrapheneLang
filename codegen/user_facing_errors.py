@@ -259,6 +259,45 @@ class RepeatedGenericName(ErrorWithLineInfo):
         )
 
 
+class RedeclarationWithIncorrectSpecializationCount(ErrorWithLocationInfo):
+    def __init__(
+        self,
+        name: str,
+        received: int,
+        expected: int,
+        declarations: Iterable[tuple[str, Location]],
+        loc: Location,
+    ) -> None:
+        received_noun = "argument" if received == 1 else "arguments"
+        expected_noun = "argument" if expected == 1 else "arguments"
+
+        super().__init__(
+            f"Error: generic type '{name}' with {received} {received_noun} "
+            f"was previously declared with {expected} {expected_noun}:\n"
+            + format_list_with_locations(declarations),
+            loc,
+        )
+
+
+class IncorrectSpecializationCount(GrapheneError):
+    def __init__(
+        self,
+        thing: Literal["type", "function"],
+        name: str,
+        received: int,
+        expected: int,
+        declarations: Iterable[tuple[str, Location]],
+    ) -> None:
+        received_noun = "argument" if received == 1 else "arguments"
+        expected_noun = "argument" if expected == 1 else "arguments"
+
+        super().__init__(
+            f"Error: generic {thing} '{name}' received {received} {received_noun}. "
+            "This conflicts with the following definitions that expect "
+            f"{expected} {expected_noun}:\n" + format_list_with_locations(declarations),
+        )
+
+
 class GenericHasGenericAnnotation(GrapheneError):
     def __init__(self, generic_name: str) -> None:
         super().__init__(
