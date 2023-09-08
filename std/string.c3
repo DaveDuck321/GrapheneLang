@@ -4,7 +4,8 @@
 @require_once "util.c3"
 @require_once "wrappers.c3"
 
-typedef StringView : Span<u8>
+typedef StringView     : Span<u8>
+typedef StringViewIter : SpanIter<u8>
 typedef UTF32Codepoint : {codepoint : u8 /* TODO: unicode support */}
 
 function decode_utf8 : (char : u8) -> UTF32Codepoint = {

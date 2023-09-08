@@ -7,8 +7,7 @@
 @require_once "std/iterators.c3"
 
 typedef Cursor : {
-    data      : StringView,
-    position  : isize, // TODO should this be an iterator?
+    iter      : StringViewIter,
     allocator : Allocator,  // FIXME use global allocator.
     // TODO when we get RAII working, add a max_depth field to prevent crashes
     // when the input is too nested.
@@ -31,27 +30,32 @@ function new_json_node : (node_type : int, allocator : Allocator&) -> JSON_Node 
     };
 }
 
-function is_eof : (cursor : Cursor&) -> bool = {
-    return cursor.position >= cursor.data.length;
+function has_next : (cursor : Cursor&) -> bool = {
+    return cursor.iter:has_next();
 }
 
 function peak : (cursor : Cursor&) -> Optional<u8> = {
-    if !cursor:is_eof() {
-        return make_optional(cursor.data.data[cursor.position]);
+    if cursor.iter:has_next() {
+        return make_optional(cursor.iter:peak());
     }
 
     return make_optional<u8>();
 }
 
 function next : (cursor : Cursor&) -> Optional<u8> = {
-    // TODO this should be const (can't use with has_value() right now).
-    let token : Optional<u8> = cursor:peak();
-
-    if token:has_value() {
-        cursor.position += 1;
+    if cursor.iter:has_next() {
+        return make_optional<u8>(cursor.iter:get_next());
     }
 
-    return token;
+    return make_optional<u8>();
+}
+
+function position : (cursor : Cursor&) -> isize = {
+    return cursor.iter.index;
+}
+
+function slice_between : (cursor: Cursor&, start_offset : iptr, end_offset : isize) -> StringView = {
+    return cursor.iter.span:slice_between(start_offset, end_offset);
 }
 
 function is_json_whitespace : (token : u8) -> bool = {
@@ -85,7 +89,7 @@ function eat : (cursor : Cursor&, string : StringView) -> bool = {
 }
 
 function eat_whitespace : (cursor: Cursor&) -> void = {
-    while !cursor:is_eof() {
+    while cursor:has_next() {
         let next_char : Optional<u8> = cursor:peak();
         runtime_assert(next_char:has_value());
 
@@ -259,7 +263,7 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
     // FIXME stop leaking the vector.
     let string : Vector<u8> = make_vector<u8>(&cursor.allocator);
 
-    while !cursor:is_eof() {
+    while cursor:has_next() {
         if !in_escape_seq and cursor:eat(char("\"")) {
             let node : JSON_Node = new_json_node(/* string */ 3, &cursor.allocator);
             node.value = make_optional(string:data());
@@ -319,7 +323,7 @@ function is_digit_helper : (token : Optional<u8>) -> bool = {
 }
 
 function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
-    const start_pos : isize = cursor.position;
+    const start_pos : isize = cursor:position();
     let is_valid : bool = false;
 
     // This is optional, so discard the return value.
@@ -338,14 +342,14 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
     // TODO parse fraction.
     // TODO parse exponent.
 
-    const end_pos : isize = cursor.position;
+    const end_pos : isize = cursor:position();
 
     if !is_valid {
         return make_optional<JSON_Node>();
     }
 
     let node : JSON_Node = new_json_node(/* string */ 4, &cursor.allocator);
-    node.value = make_optional(cursor.data:slice_between(start_pos, end_pos));
+    node.value = make_optional(cursor:slice_between(start_pos, end_pos));
 
     return make_optional(node);
 }
@@ -354,7 +358,7 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
 function json_parse : (source : StringView) -> Optional<JSON_Node> = {
     // FIXME memory safety, memory leaks.
     let cursor : Cursor = {
-        source, 0, initialize_allocator()
+        source:get_iter(), initialize_allocator()
     };
 
     let result : Optional<JSON_Node> = cursor:parse_element();
@@ -367,7 +371,7 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
     // e.g. '[1, 2], 2' would parse up to the end of the array, but the
     // remaining input makes this invalid json.
     cursor:eat_whitespace();
-    if cursor:is_eof() {
+    if !cursor:has_next() {
         return result;
     }
 
@@ -425,7 +429,7 @@ function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStrea
         for element in &iter {
             io:write(element);
             if iter:has_next() {
-                io:write(", ");
+                io:write(sv(", "));
             }
         }
 
