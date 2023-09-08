@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Iterator
+from typing import Iterator
 from typing import Type as PyType
 
 from .builtin_types import (
@@ -507,12 +507,7 @@ class BitcastExpression(TypedExpression):
         self._src_expr.assert_can_write_to()
 
 
-def get_builtin_callables() -> (
-    dict[
-        str,
-        Callable[[list[SpecializationItem], list[TypedExpression]], TypedExpression],
-    ]
-):
+def get_builtin_callables() -> (dict[str, PyType[TypedExpression]]):
     def get_integer_builtin(
         expression_class: PyType[BasicIntegerExpression | UnaryIntegerExpression],
     ):
