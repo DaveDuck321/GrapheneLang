@@ -3,14 +3,13 @@ import sys
 from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from os import getenv
-from parser.lexer_parser import init_lexer_parser
 from pathlib import Path
 from typing import Any, Optional
 
 from tap import Tap
 
-from graphene_parser import generate_ir_from_source
-from target import get_host_target, get_target, get_target_triple, load_target_config
+from .graphene_parser import generate_ir_from_source
+from .target import get_host_target, get_target, get_target_triple, load_target_config
 
 
 class PrintHostTargetAction(Action):
@@ -69,9 +68,6 @@ class DriverArguments(Tap):
     print_host_target: bool = False
     """Print the target corresponding to the host."""
 
-    bootstrap: bool = False
-    """Parse with Lark rather than the self-hosted lexer-parser."""
-
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
 
@@ -101,10 +97,12 @@ def main() -> None:
     load_target_config(args.target)
 
     parent_dir = Path(__file__).parent.resolve()
+    lib_dir = parent_dir / "lib"
+    target_dir = lib_dir / "std" / get_target()
 
     if not args.nostdlib:
-        args.include_path.append(parent_dir)
-        args.include_path.append(parent_dir / "std" / get_target())
+        args.include_path.append(lib_dir)
+        args.include_path.append(target_dir)
 
     # -o defaults to binary output path
     if args.output:
@@ -114,7 +112,6 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
-    init_lexer_parser(self_hosted=not args.bootstrap)
     ir = generate_ir_from_source(args.input, args.include_path, args.debug_compiler)
 
     if will_emit_llvm:
@@ -158,7 +155,7 @@ def main() -> None:
         # -nostdlib prevents both the standard library and the start files from
         # being linked with the executable.
         extra_flags.append("-nostdlib")
-        extra_flags.append(str(parent_dir / "std" / get_target() / "runtime.S"))
+        extra_flags.append(str(target_dir / "runtime.S"))
 
     if will_emit_binary:
         subprocess.run(
@@ -166,6 +163,7 @@ def main() -> None:
                 clang,
                 f"-O{args.optimize}",
                 "-fuse-ld=lld",  # Use the LLVM cross-linker.
+                "-Wl,--build-id=sha1",
                 "-static",
                 "-target",
                 get_target_triple(),

@@ -22,17 +22,16 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
-        fetch-tags: true # This doesn't seem to work for some reason.
         show-progress: false
     - name: Install Python 3.11
       run: |
         sudo apt-get update
         sudo apt-get install -y python3.11 python3.11-venv
         python3.11 -m venv venv/bin/activate
-    - name: Install dependencies
+    - name: Install hatch
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        python -m pip install hatch
     - name: Install clang and lli
       run: |
         # XXX workaround for https://github.com/llvm/llvm-project/issues/64182
@@ -41,9 +40,7 @@ jobs:
         chmod +x llvm.sh
         sudo ./llvm.sh ${{ matrix.llvm-version }}
         sudo apt-get install -y llvm-${{ matrix.llvm-version }}-runtime
-    - name: Bootstrap the parser
-      run: |
-        git fetch --tags origin
-        ./bootstrap.sh
+    - name: Fetch tags
+      run: git fetch --tags --force origin
     - name: Run tests
-      run: python tests/run_tests.py
+      run: hatch run test:run

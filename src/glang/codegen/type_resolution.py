@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from itertools import groupby
 from typing import Callable, Iterable, Optional
+from uuid import UUID, uuid4
 
 from .builtin_types import (
     AnonymousType,
@@ -34,11 +35,13 @@ from .user_facing_errors import (
     ErrorWithLocationInfo,
     FailedLookupError,
     GrapheneError,
+    IncorrectSpecializationCount,
     Location,
     MultipleTypeDefinitions,
     NonDeterminableSize,
     OverloadResolutionError,
     PatternMatchDeductionFailure,
+    RedeclarationWithIncorrectSpecializationCount,
     RedefinitionError,
     SpecializationFailed,
     SubstitutionFailure,
@@ -166,6 +169,7 @@ class GenericValueReference(CompileTimeConstant):
             # TODO: user facing error
             if out.mapping[self.argument] != target:
                 return None
+            return 0
 
         out.mapping[self.argument] = target
         return get_cost_at_pattern_match_depth(depth)
@@ -210,7 +214,7 @@ class UnresolvedNamedType(UnresolvedType):
         return f"{self.name}<{specialization_format}>"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
-        specialization = []
+        specialization: list[UnresolvedSpecializationItem] = []
         for item in self.specialization:
             specialization.append(item.produce_specialized_copy(generics))
 
@@ -322,9 +326,10 @@ class UnresolvedGenericType(UnresolvedType):
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
-        if self.name in out.mapping:
+        if self.argument in out.mapping:
             if target != out.mapping[self.argument]:
                 return None
+            return 0
 
         out.mapping[self.argument] = target
         return get_cost_at_pattern_match_depth(depth)
@@ -369,11 +374,16 @@ class UnresolvedStructType(UnresolvedType):
     members: tuple[tuple[str, UnresolvedType], ...]
 
     def format_for_output_to_user(self) -> str:
-        member_format = ", ".join(
-            f"{member_name}: {member_type.format_for_output_to_user()}"
-            for member_name, member_type in self.members
+        if len(self.members) == 0:
+            return "{}"
+
+        member_fmt = ", ".join(
+            (
+                f"{member_name}: {member_type.format_for_output_to_user()}"
+                for member_name, member_type in self.members
+            )
         )
-        return "{" + ", ".join(member_format) + "}"
+        return "{ " + member_fmt + " }"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedStructType(
@@ -529,11 +539,29 @@ class UnresolvedHeapArrayType(UnresolvedType):
 
 @dataclass(frozen=True)
 class Typedef:
+    # TODO: parameter packs
     name: str
     generics: tuple[GenericArgument, ...]
     expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
     aliased: UnresolvedType
     loc: Location
+    uuid: UUID
+
+    def format_name_for_output_to_user(self) -> str:
+        if len(self.expanded_specialization) == 0:
+            return self.name
+
+        specializations_fmt = ", ".join(
+            (item.format_for_output_to_user() for item in self.expanded_specialization)
+        )
+        return f"{self.name}<{specializations_fmt}>"
+
+    def format_for_output_to_user(self) -> str:
+        generics_fmt = format_generics(self.generics, None)
+        name_fmt = self.format_name_for_output_to_user()
+        aliased_fmt = self.aliased.format_for_output_to_user()
+
+        return f"typedef {generics_fmt} {name_fmt} : {aliased_fmt}"
 
     @staticmethod
     def construct(
@@ -557,18 +585,15 @@ class Typedef:
         ]
 
         expanded_specialization = [*specialization]
-        # Atm we don't support both generics and pattern matching simultaneously
-        # TODO: remove this
-        if len(generics) != 0:
-            assert len(expanded_specialization) == 0
-
         for generic in unmatched_generics:
             if generic.is_value_arg:
                 expanded_specialization.append(GenericValueReference(generic.name))
             else:
                 expanded_specialization.append(UnresolvedGenericType(generic.name))
 
-        return Typedef(name, generics, tuple(expanded_specialization), aliased, loc)
+        return Typedef(
+            name, generics, tuple(expanded_specialization), aliased, loc, uuid4()
+        )
 
     def pattern_match(
         self,
@@ -610,7 +635,9 @@ class Typedef:
         )
         new_alias = self.aliased.produce_specialized_copy(generics)
 
-        return Typedef(self.name, tuple(), new_specialization, new_alias, self.loc)
+        return Typedef(
+            self.name, tuple(), new_specialization, new_alias, self.loc, self.uuid
+        )
 
 
 @dataclass(frozen=True)
@@ -768,14 +795,16 @@ class UnresolvedFunctionSignature:
         return cost
 
 
-@dataclass(frozen=True)
+@dataclass
 class FunctionDeclaration:
     is_foreign: bool
     arg_names: tuple[str, ...]
     pack_type_name: Optional[str]
     generics: tuple[GenericArgument, ...]
     signature: UnresolvedFunctionSignature
+    mapping: GenericMapping
     loc: Location
+    uuid: UUID
 
     @staticmethod
     def construct(
@@ -804,9 +833,6 @@ class FunctionDeclaration:
         ]
 
         expanded_specialization = [*specialization]
-        # Atm we don't support both generics and pattern matching simultaneously
-        assert len(expanded_specialization) == 0  # TODO: remove this
-
         for generic in unmatched_generics:
             if generic.is_value_arg:
                 expanded_specialization.append(GenericValueReference(generic.name))
@@ -821,7 +847,14 @@ class FunctionDeclaration:
             return_type,
         )
         return FunctionDeclaration(
-            is_foreign, arg_names, pack_type_name, generics, signature, location
+            is_foreign,
+            arg_names,
+            pack_type_name,
+            generics,
+            signature,
+            GenericMapping({}, []),
+            location,
+            uuid4(),
         )
 
     def format_for_output_to_user(self) -> str:
@@ -839,8 +872,18 @@ class FunctionDeclaration:
 
     def produce_specialized_copy(
         self, generics: GenericMapping
-    ) -> UnresolvedFunctionSignature:
-        return self.signature.produce_specialized_copy(generics)
+    ) -> "FunctionDeclaration":
+        assert len(self.mapping.mapping) == 0 and len(self.mapping.pack) == 0
+        return FunctionDeclaration(
+            self.is_foreign,
+            self.arg_names,
+            self.pack_type_name,
+            tuple(),
+            self.signature.produce_specialized_copy(generics),
+            generics,
+            self.loc,
+            self.uuid,
+        )
 
 
 class SymbolTable:
@@ -871,9 +914,14 @@ class SymbolTable:
         self._newly_added_unresolved_typedefs: list[Typedef] = []
         self._newly_added_unresolved_functions: list[FunctionDeclaration] = []
 
-        # Symbols requiring codegen + cache for future lookup
-        self._resolved_types: dict[tuple[str, int], list[NamedType]] = defaultdict(list)
-        self._resolved_functions: dict[str, list[FunctionSignature]] = defaultdict(list)
+        # Lookup cache
+        self._resolved_types: dict[UUID, list[NamedType]] = defaultdict(list)
+        self._resolved_functions: dict[UUID, list[FunctionSignature]] = defaultdict(
+            list
+        )
+
+        # Remember which functions need codegen
+        self._already_codegened: dict[UUID, list[FunctionSignature]] = defaultdict(list)
         self._remaining_to_codegen: list[
             tuple[FunctionDeclaration, FunctionSignature]
         ] = []
@@ -888,40 +936,36 @@ class SymbolTable:
     def resolve_type(self, unresolved: UnresolvedType) -> Type:
         return unresolved.resolve(partial(SymbolTable.lookup_named_type, self))
 
-    def resolve_named_type(
-        self,
-        name: str,
-        unresolved_specialization: tuple[UnresolvedSpecializationItem, ...],
-        alias: UnresolvedType,
-    ) -> NamedType:
+    def resolve_named_type(self, typedef: Typedef) -> NamedType:
         specialization = [
-            self.resolve_specialization_item(item) for item in unresolved_specialization
+            self.resolve_specialization_item(item)
+            for item in typedef.expanded_specialization
         ]
 
         # Is the type already in the cache?
-        key = (name, len(unresolved_specialization))
-        for other in self._resolved_types[key]:
+        for other in self._resolved_types[typedef.uuid]:
             if do_specializations_match(other.specialization, specialization):
                 return other
 
         # Else resolve it from scratch
-        resolved_type = NamedType(name, specialization)
+        resolved_type = NamedType(typedef.name, specialization)
         try:
             # Prematurely assume type is resolvable (for cyclic types)
-            self._resolved_types[key].append(resolved_type)
-            resolved_type.update_with_finalized_alias(self.resolve_type(alias))
+            self._resolved_types[typedef.uuid].append(resolved_type)
+            resolved_alias = self.resolve_type(typedef.aliased)
+            resolved_type.update_with_finalized_alias(resolved_alias)
             if not resolved_type.is_finite:
                 raise NonDeterminableSize(resolved_type.format_for_output_to_user(True))
         except SubstitutionFailure as exc:
             # Type is NOT resolvable, undo bad assumption and rethrow error
-            self._resolved_types[key].remove(resolved_type)
-            raise exc
+            self._resolved_types[typedef.uuid].remove(resolved_type)
+            raise exc from exc
 
         return resolved_type
 
-    def resolve_function(
-        self, fn: UnresolvedFunctionSignature, declaration: FunctionDeclaration
-    ) -> FunctionSignature:
+    def resolve_function(self, declaration: FunctionDeclaration) -> FunctionSignature:
+        fn = declaration.signature
+
         resolved_specialization: list[SpecializationItem] = []
         for arg in fn.expanded_specialization:
             if isinstance(arg, CompileTimeConstant):
@@ -937,7 +981,7 @@ class SymbolTable:
         resolved_return = self.resolve_type(fn.return_type)
 
         # Check the cache, have we already resolved this function?
-        for other in self._resolved_functions[fn.name]:
+        for other in self._resolved_functions[declaration.uuid]:
             if (
                 do_specializations_match(other.specialization, resolved_specialization)
                 and other.arguments == resolved_arguments
@@ -952,8 +996,7 @@ class SymbolTable:
             resolved_specialization,
             declaration.is_foreign,
         )
-        self._resolved_functions[fn.name].append(result)
-        self._remaining_to_codegen.append((declaration, result))
+        self._resolved_functions[declaration.uuid].append(result)
         return result
 
     def select_function_with_least_implicit_conversion_cost(
@@ -961,7 +1004,7 @@ class SymbolTable:
         fn_name: str,
         candidate_functions: list[tuple[FunctionSignature, FunctionDeclaration]],
         fn_args: list[TypedExpression] | list[Type],
-    ) -> Optional[FunctionSignature]:
+    ) -> Optional[tuple[FunctionSignature, FunctionDeclaration]]:
         functions_by_cost: list[tuple[int, FunctionSignature, FunctionDeclaration]] = []
 
         for function, declaration in candidate_functions:
@@ -988,7 +1031,7 @@ class SymbolTable:
             return None
 
         if len(best_functions) == 1:
-            return best_functions[0][0]
+            return best_functions[0]
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
@@ -997,12 +1040,27 @@ class SymbolTable:
             [(fn.format_for_output_to_user(), fn.loc) for _, fn in best_functions],
         )
 
+    def add_function_to_codegen(
+        self, declaration: FunctionDeclaration, signature: FunctionSignature
+    ) -> None:
+        for other in self._already_codegened[declaration.uuid]:
+            if (
+                do_specializations_match(other.specialization, signature.specialization)
+                and other.arguments == signature.arguments
+                and other.return_type == signature.return_type
+            ):
+                return  # Already codegened
+
+        self._already_codegened[declaration.uuid].append(signature)
+        self._remaining_to_codegen.append((declaration, signature))
+
     def lookup_function(
         self,
         name: str,
         given_specialization: list[SpecializationItem],
         args: list[TypedExpression] | list[Type],
-    ) -> FunctionSignature:
+        evaluated_context: bool,
+    ) -> tuple[FunctionSignature, FunctionDeclaration]:
         # Specializes and resolves the function corresponding to the correct definition
         # There are two types of function definition:
         #   1) function [T] fn : ...            (pure generic)
@@ -1030,9 +1088,7 @@ class SymbolTable:
                 "function", f"function {name}{format_arguments(args)}"
             )
 
-        all_candidates: list[
-            tuple[int, UnresolvedFunctionSignature, FunctionDeclaration]
-        ] = []
+        all_candidates: list[tuple[int, FunctionDeclaration]] = []
         for candidate in self._unresolved_fndefs[name]:
             generics = GenericMapping({}, [])
             cost = candidate.pattern_match(args, given_specialization, generics)
@@ -1042,7 +1098,7 @@ class SymbolTable:
             # We've matched the pattern, now we specialize the candidate
             # TODO: catch these errors
             specialized = candidate.produce_specialized_copy(generics)
-            all_candidates.append((cost, specialized, candidate))
+            all_candidates.append((cost, specialized))
 
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])
@@ -1050,21 +1106,28 @@ class SymbolTable:
             resolved_candidates: list[
                 tuple[FunctionSignature, FunctionDeclaration]
             ] = []
-            for _, candidate, declaration in candidates:
+            for _, candidate in candidates:
                 try:
                     resolved_candidates.append(
-                        (self.resolve_function(candidate, declaration), declaration)
+                        (self.resolve_function(candidate), candidate)
                     )
                 except SubstitutionFailure:
                     pass  # SFINAE
+                except GrapheneError as e:
+                    raise ErrorWithLocationInfo(
+                        e.message, candidate.loc, "function signature"
+                    ) from e
 
             if len(resolved_candidates) != 0:
                 # TODO: pass along the specialization for error messages
-                signature = self.select_function_with_least_implicit_conversion_cost(
+                result = self.select_function_with_least_implicit_conversion_cost(
                     name, resolved_candidates, args
                 )
-                if signature is not None:
-                    return signature
+                if result is not None:
+                    if evaluated_context:
+                        self.add_function_to_codegen(result[1], result[0])
+
+                    return result
 
         raise OverloadResolutionError(
             f"{name}{format_specialization(given_specialization)}{format_arguments(args)}",
@@ -1096,6 +1159,19 @@ class SymbolTable:
                 f"typedef {prefix}{format_specialization(specialization)} : ...",
             )
 
+        example_candidate = self._unresolved_typedefs[prefix][0]
+        if len(specialization) != len(example_candidate.expanded_specialization):
+            raise IncorrectSpecializationCount(
+                "type",
+                f"{prefix}{format_specialization(specialization)}",
+                len(specialization),
+                len(example_candidate.expanded_specialization),
+                [
+                    (thing.format_for_output_to_user(), thing.loc)
+                    for thing in self._unresolved_typedefs[prefix]
+                ],
+            )
+
         all_candidates: list[tuple[int, Typedef]] = []
         for candidate in self._unresolved_typedefs[prefix]:
             if len(candidate.expanded_specialization) != len(specialization):
@@ -1119,11 +1195,7 @@ class SymbolTable:
             resolved_candidates: list[tuple[Type, Location]] = []
             for _, candidate in candidates:
                 try:
-                    resolved_type = self.resolve_named_type(
-                        candidate.name,
-                        candidate.expanded_specialization,
-                        candidate.aliased,
-                    )
+                    resolved_type = self.resolve_named_type(candidate)
 
                     if do_specializations_match(
                         resolved_type.specialization, specialization
@@ -1166,21 +1238,36 @@ class SymbolTable:
         self._newly_added_unresolved_functions.append(fn_to_add)
 
     def add_builtin_type(self, type_to_add: PrimitiveType) -> None:
-        self._resolved_types[type_to_add.name, 0].append(type_to_add)
-        self.add_type(
-            Typedef(
-                type_to_add.name,
-                tuple(),
-                tuple(),
-                UnresolvedNamedType(type_to_add.name, tuple()),
-                BuiltinSourceLocation(),
-            )
+        typedef = Typedef(
+            type_to_add.name,
+            tuple(),
+            tuple(),
+            UnresolvedNamedType(type_to_add.name, tuple()),
+            BuiltinSourceLocation(),
+            uuid4(),
         )
+        self._resolved_types[typedef.uuid].append(type_to_add)
+        self.add_type(typedef)
 
-    def add_type(self, type_to_add: Typedef) -> None:
-        # TODO: check for duplicates etc.
-        self._unresolved_typedefs[type_to_add.name].append(type_to_add)
-        self._newly_added_unresolved_typedefs.append(type_to_add)
+    def add_type(self, to_add: Typedef) -> None:
+        # Check for conflicting definitions
+        if to_add.name in self._unresolved_typedefs:
+            existing = self._unresolved_typedefs[to_add.name]
+
+            if len(to_add.expanded_specialization) != len(
+                existing[0].expanded_specialization
+            ):
+                raise RedeclarationWithIncorrectSpecializationCount(
+                    to_add.format_name_for_output_to_user(),
+                    len(to_add.expanded_specialization),
+                    len(existing[0].expanded_specialization),
+                    [(item.format_for_output_to_user(), item.loc) for item in existing],
+                    to_add.loc,
+                )
+
+        # Everything looks good for now, add the type
+        self._unresolved_typedefs[to_add.name].append(to_add)
+        self._newly_added_unresolved_typedefs.append(to_add)
 
     def resolve_all_non_generics(self) -> None:
         for typedef in self._newly_added_unresolved_typedefs:
@@ -1209,7 +1296,7 @@ class SymbolTable:
                     self.resolve_type(item) for item in fn.signature.arguments
                 ]
                 self.lookup_function(
-                    fn.signature.name, resolved_specialization, resolved_args
+                    fn.signature.name, resolved_specialization, resolved_args, True
                 )
             except GrapheneError as e:
                 raise ErrorWithLocationInfo(

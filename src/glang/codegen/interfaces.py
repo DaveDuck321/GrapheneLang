@@ -3,7 +3,7 @@ from copy import copy
 from dataclasses import dataclass
 from typing import Any, Iterable, Iterator, Optional
 
-from target import get_llvm_type_info
+from ..target import get_llvm_type_info
 
 
 class TypeDefinition(ABC):

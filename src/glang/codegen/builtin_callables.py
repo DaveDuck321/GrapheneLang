@@ -1,6 +1,5 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Iterator
-from typing import Type as PyType
 
 from .builtin_types import (
     BoolDefinition,
@@ -16,12 +15,20 @@ from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
 
-class UnaryIntegerExpression(TypedExpression, ABC):
+class BuiltinCallable(TypedExpression):
+    @abstractmethod
+    def __init__(
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+    ) -> None:
+        pass
+
+
+class UnaryIntegerExpression(BuiltinCallable):
     IR_FORMAT_STR = ""
     USER_FACING_NAME = ""
 
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
         (self._arg,) = arguments
 
@@ -32,7 +39,7 @@ class UnaryIntegerExpression(TypedExpression, ABC):
         assert isinstance(definition, (IntegerDefinition, BoolDefinition))
 
         self._arg_type = self._arg.underlying_type.convert_to_value_type()
-        super().__init__(self._arg_type, False)
+        TypedExpression.__init__(self, self._arg_type, False)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._arg})"
@@ -77,7 +84,7 @@ class UnaryMinusExpression(UnaryIntegerExpression):
     IR_FORMAT_STR = "sub {type} 0, {arg}"
 
 
-class BasicIntegerExpression(TypedExpression, ABC):
+class BasicIntegerExpression(BuiltinCallable):
     SIGNED_IR = ""
     UNSIGNED_IR = ""
     USER_FACING_NAME = ""
@@ -88,7 +95,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
         pass
 
     def __init__(
-        self, specialization: list[Type], arguments: list[TypedExpression]
+        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
         lhs, rhs = arguments
         # This is not a user-facing function, we don't need sensible error messages
@@ -101,7 +108,7 @@ class BasicIntegerExpression(TypedExpression, ABC):
         assert isinstance(rhs_definition, (IntegerDefinition, BoolDefinition))
         assert lhs.underlying_type == rhs.underlying_type
 
-        super().__init__(self.get_result_type(arguments), False)
+        TypedExpression.__init__(self, self.get_result_type(arguments), False)
 
         self._arg_type = lhs.underlying_type.convert_to_value_type()
         self._lhs = lhs
@@ -242,7 +249,7 @@ class IsLessThanExpression(CompareExpression):
     USER_FACING_NAME = "__builtin_is_less_than"
 
 
-class AlignOfExpression(TypedExpression):
+class AlignOfExpression(BuiltinCallable):
     def __init__(
         self,
         specialization: list[SpecializationItem],
@@ -257,7 +264,7 @@ class AlignOfExpression(TypedExpression):
             SizeType(), str(self._argument_type.alignment)
         )
 
-        super().__init__(self._result.underlying_type, False)
+        TypedExpression.__init__(self, self._result.underlying_type, False)
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
@@ -276,7 +283,7 @@ class AlignOfExpression(TypedExpression):
         raise OperandError("cannot assign to `__builtin_alignof<...>()`")
 
 
-class SizeOfExpression(TypedExpression):
+class SizeOfExpression(BuiltinCallable):
     def __init__(
         self,
         specialization: list[SpecializationItem],
@@ -289,7 +296,7 @@ class SizeOfExpression(TypedExpression):
 
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
-        super().__init__(self._result.underlying_type, False)
+        TypedExpression.__init__(self, self._result.underlying_type, False)
 
     def __repr__(self) -> str:
         return f"SizeOf({self._argument_type})"
@@ -308,7 +315,7 @@ class SizeOfExpression(TypedExpression):
         raise OperandError("cannot assign to `__builtin_sizeof<...>()`")
 
 
-class NarrowExpression(TypedExpression):
+class NarrowExpression(BuiltinCallable):
     def __init__(
         self,
         specialization: list[SpecializationItem],
@@ -328,7 +335,7 @@ class NarrowExpression(TypedExpression):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        super().__init__(return_type, False)
+        TypedExpression.__init__(self, return_type, False)
 
     def __repr__(self) -> str:
         return f"Narrow({self._argument} to {self.underlying_type})"
@@ -357,7 +364,7 @@ class NarrowExpression(TypedExpression):
         raise OperandError("cannot assign to `__builtin_narrow<...>(...)`")
 
 
-class PtrToIntExpression(TypedExpression):
+class PtrToIntExpression(BuiltinCallable):
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
@@ -369,7 +376,7 @@ class PtrToIntExpression(TypedExpression):
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        super().__init__(IPtrType(), False)
+        TypedExpression.__init__(self, IPtrType(), False)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -396,7 +403,7 @@ class PtrToIntExpression(TypedExpression):
         raise OperandError("Cannot assign to `__builtin_ptr_to_int()`")
 
 
-class IntToPtrExpression(TypedExpression):
+class IntToPtrExpression(BuiltinCallable):
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
@@ -410,7 +417,7 @@ class IntToPtrExpression(TypedExpression):
         (self._src_expr,) = arguments
         assert isinstance(self._src_expr.underlying_type, GenericIntType)
 
-        super().__init__(self._ptr_type.convert_to_value_type(), True)
+        TypedExpression.__init__(self, self._ptr_type.convert_to_value_type(), True)
 
     def __repr__(self) -> str:
         return f"IntToPtr({self._src_expr} to {self.underlying_type})"
@@ -442,7 +449,7 @@ class IntToPtrExpression(TypedExpression):
         pass
 
 
-class BitcastExpression(TypedExpression):
+class BitcastExpression(BuiltinCallable):
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
     ) -> None:
@@ -466,7 +473,8 @@ class BitcastExpression(TypedExpression):
 
         assert self._target_type.size == src_type.size
 
-        super().__init__(
+        TypedExpression.__init__(
+            self,
             self._target_type.convert_to_value_type(),
             self._target_type.is_reference,
         )
@@ -507,9 +515,9 @@ class BitcastExpression(TypedExpression):
         self._src_expr.assert_can_write_to()
 
 
-def get_builtin_callables() -> (dict[str, PyType[TypedExpression]]):
+def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
     def get_integer_builtin(
-        expression_class: PyType[BasicIntegerExpression | UnaryIntegerExpression],
+        expression_class: type[BasicIntegerExpression | UnaryIntegerExpression],
     ):
         return (expression_class.USER_FACING_NAME, expression_class)
 

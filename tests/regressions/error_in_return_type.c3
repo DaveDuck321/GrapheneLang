@@ -1,8 +1,6 @@
 typedef [T] Span : {}
 
-// Hmm, the error is a bit misleading...
-// The overload resolution fails due to SFINAE not parameter count.. but this is
-// also kinda the point of SFINAE, if we fixed this `EnableIf` would break.
+// TODO: the line number still isn't right here (but it's very close)
 function [T] foo : ()
     -> Span = {}
 
@@ -12,7 +10,6 @@ function main : () -> int = {
 }
 
 /// @COMPILE; EXPECT ERR
-/// File '*.c3', line 10, in 'function main: () -> int'
-/// Error: overload resolution for function call 'foo<int>()' failed
-/// Available overloads:
-/// - function [[]T[]] foo<T> : () -> Span
+/// File '*.c3', line 4, in 'function signature'
+/// Error: generic type 'Span' received 0 arguments. This conflicts with the following definitions that expect 1 argument:
+/// - typedef  [[]T[]] Span<T> : {}      (File '*.c3', line 1)
