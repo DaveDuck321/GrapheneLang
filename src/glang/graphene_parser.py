@@ -1,4 +1,3 @@
-import parser.lexer_parser as lp
 import sys
 import traceback
 from dataclasses import dataclass
@@ -6,8 +5,8 @@ from pathlib import Path
 from typing import Any, Generator, Iterable, Optional, TypeGuard
 from uuid import UUID
 
-import codegen as cg
-from codegen.user_facing_errors import (
+from . import codegen as cg
+from .codegen.user_facing_errors import (
     CircularImportException,
     ErrorWithLineInfo,
     ErrorWithLocationInfo,
@@ -22,6 +21,7 @@ from codegen.user_facing_errors import (
     StructMemberRedeclaration,
     VoidVariableDeclaration,
 )
+from .parser import lexer_parser as lp
 
 UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
 
@@ -210,7 +210,7 @@ class FunctionSignatureParser(lp.Interpreter):
         super().__init__()
 
         self._current_file: Optional[str] = None
-        self._include_hierarchy: Optional[tuple[str]] = None
+        self._include_hierarchy: Optional[tuple[str, ...]] = None
 
         self._program = program
         self._function_mapping: dict[UUID, lp.GenericFunctionDefinition] = {}

@@ -2,6 +2,7 @@ import fnmatch
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
+from importlib import resources
 from multiprocessing import cpu_count
 from os import getenv
 from pathlib import Path
@@ -17,10 +18,10 @@ PARENT_DIR = Path(__file__).parent
 TESTS_DIR = PARENT_DIR
 OUT_DIR = TESTS_DIR / "out"
 RUNTIME_OBJ_PATH = OUT_DIR / "runtime.o"
-DRIVER_PATH = PARENT_DIR.parent / "glang"
+DRIVER = "glang"
 
 HOST_TARGET = subprocess.run(
-    [DRIVER_PATH, "--print-host-target"],
+    [DRIVER, "--print-host-target"],
     check=True,
     stdout=subprocess.PIPE,
     text=True,
@@ -136,7 +137,7 @@ def run_test(file_path: Path) -> bool:
         "compile",
         file_path.parent,
         [
-            DRIVER_PATH,
+            DRIVER,
             "--emit-llvm-to-stdout",
             *config.compile_args,
             file_path,
@@ -220,18 +221,20 @@ def run_tests(tests: list[Path], workers: int) -> int:
 
 
 def build_jit_dependencies() -> None:
-    runtime_src_path = PARENT_DIR.parent / "std" / HOST_TARGET / "runtime.S"
-    assert runtime_src_path.is_file()
+    with resources.as_file(
+        resources.files("glang.lib.std") / HOST_TARGET / "runtime.S"
+    ) as runtime_src_path:
+        assert runtime_src_path.is_file()
 
-    # Don't compile the runtime again if it's up-to-date.
-    if (
-        not RUNTIME_OBJ_PATH.is_file()
-        or runtime_src_path.stat().st_mtime > RUNTIME_OBJ_PATH.stat().st_mtime
-    ):
-        # Need to use `cc` because `as` doesn't run the C preprocessor.
-        subprocess.run(
-            ["cc", "-c", runtime_src_path, "-o", RUNTIME_OBJ_PATH], check=True
-        )
+        # Don't compile the runtime again if it's up-to-date.
+        if (
+            not RUNTIME_OBJ_PATH.is_file()
+            or runtime_src_path.stat().st_mtime > RUNTIME_OBJ_PATH.stat().st_mtime
+        ):
+            # Need to use `cc` because `as` doesn't run the C preprocessor.
+            subprocess.run(
+                ["cc", "-c", runtime_src_path, "-o", RUNTIME_OBJ_PATH], check=True
+            )
 
     assert RUNTIME_OBJ_PATH.is_file()
 
@@ -243,7 +246,6 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    assert DRIVER_PATH.is_file()
     assert TESTS_DIR.is_dir()
     OUT_DIR.mkdir(exist_ok=True)
 

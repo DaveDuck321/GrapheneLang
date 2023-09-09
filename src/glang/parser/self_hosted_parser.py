@@ -2,9 +2,9 @@ import json
 import subprocess
 from pathlib import Path
 
-from codegen.user_facing_errors import InvalidSyntax
+from ..codegen.user_facing_errors import InvalidSyntax
 
-PARSER_PATH = Path(__file__).parent / "parser"
+PARSER_PATH = (Path(__file__).parent.parent / "bin" / "parser").resolve()
 
 
 def is_whitespace(string: str) -> bool:

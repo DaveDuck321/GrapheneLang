@@ -4,8 +4,7 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Optional
 
-from target import get_abi, get_int_type_info, get_ptr_type_info
-
+from ..target import get_abi, get_int_type_info, get_ptr_type_info
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
     ArrayDimensionError,
