@@ -7,4 +7,4 @@ typedef MyType<u8> : int
 /// File *.c3', line 3, in 'typedef'
 /// Error: multiple definitions of type 'MyType<u8>':
 /// - typedef MyType<u8> : bool      (File '*.c3', line 3)
-/// - typedef MyType<u8> : bool      (File '*.c3', line 4)
+/// - typedef MyType<u8> : int       (File '*.c3', line 4)

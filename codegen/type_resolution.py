@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import partial
 from itertools import groupby
 from typing import Callable, Iterable, Optional
+from uuid import UUID, uuid4
 
 from .builtin_types import (
     AnonymousType,
@@ -168,6 +169,7 @@ class GenericValueReference(CompileTimeConstant):
             # TODO: user facing error
             if out.mapping[self.argument] != target:
                 return None
+            return 0
 
         out.mapping[self.argument] = target
         return get_cost_at_pattern_match_depth(depth)
@@ -212,7 +214,7 @@ class UnresolvedNamedType(UnresolvedType):
         return f"{self.name}<{specialization_format}>"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
-        specialization = []
+        specialization: list[UnresolvedSpecializationItem] = []
         for item in self.specialization:
             specialization.append(item.produce_specialized_copy(generics))
 
@@ -324,9 +326,10 @@ class UnresolvedGenericType(UnresolvedType):
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
-        if self.name in out.mapping:
+        if self.argument in out.mapping:
             if target != out.mapping[self.argument]:
                 return None
+            return 0
 
         out.mapping[self.argument] = target
         return get_cost_at_pattern_match_depth(depth)
@@ -542,6 +545,7 @@ class Typedef:
     expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
     aliased: UnresolvedType
     loc: Location
+    uuid: UUID
 
     def format_name_for_output_to_user(self) -> str:
         if len(self.expanded_specialization) == 0:
@@ -587,7 +591,9 @@ class Typedef:
             else:
                 expanded_specialization.append(UnresolvedGenericType(generic.name))
 
-        return Typedef(name, generics, tuple(expanded_specialization), aliased, loc)
+        return Typedef(
+            name, generics, tuple(expanded_specialization), aliased, loc, uuid4()
+        )
 
     def pattern_match(
         self,
@@ -629,7 +635,9 @@ class Typedef:
         )
         new_alias = self.aliased.produce_specialized_copy(generics)
 
-        return Typedef(self.name, tuple(), new_specialization, new_alias, self.loc)
+        return Typedef(
+            self.name, tuple(), new_specialization, new_alias, self.loc, self.uuid
+        )
 
 
 @dataclass(frozen=True)
@@ -891,7 +899,7 @@ class SymbolTable:
         self._newly_added_unresolved_functions: list[FunctionDeclaration] = []
 
         # Symbols requiring codegen + cache for future lookup
-        self._resolved_types: dict[tuple[str, int], list[NamedType]] = defaultdict(list)
+        self._resolved_types: dict[UUID, list[NamedType]] = defaultdict(list)
         self._resolved_functions: dict[str, list[FunctionSignature]] = defaultdict(list)
         self._remaining_to_codegen: list[
             tuple[FunctionDeclaration, FunctionSignature]
@@ -907,34 +915,30 @@ class SymbolTable:
     def resolve_type(self, unresolved: UnresolvedType) -> Type:
         return unresolved.resolve(partial(SymbolTable.lookup_named_type, self))
 
-    def resolve_named_type(
-        self,
-        name: str,
-        unresolved_specialization: tuple[UnresolvedSpecializationItem, ...],
-        alias: UnresolvedType,
-    ) -> NamedType:
+    def resolve_named_type(self, typedef: Typedef) -> NamedType:
         specialization = [
-            self.resolve_specialization_item(item) for item in unresolved_specialization
+            self.resolve_specialization_item(item)
+            for item in typedef.expanded_specialization
         ]
 
         # Is the type already in the cache?
-        key = (name, len(unresolved_specialization))
-        for other in self._resolved_types[key]:
+        for other in self._resolved_types[typedef.uuid]:
             if do_specializations_match(other.specialization, specialization):
                 return other
 
         # Else resolve it from scratch
-        resolved_type = NamedType(name, specialization)
+        resolved_type = NamedType(typedef.name, specialization)
         try:
             # Prematurely assume type is resolvable (for cyclic types)
-            self._resolved_types[key].append(resolved_type)
-            resolved_type.update_with_finalized_alias(self.resolve_type(alias))
+            self._resolved_types[typedef.uuid].append(resolved_type)
+            resolved_alias = self.resolve_type(typedef.aliased)
+            resolved_type.update_with_finalized_alias(resolved_alias)
             if not resolved_type.is_finite:
                 raise NonDeterminableSize(resolved_type.format_for_output_to_user(True))
         except SubstitutionFailure as exc:
             # Type is NOT resolvable, undo bad assumption and rethrow error
-            self._resolved_types[key].remove(resolved_type)
-            raise exc
+            self._resolved_types[typedef.uuid].remove(resolved_type)
+            raise exc from exc
 
         return resolved_type
 
@@ -1151,11 +1155,7 @@ class SymbolTable:
             resolved_candidates: list[tuple[Type, Location]] = []
             for _, candidate in candidates:
                 try:
-                    resolved_type = self.resolve_named_type(
-                        candidate.name,
-                        candidate.expanded_specialization,
-                        candidate.aliased,
-                    )
+                    resolved_type = self.resolve_named_type(candidate)
 
                     if do_specializations_match(
                         resolved_type.specialization, specialization
@@ -1198,16 +1198,16 @@ class SymbolTable:
         self._newly_added_unresolved_functions.append(fn_to_add)
 
     def add_builtin_type(self, type_to_add: PrimitiveType) -> None:
-        self._resolved_types[type_to_add.name, 0].append(type_to_add)
-        self.add_type(
-            Typedef(
-                type_to_add.name,
-                tuple(),
-                tuple(),
-                UnresolvedNamedType(type_to_add.name, tuple()),
-                BuiltinSourceLocation(),
-            )
+        typedef = Typedef(
+            type_to_add.name,
+            tuple(),
+            tuple(),
+            UnresolvedNamedType(type_to_add.name, tuple()),
+            BuiltinSourceLocation(),
+            uuid4(),
         )
+        self._resolved_types[typedef.uuid].append(type_to_add)
+        self.add_type(typedef)
 
     def add_type(self, to_add: Typedef) -> None:
         # Check for conflicting definitions
