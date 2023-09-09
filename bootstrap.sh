@@ -9,7 +9,7 @@ function checkout() {
         echo "$rpm_dir"
     else
         dir="$(mktemp -d)"
-        git archive --worktree-attributes "$1" | tar -x -C "$dir"
+        git archive "$1" --worktree-attributes ":(exclude)tests/" | tar -x -C "$dir"
         echo "$dir"
     fi
 }
