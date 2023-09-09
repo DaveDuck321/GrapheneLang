@@ -2,6 +2,8 @@ typedef TrueType : {}
 typedef FalseType : {}
 typedef EnableIf<TrueType> : {}
 
+typedef [T] Overwrite : {}
+
 typedef Both<TrueType,  TrueType>  : TrueType
 typedef Both<TrueType,  FalseType> : FalseType
 typedef Both<FalseType, TrueType>  : FalseType
@@ -18,18 +20,18 @@ typedef Not<FalseType> : TrueType
 typedef [U, V] AreEquivalent : FalseType
 typedef [V] AreEquivalent<V, V> : TrueType
 
-typedef[U, V] SelectFirst : U
-typedef[Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
+typedef [U, V] SelectFirst : U
+typedef [Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
 
 // Groupings for the builtin types
-typedef[T] IsIntegral : FalseType
+typedef [T] IsIntegral : FalseType
 typedef IsIntegral<i8> : TrueType
 typedef IsIntegral<i16> : TrueType
 typedef IsIntegral<i32> : TrueType
 typedef IsIntegral<i64> : TrueType
 typedef IsIntegral<i128> : TrueType
 
-typedef[T] IsLogical : FalseType
+typedef [T] IsLogical : FalseType
 typedef IsLogical<bool> : TrueType
 typedef IsLogical<u8> : TrueType
 typedef IsLogical<u16> : TrueType
@@ -37,7 +39,9 @@ typedef IsLogical<u32> : TrueType
 typedef IsLogical<u64> : TrueType
 typedef IsLogical<u128> : TrueType
 
-typedef[T] HasTrivialAssignments : FalseType
+typedef [T] HasTrivialAssignments : RegisterHasTrivialAssignments<Overwrite<T>>
+typedef [T] RegisterHasTrivialAssignments : FalseType
 
 // Needs to implement `flush`, `close`, `consume_length` and `request_buffer`
-typedef[T] IsStreamableTextIO : FalseType
+typedef [T] IsStreamableTextIO : RegisterIsStreamableTextIO<Overwrite<T>>
+typedef [T] RegisterIsStreamableTextIO : FalseType

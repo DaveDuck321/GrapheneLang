@@ -15,12 +15,7 @@ typedef CommonArithmeticType<i32, i128> : i128
 typedef CommonArithmeticType<i64, i128> : i128
 
 typedef [U, V] ArithmeticCompareResult : TypeIf<bool, Both<IsIntegral<U>, IsIntegral<V>>>
-
-typedef HasTrivialAssignments<i8> : TrueType
-typedef HasTrivialAssignments<i16> : TrueType
-typedef HasTrivialAssignments<i32> : TrueType
-typedef HasTrivialAssignments<i64> : TrueType
-typedef HasTrivialAssignments<i128> : TrueType
+typedef [T] RegisterHasTrivialAssignments<Overwrite<T>> : TypeIf<TrueType, IsIntegral<T>>
 
 @operator [T] + : (value: T) -> TypeIf<T, IsIntegral<T>> = { return value; }
 
