@@ -9,4 +9,4 @@ function main : () -> int = {
 
 /// @COMPILE --use-crt
 /// @RUN; EXPECT OUT
-/// 2.??
+/// 2.*

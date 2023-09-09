@@ -2,8 +2,7 @@ from functools import cached_property
 from itertools import count
 from typing import Optional
 
-import target
-
+from .. import target
 from .builtin_callables import get_builtin_callables
 from .builtin_types import (
     AnonymousType,

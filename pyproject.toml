@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "glang"
+version = "0.2.0"
+authors = [
+  { name = "Antros Economides", email = "antroseconomides@hotmail.co.uk" },
+  { name = "Tom Grant", email = "thomas.grant.mail@gmail.com" },
+]
+description = "A Graphene front-end for LLVM"
+# TODO readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.10"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development :: Compilers",
+]
+dependencies = ["PyYAML~=6.0.0", "typed-argument-parser~=1.8.1"]
+
+[project.urls]
+"Homepage" = "https://github.com/DaveDuck321/GrapheneLang/"
+"Bug Tracker" = "https://github.com/DaveDuck321/GrapheneLang/issues"
+
+[project.scripts]
+glang = "glang.driver:main"
+
+
+# Development environment to be used with your IDE. Just set the venv path to
+# the output of `hatch env find dev`.
+[tool.hatch.envs.dev]
+dependencies = ["hatch~=1.7.0", "lark~=1.1.7", "pylint"]
+
+[tool.hatch.envs.dev.scripts]
+bootstrap = "./bootstrap.sh"
+lint = ["pylint $(git ls-files \\*.py)"]
+
+
+# Test environment.
+[tool.hatch.envs.test]
+dependencies = ["interegular~=0.3.2", "lark~=1.1.7"]
+
+[tool.hatch.envs.test.scripts]
+run = "python tests/run_tests.py"
+
+
+# Style environment. Does not depend on the project.
+[tool.hatch.envs.style]
+detached = true
+skip-install = true
+dependencies = ["black", "isort"]
+
+[tool.hatch.envs.style.scripts]
+check = [
+  "black --check --diff .",
+  "isort --check-only --diff --profile black .",
+]
+fmt = ["isort --profile black .", "black ."]
+
+
+# Build configuration. Need a bunch of dependencies because the build process
+# bootstraps the compiler.
+[tool.hatch.build]
+# Exclude symlinks used for editable installs.
+exclude = ["src/glang/bin"]
+dependencies = [
+  "hatch~=1.7.0",
+  "lark~=1.1.7",
+  "PyYAML~=6.0.0",
+  "typed-argument-parser~=1.8.1",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [".github", "docs", "tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/glang"]
+hooks.custom.path = "hatch_build.py"
