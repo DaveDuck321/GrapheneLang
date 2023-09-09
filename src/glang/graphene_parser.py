@@ -3,6 +3,7 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Generator, Iterable, Optional, TypeGuard
+from uuid import UUID
 
 from . import codegen as cg
 from .codegen.user_facing_errors import (
@@ -212,9 +213,7 @@ class FunctionSignatureParser(lp.Interpreter):
         self._include_hierarchy: Optional[tuple[str, ...]] = None
 
         self._program = program
-        self._function_mapping: dict[
-            cg.FunctionDeclaration, lp.GenericFunctionDefinition
-        ] = {}
+        self._function_mapping: dict[UUID, lp.GenericFunctionDefinition] = {}
 
     def parse_file(
         self,
@@ -237,7 +236,6 @@ class FunctionSignatureParser(lp.Interpreter):
         tuple[
             cg.FunctionDeclaration,
             cg.FunctionSignature,
-            cg.GenericMapping,
             Optional[lp.GenericFunctionDefinition],
         ],
         None,
@@ -246,15 +244,11 @@ class FunctionSignatureParser(lp.Interpreter):
         while to_generate := self._program.symbol_table.get_next_function_to_codegen():
             declaration, signature = to_generate
 
-            mapping = cg.GenericMapping({}, [])
             body = None
             if not declaration.is_foreign:
-                declaration.pattern_match(
-                    signature.arguments, signature.specialization, mapping
-                )
-                body = self._function_mapping[declaration]
+                body = self._function_mapping[declaration.uuid]
 
-            yield declaration, signature, mapping, body
+            yield declaration, signature, body
 
     def GenericFunctionDefinition(self, node: lp.GenericFunctionDefinition) -> None:
         assert self._current_file is not None
@@ -324,7 +318,7 @@ class FunctionSignatureParser(lp.Interpreter):
             unresolved_return,
             location,
         )
-        self._function_mapping[fn_declaration] = node
+        self._function_mapping[fn_declaration.uuid] = node
         self._program.symbol_table.add_function(fn_declaration)
 
     def ForeignFunction(self, node: lp.ForeignFunction) -> None:
@@ -920,7 +914,6 @@ def generate_function(
     declaration: cg.FunctionDeclaration,
     signature: cg.FunctionSignature,
     body: Optional[lp.GenericFunctionDefinition],
-    generic_mapping: cg.GenericMapping,
 ) -> None:
     try:
         fn = cg.Function(declaration.arg_names, signature, declaration.pack_type_name)
@@ -932,7 +925,7 @@ def generate_function(
         assert declaration.is_foreign
         return
 
-    generate_body(program, fn, fn.top_level_scope, body.scope, generic_mapping)
+    generate_body(program, fn, fn.top_level_scope, body.scope, declaration.mapping)
 
     # We cannot omit the "ret" instruction from LLVM IR. If the function returns
     # void, then we can add it ourselves, otherwise the user needs to fix it.
@@ -1003,14 +996,9 @@ def generate_ir_from_source(
             set(),
         )
 
-        for (
-            declaration,
-            signature,
-            mapping,
-            body,
-        ) in fn_parser.get_functions_to_codegen():
+        for declaration, signature, body in fn_parser.get_functions_to_codegen():
             try:
-                generate_function(program, declaration, signature, body, mapping)
+                generate_function(program, declaration, signature, body)
             except ErrorWithLineInfo as exc:
                 assert isinstance(declaration.loc, SourceLocation)
                 location = SourceLocation(
