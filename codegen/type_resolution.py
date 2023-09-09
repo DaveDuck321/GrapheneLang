@@ -1113,6 +1113,10 @@ class SymbolTable:
                     )
                 except SubstitutionFailure:
                     pass  # SFINAE
+                except GrapheneError as e:
+                    raise ErrorWithLocationInfo(
+                        e.message, candidate.loc, "function signature"
+                    ) from e
 
             if len(resolved_candidates) != 0:
                 # TODO: pass along the specialization for error messages
