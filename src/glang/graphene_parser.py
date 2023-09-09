@@ -209,7 +209,7 @@ class FunctionSignatureParser(lp.Interpreter):
         super().__init__()
 
         self._current_file: Optional[str] = None
-        self._include_hierarchy: Optional[tuple[str]] = None
+        self._include_hierarchy: Optional[tuple[str, ...]] = None
 
         self._program = program
         self._function_mapping: dict[
