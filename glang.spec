@@ -1,11 +1,11 @@
 Name:           glang
-Version:        0.1.3
+Version:        0.2.0
 Release:        %autorelease
 Summary:        A Graphene front-end for LLVM
 
 License:        AGPL-3.0-only
 URL:            https://github.com/DaveDuck321/GrapheneLang
-Source0:        %{url}/archive/refs/heads/dev_hatch.tar.gz
+Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
 Source1:        %{url}/archive/refs/tags/bootstrap/1.tar.gz
 Source2:        %{url}/archive/refs/tags/bootstrap/2.tar.gz
 
@@ -17,7 +17,7 @@ BuildRequires:  lld
 %global toolchain clang
 %global debug_package %{nil}
 
-%define source_dir GrapheneLang-dev_hatch
+%define source_dir GrapheneLang-%{version}
 
 %description
 A Graphene front-end for LLVM (TODO).
