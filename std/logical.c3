@@ -2,7 +2,7 @@
 @require_once "type_traits.c3"
 @require_once "util.c3"
 
-typedef [T] RegisterHasTrivialAssignments<Overwrite<T>> : TypeIf<TrueType, IsLogical<T>>
+typedef [T] RegisterHasTrivialAssignments<Override<T>> : TypeIf<TrueType, IsLogical<T>>
 
 @operator ! : (value : bool) -> bool = {
     if value {

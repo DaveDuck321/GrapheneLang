@@ -2,7 +2,7 @@ typedef TrueType : {}
 typedef FalseType : {}
 typedef EnableIf<TrueType> : {}
 
-typedef [T] Overwrite : {}
+typedef [T] Override : {}
 
 typedef Both<TrueType,  TrueType>  : TrueType
 typedef Both<TrueType,  FalseType> : FalseType
@@ -39,9 +39,9 @@ typedef IsLogical<u32> : TrueType
 typedef IsLogical<u64> : TrueType
 typedef IsLogical<u128> : TrueType
 
-typedef [T] HasTrivialAssignments : RegisterHasTrivialAssignments<Overwrite<T>>
+typedef [T] HasTrivialAssignments : RegisterHasTrivialAssignments<Override<T>>
 typedef [T] RegisterHasTrivialAssignments : FalseType
 
 // Needs to implement `flush`, `close`, `consume_length` and `request_buffer`
-typedef [T] IsStreamableTextIO : RegisterIsStreamableTextIO<Overwrite<T>>
+typedef [T] IsStreamableTextIO : RegisterIsStreamableTextIO<Override<T>>
 typedef [T] RegisterIsStreamableTextIO : FalseType

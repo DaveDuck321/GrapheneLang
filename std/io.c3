@@ -11,7 +11,7 @@
 
 typedef UnbufferedFile : { fd : int }
 
-typedef RegisterIsStreamableTextIO<Overwrite<BufferedFile>> : TrueType
+typedef RegisterIsStreamableTextIO<Override<BufferedFile>> : TrueType
 typedef BufferedFile : {
     underlying_file : UnbufferedFile,
     buffer : u8[1024],
