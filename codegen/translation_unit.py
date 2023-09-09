@@ -17,7 +17,7 @@ from .generatable import Scope, StackVariable, StaticVariable, VariableAssignmen
 from .interfaces import SpecializationItem, Type, TypedExpression
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
-from .type_resolution import SymbolTable
+from .type_resolution import FunctionDeclaration, SymbolTable
 from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
 
 
@@ -137,6 +137,7 @@ class Program:
 
         self._has_main: bool = False
 
+        self._functions_to_codegen: list[tuple[FunctionSignature, FunctionDeclaration]]
         for builtin_type in get_builtin_types():
             self.symbol_table.add_builtin_type(builtin_type)
 
@@ -149,8 +150,8 @@ class Program:
         if fn_name in self._builtin_callables:
             return self._builtin_callables[fn_name](fn_specialization, fn_args)
 
-        signature = self.symbol_table.lookup_function(
-            fn_name, fn_specialization, fn_args
+        signature, _ = self.symbol_table.lookup_function(
+            fn_name, fn_specialization, fn_args, True
         )
         return FunctionCallExpression(signature, fn_args)
 

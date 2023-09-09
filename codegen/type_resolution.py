@@ -914,11 +914,14 @@ class SymbolTable:
         self._newly_added_unresolved_typedefs: list[Typedef] = []
         self._newly_added_unresolved_functions: list[FunctionDeclaration] = []
 
-        # Symbols requiring codegen + cache for future lookup
+        # Lookup cache
         self._resolved_types: dict[UUID, list[NamedType]] = defaultdict(list)
         self._resolved_functions: dict[UUID, list[FunctionSignature]] = defaultdict(
             list
         )
+
+        # Remember which functions need codegen
+        self._already_codegened: dict[UUID, list[FunctionSignature]] = defaultdict(list)
         self._remaining_to_codegen: list[
             tuple[FunctionDeclaration, FunctionSignature]
         ] = []
@@ -994,7 +997,6 @@ class SymbolTable:
             declaration.is_foreign,
         )
         self._resolved_functions[declaration.uuid].append(result)
-        self._remaining_to_codegen.append((declaration, result))
         return result
 
     def select_function_with_least_implicit_conversion_cost(
@@ -1002,7 +1004,7 @@ class SymbolTable:
         fn_name: str,
         candidate_functions: list[tuple[FunctionSignature, FunctionDeclaration]],
         fn_args: list[TypedExpression] | list[Type],
-    ) -> Optional[FunctionSignature]:
+    ) -> Optional[tuple[FunctionSignature, FunctionDeclaration]]:
         functions_by_cost: list[tuple[int, FunctionSignature, FunctionDeclaration]] = []
 
         for function, declaration in candidate_functions:
@@ -1029,7 +1031,7 @@ class SymbolTable:
             return None
 
         if len(best_functions) == 1:
-            return best_functions[0][0]
+            return best_functions[0]
 
         # If there are two or more equally good candidates, then this function
         # call is ambiguous.
@@ -1038,12 +1040,27 @@ class SymbolTable:
             [(fn.format_for_output_to_user(), fn.loc) for _, fn in best_functions],
         )
 
+    def add_function_to_codegen(
+        self, declaration: FunctionDeclaration, signature: FunctionSignature
+    ) -> None:
+        for other in self._already_codegened[declaration.uuid]:
+            if (
+                do_specializations_match(other.specialization, signature.specialization)
+                and other.arguments == signature.arguments
+                and other.return_type == signature.return_type
+            ):
+                return  # Already codegened
+
+        self._already_codegened[declaration.uuid].append(signature)
+        self._remaining_to_codegen.append((declaration, signature))
+
     def lookup_function(
         self,
         name: str,
         given_specialization: list[SpecializationItem],
         args: list[TypedExpression] | list[Type],
-    ) -> FunctionSignature:
+        evaluated_context: bool,
+    ) -> tuple[FunctionSignature, FunctionDeclaration]:
         # Specializes and resolves the function corresponding to the correct definition
         # There are two types of function definition:
         #   1) function [T] fn : ...            (pure generic)
@@ -1099,11 +1116,14 @@ class SymbolTable:
 
             if len(resolved_candidates) != 0:
                 # TODO: pass along the specialization for error messages
-                signature = self.select_function_with_least_implicit_conversion_cost(
+                result = self.select_function_with_least_implicit_conversion_cost(
                     name, resolved_candidates, args
                 )
-                if signature is not None:
-                    return signature
+                if result is not None:
+                    if evaluated_context:
+                        self.add_function_to_codegen(result[1], result[0])
+
+                    return result
 
         raise OverloadResolutionError(
             f"{name}{format_specialization(given_specialization)}{format_arguments(args)}",
@@ -1272,7 +1292,7 @@ class SymbolTable:
                     self.resolve_type(item) for item in fn.signature.arguments
                 ]
                 self.lookup_function(
-                    fn.signature.name, resolved_specialization, resolved_args
+                    fn.signature.name, resolved_specialization, resolved_args, True
                 )
             except GrapheneError as e:
                 raise ErrorWithLocationInfo(
