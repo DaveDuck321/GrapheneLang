@@ -34,6 +34,11 @@ A Graphene front-end for LLVM (TODO).
 # Go back to our build directory.
 cd %{_builddir}/%{source_dir}
 
+# Initializing Lark with strict=True requires the interegular package. Turn off
+# strict mode so that we can run the tests without it.
+sed -i "s/strict=True/strict=False/" tests/test_config_parser.py
+
+
 %generate_buildrequires
 %pyproject_buildrequires
 
@@ -51,7 +56,7 @@ cd %{_builddir}/%{source_dir}
 
 %check
 %pyproject_check_import -t
-# TODO run the full test suite.
+%{py3_test_envvars} %{python3} tests/run_tests.py
 
 
 %files -f %{pyproject_files}
