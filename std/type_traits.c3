@@ -15,6 +15,9 @@ typedef Either<FalseType, FalseType> : FalseType
 typedef Not<TrueType> : FalseType
 typedef Not<FalseType> : TrueType
 
+typedef [U, V] AreEquivalent : FalseType
+typedef [V] AreEquivalent<V, V> : TrueType
+
 typedef[U, V] SelectFirst : U
 typedef[Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
 
