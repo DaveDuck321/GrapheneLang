@@ -795,14 +795,16 @@ class UnresolvedFunctionSignature:
         return cost
 
 
-@dataclass(frozen=True)
+@dataclass
 class FunctionDeclaration:
     is_foreign: bool
     arg_names: tuple[str, ...]
     pack_type_name: Optional[str]
     generics: tuple[GenericArgument, ...]
     signature: UnresolvedFunctionSignature
+    mapping: GenericMapping
     loc: Location
+    uuid: UUID
 
     @staticmethod
     def construct(
@@ -831,9 +833,6 @@ class FunctionDeclaration:
         ]
 
         expanded_specialization = [*specialization]
-        # Atm we don't support both generics and pattern matching simultaneously
-        assert len(expanded_specialization) == 0  # TODO: remove this
-
         for generic in unmatched_generics:
             if generic.is_value_arg:
                 expanded_specialization.append(GenericValueReference(generic.name))
@@ -848,7 +847,14 @@ class FunctionDeclaration:
             return_type,
         )
         return FunctionDeclaration(
-            is_foreign, arg_names, pack_type_name, generics, signature, location
+            is_foreign,
+            arg_names,
+            pack_type_name,
+            generics,
+            signature,
+            GenericMapping({}, []),
+            location,
+            uuid4(),
         )
 
     def format_for_output_to_user(self) -> str:
@@ -866,8 +872,18 @@ class FunctionDeclaration:
 
     def produce_specialized_copy(
         self, generics: GenericMapping
-    ) -> UnresolvedFunctionSignature:
-        return self.signature.produce_specialized_copy(generics)
+    ) -> "FunctionDeclaration":
+        assert len(self.mapping.mapping) == 0 and len(self.mapping.pack) == 0
+        return FunctionDeclaration(
+            self.is_foreign,
+            self.arg_names,
+            self.pack_type_name,
+            tuple(),
+            self.signature.produce_specialized_copy(generics),
+            generics,
+            self.loc,
+            self.uuid,
+        )
 
 
 class SymbolTable:
@@ -900,7 +916,9 @@ class SymbolTable:
 
         # Symbols requiring codegen + cache for future lookup
         self._resolved_types: dict[UUID, list[NamedType]] = defaultdict(list)
-        self._resolved_functions: dict[str, list[FunctionSignature]] = defaultdict(list)
+        self._resolved_functions: dict[UUID, list[FunctionSignature]] = defaultdict(
+            list
+        )
         self._remaining_to_codegen: list[
             tuple[FunctionDeclaration, FunctionSignature]
         ] = []
@@ -942,9 +960,9 @@ class SymbolTable:
 
         return resolved_type
 
-    def resolve_function(
-        self, fn: UnresolvedFunctionSignature, declaration: FunctionDeclaration
-    ) -> FunctionSignature:
+    def resolve_function(self, declaration: FunctionDeclaration) -> FunctionSignature:
+        fn = declaration.signature
+
         resolved_specialization: list[SpecializationItem] = []
         for arg in fn.expanded_specialization:
             if isinstance(arg, CompileTimeConstant):
@@ -960,7 +978,7 @@ class SymbolTable:
         resolved_return = self.resolve_type(fn.return_type)
 
         # Check the cache, have we already resolved this function?
-        for other in self._resolved_functions[fn.name]:
+        for other in self._resolved_functions[declaration.uuid]:
             if (
                 do_specializations_match(other.specialization, resolved_specialization)
                 and other.arguments == resolved_arguments
@@ -975,7 +993,7 @@ class SymbolTable:
             resolved_specialization,
             declaration.is_foreign,
         )
-        self._resolved_functions[fn.name].append(result)
+        self._resolved_functions[declaration.uuid].append(result)
         self._remaining_to_codegen.append((declaration, result))
         return result
 
@@ -1053,9 +1071,7 @@ class SymbolTable:
                 "function", f"function {name}{format_arguments(args)}"
             )
 
-        all_candidates: list[
-            tuple[int, UnresolvedFunctionSignature, FunctionDeclaration]
-        ] = []
+        all_candidates: list[tuple[int, FunctionDeclaration]] = []
         for candidate in self._unresolved_fndefs[name]:
             generics = GenericMapping({}, [])
             cost = candidate.pattern_match(args, given_specialization, generics)
@@ -1065,7 +1081,7 @@ class SymbolTable:
             # We've matched the pattern, now we specialize the candidate
             # TODO: catch these errors
             specialized = candidate.produce_specialized_copy(generics)
-            all_candidates.append((cost, specialized, candidate))
+            all_candidates.append((cost, specialized))
 
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])
@@ -1073,10 +1089,10 @@ class SymbolTable:
             resolved_candidates: list[
                 tuple[FunctionSignature, FunctionDeclaration]
             ] = []
-            for _, candidate, declaration in candidates:
+            for _, candidate in candidates:
                 try:
                     resolved_candidates.append(
-                        (self.resolve_function(candidate, declaration), declaration)
+                        (self.resolve_function(candidate), candidate)
                     )
                 except SubstitutionFailure:
                     pass  # SFINAE
