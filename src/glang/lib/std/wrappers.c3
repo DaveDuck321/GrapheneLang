@@ -27,6 +27,7 @@ function [T] make_optional : (value : T) -> Optional<T> = {
 }
 
 function [T] data : (self : Optional<T>&) -> T& = {
+    runtime_assert(self:has_value());
     return &self._value;
 }
 
