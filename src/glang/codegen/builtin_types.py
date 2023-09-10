@@ -16,7 +16,7 @@ from .user_facing_errors import (
 
 
 class PlaceholderDefinition(TypeDefinition):
-    def replace_with(self, other : TypeDefinition) -> bool:
+    def replace_with(self, other: TypeDefinition) -> bool:
         # This abomination exists so that we can substitute a placeholder
         #  definition using `NamedType.update_with_finalized_alias()` even after
         #  calling `Type.convert_to_reference()` (which makes a shallow copy).

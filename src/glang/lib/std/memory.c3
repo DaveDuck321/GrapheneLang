@@ -23,13 +23,13 @@ function PAGE_SIZE : () -> isize = {
 
 typedef AllocatorNode : {
     integrity_check : u64,
-    next_node : iptr, // TODO use: Optional<Ptr<AllocatorNode>> (recursive type)
+    next_node : Optional<AllocatorNode&>
 }
 
 typedef Allocator : {
     // TODO: parameterize `8` as a generic argument
     integrity_checks : u64[8],
-    bins : Optional<Ptr<AllocatorNode>>[8],
+    bins : Optional<AllocatorNode&>[8],
 }
 
 function get_allocator_bin_index : (size_required : isize) -> isize = {
@@ -95,19 +95,15 @@ function [T] deallocate_span : (allocator : Allocator&, span : Span<T>) -> void 
 function deallocate_to_bin : (allocator : Allocator&, bin : isize, addr : iptr) -> void = {
     let integrity_check : u64 = allocator.integrity_checks[bin];
 
+    if allocator.bins[bin]:has_value() {
+        runtime_assert(allocator.bins[bin]:data().integrity_check == integrity_check);
+    }
+
     let new_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(addr);
     new_node.integrity_check = integrity_check;
+    new_node.next_node = allocator.bins[bin];
 
-    if allocator.bins[bin]:has_value() {
-        let next_node_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data();
-        let next_node : AllocatorNode& = &next_node_ptr:data();
-        runtime_assert(next_node.integrity_check == integrity_check);
-
-        new_node.next_node = ref_to_addr(&next_node);
-    } else {
-        new_node.next_node = 0;
-    }
-    allocator.bins[bin]:store<Ptr<AllocatorNode>>({&new_node});
+    allocator.bins[bin]:store(&new_node);
 }
 
 function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : isize) -> iptr = {
@@ -122,21 +118,10 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
 
     // TODO: need template arguments deduction for function calls (especially the UFCS)
     if allocator.bins[bin]:has_value() {
-        let node_to_pop_ptr : Ptr<AllocatorNode> = allocator.bins[bin]:data();
-        let node_to_pop : AllocatorNode& = &node_to_pop_ptr:data();
-
+        let node_to_pop : AllocatorNode& = &allocator.bins[bin]:data();
         runtime_assert(node_to_pop.integrity_check == integrity_check);
-        // TODO: we should eventually just copy the optional without the branch
-        if node_to_pop.next_node != 0 {
-            let next_node_but_fixme_address : iptr = node_to_pop.next_node;
-            let next_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(next_node_but_fixme_address);
-            let next_node_ptr : Ptr<AllocatorNode> = {&next_node};
 
-            allocator.bins[bin]:store(next_node_ptr);
-        } else {
-            allocator.bins[bin]:erase();
-        }
-
+        allocator.bins[bin] = node_to_pop.next_node;
         return ref_to_addr(&node_to_pop);
     } else {
         // We don't have any bins left, split one from the bin above us
@@ -148,8 +133,8 @@ function allocate_from_bin_and_return_address : (allocator : Allocator&, bin : i
         // We give the memory in bin1 to the user immediately, but we save bin2 for ourselves
         let new_node : AllocatorNode& = &addr_to_ref<AllocatorNode>(new_bin_location_2);
         new_node.integrity_check = integrity_check;
-        new_node.next_node = 0;
-        allocator.bins[bin]:store<Ptr<AllocatorNode>>({&new_node});
+        new_node.next_node:erase();
+        allocator.bins[bin]:store(&new_node);
 
         return new_bin_location_1;
     }

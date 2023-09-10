@@ -5,6 +5,7 @@ function [T] data : (self : Ptr<T>&) -> T& = {
 }
 
 typedef [T] Optional : { _value : T, _has_value : bool}
+typedef [T] Optional<T&> : { _ptr : iptr } // Nullptr optimization
 
 function [T] store : (self : Optional<T>&, value : T) -> void = {
     self._value = value;
@@ -32,6 +33,30 @@ function [T] data : (self : Optional<T>&) -> T& = {
 
 function [T] has_value : (self : Optional<T>&) -> bool = {
     return self._has_value;
+}
+
+function [T] store : (self : Optional<T&>&, value : T&) -> void = {
+    self._ptr = ref_to_addr(&value);
+}
+
+function [T] erase : (self : Optional<T&>&) -> void = {
+    self._ptr = 0;
+}
+
+function [T] make_optional<T&> : () -> Optional<T&> = {
+    return {0};
+}
+
+function [T] make_optional<T&> : (value : T&) -> Optional<T&> = {
+    return {ref_to_addr(&value)};
+}
+
+function [T] data : (self : Optional<T&>&) -> T& = {
+    return &addr_to_ref<T>(self._ptr);
+}
+
+function [T] has_value : (self : Optional<T&>&) -> bool = {
+    return self._ptr != 0;
 }
 
 typedef [T] Span : {
