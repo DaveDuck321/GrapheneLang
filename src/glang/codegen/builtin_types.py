@@ -16,6 +16,17 @@ from .user_facing_errors import (
 
 
 class PlaceholderDefinition(TypeDefinition):
+    def replace_with(self, other : TypeDefinition) -> bool:
+        # This abomination exists so that we can substitute a placeholder
+        #  definition using `NamedType.update_with_finalized_alias()` even after
+        #  calling `Type.convert_to_reference()` (which makes a shallow copy).
+        #  Since this method operates in place, it updates the definition in
+        #  both type copies simultaneously.
+
+        # TODO: rework references enough that this isn't necessary
+        self.__class__ = type(other)
+        self.__dict__ = other.__dict__
+
     def are_equivalent(self, other: TypeDefinition) -> bool:
         assert other is self
         return True
@@ -67,9 +78,10 @@ class NamedType(Type):
 
     def update_with_finalized_alias(self, alias: Type) -> None:
         assert self.alias is None
+        assert isinstance(self.definition, PlaceholderDefinition)
 
         self.alias = alias
-        self.definition = alias.definition
+        self.definition.replace_with(alias.definition)
         self.is_reference = alias.is_reference
 
     def get_name(self) -> str:
