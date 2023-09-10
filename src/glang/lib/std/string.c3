@@ -4,7 +4,8 @@
 @require_once "util.c3"
 @require_once "wrappers.c3"
 
-typedef StringView : Span<u8>
+typedef StringView     : Span<u8>
+typedef StringViewIter : SpanIter<u8>
 typedef UTF32Codepoint : {codepoint : u8 /* TODO: unicode support */}
 
 function decode_utf8 : (char : u8) -> UTF32Codepoint = {
@@ -100,4 +101,8 @@ function ascii_is_matched_pair : (lhs : u8, rhs : u8) -> bool = {
         return true;
     }
     return false;
+}
+
+function char : (literal : u8[1]&) -> u8 = {
+    return literal[0];
 }

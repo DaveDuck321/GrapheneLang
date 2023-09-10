@@ -1,6 +1,5 @@
 from abc import abstractmethod
 from typing import Iterator
-from typing import Type as PyType
 
 from .builtin_types import (
     BoolDefinition,
@@ -518,7 +517,7 @@ class BitcastExpression(BuiltinCallable):
 
 def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
     def get_integer_builtin(
-        expression_class: PyType[BasicIntegerExpression | UnaryIntegerExpression],
+        expression_class: type[BasicIntegerExpression | UnaryIntegerExpression],
     ):
         return (expression_class.USER_FACING_NAME, expression_class)
 

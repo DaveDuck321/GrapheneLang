@@ -28,6 +28,7 @@ function [T] make_optional : (value : T) -> Optional<T> = {
 }
 
 function [T] data : (self : Optional<T>&) -> T& = {
+    runtime_assert(self:has_value());
     return &self._value;
 }
 
@@ -103,4 +104,13 @@ function [T] get_iter : (span : Span<T>&) -> SpanIter<T> = {
     let index : isize = iter.index;
     iter.index += 1;
     return &iter.span.data[index];
+}
+
+function [T] get_next : (iter : SpanIter<T>&) -> T& = {
+    return &iter:__builtin_get_next();
+}
+
+function [T] peak : (iter : SpanIter<T>&) -> T& = {
+    runtime_assert(iter:has_next());
+    return &iter.span.data[iter.index];
 }

@@ -1,3 +1,4 @@
+@require_once "algorithms.c3"
 @require_once "arithmetic.c3"
 @require_once "assert.c3"
 @require_once "memory.c3"
@@ -12,11 +13,13 @@ typedef [T] Vector : {
 function DEFAULT_VECTOR_CAPACITY : () -> isize = { return 8; }
 
 function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
-    /* TODO: It'd be kinda nice to NOT allocate by default
-             atm it would be hard to make `Span` support this */
+    // HACK we don't want to allocate by default, so we are forced to initialize
+    // the Span with a null pointer. Note that if a user calls data() before
+    // any memory is allocated, then they'll get a 0-length span with a null
+    // pointer.
     return {
         .allocator = &allocator,
-        .memory = allocator:allocate_span<T>(DEFAULT_VECTOR_CAPACITY()),
+        .memory = { &__builtin_int_to_ptr<T[&]>(0), 0 },
         .length = 0,
     };
 }
@@ -24,7 +27,7 @@ function [T] make_vector : (allocator : Allocator&) -> Vector<T> = {
 function [T] push_back : (self : Vector<T>&, data : T) -> void = {
     if self.length == self.memory.length {
         // Grow the vector
-        let new_capacity : isize = 2 * self.memory.length;
+        let new_capacity : isize = max(2 * self.memory.length, DEFAULT_VECTOR_CAPACITY());
         let new_memory : Span<T> = self.allocator:allocate_span<T>(new_capacity);
 
         // Copy the old data
@@ -35,7 +38,7 @@ function [T] push_back : (self : Vector<T>&, data : T) -> void = {
             index += 1;
         }
 
-        self.allocator:deallocate_span(self.memory);
+        self:deallocate();
         self.memory = new_memory;
     }
     self.memory.data[self.length] = data;
@@ -82,7 +85,10 @@ function [T] clear : (self : Vector<T>&) -> void = {
 
 function [T] deallocate : (self : Vector<T>&) -> void = {
     // TODO: this aught to be a destructor
-    self.allocator:deallocate_span(self.memory);
+    if self.memory.length != 0 {
+        // BUG deallocating a null pointer segfaults.
+        self.allocator:deallocate_span(self.memory);
+    }
 }
 
 function [T] data : (self : Vector<T>&) -> Span<T> = {
