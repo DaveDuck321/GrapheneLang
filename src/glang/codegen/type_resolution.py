@@ -1108,9 +1108,12 @@ class SymbolTable:
             ] = []
             for _, candidate in candidates:
                 try:
-                    resolved_candidates.append(
-                        (self.resolve_function(candidate), candidate)
-                    )
+                    resolved = self.resolve_function(candidate)
+                    if do_specializations_match(
+                        resolved.specialization[: len(given_specialization)],
+                        given_specialization,
+                    ):
+                        resolved_candidates.append((resolved, candidate))
                 except SubstitutionFailure:
                     pass  # SFINAE
                 except GrapheneError as e:
