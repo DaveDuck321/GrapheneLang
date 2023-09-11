@@ -21,7 +21,6 @@ function [T, @Len] get_iter : (array : T[@Len]&) -> ArrayIter<T, @Len> = {
     return &result;
 }
 
-
 function [T] sizeof : () -> isize = {
     return __builtin_sizeof<T>();
 }
@@ -68,5 +67,8 @@ function as_logical : (value : i16)  -> u16  = { return __builtin_bitcast<u16>(v
 function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(value); }
 function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); }
 function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); }
+
+function value<TrueType> : () -> bool = { return true; }
+function value<FalseType> : () -> bool = { return false; }
 
 function [T] has_next : (iter : T&) -> bool = { return iter:__builtin_has_next(); }

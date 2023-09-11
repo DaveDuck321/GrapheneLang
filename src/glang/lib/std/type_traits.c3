@@ -23,6 +23,9 @@ typedef [V] AreEquivalent<V, V> : TrueType
 typedef [U, V] SelectFirst : U
 typedef [Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
 
+typedef [T] Ref : T&
+typedef [T] Ref<T&> : T&
+
 // Groupings for the builtin types
 typedef [T] IsIntegral : FalseType
 typedef IsIntegral<i8> : TrueType
