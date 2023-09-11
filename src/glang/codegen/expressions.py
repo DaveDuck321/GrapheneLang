@@ -678,14 +678,15 @@ class LogicalOperator(TypedExpression):
         ir: list[str] = []
 
         lhs_label = f"l{self.operator}{self.label_id}.lhs"
-        rhs_label = f"l{self.operator}{self.label_id}.rhs"
+        rhs_start_label = f"l{self.operator}{self.label_id}.rhs_start"
+        rhs_end_label = f"l{self.operator}{self.label_id}.rhs_end"
         end_label = f"l{self.operator}{self.label_id}.end"
 
         # Logical and evaluates the RHS condition only if the LHS evaluates to
         # true. Logical or evaluates the RHS condition only if the LHS evaluates
         # to false.
-        label_if_true = rhs_label if self.operator == "and" else end_label
-        label_if_false = end_label if self.operator == "and" else rhs_label
+        label_if_true = rhs_start_label if self.operator == "and" else end_label
+        label_if_false = end_label if self.operator == "and" else rhs_start_label
 
         # Start by branching to a known label name. This would have been
         # entirely unnecessary if we knew what the current label name was, but
@@ -710,7 +711,7 @@ class LogicalOperator(TypedExpression):
         )
 
         # rhs body.
-        ir.append(f"{rhs_label}:")
+        ir.append(f"{rhs_start_label}:")
         ir.extend(self.expand_ir(self.rhs_generatables, reg_gen))
         ir.extend(self.rhs_expression.generate_ir(reg_gen))
 
@@ -720,11 +721,15 @@ class LogicalOperator(TypedExpression):
         )
         ir.extend(self.expand_ir(extra_rhs_exprs, reg_gen))
 
-        # We always go to end_label.
-        # br label <dest>
-        ir.append(f"br label %{end_label}")
+        # The rhs may generate its own labels. Due to this, we do not know which
+        #  label contains `self.rhs_expression`. Since Phi needs control flow
+        #  information, we generate a label and branch directly to phi.
+        # TODO: we can generate cleaner IR be recording expressions' labels
+        ir.append(f"br label %{rhs_end_label}")
+        ir.append(f"{rhs_end_label}:")
 
-        # end body.
+        # phi's block: all control flows branch into this label
+        ir.append(f"br label %{end_label}")
         ir.append(f"{end_label}:")
 
         # The IR is in SSA form, so we need a phi node to obtain the result of
@@ -734,7 +739,7 @@ class LogicalOperator(TypedExpression):
         ir.append(
             f"{self.ir_ref_without_type_annotation} = phi {self.ir_type_annotation} "
             f"[ {conv_lhs.ir_ref_without_type_annotation}, %{lhs_label} ], "
-            f"[ {conv_rhs.ir_ref_without_type_annotation}, %{rhs_label} ]"
+            f"[ {conv_rhs.ir_ref_without_type_annotation}, %{rhs_end_label} ]"
         )
 
         return ir
