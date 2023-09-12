@@ -591,7 +591,16 @@ function parse_type_prefix : (cursor : Cursor&) -> Type = {
 function parse_array_type : (cursor : Cursor&, prefix : Type) -> Type = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
 
-    let is_heap_array : bool = cursor:try_skip_next_and_surrounding_white_space("&");
+    let is_mutable : bool = cursor:try_skip_next_and_surrounding_white_space("mut");
+
+    let is_heap_array : bool;
+    if is_mutable {
+        // We've already seen a `mut` token, this MUST be a heap array
+        is_heap_array = true;
+        cursor:expect_next_skipping_ws("&");
+    } else {
+        is_heap_array = cursor:try_skip_next_and_surrounding_white_space("&");
+    }
 
     let sizes : Vector<CompileTimeConstant>;
     // TODO: this would be cleaner with a short-circuit `and`
@@ -611,7 +620,7 @@ function parse_array_type : (cursor : Cursor&, prefix : Type) -> Type = {
 
     let meta : Meta = {prefix.meta.start_offset, cursor.position};
     let array : ArrayType& = &cursor.allocator:allocate<ArrayType>();
-    array = {prefix, sizes, is_heap_array, meta};
+    array = {prefix, sizes, is_heap_array, !is_mutable, meta};
 
     let result_type : Type = {1, ref_to_addr(&array), meta};
     if cursor:is_next("[") {
@@ -638,7 +647,15 @@ function parse_type : (cursor : Cursor&) -> Type = {
     if cursor:try_skip_next("&") {
         let ref_type : RefType& = &cursor.allocator:allocate<RefType>();
         let meta : Meta = meta(prefix.meta.start_offset, cursor:skip_ws_return_offset());
-        ref_type = {prefix, meta};
+        ref_type = {prefix, true, meta};
+        return {2, ref_to_addr(&ref_type), meta};
+    }
+
+    if cursor:try_skip_next_and_surrounding_white_space("mut") {
+        cursor:expect_next("&");
+        let ref_type : RefType& = &cursor.allocator:allocate<RefType>();
+        let meta : Meta = meta(prefix.meta.start_offset, cursor:skip_ws_return_offset());
+        ref_type = {prefix, false, meta};
         return {2, ref_to_addr(&ref_type), meta};
     }
 
@@ -937,7 +954,7 @@ function parse_maybe_unary_or_borrow_expression : (cursor : Cursor&) -> Expressi
     }
 
     if cursor:try_skip_next("&") {
-        let is_const : bool = cursor:try_skip_next_and_surrounding_white_space("const");
+        let is_const : bool = !cursor:try_skip_next_and_surrounding_white_space("mut");
         let rhs : Expression = cursor:parse_maybe_unary_or_borrow_expression();
 
         let borrow : Borrow& = &cursor.allocator:allocate<Borrow>();
@@ -1066,9 +1083,9 @@ function parse_for : (cursor : Cursor&) -> For = {
     return {variable_name, expression, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
-function parse_const_declaration : (cursor : Cursor&) -> VariableDeclaration = {
+function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
-    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("const"));
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
@@ -1077,7 +1094,7 @@ function parse_const_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let type : Type = cursor:parse_type();
 
     if !cursor:try_skip_next_and_surrounding_white_space("=") {
-        syntax_error(&cursor, sv("a constant cannot be declared uninitialized"));
+        syntax_error(&cursor, sv("a value cannot be declared uninitialized"));
     }
 
     let expression : Expression = cursor:parse_expression();
@@ -1086,9 +1103,9 @@ function parse_const_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     return {true, variable_name, type, make_optional(expression), meta(start_offset, cursor:skip_ws_return_offset())};
 }
 
-function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
+function parse_mut_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
-    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("mut"));
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
@@ -1153,9 +1170,9 @@ function parse_line : (cursor : Cursor&) -> Line = {
         pointer = cursor:parse_let_declaration();
         return {7, ref_to_addr(&pointer), pointer.meta};
     }
-    if cursor:is_next("const") {
+    if cursor:is_next("mut") {
         let pointer : VariableDeclaration& = &cursor.allocator:allocate<VariableDeclaration>();
-        pointer = cursor:parse_const_declaration();
+        pointer = cursor:parse_mut_declaration();
         return {7, ref_to_addr(&pointer), pointer.meta};
     }
 
