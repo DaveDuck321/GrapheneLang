@@ -620,7 +620,7 @@ function parse_array_type : (cursor : Cursor&, prefix : Type) -> Type = {
 
     let meta : Meta = {prefix.meta.start_offset, cursor.position};
     let array : ArrayType& = &cursor.allocator:allocate<ArrayType>();
-    array = {prefix, sizes, is_heap_array, !is_mutable, meta};
+    array = {prefix, sizes, is_heap_array, is_mutable, meta};
 
     let result_type : Type = {1, ref_to_addr(&array), meta};
     if cursor:is_next("[") {
@@ -647,7 +647,7 @@ function parse_type : (cursor : Cursor&) -> Type = {
     if cursor:try_skip_next("&") {
         let ref_type : RefType& = &cursor.allocator:allocate<RefType>();
         let meta : Meta = meta(prefix.meta.start_offset, cursor:skip_ws_return_offset());
-        ref_type = {prefix, true, meta};
+        ref_type = {prefix, false, meta};
         return {2, ref_to_addr(&ref_type), meta};
     }
 
@@ -655,7 +655,7 @@ function parse_type : (cursor : Cursor&) -> Type = {
         cursor:expect_next("&");
         let ref_type : RefType& = &cursor.allocator:allocate<RefType>();
         let meta : Meta = meta(prefix.meta.start_offset, cursor:skip_ws_return_offset());
-        ref_type = {prefix, false, meta};
+        ref_type = {prefix, true, meta};
         return {2, ref_to_addr(&ref_type), meta};
     }
 
@@ -954,11 +954,11 @@ function parse_maybe_unary_or_borrow_expression : (cursor : Cursor&) -> Expressi
     }
 
     if cursor:try_skip_next("&") {
-        let is_const : bool = !cursor:try_skip_next_and_surrounding_white_space("mut");
+        let is_mut : bool = cursor:try_skip_next_and_surrounding_white_space("mut");
         let rhs : Expression = cursor:parse_maybe_unary_or_borrow_expression();
 
         let borrow : Borrow& = &cursor.allocator:allocate<Borrow>();
-        borrow = {is_const, rhs, meta(start_offset, borrow.meta.end_offset)};
+        borrow = {is_mut, rhs, meta(start_offset, borrow.meta.end_offset)};
         return {11, ref_to_addr(&borrow), borrow.meta};
     }
 
@@ -1124,7 +1124,7 @@ function parse_mut_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     }
 
     cursor:expect_next(";");
-    return {false, variable_name, type, expression_opt, meta(start_offset, cursor:skip_ws_return_offset())};
+    return {true, variable_name, type, expression_opt, meta(start_offset, cursor:skip_ws_return_offset())};
 }
 
 function parse_return : (cursor : Cursor&) -> Return = {

@@ -722,7 +722,7 @@ def generate_variable_declaration(
             "variable", node.variable, var_type.format_for_output_to_user()
         )
 
-    var = cg.StackVariable(node.variable, var_type, node.is_const, rhs is not None)
+    var = cg.StackVariable(node.variable, var_type, not node.is_mut, rhs is not None)
     scope.add_variable(var)
 
     if rhs is None:

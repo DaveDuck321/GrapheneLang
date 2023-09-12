@@ -28,8 +28,8 @@ typedef CompileTimeConstant : {
 }
 
 typedef FunctionType : { /* TODO */ }
-typedef ArrayType : { base_type : Type, size : Vector<CompileTimeConstant>, is_heap_array : bool, is_const : bool, meta : Meta}
-typedef RefType : { type : Type, is_const : bool, meta : Meta }
+typedef ArrayType : { base_type : Type, size : Vector<CompileTimeConstant>, is_heap_array : bool, is_mut : bool, meta : Meta}
+typedef RefType : { type : Type, is_mut : bool, meta : Meta }
 typedef NamedType : { name : ProgramSlice, specialization : Vector<Specialization>, meta : Meta}
 typedef StructType : { members : Vector<TypedMember>, meta : Meta}
 typedef PackType : { type : Type, meta : Meta }
@@ -123,7 +123,7 @@ typedef Assignment : {
 }
 
 typedef VariableDeclaration : {
-    is_const : bool,
+    is_mut : bool,
     variable : ProgramSlice,
     type : Type,
     expression : Optional<Expression>,
@@ -170,7 +170,7 @@ typedef LogicalOperator : {
 }
 
 typedef Borrow : {
-    is_const : bool,
+    is_mut : bool,
     expression : Expression,
     meta : Meta,
 }
@@ -428,7 +428,7 @@ function write_json_value : (stream : JSON_Stream&, array : ArrayType&) -> void 
     let object : JSON_Object = stream:new_object();
     if array.is_heap_array {
         object:add_meta("HeapArrayType", array.meta);
-        object:add("is_const", array.is_const);
+        object:add("is_mut", array.is_mut);
     } else {
         object:add_meta("StackArrayType", array.meta);
     }
@@ -443,7 +443,7 @@ function write_json_value : (stream : JSON_Stream&, node : RefType&) -> void = {
     object
         :add_meta("ReferenceType", node.meta)
         :add("value_type", node.type)
-        :add("is_const", node.is_const)
+        :add("is_mut", node.is_mut)
         :end();
 }
 
@@ -687,7 +687,7 @@ function write_json_value : (stream : JSON_Stream&, node : VariableDeclaration&)
     let object : JSON_Object = stream:new_object();
     object
         :add_meta("VariableDeclaration", node.meta)
-        :add("is_const", node.is_const)
+        :add("is_mut", node.is_mut)
         :add("variable", node.variable)
         :add("type_", node.type)
         :add("expression", node.expression)
@@ -791,7 +791,7 @@ function write_json_value : (stream : JSON_Stream&, node : Borrow&) -> void = {
     let object : JSON_Object = stream:new_object();
     object
         :add_meta("Borrow", node.meta)
-        :add("is_const", node.is_const)
+        :add("is_mut", node.is_mut)
         :add("expression", node.expression)
         :end();
 }

@@ -66,7 +66,7 @@ class ArrayType(Type):
 
 @dataclass
 class HeapArrayType(ArrayType):
-    is_const: bool
+    is_mut: bool
 
 
 @dataclass
@@ -77,7 +77,7 @@ class StackArrayType(ArrayType):
 @dataclass
 class ReferenceType(Type):
     value_type: Type
-    is_const: bool
+    is_mut: bool
 
 
 @dataclass
@@ -213,7 +213,7 @@ class Assignment(LineOfCode):
 
 @dataclass
 class VariableDeclaration(LineOfCode):
-    is_const: bool
+    is_mut: bool
     variable: str
     type_: Type
     expression: Optional[Expression]
@@ -241,7 +241,7 @@ class LogicalOperatorUse(Expression):
 
 @dataclass
 class Borrow(Expression):
-    is_const: bool
+    is_mut: bool
     expression: Expression
 
 
