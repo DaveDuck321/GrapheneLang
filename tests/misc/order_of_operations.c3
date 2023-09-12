@@ -26,11 +26,11 @@ foreign puts : (str: u8[&]) -> int
 }
 
 function main : () -> int = {
-    const a: int = 1 + 2 * 3;
-    const b: int = 2 * 3 + 1;
-    const c: bool = 1 + 2 | 3 + 4;
-    const d: int = 1 * 2 ** 8 * 3;
-    const e: bool = 1 * 2 == 8 * 3;
+    let a: int = 1 + 2 * 3;
+    let b: int = 2 * 3 + 1;
+    let c: bool = 1 + 2 | 3 + 4;
+    let d: int = 1 * 2 ** 8 * 3;
+    let e: bool = 1 * 2 == 8 * 3;
     return 0;
 }
 

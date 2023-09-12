@@ -320,7 +320,7 @@ function [T] write_json_value : (stream : JSON_Stream&, opt : Optional<T>&) -> v
     if opt:has_value() {
         stream:write_json_value(&opt:data());
     } else {
-        let null : Null = {}; // TODO: const &
+        let null : Null = {}; // TODO: let &
         stream:write_json_value(&null);
     }
 }

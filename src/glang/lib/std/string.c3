@@ -39,7 +39,7 @@ typedef CString : { data : u8[&] }
 
 function length : (str: CString&) -> isize = {
     let len : isize = 0;
-    const null : u8[1]& = "\0"; // TODO: add char
+    let null : u8[1]& = "\0"; // TODO: add char
 
     while str.data[len] != null[0] {
         len = len + 1;

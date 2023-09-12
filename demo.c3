@@ -136,7 +136,7 @@ function[@Len, Ts...] printf: (format: u8[@Len]&, vals: Ts...) -> void = {
     let iov: iovec[32];
 
     let fixme: iovec[&] = &iov;
-    const len: int = printf_impl(&allocator, &format, 0, &fixme, 0, vals...);
+    let len: int = printf_impl(&allocator, &format, 0, &fixme, 0, vals...);
     sys_writev(1, &fixme, len);
 }
 

@@ -55,8 +55,8 @@ foreign puts : (str: u8[&]) -> int
 }
 
 function main : () -> int = {
-    const a: int = 0;
-    const r: bool = -a**5 * 2 >> 3 + 2 ^ 1 | 1 & 0 == 0;
+    let a: int = 0;
+    let r: bool = -a**5 * 2 >> 3 + 2 ^ 1 | 1 & 0 == 0;
     return 0;
 }
 

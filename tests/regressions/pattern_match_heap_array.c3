@@ -1,8 +1,8 @@
 @require_once "std/io.c3"
 
 function main : () -> int = {
-    const str: u8[&] = "abc";
-    puts(&const str);
+    let str: u8[&] = "abc";
+    puts(&str);
     return 0;
 }
 

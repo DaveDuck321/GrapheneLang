@@ -1087,6 +1087,9 @@ function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
 
+    // AHHH, the bootstrap is hard here, for now `let` and `mut` are the same thing
+    return cursor:parse_mut_declaration();
+
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
     cursor:expect_next_skipping_ws(":");
@@ -1100,12 +1103,12 @@ function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let expression : Expression = cursor:parse_expression();
 
     cursor:expect_next(";");
-    return {true, variable_name, type, make_optional(expression), meta(start_offset, cursor:skip_ws_return_offset())};
+    return {false, variable_name, type, make_optional(expression), meta(start_offset, cursor:skip_ws_return_offset())};
 }
 
 function parse_mut_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
-    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("mut"));
+    /* runtime_assert(*/ cursor:try_skip_next_and_surrounding_white_space("mut");
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 

@@ -10,18 +10,18 @@ foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i64) -> i64
 
 function sys_read : (fd: int, buffer: u8[&], count: isize) -> isize = {
-    const buffer_addr : iptr = __builtin_ptr_to_int(buffer);
+    let buffer_addr : iptr = __builtin_ptr_to_int(buffer);
     return _syscall_3(fd, buffer_addr, count, /* read */ 0);
 }
 
 function sys_write : (fd: int, buffer: u8[&], count: isize) -> isize = {
-    const buffer_addr : iptr = __builtin_ptr_to_int(buffer);
+    let buffer_addr : iptr = __builtin_ptr_to_int(buffer);
     return _syscall_3(fd, buffer_addr, count, /* write */ 1);
 }
 
 function sys_open : (filename: u8[&], flags: u32, mode: u32) -> int = {
-    const filename_addr : iptr = __builtin_ptr_to_int(filename);
-    const result : i64 =  _syscall_3(filename_addr, as_arithmetic(flags),
+    let filename_addr : iptr = __builtin_ptr_to_int(filename);
+    let result : i64 =  _syscall_3(filename_addr, as_arithmetic(flags),
                                      as_arithmetic(mode), /* open */ 2);
     return Narrow<int>(result);
 }
@@ -31,7 +31,7 @@ function sys_close : (fd : int) -> int = {
 }
 
 function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
-    const iov_addr : iptr = __builtin_ptr_to_int(iov);
+    let iov_addr : iptr = __builtin_ptr_to_int(iov);
     return _syscall_3(fd, iov_addr, iovcnt, /* writev */ 20);
 }
 
@@ -52,7 +52,7 @@ function sys_mmap : (
 }
 
 function sys_munmap : (addr: isize, length : isize) -> int = {
-    const result : i64 = _syscall_2(addr, length, /* munmap */ 11);
+    let result : i64 = _syscall_2(addr, length, /* munmap */ 11);
     return Narrow<int>(result);
 }
 

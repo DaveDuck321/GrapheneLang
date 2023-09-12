@@ -6,7 +6,7 @@ function sys_exit : (code : int) -> void = {
 }
 
 function sys_write : (fd: int, buffer: u8[&], count: isize) -> isize = {
-    const buffer_addr : iptr = __builtin_ptr_to_int(buffer);
+    let buffer_addr : iptr = __builtin_ptr_to_int(buffer);
 
     return _syscall_3(fd, buffer_addr, count, /* write */ 4);
 }

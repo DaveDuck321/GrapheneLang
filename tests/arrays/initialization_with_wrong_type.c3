@@ -1,5 +1,5 @@
 function main : () -> int = {
-    const array : int[4] = { 0, 0, 1, "hello!" };
+    let array : int[4] = { 0, 0, 1, "hello!" };
 
     return array[3];
 }

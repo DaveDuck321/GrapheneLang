@@ -4,7 +4,7 @@
 
 
 function main : () -> int = {
-    const input : StringView = sv("{\"name\":\"program\",\"children\":[{\"name\":\"require_once\",\"children\":[{\"name\":\"ESCAPED_STRING\",\"value\":\"\\\"std/format.c3\\\"\"}]}]}");
+    let input : StringView = sv("{\"name\":\"program\",\"children\":[{\"name\":\"require_once\",\"children\":[{\"name\":\"ESCAPED_STRING\",\"value\":\"\\\"std/format.c3\\\"\"}]}]}");
     let result : Optional<JSON_Node> = json_parse(input);
 
     // Should be accepted.

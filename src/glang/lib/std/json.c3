@@ -67,7 +67,7 @@ function is_json_whitespace : (token : u8) -> bool = {
 }
 
 function eat : (cursor : Cursor&, token : u8) -> bool = {
-    // TODO this should be const (can't use with has_value() right now).
+    // TODO this should be let (can't use with has_value() right now).
     let next_char : Optional<u8> = cursor:peak();
 
     if next_char:has_value() and next_char:data() == token {
@@ -205,7 +205,7 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
         return make_optional<JSON_Node>();
     }
 
-    const next_token : u8 = optional_next_token:data();
+    let next_token : u8 = optional_next_token:data();
 
     if next_token == char("\"") {
         return cursor:parse_string();
@@ -238,7 +238,7 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
 function parse_element : (cursor : Cursor&) -> Optional<JSON_Node> = {
     cursor:eat_whitespace();
 
-    const value_node : Optional<JSON_Node> = cursor:parse_value();
+    let value_node : Optional<JSON_Node> = cursor:parse_value();
 
     cursor:eat_whitespace();
 
@@ -273,7 +273,7 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
         let char_opt : Optional<u8> = cursor:next();
         runtime_assert(char_opt:has_value());
-        const char : u8 = char_opt:data();
+        let char : u8 = char_opt:data();
 
         // Reject strings with control characters.
         if is_control_character(char) {
@@ -323,7 +323,7 @@ function is_digit_helper : (token : Optional<u8>) -> bool = {
 }
 
 function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
-    const start_pos : isize = cursor:position();
+    let start_pos : isize = cursor:position();
     let is_valid : bool = false;
 
     // This is optional, so discard the return value.
@@ -342,7 +342,7 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
     // TODO parse fraction.
     // TODO parse exponent.
 
-    const end_pos : isize = cursor:position();
+    let end_pos : isize = cursor:position();
 
     if !is_valid {
         return make_optional<JSON_Node>();

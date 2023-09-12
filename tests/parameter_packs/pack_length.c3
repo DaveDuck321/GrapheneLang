@@ -12,8 +12,8 @@ function[T, Ys...] pack_len: (curr: T, next: Ys...) -> int = {
 }
 
 function main : () -> int = {
-    const s : S = {};
-    const t : T = {};
+    let s : S = {};
+    let t : T = {};
 
     return pack_len(1, 2, 3, s, t);
 }
