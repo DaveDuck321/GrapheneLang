@@ -242,6 +242,14 @@ class AssignmentToNonPointerError(GrapheneError):
         )
 
 
+class AssignmentToBorrowedReference(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot assign to borrowed reference type '{type_name}'. "
+            "Please do not manually borrow before an assignment."
+        )
+
+
 class ArrayDimensionError(GrapheneError):
     def __init__(self, array_type: str) -> None:
         super().__init__(
