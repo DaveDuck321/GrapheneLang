@@ -66,7 +66,7 @@ class ArrayType(Type):
 
 @dataclass
 class HeapArrayType(ArrayType):
-    is_const : bool
+    is_const: bool
 
 
 @dataclass
@@ -77,7 +77,7 @@ class StackArrayType(ArrayType):
 @dataclass
 class ReferenceType(Type):
     value_type: Type
-    is_const : bool
+    is_const: bool
 
 
 @dataclass
