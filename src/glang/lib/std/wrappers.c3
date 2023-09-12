@@ -60,6 +60,17 @@ function [T] has_value : (self : Optional<T&>&) -> bool = {
     return self._ptr != 0;
 }
 
+function [IO, T] write : (
+    io : IO&, optional : Optional<T>
+) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+    if optional:has_value() {
+        return io:write(optional:data());
+    }
+
+    return io:write("<empty>");
+}
+
+
 typedef [T] Span : {
     data : T[&],
     length : isize,
