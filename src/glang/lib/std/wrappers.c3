@@ -73,6 +73,7 @@ function [T] erase : (self : Optional<T&> mut&) -> void = {
 }
 
 function [T] data : (self : Optional<T&>&) -> T& = {
+    runtime_assert(self:has_value());
     return &addr_to_ref<T>(self._ptr);
 }
 
