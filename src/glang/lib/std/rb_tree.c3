@@ -17,6 +17,14 @@ function RIGHT : () -> bool = {
     return true;
 }
 
+function left_if : (condition : bool) -> bool = {
+    if condition {
+        return LEFT();
+    }
+
+    return RIGHT();
+}
+
 typedef [K, V] RB_Node : {
     key    : K,
     value  : V,
@@ -231,28 +239,18 @@ function [K, V] insert : (
             u.value = value;
             return;
         }
-        else {
-            // Keep track of the parent node.
-            p_opt:store(&u_ptr:data():data());
 
-            if key < u.key {
-                u_ptr = {&u.left};
-            }
-            else {
-                u_ptr = {&u.right};
-            }
-        }
+        // Keep track of the parent node.
+        p_opt:store(&u_ptr:data():data());
+
+        u_ptr = {&u:get_child(left_if(key < u.key))};
     }
 
     u_ptr:data():store(&self:new<RB_Node<K, V>>(key, value, p_opt));
 
     if p_opt:has_value() {
-        if key < p_opt:data().key {
-            p_opt:data().left = u_ptr:data();
-        }
-        else {
-            p_opt:data().right = u_ptr:data();
-        }
+        let p : RB_Node<K, V>& = &p_opt:data();
+        p:get_child(left_if(key < p.key)) = u_ptr:data();
     }
 
     self:fix_after_insert(&u_ptr:data():data());
@@ -268,12 +266,7 @@ function [K, V] search : (self : RB_Tree<K, V>&, key : K) -> Optional<V> = {
             return make_optional(u:data().value);
         }
 
-        if key < u_key {
-            u = u:data().left;
-        }
-        else {
-            u = u:data().right;
-        }
+        u = u:data():get_child(left_if(key < u_key));
     }
 
     return make_optional<V>();
