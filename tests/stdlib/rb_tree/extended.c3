@@ -2,7 +2,7 @@
 @require_once "std/iterators.c3"
 @require_once "std/wrappers.c3"
 
-function [K, V] is_valid_rb_tree_impl : (node : RB_Node<K, V>&) -> Optional<int> = {
+function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
     if node.colour == RED() {
         // Property 4: if a node is red, both of its children are black.
         if node.left:is_red() or node.right:is_red() {
@@ -45,7 +45,7 @@ function [K, V] is_valid_rb_tree_impl : (node : RB_Node<K, V>&) -> Optional<int>
     return make_optional<int>();
 }
 
-function [K, V] is_valid_rb_tree : (tree : RB_Tree<K, V>&) -> bool = {
+function [K] is_valid_rb_tree : (tree : RB_Tree<K>&) -> bool = {
     // Property 2: the root node is black.
     if tree.root:is_red() {
         return false;
@@ -60,10 +60,10 @@ function [K, V] is_valid_rb_tree : (tree : RB_Tree<K, V>&) -> bool = {
 }
 
 function main : () -> int = {
-    let tree : RB_Tree<int, int> = make<RB_Tree<int, int>>();
+    let tree : RB_Tree<int> = make<RB_Tree<int>>();
 
     for i in range(10000) {
-        tree:insert(i, i);
+        tree:insert(i);
         if !tree:is_valid_rb_tree() {
             return i;
         }

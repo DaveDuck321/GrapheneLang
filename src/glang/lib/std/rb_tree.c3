@@ -25,26 +25,25 @@ function left_if : (condition : bool) -> bool = {
     return RIGHT();
 }
 
-typedef [K, V] RB_Node : {
+typedef [K] RB_Node : {
     key    : K,
-    value  : V,
-    left   : Optional<RB_Node<K, V>&>,
-    right  : Optional<RB_Node<K, V>&>,
-    parent : Optional<RB_Node<K, V>&>,
+    left   : Optional<RB_Node<K>&>,
+    right  : Optional<RB_Node<K>&>,
+    parent : Optional<RB_Node<K>&>,
     colour : bool
 }
 
-typedef [K, V] RB_Tree : {
-    root : Optional<RB_Node<K, V>&>,
+typedef [K] RB_Tree : {
+    root : Optional<RB_Node<K>&>,
     allocator : Allocator,  // FIXME use global allocator.
 }
 
-@operator [K, V] == : (left : RB_Node<K, V>&, right : RB_Node<K, V>&) -> bool = {
+@operator [K] == : (left : RB_Node<K>&, right : RB_Node<K>&) -> bool = {
     return ref_to_addr(&left) == ref_to_addr(&right);
 }
 
-function [IO, K, V] write : (
-    io : IO&, node : RB_Node<K, V>
+function [IO, K] write : (
+    io : IO&, node : RB_Node<K>
 ) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
     // NOTE for debugging only.
     io:write(node.key);
@@ -54,8 +53,6 @@ function [IO, K, V] write : (
     else {
         io:write(sv(" (black)"));
     }
-    io:write(sv(": "));
-    io:write(node.value);
     io:write(sv("\nleft: {\n"));
     io:write(node.left);
     io:write(sv("\n}\nright: {\n"));
@@ -63,16 +60,15 @@ function [IO, K, V] write : (
     return io:write(sv("\n}\n"));
 }
 
-function [K, V] new<RB_Node<K, V>> : (
-    self : RB_Tree<K, V>&, key : K, value : V, parent : Optional<RB_Node<K, V>&>
-) -> RB_Node<K, V>& = {
-    let node : RB_Node<K, V>& = &self.allocator:allocate<RB_Node<K, V>>();
+function [K] new<RB_Node<K>> : (
+    self : RB_Tree<K>&, key : K, parent : Optional<RB_Node<K>&>
+) -> RB_Node<K>& = {
+    let node : RB_Node<K>& = &self.allocator:allocate<RB_Node<K>>();
 
     node = {
         .key = key,
-        .value = value,
-        .left = make_optional<RB_Node<K, V>&>(),
-        .right = make_optional<RB_Node<K, V>&>(),
+        .left = make_optional<RB_Node<K>&>(),
+        .right = make_optional<RB_Node<K>&>(),
         .parent = parent,
         .colour = RED(), // NOTE new nodes are red.
     };
@@ -80,16 +76,16 @@ function [K, V] new<RB_Node<K, V>> : (
     return &node;
 }
 
-function [K, V] make<RB_Tree<K, V>> : () -> RB_Tree<K, V> = {
+function [K] make<RB_Tree<K>> : () -> RB_Tree<K> = {
     return {
-        .root = make_optional<RB_Node<K, V>&>(),
+        .root = make_optional<RB_Node<K>&>(),
         .allocator = initialize_allocator(),
     };
 }
 
-function [K, V] get_child : (
-    node : RB_Node<K, V>&, side : bool
-) -> Optional<RB_Node<K, V>&>& = {
+function [K] get_child : (
+    node : RB_Node<K>&, side : bool
+) -> Optional<RB_Node<K>&>& = {
     if side == LEFT() {
         return &node.left;
     }
@@ -97,9 +93,9 @@ function [K, V] get_child : (
     return &node.right;
 }
 
-function [K, V] which_child_am_i : (node : RB_Node<K, V>&) -> bool = {
+function [K] which_child_am_i : (node : RB_Node<K>&) -> bool = {
     runtime_assert(node.parent:has_value());
-    let parent : RB_Node<K, V>& = &node.parent:data();
+    let parent : RB_Node<K>& = &node.parent:data();
 
     // NOTE we have to borrow explicitly to call operator == with references.
     if parent.left:has_value() and &parent.left:data() == &node {
@@ -110,29 +106,27 @@ function [K, V] which_child_am_i : (node : RB_Node<K, V>&) -> bool = {
     return RIGHT();
 }
 
-function [K, V] is_red : (node_opt : Optional<RB_Node<K, V>&>&) -> bool = {
+function [K] is_red : (node_opt : Optional<RB_Node<K>&>&) -> bool = {
     // Using property 3 of red-black trees: every leaf node (nil node) is black.
     return node_opt:has_value() and node_opt:data().colour == RED();
 }
 
-function [K, V] is_black : (node_opt : Optional<RB_Node<K, V>&>&) -> bool = {
+function [K] is_black : (node_opt : Optional<RB_Node<K>&>&) -> bool = {
     return !node_opt:is_red();
 }
 
-function [K, V] colour_black : (
-    node_opt : Optional<RB_Node<K, V>&>&
-) -> void = {
+function [K] colour_black : (node_opt : Optional<RB_Node<K>&>&) -> void = {
     // Using property 3 of red-black trees: every leaf node (nil node) is black.
     if node_opt:has_value() {
         node_opt:data().colour = BLACK();
     }
 }
 
-function [K, V] rotate : (
-    self : RB_Tree<K, V>&, u : RB_Node<K, V>&, side : bool
+function [K] rotate : (
+    self : RB_Tree<K>&, u : RB_Node<K>&, side : bool
 ) -> void = {
     // If we are rotating left, get the right child.
-    let v : RB_Node<K, V>& = &get_child(&u, !side):data();
+    let v : RB_Node<K>& = &u:get_child(!side):data();
 
     // Move child from v to u, and update the child's parent pointer.
     u:get_child(!side) = v:get_child(side);
@@ -155,15 +149,15 @@ function [K, V] rotate : (
     u.parent:store(&v);
 }
 
-function [K, V] fix_after_insert : (
-    self : RB_Tree<K, V>&, node : RB_Node<K, V>&
+function [K] fix_after_insert : (
+    self : RB_Tree<K>&, node : RB_Node<K>&
 ) -> void = {
     // We need to use a Ptr here so that we can update the value on every
     // iteration.
-    let u_ptr : Ptr<RB_Node<K, V>> = {&node};
+    let u_ptr : Ptr<RB_Node<K>> = {&node};
 
     while u_ptr:data().colour == RED() {
-        let u : RB_Node<K, V>& = &u_ptr:data();
+        let u : RB_Node<K>& = &u_ptr:data();
 
         // Case 4: u has no parent.
         if !u.parent:has_value() {
@@ -172,7 +166,7 @@ function [K, V] fix_after_insert : (
             return;
         }
 
-        let v : RB_Node<K, V>& = &u.parent:data();
+        let v : RB_Node<K>& = &u.parent:data();
 
         // Case 1: u has a black parent.
         if v.colour == BLACK() {
@@ -183,7 +177,7 @@ function [K, V] fix_after_insert : (
 
         // u has a red parent. Property 2 of red-black trees states that the
         // root node is black, therefore v also has a parent.
-        let w : RB_Node<K, V>& = &v.parent:data();
+        let w : RB_Node<K>& = &v.parent:data();
 
         // Case 2: u has a red parent and a red uncle.
         if w.left:is_red() and w.right:is_red() {
@@ -223,19 +217,19 @@ function [K, V] fix_after_insert : (
     }
 }
 
-function [K, V] insert : (
-    self : RB_Tree<K, V>&, key : K, value : V
-) -> void = {
-    let p_opt : Optional<RB_Node<K, V>&> = make_optional<RB_Node<K, V>&>();
-    let u_ptr : Ptr<Optional<RB_Node<K, V>&>> = {&self.root};
+function [K] insert : (self : RB_Tree<K>&, key : K) -> void = {
+    let p_opt : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
+    let u_ptr : Ptr<Optional<RB_Node<K>&>> = {&self.root};
 
     while u_ptr:data():has_value() {
-        let u : RB_Node<K, V>& = &u_ptr:data():data();
+        let u : RB_Node<K>& = &u_ptr:data():data();
 
         if key == u.key {
-            // Key already exists. We can just replace the value and return
-            // early, as the red-black tree is already valid.
-            u.value = value;
+            // Key already exists. Overwrite it with the new key (if the tree is
+            // used to implement a map, then the associated value could be
+            // different) and return early, as the red-black tree is already
+            // valid.
+            u.key = key;
             return;
         }
 
@@ -245,28 +239,28 @@ function [K, V] insert : (
         u_ptr = {&u:get_child(left_if(key < u.key))};
     }
 
-    u_ptr:data():store(&self:new<RB_Node<K, V>>(key, value, p_opt));
+    u_ptr:data():store(&self:new<RB_Node<K>>(key, p_opt));
 
     if p_opt:has_value() {
-        let p : RB_Node<K, V>& = &p_opt:data();
+        let p : RB_Node<K>& = &p_opt:data();
         p:get_child(left_if(key < p.key)) = u_ptr:data();
     }
 
     self:fix_after_insert(&u_ptr:data():data());
 }
 
-function [K, V] search : (self : RB_Tree<K, V>&, key : K) -> Optional<V> = {
-    let u : Optional<RB_Node<K, V>&> = self.root;
+function [K] search : (self : RB_Tree<K>&, key : K) -> Optional<K> = {
+    let u : Optional<RB_Node<K>&> = self.root;
 
     while u:has_value() {
         let u_key : K& = &u:data().key;
 
         if key == u_key {
-            return make_optional(u:data().value);
+            return make_optional(u_key);
         }
 
         u = u:data():get_child(left_if(key < u_key));
     }
 
-    return make_optional<V>();
+    return make_optional<K>();
 }

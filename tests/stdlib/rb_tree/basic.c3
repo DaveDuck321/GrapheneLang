@@ -3,12 +3,12 @@
 @require_once "std/string.c3"
 
 function main : () -> int = {
-    let tree : RB_Tree<int, StringView> = make<RB_Tree<int, StringView>>();
+    let tree : RB_Tree<int> = make<RB_Tree<int>>();
 
-    tree:insert(0, sv("V0"));
-    tree:insert(1, sv("V1"));
-    tree:insert(2, sv("V2"));
-    tree:insert(3, sv("V3"));
+    tree:insert(0);
+    tree:insert(1);
+    tree:insert(2);
+    tree:insert(3);
 
     print(tree:search(4));
     print(tree:search(3));
@@ -22,7 +22,7 @@ function main : () -> int = {
 /// @COMPILE
 /// @RUN; EXPECT OUT
 /// <empty>
-/// V3
-/// V2
-/// V1
-/// V0
+/// 3
+/// 2
+/// 1
+/// 0
