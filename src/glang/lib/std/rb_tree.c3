@@ -40,8 +40,7 @@ typedef [K, V] RB_Tree : {
 }
 
 @operator [K, V] == : (left : RB_Node<K, V>&, right : RB_Node<K, V>&) -> bool = {
-    // Assume both nodes belong to the same tree, to keep things simple.
-    return left.key == right.key;
+    return ref_to_addr(&left) == ref_to_addr(&right);
 }
 
 function [IO, K, V] write : (
