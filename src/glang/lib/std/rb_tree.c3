@@ -128,9 +128,9 @@ function [K, V] rotate : (
     let v : RB_Node<K, V>& = &get_child(&u, !side):data();
 
     // Move child from v to u, and update the child's parent pointer.
-    get_child(&u, !side) = get_child(&v, side);
-    if get_child(&u, !side):has_value() {
-        get_child(&u, !side):data().parent:store(&u);
+    u:get_child(!side) = v:get_child(side);
+    if u:get_child(!side):has_value() {
+        u:get_child(!side):data().parent:store(&u);
     }
 
     // Replace u with v.
