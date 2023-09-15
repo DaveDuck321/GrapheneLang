@@ -17,6 +17,10 @@ function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
     let black_count_r : int = 1;
 
     if node.left:has_value() {
+        if node.left:data().key >= node.key {
+            return make_optional<int>();
+        }
+
         let left_res : Optional<int> = node.left:data():is_valid_rb_tree_impl();
         if left_res:has_value() {
             black_count_l = left_res:data();
@@ -25,7 +29,12 @@ function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
             return make_optional<int>();
         }
     }
+
     if node.right:has_value() {
+        if node.right:data().key <= node.key {
+            return make_optional<int>();
+        }
+
         let right_res : Optional<int> = node.right:data():is_valid_rb_tree_impl();
         if right_res:has_value() {
             black_count_r = right_res:data();
