@@ -110,7 +110,6 @@ function [K] which_child_am_i : (
 }
 
 function [K] which_child_am_i : (node : RB_Node<K>&) -> bool = {
-    runtime_assert(node.parent:has_value());
     return which_child_am_i(make_optional(&node), &node.parent:data());
 }
 
@@ -145,7 +144,7 @@ function [K] rotate : (
     // Replace u with v.
     v.parent = u.parent;
     if v.parent:has_value() {
-        const u_side : bool = which_child_am_i(&u);
+        const u_side : bool = u:which_child_am_i();
         u.parent:data():get_child(u_side):store(&v);
     }
     else {
@@ -199,8 +198,8 @@ function [K] fix_after_insert : (
         }
         else {
             // Case 3: u has a red parent and a black uncle.
-            const u_side : bool = which_child_am_i(&u);
-            const uncle_side : bool = !which_child_am_i(&v);
+            const u_side : bool = u:which_child_am_i();
+            const uncle_side : bool = !v:which_child_am_i();
 
             if u_side != uncle_side {
                 // Case 3a: u is away from its uncle.
