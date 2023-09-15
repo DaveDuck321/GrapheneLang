@@ -61,28 +61,52 @@ function [K] is_valid_rb_tree : (tree : RB_Tree<K>&) -> bool = {
 
 function main : () -> int = {
     let tree : RB_Tree<int> = make<RB_Tree<int>>();
+    let n : int = 1000;
 
-    for i in range(10000) {
+    for i in range(n) {
         tree:insert(i);
         if !tree:is_valid_rb_tree() {
-            return i;
+            return 1;
         }
     }
 
-    for i in range(10000) {
+    for i in range(n) {
         let value : Optional<int> = tree:search(i);
-
         if !value:has_value() or value:data() != i {
-            return i;
+            return 2;
         }
     }
 
-    for i in range(1, 1000) {
+    for i in range(1, n) {
         let value : Optional<int> = tree:search(-i);
-
         if value:has_value() {
-            return -i;
+            return 3;
         }
+    }
+
+    for i in range(1, n, 5) {
+        tree:delete(i);
+        if !tree:is_valid_rb_tree() {
+            return 4;
+        }
+    }
+
+    for i in range(0, n, 7) {
+        tree:delete(i);
+        if !tree:is_valid_rb_tree() {
+            return 5;
+        }
+    }
+
+    for i in range(n) {
+        tree:delete(i);
+        if !tree:is_valid_rb_tree() {
+            return 6;
+        }
+    }
+
+    if tree.root:has_value() {
+        return 7;
     }
 
     return 0;

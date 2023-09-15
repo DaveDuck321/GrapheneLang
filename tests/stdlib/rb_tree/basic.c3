@@ -16,6 +16,17 @@ function main : () -> int = {
     print(tree:search(1));
     print(tree:search(0));
 
+    tree:delete(0);
+    tree:delete(1);
+    tree:delete(2);
+    tree:delete(3);
+
+    print(tree:search(4));
+    print(tree:search(3));
+    print(tree:search(2));
+    print(tree:search(1));
+    print(tree:search(0));
+
     return 0;
 }
 
@@ -26,3 +37,8 @@ function main : () -> int = {
 /// 2
 /// 1
 /// 0
+/// <empty>
+/// <empty>
+/// <empty>
+/// <empty>
+/// <empty>
