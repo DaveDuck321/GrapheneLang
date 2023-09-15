@@ -2,56 +2,59 @@
 @require_once "std/iterators.c3"
 @require_once "std/wrappers.c3"
 
-function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
-    if node.colour == RED() {
-        // Property 4: if a node is red, both of its children are black.
-        if node.left:is_red() or node.right:is_red() {
+function [K] child_is_valid_rb_tree: (
+    node : RB_Node<K>&, side : bool
+) -> Optional<int> = {
+    let child_opt : Optional<RB_Node<K>&> = node:get_child(side);
+
+    if !child_opt:has_value() {
+        return make_optional(1);
+    }
+
+    let child : RB_Node<K>& = &child_opt:data();
+
+    if side == LEFT() {
+        if child.key >= node.key {
             return make_optional<int>();
         }
+    }
+    else {
+        if child.key <= node.key {
+            return make_optional<int>();
+        }
+    }
+
+    return child:is_valid_rb_tree_impl();
+}
+
+function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
+    // Property 4: if a node is red, both of its children are black.
+    if node.colour == RED() and (node.left:is_red() or node.right:is_red()) {
+        return make_optional<int>();
     }
 
     // Property 3: every leaf node (nil node) is black.
     // Property 5: starting from any node, all simple paths down to leaf nodes
     // hold the same number of black nodes.
-    let black_count_l : int = 1;
-    let black_count_r : int = 1;
-
-    if node.left:has_value() {
-        if node.left:data().key >= node.key {
-            return make_optional<int>();
-        }
-
-        let left_res : Optional<int> = node.left:data():is_valid_rb_tree_impl();
-        if left_res:has_value() {
-            black_count_l = left_res:data();
-        }
-        else {
-            return make_optional<int>();
-        }
+    let black_count_l : Optional<int> = node:child_is_valid_rb_tree(LEFT());
+    if !black_count_l:has_value() {
+        return make_optional<int>();
     }
 
-    if node.right:has_value() {
-        if node.right:data().key <= node.key {
-            return make_optional<int>();
-        }
-
-        let right_res : Optional<int> = node.right:data():is_valid_rb_tree_impl();
-        if right_res:has_value() {
-            black_count_r = right_res:data();
-        }
-        else {
-            return make_optional<int>();
-        }
+    let black_count_r : Optional<int> = node:child_is_valid_rb_tree(RIGHT());
+    if !black_count_r:has_value() {
+        return make_optional<int>();
     }
 
-    if black_count_l == black_count_r {
-        if node.colour == BLACK() {
-            black_count_l += 1;
-        }
-        return make_optional(black_count_l);
+    if black_count_l:data() != black_count_r:data() {
+        return make_optional<int>();
     }
 
-    return make_optional<int>();
+    if node.colour == BLACK() {
+        return make_optional(black_count_l:data() + 1);
+    }
+
+    return black_count_l;
 }
 
 function [K] is_valid_rb_tree : (tree : RB_Tree<K>&) -> bool = {
