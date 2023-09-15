@@ -295,14 +295,30 @@ function [K] shift_nodes : (
     }
 }
 
-function [K] minimum : (node : RB_Node<K>&) -> RB_Node<K>& = {
+function [K] minmax : (node : RB_Node<K>&, direction : bool) -> RB_Node<K>& = {
     let u : Ptr<RB_Node<K>> = {&node};
 
-    while u:data().left:has_value() {
-        u = {&u:data().left:data()};
+    // TODO some sort of lambda/local function would really help here.
+    while u:data():get_child(direction):has_value() {
+        u = {&u:data():get_child(direction):data()};
     }
 
     return &u:data();
+}
+
+function [K] minmax : (tree : RB_Tree<K>&, direction : bool) -> Optional<K> = {
+    if tree.root:has_value() {
+        return make_optional(tree.root:data():minmax(direction).key);
+    }
+    return make_optional<K>();
+}
+
+function [K] minimum : (tree : RB_Tree<K>&) -> Optional<K> = {
+    return tree:minmax(LEFT());
+}
+
+function [K] maximum : (tree : RB_Tree<K>&) -> Optional<K> = {
+    return tree:minmax(RIGHT());
 }
 
 function [K] fix_after_delete_impl : (
@@ -407,7 +423,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
 
     if u.left:has_value() and u.right:has_value() {
         // u has two children.
-        let v : RB_Node<K>& = &u.right:data():minimum();
+        let v : RB_Node<K>& = &u.right:data():minmax(LEFT());
         must_fix = v.colour == BLACK();
         x = v.right;
 

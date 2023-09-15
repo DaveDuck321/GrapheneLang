@@ -1,6 +1,5 @@
-@require_once "std/format.c3"
 @require_once "std/rb_tree.c3"
-@require_once "std/string.c3"
+@require_once "std/format.c3"
 
 function main : () -> int = {
     let tree : RB_Tree<int> = make<RB_Tree<int>>();
