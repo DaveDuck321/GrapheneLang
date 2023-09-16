@@ -327,13 +327,3 @@ def format_generics(args: Iterable[GenericArgument], pack_name: Optional[str]) -
         return ""
 
     return f" [{str.join(', ', formatted_generics)}]"
-
-
-@dataclass
-class Parameter:
-    name: str
-    type: Type
-
-    def __eq__(self, _: Any) -> bool:
-        # No one was using this :).
-        assert False
