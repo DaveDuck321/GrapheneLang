@@ -14,11 +14,11 @@ typedef FilePosition : {
     offset : isize,
 }
 
-function generate_position_lookup_table : (program : StringView, allocator: Allocator&) -> PositionLookupTable = {
-    let new_lines : Vector<isize> = make_vector<isize>(&allocator);
+function generate_position_lookup_table : (program : StringView, allocator: Allocator mut&) -> PositionLookupTable = {
+    mut new_lines : Vector<isize> = make<Vector<isize>>(&mut allocator);
 
-    for current_offset in range(program.length) {
-        if program.data[current_offset] == "\n"[0] {
+    for current_offset in range(program:length()) {
+        if program.buffer.data[current_offset] == "\n"[0] {
             new_lines:push_back(current_offset);
         }
     }
@@ -26,14 +26,14 @@ function generate_position_lookup_table : (program : StringView, allocator: Allo
 }
 
 function lookup_zero_indexed_line_number : (table : PositionLookupTable&, offset : isize) -> isize = {
-    return table.offsets:data():bisect_left(offset);
+    return bisect_left(table.offsets:view(), offset);
 }
 
 function lookup_position : (table: PositionLookupTable&, offset : isize) -> FilePosition = {
     let line_number : isize = table:lookup_zero_indexed_line_number(offset);
 
     // TODO: I'm using this pattern a lot, it should be a single statement
-    let column_number : isize;
+    mut column_number : isize;
     if line_number == 0 {
         column_number = offset + 1;
     } else {

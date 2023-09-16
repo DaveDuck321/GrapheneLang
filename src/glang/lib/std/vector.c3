@@ -47,9 +47,9 @@ function [T] push_back : (self : Vector<T> mut&, data : T) -> void = {
     self.length += 1;
 }
 
-function [T] extend_back : (self : Vector<T> mut&, data: View<T>) -> void = {
+function [T, Iter] extend_back : (self : Vector<T> mut&, iter : Iter) -> void = {
     // TODO: create capacity in one go
-    for value in data:get_iter() {
+    for value in iter {
         self:push_back(value);
     }
 }
@@ -114,6 +114,15 @@ function [T] get_iter : (vec : Vector<T> mut&) -> ContiguousContainerIter<Vector
 }
 
 function [T] get_iter : (vec : Vector<T>&) -> ContiguousContainerIter<Vector<T>&, T mut&> = {
+    return { .container = &vec, .current_index = 0 };
+}
+
+// TODO: remove this... maybe use const value semantics?
+function [T] get_citer : (vec : Vector<T> mut&) -> ContiguousContainerIter<Vector<T>&, T&> = {
+    return (&vec):get_iter();
+}
+
+function [T] get_citer : (vec : Vector<T>&) -> ContiguousContainerIter<Vector<T>&, T&> = {
     return { .container = &vec, .current_index = 0 };
 }
 

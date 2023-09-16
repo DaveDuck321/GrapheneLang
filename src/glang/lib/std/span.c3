@@ -51,9 +51,23 @@ function [T] get_iter : (span : _SpanImpl<T>&)
     };
 }
 
+function [T] get_iter : (span : _SpanImpl<T> mut&)
+    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+{
+    return {
+        .container = &span,
+        .current_index = 0,
+    };
+}
+
 function [T] length : (span : _SpanImpl<T>&) -> isize = {
     return span.length;
 }
+
+function [T] length : (span : _SpanImpl<T> mut&) -> isize = {
+    return span.length;
+}
+
 
 function [T] get : (span : _SpanImpl<T>&, index : isize)
     -> _SpanImplMemberReference<T> =
