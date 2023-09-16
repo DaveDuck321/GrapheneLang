@@ -18,7 +18,7 @@ mkdir -p ./dist
 
 stage_1_dir="$(checkout bootstrap/1)"
 stage_2_dir="$(checkout bootstrap/2)"
-stage_4_dir="$(checkout 4a92ddc99d72f897c41f750ce4034b421a8a81cc)"  # TODO: change this after the commit is merged
+stage_4_dir="$(checkout bd20ccbc05ae7978632549af1d978e1a9bbd7367)"  # TODO: change this after the commit is merged
 
 # We can't have these inside the function, as the EXIT signal seems to be raised
 # when the functions returns... It also looks like a second call to trap

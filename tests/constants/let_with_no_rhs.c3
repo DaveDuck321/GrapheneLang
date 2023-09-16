@@ -7,4 +7,4 @@ function main : () -> int = {
 /// File '*.c3', line 2
 /// let val : int;
 /// ^
-// Error: invalid syntax, a non-mutable value cannot be declared uninitialized
+/// Error: invalid syntax, a non-mutable value cannot be declared uninitialized

@@ -1,8 +1,0 @@
-function main : () -> void = {
-    let a : int;
-}
-/// @COMPILE; EXPECT ERR
-/// File '*.c3', line 2
-/// let a : int;
-/// ^
-/// Error: invalid syntax, a constant cannot be declared uninitialized
