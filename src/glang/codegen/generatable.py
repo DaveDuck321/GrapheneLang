@@ -6,6 +6,7 @@ from .type_conversions import assert_is_implicitly_convertible, do_implicit_conv
 from .user_facing_errors import (
     AssignmentToBorrowedReference,
     AssignmentToNonPointerError,
+    CannotAssignToAConstant,
     FailedLookupError,
     OperandError,
     RedefinitionError,
@@ -14,9 +15,9 @@ from .user_facing_errors import (
 
 class StackVariable(Variable):
     def __init__(
-        self, name: str, var_type: Type, constant: bool, initialized: bool
+        self, name: str, var_type: Type, is_mutable: bool, initialized: bool
     ) -> None:
-        super().__init__(name, var_type, constant)
+        super().__init__(name, var_type, is_mutable)
 
         self.initialized = initialized
 
@@ -49,12 +50,6 @@ class StackVariable(Variable):
             )
 
     def assert_can_write_to(self) -> None:
-        # Can write to any non-constant variable.
-        if self.constant:
-            raise OperandError(
-                f"cannot modify constant variable '{self.user_facing_name}'"
-            )
-
         # TODO: this is kinda hacky, we aught to rename this function to
         # something like: `promise_will_write_to()``
         self.initialized = True
@@ -62,11 +57,11 @@ class StackVariable(Variable):
 
 class StaticVariable(Variable):
     def __init__(
-        self, name: str, var_type: Type, constant: bool, graphene_literal: str
+        self, name: str, var_type: Type, is_mutable: bool, graphene_literal: str
     ) -> None:
-        assert not var_type.is_reference
+        assert var_type.storage_kind == Type.Kind.VALUE
         self._graphene_literal = graphene_literal
-        super().__init__(name, var_type, constant)
+        super().__init__(name, var_type, is_mutable)
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -80,7 +75,7 @@ class StaticVariable(Variable):
         return f"{self.type.ir_type} {self.ir_ref_without_type_annotation}"
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        additional_prefix = "unnamed_addr constant" if self.constant else "global"
+        additional_prefix = "global" if self.is_mutable else "unnamed_addr constant"
 
         literal = self.type.definition.graphene_literal_to_ir_constant(
             self._graphene_literal
@@ -105,10 +100,7 @@ class StaticVariable(Variable):
         pass
 
     def assert_can_write_to(self) -> None:
-        if self.constant:
-            raise OperandError(
-                f"cannot modify constant variable '{self.user_facing_name}'"
-            )
+        pass
 
 
 class Scope(Generatable):
@@ -370,7 +362,7 @@ class ReturnStatement(Generatable):
         return f"ReturnStatement({self.returned_expr})"
 
 
-class VariableAssignment(Generatable):
+class VariableInitialize(Generatable):
     def __init__(self, variable: StackVariable, value: TypedExpression) -> None:
         super().__init__()
 
@@ -409,17 +401,24 @@ class Assignment(Generatable):
     def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
         super().__init__()
 
+        if dst.underlying_type.storage_kind != Type.Kind.VALUE:
+            raise AssignmentToBorrowedReference(
+                dst.underlying_type.format_for_output_to_user()
+            )
+
         dst.assert_can_write_to()
         src.assert_can_read_from()
 
-        if not dst.has_address:
+        storage_kind = dst.get_equivalent_pure_type().storage_kind
+
+        if storage_kind == Type.Kind.VALUE:
             raise AssignmentToNonPointerError(
                 dst.underlying_type.format_for_output_to_user()
             )
 
-        if dst.underlying_type.is_reference:
-            raise AssignmentToBorrowedReference(
-                dst.underlying_type.format_for_output_to_user()
+        if storage_kind == Type.Kind.CONST_REF:
+            raise CannotAssignToAConstant(
+                dst.get_equivalent_pure_type().format_for_output_to_user()
             )
 
         self._dst = dst

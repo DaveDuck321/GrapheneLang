@@ -9,7 +9,7 @@ from .user_facing_errors import OperandError, TypeCheckerError
 class SquashIntoUnderlyingType(TypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
         # Converts a TypedExpression into an underlying type with no indirection
-        super().__init__(ref.underlying_type, False)
+        super().__init__(ref.underlying_type, Type.Kind.VALUE)
 
         self.ref = ref
 
@@ -45,13 +45,13 @@ class PromoteInteger(TypedExpression):
         src_definition = src.underlying_type.definition
 
         assert not src.has_address
-        assert not dest_type.is_reference
+        assert dest_type.storage_kind == Type.Kind.VALUE
         assert isinstance(src_definition, IntegerDefinition)
         assert isinstance(dest_type.definition, IntegerDefinition)
         assert src_definition.is_signed == dest_type.definition.is_signed
         assert src_definition.bits < dest_type.definition.bits
 
-        super().__init__(dest_type, False)
+        super().__init__(dest_type, Type.Kind.VALUE)
 
         self.src = src
         self.is_signed = src_definition.is_signed
@@ -88,7 +88,7 @@ class PromoteInteger(TypedExpression):
 class Reinterpret(TypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
         # Bit cast between anything
-        super().__init__(dest_type, False)
+        super().__init__(dest_type, Type.Kind.VALUE)
 
         self._src = src
         self._no_conversion_needed = (
@@ -161,7 +161,7 @@ def implicit_conversion_impl(
     promotion_cost: int = 0
 
     # Always dereference implicit addresses
-    if src.is_indirect_pointer_to_type:
+    if src.underlying_indirection_kind != Type.Kind.VALUE:
         expr_list.append(SquashIntoUnderlyingType(src))
 
     # Initializer lists (+ anything else that depends on the TypedExpression)
@@ -169,21 +169,20 @@ def implicit_conversion_impl(
     promotion_cost += additional_cost
     expr_list.extend(exprs)
 
-    # The type-system reference should not be implicitly dereferenced
-    if last_type().is_reference != dest_type.is_reference:
+    # We never implicitly dereferenced
+    if last_type().storage_kind != dest_type.storage_kind:
         maybe_missing_borrow = False
-        if src.underlying_type == dest_type.convert_to_value_type():
+        if src.underlying_type == dest_type.convert_to_storage_type(Type.Kind.VALUE):
             maybe_missing_borrow = src.was_reference_type_at_any_point
 
         raise TypeCheckerError(
             context,
-            src.underlying_type.format_for_output_to_user(),
-            dest_type.format_for_output_to_user(),
+            src.underlying_type.format_for_output_to_user(True),
+            dest_type.format_for_output_to_user(True),
             maybe_missing_borrow,
         )
 
     # Integer promotion.
-    # TODO we might want to relax the is_signed == is_signed rule.
     last_def = last_type().definition
     dest_def = dest_type.definition
     if (
@@ -196,33 +195,35 @@ def implicit_conversion_impl(
         expr_list.append(PromoteInteger(last_expr(), dest_type))
 
     # Array reference equivalence
+    last_array_def = last_type().convert_to_value_type().definition
+    dest_array_def = dest_type.convert_to_value_type().definition
     if (
-        last_type().is_reference
-        and dest_type.is_reference
-        and isinstance(last_def, (HeapArrayDefinition, StackArrayDefinition))
-        and isinstance(dest_def, (HeapArrayDefinition, StackArrayDefinition))
-        and last_def.member == dest_def.member
+        last_type().storage_kind != Type.Kind.VALUE
+        and last_type().storage_kind == dest_type.storage_kind
+        and isinstance(last_array_def, (HeapArrayDefinition, StackArrayDefinition))
+        and isinstance(dest_array_def, (HeapArrayDefinition, StackArrayDefinition))
+        and last_array_def.member == dest_array_def.member
     ):
         if (
-            isinstance(last_def, HeapArrayDefinition)
-            and isinstance(dest_def, HeapArrayDefinition)
-            and last_def.known_dimensions == dest_def.known_dimensions
+            isinstance(last_array_def, HeapArrayDefinition)
+            and isinstance(dest_array_def, HeapArrayDefinition)
+            and last_array_def.known_dimensions == dest_array_def.known_dimensions
         ):
             expr_list.append(Reinterpret(last_expr(), dest_type))
 
         if (
-            isinstance(last_def, StackArrayDefinition)
-            and isinstance(dest_def, HeapArrayDefinition)
-            and last_def.dimensions[1:] == dest_def.known_dimensions
+            isinstance(last_array_def, StackArrayDefinition)
+            and isinstance(dest_array_def, HeapArrayDefinition)
+            and last_array_def.dimensions[1:] == dest_array_def.known_dimensions
         ):
             # TODO: promotion cost going from known size to smaller/ unknown size
             expr_list.append(Reinterpret(last_expr(), dest_type))
 
         if (
-            isinstance(last_def, StackArrayDefinition)
-            and isinstance(dest_def, StackArrayDefinition)
-            and last_def.dimensions[1:] == dest_def.dimensions[1:]
-            and last_def.dimensions[0] >= dest_def.dimensions[0]
+            isinstance(last_array_def, StackArrayDefinition)
+            and isinstance(dest_array_def, StackArrayDefinition)
+            and last_array_def.dimensions[1:] == dest_array_def.dimensions[1:]
+            and last_array_def.dimensions[0] >= dest_array_def.dimensions[0]
         ):
             # TODO: promotion cost going from known size to smaller/ unknown size
             expr_list.append(Reinterpret(last_expr(), dest_type))
@@ -260,7 +261,7 @@ def get_implicit_conversion_cost(
 ) -> Optional[int]:
     class Wrapper(TypedExpression):
         def __init__(self, expr_type: Type) -> None:
-            super().__init__(expr_type, False, False)
+            super().__init__(expr_type, Type.Kind.VALUE)
 
         @property
         def ir_ref_without_type_annotation(self) -> str:

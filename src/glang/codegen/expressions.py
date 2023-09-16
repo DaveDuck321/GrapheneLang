@@ -19,12 +19,13 @@ from .type_conversions import (
 )
 from .user_facing_errors import (
     ArrayIndexCount,
-    BorrowTypeError,
+    BorrowWithNoAddressError,
     CannotAssignToInitializerList,
     DoubleBorrowError,
     InvalidInitializerListConversion,
     InvalidInitializerListDeduction,
     InvalidInitializerListLength,
+    MutableBorrowOfNonMutable,
     OperandError,
     TypeCheckerError,
 )
@@ -32,7 +33,7 @@ from .user_facing_errors import (
 
 class ConstantExpression(TypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
-        super().__init__(cst_type, False)
+        super().__init__(cst_type, Type.Kind.VALUE)
 
         self.value = cst_type.definition.graphene_literal_to_ir_constant(value)
 
@@ -54,11 +55,24 @@ class ConstantExpression(TypedExpression):
 
 class VariableReference(TypedExpression):
     def __init__(self, variable: Variable) -> None:
+        # Calculate the constness
+        # 1) If the variable refers to a reference, the storage MUST be const,
+        #     the reference inherits its constness from the reference type
+        if variable.type.storage_kind != Type.Kind.VALUE:
+            assert not variable.is_mutable
+            indirection_kind = variable.type.storage_kind
+
+        # 2) Otherwise the variable refers to a value type, take its storage constness
+        else:
+            indirection_kind = (
+                Type.Kind.MUTABLE_REF if variable.is_mutable else Type.Kind.CONST_REF
+            )
+
         # A variable with a reference type needs borrowing before it becomes a true reference
         super().__init__(
             variable.type.convert_to_value_type(),
-            True,
-            variable.type.is_reference,
+            indirection_kind,
+            variable.type.storage_kind != Type.Kind.VALUE,
         )
 
         self.variable = variable
@@ -84,7 +98,7 @@ class VariableReference(TypedExpression):
         self._ir_ref = self.variable.ir_ref_without_type_annotation
 
         ir = []
-        if self.variable.type.is_reference:
+        if self.variable.type.storage_kind != Type.Kind.VALUE:
             self._ir_ref = f"%{self.dereference_double_indirection(reg_gen, ir)}"
 
         return ir
@@ -92,7 +106,7 @@ class VariableReference(TypedExpression):
 
 class FunctionParameter(TypedExpression):
     def __init__(self, expr_type: Type) -> None:
-        super().__init__(expr_type, False)
+        super().__init__(expr_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"FunctionParameter({self.underlying_type})"
@@ -118,12 +132,11 @@ class FunctionCallExpression(TypedExpression):
     def __init__(
         self, signature: FunctionSignature, args: list[TypedExpression]
     ) -> None:
-        if signature.return_type.is_reference:
-            # The user needs to borrow again if they want the actual reference
-            super().__init__(signature.return_type.convert_to_value_type(), True, True)
-        else:
-            # The function returns a value (not an address), so we can't later borrow it
-            super().__init__(signature.return_type, False)
+        super().__init__(
+            signature.return_type.convert_to_value_type(),
+            signature.return_type.storage_kind,
+            signature.return_type.storage_kind != Type.Kind.VALUE,
+        )
 
         for arg, arg_type in zip(args, signature.arguments, strict=True):
             arg.assert_can_read_from()
@@ -177,27 +190,40 @@ class FunctionCallExpression(TypedExpression):
 
 
 class BorrowExpression(TypedExpression):
-    def __init__(self, expr: TypedExpression, is_explicitly_constant: bool) -> None:
+    def __init__(self, expr: TypedExpression, is_explicitly_mutable: bool) -> None:
         self._expr = expr
 
-        if expr.underlying_type.is_reference:
+        if expr.underlying_type.storage_kind != Type.Kind.VALUE:
             raise DoubleBorrowError(expr.underlying_type.format_for_output_to_user())
 
-        if not expr.is_indirect_pointer_to_type:
-            raise BorrowTypeError(expr.underlying_type.format_for_output_to_user())
+        if expr.underlying_indirection_kind == Type.Kind.VALUE:
+            raise BorrowWithNoAddressError(
+                expr.underlying_type.format_for_output_to_user()
+            )
 
-        # TODO: test if the expression is constant, if it is fall back to a constant borrow
-        self._is_constant = is_explicitly_constant
+        if expr.underlying_indirection_kind == Type.Kind.CONST_REF:
+            # TODO: should a mutable borrow of a constant value give a constant borrow?
+            if is_explicitly_mutable:
+                # TODO: is this error message sufficient?
+                raise MutableBorrowOfNonMutable(
+                    expr.get_equivalent_pure_type().format_for_output_to_user()
+                )
+
+        self._is_mut = is_explicitly_mutable
+
+        storage_type = Type.Kind.MUTABLE_REF if self._is_mut else Type.Kind.CONST_REF
 
         # TODO: this is a bit more permissive that I'd like, but we (need)? to support
         #       indirect initialization by first assigning to a reference
-        if not self._is_constant:
+        if self._is_mut:
             expr.assert_can_write_to()
 
-        super().__init__(expr.underlying_type.convert_to_reference_type(), False)
+        super().__init__(
+            expr.underlying_type.convert_to_storage_type(storage_type), Type.Kind.VALUE
+        )
 
     def __repr__(self) -> str:
-        return f"BorrowExpression({repr(self._expr)})"
+        return f"BorrowExpression(is_mut={self._is_mut}, {repr(self._expr)})"
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -208,7 +234,7 @@ class BorrowExpression(TypedExpression):
 
     def assert_can_write_to(self) -> None:
         # TODO: can this assert be reached by a user?
-        assert not self._is_constant
+        assert self._is_mut
         self._expr.assert_can_write_to()
 
 
@@ -218,11 +244,11 @@ class StructMemberAccess(TypedExpression):
         self._lhs = lhs
 
         self._struct_type = lhs.underlying_type.convert_to_value_type()
-        underlying_definition = lhs.underlying_type.definition
+        underlying_definition = self._struct_type.definition
         if not isinstance(underlying_definition, StructDefinition):
             raise TypeCheckerError(
                 "struct member access",
-                lhs.underlying_type.format_for_output_to_user(),
+                self._struct_type.format_for_output_to_user(),
                 "{...}",
             )
 
@@ -230,12 +256,23 @@ class StructMemberAccess(TypedExpression):
             member_name
         )
 
-        # If the member is a reference we can always calculate an address
-        if self._member_type.is_reference:
-            super().__init__(self._member_type.convert_to_value_type(), True)
-        else:
-            # We only know an address if the struct itself has an address
-            super().__init__(self._member_type, lhs.has_address)
+        # We need to determine the constness of the accessed member expression
+        # 1) The struct doesn't not have an address
+        #    - We take the constness from the member's type
+        storage_kind = self._member_type.storage_kind
+
+        # 2) The struct has const storage
+        #    - If the member is a reference type we take its constness
+        #    - If the member is a value type, we assign constant storage
+        #    - TODO: I'm not sure this is the best approach... its hard tho
+
+        # 3) The struct has mutable storage
+        #    - If the member is a reference type we take its constness
+        #    - If the member is a value type, we assign mutable storage
+        if storage_kind == Type.Kind.VALUE:
+            storage_kind = lhs.get_equivalent_pure_type().storage_kind
+
+        super().__init__(self._member_type.convert_to_value_type(), storage_kind)
 
     def generate_ir_from_known_address(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
@@ -255,7 +292,7 @@ class StructMemberAccess(TypedExpression):
 
         # Prevent double indirection, dereference the element pointer to get the
         # underlying reference
-        if self._member_type.is_reference:
+        if self._member_type.storage_kind != Type.Kind.VALUE:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
@@ -344,7 +381,10 @@ class ArrayIndexAccess(TypedExpression):
             self._indices.append(index_expr)
             self._conversion_exprs.extend(conversions)
 
-        super().__init__(self._element_type.convert_to_value_type(), True)
+        pure_type = array_ptr.get_equivalent_pure_type()
+        super().__init__(
+            self._element_type.convert_to_value_type(), pure_type.storage_kind
+        )
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
@@ -379,7 +419,7 @@ class ArrayIndexAccess(TypedExpression):
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
-        if self._element_type.is_reference:
+        if self._element_type.storage_kind != Type.Kind.VALUE:
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
@@ -402,7 +442,7 @@ class ArrayIndexAccess(TypedExpression):
 
 class ArrayInitializer(TypedExpression):
     def __init__(self, array_type: Type, element_exprs: list[TypedExpression]) -> None:
-        assert not array_type.is_reference
+        assert array_type.storage_kind == Type.Kind.VALUE
         assert isinstance(array_type.definition, StackArrayDefinition)
         # TODO support for multidimensional arrays?
         assert len(array_type.definition.dimensions) == 1
@@ -427,7 +467,7 @@ class ArrayInitializer(TypedExpression):
             self._conversion_exprs.extend(extra_exprs)
             self.implicit_conversion_cost += conversion_cost
 
-        super().__init__(array_type, False, False)
+        super().__init__(array_type, Type.Kind.VALUE)
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
@@ -462,7 +502,7 @@ class ArrayInitializer(TypedExpression):
 
 class StructInitializer(TypedExpression):
     def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
-        assert not struct_type.is_reference
+        assert struct_type.storage_kind == Type.Kind.VALUE
         assert isinstance(struct_type.definition, StructDefinition)
         assert len(member_exprs) == len(struct_type.definition.members)
 
@@ -475,7 +515,9 @@ class StructInitializer(TypedExpression):
         for (_, target_type), member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
         ):
-            member, extra_exprs = do_implicit_conversion(member_expr, target_type)
+            member, extra_exprs = do_implicit_conversion(
+                member_expr, target_type, "struct initializer"
+            )
 
             conversion_cost = get_implicit_conversion_cost(member_expr, target_type)
             assert conversion_cost is not None
@@ -484,7 +526,7 @@ class StructInitializer(TypedExpression):
             self._conversion_exprs.extend(extra_exprs)
             self.implicit_conversion_cost += conversion_cost
 
-        super().__init__(struct_type, False, False)
+        super().__init__(struct_type, Type.Kind.VALUE)
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
@@ -556,7 +598,7 @@ class InitializerList(TypedExpression):
 
 class NamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression], names: list[str]) -> None:
-        super().__init__(None, False, False)
+        super().__init__(None, Type.Kind.VALUE)
 
         self._members = dict(zip(names, members, strict=True))
 
@@ -592,7 +634,7 @@ class NamedInitializerList(InitializerList):
 
 class UnnamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression]) -> None:
-        super().__init__(None, False, False)
+        super().__init__(None, Type.Kind.VALUE)
 
         self._members = members
 
@@ -649,7 +691,7 @@ class LogicalOperator(TypedExpression):
         rhs_generatables: list[Generatable],
         rhs_expression: TypedExpression,
     ) -> None:
-        super().__init__(BoolType(), False)
+        super().__init__(BoolType(), Type.Kind.VALUE)
 
         assert operator in ("and", "or")
 

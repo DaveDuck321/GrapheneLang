@@ -39,7 +39,7 @@ class UnaryIntegerExpression(BuiltinCallable):
         assert isinstance(definition, (IntegerDefinition, BoolDefinition))
 
         self._arg_type = self._arg.underlying_type.convert_to_value_type()
-        TypedExpression.__init__(self, self._arg_type, False)
+        TypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._arg})"
@@ -108,7 +108,7 @@ class BasicIntegerExpression(BuiltinCallable):
         assert isinstance(rhs_definition, (IntegerDefinition, BoolDefinition))
         assert lhs.underlying_type == rhs.underlying_type
 
-        TypedExpression.__init__(self, self.get_result_type(arguments), False)
+        TypedExpression.__init__(self, self.get_result_type(arguments), Type.Kind.VALUE)
 
         self._arg_type = lhs.underlying_type.convert_to_value_type()
         self._lhs = lhs
@@ -264,7 +264,7 @@ class AlignOfExpression(BuiltinCallable):
             SizeType(), str(self._argument_type.alignment)
         )
 
-        TypedExpression.__init__(self, self._result.underlying_type, False)
+        TypedExpression.__init__(self, self._result.underlying_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
@@ -296,7 +296,7 @@ class SizeOfExpression(BuiltinCallable):
 
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
-        TypedExpression.__init__(self, self._result.underlying_type, False)
+        TypedExpression.__init__(self, self._result.underlying_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"SizeOf({self._argument_type})"
@@ -335,7 +335,7 @@ class NarrowExpression(BuiltinCallable):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        TypedExpression.__init__(self, return_type, False)
+        TypedExpression.__init__(self, return_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"Narrow({self._argument} to {self.underlying_type})"
@@ -376,7 +376,7 @@ class PtrToIntExpression(BuiltinCallable):
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        TypedExpression.__init__(self, IPtrType(), False)
+        TypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -412,12 +412,14 @@ class IntToPtrExpression(BuiltinCallable):
 
         (self._ptr_type,) = specialization
         assert isinstance(self._ptr_type, Type)
-        assert self._ptr_type.is_reference
+        assert self._ptr_type.storage_kind != Type.Kind.VALUE
 
         (self._src_expr,) = arguments
         assert isinstance(self._src_expr.underlying_type, GenericIntType)
 
-        TypedExpression.__init__(self, self._ptr_type.convert_to_value_type(), True)
+        TypedExpression.__init__(
+            self, self._ptr_type.convert_to_value_type(), self._ptr_type.storage_kind
+        )
 
     def __repr__(self) -> str:
         return f"IntToPtr({self._src_expr} to {self.underlying_type})"
@@ -465,7 +467,10 @@ class BitcastExpression(BuiltinCallable):
         src_type = self._src_expr.underlying_type
 
         # We can bitcast from ptr->ptr or non-aggregate->non-aggregate
-        assert self._target_type.is_reference == src_type.is_reference
+        #  We can also bitcast away const
+        assert (self._target_type.storage_kind == Type.Kind.VALUE) == (
+            src_type.storage_kind == Type.Kind.VALUE
+        )
 
         # TODO: support floats, support references
         assert isinstance(self._target_type, GenericIntType)
@@ -476,7 +481,7 @@ class BitcastExpression(BuiltinCallable):
         TypedExpression.__init__(
             self,
             self._target_type.convert_to_value_type(),
-            self._target_type.is_reference,
+            self._target_type.storage_kind,
         )
 
     def __repr__(self) -> str:

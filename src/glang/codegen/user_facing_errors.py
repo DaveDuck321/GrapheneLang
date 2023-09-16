@@ -216,7 +216,7 @@ class ArrayIndexCount(GrapheneError):
         )
 
 
-class BorrowTypeError(GrapheneError):
+class BorrowWithNoAddressError(GrapheneError):
     def __init__(self, type_name: str) -> None:
         super().__init__(f"Error: cannot borrow type '{type_name}' (with no address)")
 
@@ -419,6 +419,36 @@ class InvalidMainReturnType(GrapheneError):
         super().__init__(
             f"Error: type '{actual_type}' is not a valid return type for"
             " function 'main'; expected 'int'"
+        )
+
+
+class CannotAssignToAConstant(GrapheneError):
+    def __init__(self, thing: str) -> None:
+        super().__init__(
+            "Error: left hand side of assignment operation has "
+            f"non-mutable type '{thing}'"
+        )
+
+
+class MutableBorrowOfNonMutable(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot perform mutable borrow on non-mutable type '{type_name}'"
+        )
+
+
+class MutableVariableContainsAReference(GrapheneError):
+    def __init__(self, var_name: str, type_name: str) -> None:
+        super().__init__(
+            f"Error: cannot store reference type '{type_name}' in mutable variable "
+            f"'{var_name}', consider using 'let {var_name} : {type_name} = ...'"
+        )
+
+
+class CannotUseHeapArrayInValueContext(GrapheneError):
+    def __init__(self, type_name: str) -> None:
+        super().__init__(
+            f"Error: heap array type '{type_name}' cannot be used as a value type."
         )
 
 
