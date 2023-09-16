@@ -25,6 +25,18 @@ typedef [Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
 
 typedef [T] Ref : T&
 typedef [T] Ref<T&> : T&
+typedef [T] Ref<T mut&> : T&
+
+typedef [T] MutRef : TypeIf<T mut&, Not<IsRef<T>>>
+typedef [T] MutRef<T mut&> : T mut&
+
+typedef [T] IsRef : Either<IsMutRef<T>, IsConstRef<T>>
+
+typedef [T] IsMutRef : FalseType
+typedef [T] IsMutRef<T mut&> : TrueType
+
+typedef [T] IsConstRef : FalseType
+typedef [T] IsConstRef<T&> : TrueType
 
 // Groupings for the builtin types
 typedef [T] IsIntegral : FalseType

@@ -11,54 +11,13 @@
 
 typedef UnbufferedFile : { fd : int }
 
-typedef RegisterIsStreamableTextIO<Override<BufferedFile>> : TrueType
-typedef BufferedFile : {
-    underlying_file : UnbufferedFile,
-    buffer : u8[1024],
-    buffer_pointer : isize,
+function write : (file : UnbufferedFile&, buffer : View<u8>) -> void = {
+    sys_write(file.fd, &buffer.data, buffer.length);
 }
 
-function get_stdout_io : () -> BufferedFile = {
-    let result : BufferedFile;
-    result.underlying_file = {1 /* stdout */};
-    result.buffer_pointer = 0;
-    return result;
-}
-
-function flush : (io : BufferedFile&) -> void = {
-    let data_to_write : StringView = {&io.buffer, io.buffer_pointer};
-    io.underlying_file:write(data_to_write);
-    io.buffer_pointer = 0;
-}
-
-function close : (io : BufferedFile&) -> void = {
-    io:flush();
-    io.underlying_file:close();
-}
-
-function request_buffer : (io : BufferedFile&, length : isize) -> Span<u8> = {
-    runtime_assert(length <= io.buffer:length());
-
-    if io.buffer_pointer + length < io.buffer:length() {
-        // TODO: slice function
-        let addr : iptr = ref_to_addr(&io.buffer[io.buffer_pointer]);
-        return {&addr_to_heap_array<u8>(addr), length};
-    }
-
-    // The remaining buffer is too small, flush to make more space
-    io:flush();
-    return {&io.buffer, length};
-}
-
-function consume_length : (io : BufferedFile&, length : isize) -> void = {
-    io.buffer_pointer += length;
-}
-
-function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
-    // BUG: try removing the '&' here... the error message is nonsense
-    let fd : int = sys_open(&file_path.data, mode, 0x00);
-    runtime_assert(fd > 0);
-    return {fd};
+function read : (file : UnbufferedFile&, buffer: Span<u8>) -> View<u8> = {
+    let bytes_read: isize = sys_read(file.fd, &mut buffer.data, buffer.length);
+    return {&buffer.data, bytes_read};
 }
 
 function close : (file : UnbufferedFile&) -> void = {
@@ -68,17 +27,62 @@ function close : (file : UnbufferedFile&) -> void = {
     }
 }
 
-function read : (file : UnbufferedFile&, buffer: Span<u8>) -> Span<u8> = {
-    let bytes_read: isize = sys_read(file.fd, &buffer.data, buffer.length);
-    return {&buffer.data, bytes_read};
+function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
+    // BUG: try removing the '&' here... the error message is nonsense
+    let fd : int = sys_open(&file_path.data, mode, 0x00);
+    runtime_assert(fd > 0);
+    return {fd};
 }
 
-function read : (file : BufferedFile&, buffer: Span<u8>) -> Span<u8> = {
+
+typedef RegisterIsStreamableTextIO<Override<BufferedFile>> : TrueType
+typedef BufferedFile : {
+    underlying_file : UnbufferedFile,
+    buffer : u8[1024],
+    buffer_pointer : isize,
+}
+
+function get_stdout_io : () -> BufferedFile = {
+    mut result : BufferedFile;
+    result.underlying_file = {1 /* stdout */};
+    result.buffer_pointer = 0;
+    return result;
+}
+
+function flush : (io : BufferedFile mut&) -> void = {
+    let data_to_write : View<u8> = {&io.buffer, io.buffer_pointer};
+    let string_to_write : StringView = make<StringView>(data_to_write);
+    // UFCS where `write` takes a `T&` and we have a `T mut&`
+    (&io.underlying_file):write(data_to_write);
+    io.buffer_pointer = 0;
+}
+
+function close : (io : BufferedFile mut&) -> void = {
+    io:flush();
+    (&io.underlying_file):close();
+}
+
+function request_buffer : (io : BufferedFile mut&, length : isize) -> Span<u8> = {
+    // TODO: this syntax for calling const length is kinda dumb
+    runtime_assert(length <= io.buffer:length());
+
+    if io.buffer_pointer + length < io.buffer:length() {
+        // TODO: slice function
+        let addr : iptr = ref_to_addr(&io.buffer[io.buffer_pointer]);
+        return {&mut addr_to_mut_heap_array<u8>(addr), length};
+    }
+
+    // The remaining buffer is too small, flush to make more space
+    io:flush();
+    return {&mut io.buffer, length};
+}
+
+function consume_length : (io : BufferedFile mut&, length : isize) -> void = {
+    io.buffer_pointer += length;
+}
+
+function read : (file : BufferedFile&, buffer: Span<u8>) -> View<u8> = {
     return file.underlying_file:read(buffer);
-}
-
-function write : (file : UnbufferedFile&, buffer : Span<u8>) -> void = {
-    sys_write(file.fd, &buffer.data, buffer.length);
 }
 
 function EOF : () -> int = {
@@ -91,7 +95,7 @@ function puts : (str : StringView) -> int = {
     // puts - put a string on standard output
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/puts.html
     let iov : iovec[2] = {
-        {&str.data, str.length},
+        {&str.buffer.data, str:length()},
         {"\n", 1}
     };
 
@@ -110,11 +114,9 @@ function puts : (str : StringView) -> int = {
 }
 
 function[@Len] puts : (str: u8[@Len]&) -> int = {
-    return puts(make_span(&str));
+    return puts(sv(&str));
 }
 
 function puts : (str: CString) -> int = {
-    // TODO: why is this intermediate variable needed?
-    let span : Span<u8> = {&str.data, str:length()};
-    return puts(span);
+    return puts(make<StringView>(str));
 }
