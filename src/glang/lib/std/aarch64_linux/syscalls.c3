@@ -10,7 +10,7 @@ foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i32) -> i64
 foreign _syscall_4 : (a: i64, b: i64, c: i64, d: i64, syscall_number: i32) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i32) -> i64
 
-function sys_read : (fd: int, buffer: u8[&], count: isize) -> isize = {
+function sys_read : (fd: int, buffer: u8[mut&], count: isize) -> isize = {
     let buffer_addr : iptr = __builtin_ptr_to_int(buffer);
     return _syscall_3(fd, buffer_addr, count, /* read */ 63);
 }
