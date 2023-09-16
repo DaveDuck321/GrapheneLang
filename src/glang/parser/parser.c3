@@ -106,7 +106,7 @@ function skip_ws_return_offset : (cursor : Cursor&) -> isize = {
     return start_offset;
 }
 
-function [IO] write_syntax_error_location : (io : IO&, cursor : Cursor&, position: isize) -> void = {
+function [IO] write_syntax_error_location : (io : IO mut&, cursor : Cursor&, position: isize) -> void = {
     let lookup_table : PositionLookupTable = generate_position_lookup_table(cursor.program, &cursor.allocator);
     let loc : FilePosition = lookup_table:lookup_position(position);
 
@@ -1087,9 +1087,6 @@ function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("let"));
 
-    // AHHH, the bootstrap is hard here, for now `let` and `mut` are the same thing
-    return cursor:parse_mut_declaration();
-
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 
     cursor:expect_next_skipping_ws(":");
@@ -1097,7 +1094,7 @@ function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let type : Type = cursor:parse_type();
 
     if !cursor:try_skip_next_and_surrounding_white_space("=") {
-        syntax_error(&cursor, sv("a value cannot be declared uninitialized"));
+        syntax_error(&cursor, sv("a non-mutable value cannot be declared uninitialized"));
     }
 
     let expression : Expression = cursor:parse_expression();
@@ -1108,7 +1105,7 @@ function parse_let_declaration : (cursor : Cursor&) -> VariableDeclaration = {
 
 function parse_mut_declaration : (cursor : Cursor&) -> VariableDeclaration = {
     let start_offset : isize = cursor.position;
-    /* runtime_assert(*/ cursor:try_skip_next_and_surrounding_white_space("mut");
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("mut"));
 
     let variable_name : ProgramSlice = cursor:get_next_ascii_only_identifier();
 

@@ -6,7 +6,7 @@ typedef[T] LinkedListNode : {
 }
 
 function main : () -> int = {
-    let a : LinkedListNode<int>;
+    mut a : LinkedListNode<int>;
     return 0;
 }
 

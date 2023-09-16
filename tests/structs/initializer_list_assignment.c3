@@ -1,7 +1,7 @@
 typedef MyStruct : {a: int, x: int}
 
 function main : () -> int = {
-    let struct : MyStruct;
+    mut struct : MyStruct;
     struct = {9, 10};
     struct = {.x = 11, .a = 12};
 

@@ -1,4 +1,3 @@
-@require_once "std/io.c3"
 @require_once "std/logical.c3"
 
 function truthy : () -> bool = { return true; }

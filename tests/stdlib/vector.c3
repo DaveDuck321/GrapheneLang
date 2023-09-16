@@ -1,11 +1,11 @@
 @require_once "std/arithmetic.c3"
 @require_once "std/vector.c3"
-
+@require_once "std/format.c3"
 
 function main : () -> int = {
-    let allocator : Allocator = initialize_allocator();
+    mut allocator : Allocator = initialize_allocator();
 
-    let vec : Vector<int> = make_vector<int>(&allocator);
+    mut vec : Vector<int> = make<Vector<int>>(&mut allocator);
     vec:push_back(0);
     vec:push_back(1);
     vec:push_back(2);
@@ -18,20 +18,20 @@ function main : () -> int = {
     }
 
     if vec:get(1) != 1 {
-        return 1;
+        return 2;
     }
 
-    vec:set(0, 10);
+    vec:get(0) = 10;
     if vec:get(0) != 10 {
-        return 1;
+        return 3;
     }
 
-    let sum : int = 0;
+    mut sum : int = 0;
     for i in vec:get_iter() {
         sum += i;
     }
     if sum != 20 {
-        return 1;
+        return sum;
     }
 
     vec:deallocate(); // TODO: RAII

@@ -9,7 +9,7 @@ typedef MyStruct : {
 
 
 function main : () -> int = {
-    let allocator : Allocator = initialize_allocator();
+    mut allocator : Allocator = initialize_allocator();
     let span : Span<int> = allocator:allocate_span<int>(30);
     span.data[29] = 42;
 

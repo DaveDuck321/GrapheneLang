@@ -1,7 +1,7 @@
 @require_once "std/arithmetic.c3"
 
 function main : () -> int = {
-    let i: int = 0;
+    mut i: int = 0;
     while i < 1000000 {
         // This causes a stack overflow if new space for `a` is allocated on
         //   every loop iteration

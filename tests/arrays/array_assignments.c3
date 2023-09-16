@@ -5,10 +5,10 @@ typedef MyArray : int[3]
 }
 
 function main : () -> int = {
-    let array : MyArray;
+    mut array : MyArray;
 
-    let b : int& = &array[0];
-    let c : int& = &array[1];
+    let b : int mut& = &mut array[0];
+    let c : int mut& = &mut array[1];
 
     b = 6;  // Sets `array[0]` to 6
     c = 7;  // Sets `array[1]` to 7

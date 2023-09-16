@@ -7,18 +7,18 @@ function fn : (a: int) -> int = {
     return 0;
 }
 
-function fn : (a: int&) -> int = {
+function fn : (a: int mut&) -> int = {
     puts("ref");
     return 0;
 }
 
 function main: () -> int = {
-    let x: int = 0;
-    let my_struct : MyStruct; // TODO: initialize (and warn when uninitialized)
+    mut x: int = 0;
+    mut my_struct : MyStruct;
     fn(x);
-    fn(&x);
+    fn(&mut x);
     fn(0);
-    fn(&my_struct.a);
+    fn(&mut my_struct.a);
     fn(my_struct.a);
     return 0;
 }
