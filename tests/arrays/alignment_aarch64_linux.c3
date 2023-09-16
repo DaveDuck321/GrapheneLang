@@ -1,9 +1,9 @@
 function main : () -> int = {
     // Arrays use the alignment of their elements.
-    let small : int[3];
+    mut small : int[3];
 
     // Irrespective of the total array size.
-    let large : int[4];
+    mut large : int[4];
 
     return 0;
 }
