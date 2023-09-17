@@ -257,19 +257,13 @@ class StructMemberAccess(TypedExpression):
         )
 
         # We need to determine the constness of the accessed member expression
-        # 1) The struct doesn't not have an address
-        #    - We take the constness from the member's type
-        storage_kind = self._member_type.storage_kind
-
-        # 2) The struct has const storage
-        #    - If the member is a reference type we take its constness
-        #    - If the member is a value type, we assign constant storage
-        #    - TODO: I'm not sure this is the best approach... its hard tho
-
-        # 3) The struct has mutable storage
-        #    - If the member is a reference type we take its constness
-        #    - If the member is a value type, we assign mutable storage
-        if storage_kind == Type.Kind.VALUE:
+        # 1) If the member is a reference
+        #      - We take its storage type (even if the parent struct is constant)
+        # 2) If the member is a value type
+        #      - We take the storage type of the parent struct
+        if self._member_type.storage_kind.is_reference():
+            storage_kind = self._member_type.storage_kind
+        else:
             storage_kind = lhs.get_equivalent_pure_type().storage_kind
 
         super().__init__(self._member_type.convert_to_value_type(), storage_kind)
