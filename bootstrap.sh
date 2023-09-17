@@ -16,9 +16,10 @@ function checkout() {
 
 mkdir -p ./dist
 
+dest_dir="$(pwd)"
 stage_1_dir="$(checkout bootstrap/1)"
 stage_2_dir="$(checkout bootstrap/2)"
-stage_4_dir="$(checkout bd20ccbc05ae7978632549af1d978e1a9bbd7367)"  # TODO: change this after the commit is merged
+stage_4_dir="$(checkout bootstrap/4)"
 
 # We can't have these inside the function, as the EXIT signal seems to be raised
 # when the functions returns... It also looks like a second call to trap
@@ -40,8 +41,7 @@ mkdir -p "$stage_4_dir/dist"
 # Stage 4; we introduce `mut` syntax, first compile a commit where the parser
 # (but not the codegen) supports it. note: from this point forward we run as a
 # python module
-/usr/bin/env -C "$stage_4_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser
-cp "$stage_4_dir/dist/parser" ./dist/parser
+/usr/bin/env -C "$stage_4_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "$dest_dir/dist/parser"
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
