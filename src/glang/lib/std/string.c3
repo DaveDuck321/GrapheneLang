@@ -45,9 +45,7 @@ function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>&, u8&
 // CString
 function length : (str: CString&) -> isize = {
     mut len : isize = 0;
-    let null : u8[1]& = "\0"; // TODO: implement char
-
-    while str.data[len] != char(&null) {
+    while str.data[len] != char("\0") {
         len = len + 1;
     }
     return len;

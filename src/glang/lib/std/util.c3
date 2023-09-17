@@ -8,11 +8,7 @@ function [T] alignof : () -> isize = {
     return __builtin_alignof<T>();
 }
 
-function [T] have_same_addr : (a : T&, b : T&) -> bool = {
-    return ref_to_addr(&a) == ref_to_addr(&b);
-}
-
-function [T] have_same_addr : (a : T[&], b : T[&]) -> bool = {
+function [T] have_same_addr : (a : T, b : T) -> TypeIf<bool, IsRef<T>> = {
     return ref_to_addr(&a) == ref_to_addr(&b);
 }
 

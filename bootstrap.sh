@@ -40,9 +40,7 @@ mkdir -p "$stage_4_dir/dist"
 # Stage 4; we introduce `mut` syntax, first compile a commit where the parser
 # (but not the codegen) supports it. note: from this point forward we run as a
 # python module
-pushd "$stage_4_dir"
-/usr/bin/env python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "./dist/parser"
-popd
+/usr/bin/env -C "$stage_4_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser
 cp "$stage_4_dir/dist/parser" ./dist/parser
 
 # Final Stage; build the native parser from the working tree. Note that we need

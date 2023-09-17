@@ -34,9 +34,11 @@ typedef [T] IsRef : Either<IsMutRef<T>, IsConstRef<T>>
 
 typedef [T] IsMutRef : FalseType
 typedef [T] IsMutRef<T mut&> : TrueType
+typedef [T] IsMutRef<T[mut &]> : TrueType
 
 typedef [T] IsConstRef : FalseType
 typedef [T] IsConstRef<T&> : TrueType
+typedef [T] IsConstRef<T[&]> : TrueType
 
 // Groupings for the builtin types
 typedef [T] IsIntegral : FalseType
