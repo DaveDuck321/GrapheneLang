@@ -16,9 +16,9 @@ typedef[T] LinkedListNode3 : {
 }
 
 function main : () -> int = {
-    let a : LinkedListNode1<int>;
-    let b : LinkedListNode2<int>;
-    let c : LinkedListNode3<int>;
+    mut a : LinkedListNode1<int>;
+    mut b : LinkedListNode2<int>;
+    mut c : LinkedListNode3<int>;
     return 0;
 }
 

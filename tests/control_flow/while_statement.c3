@@ -5,8 +5,8 @@ function is_less_than_20 : (arg: int) -> bool = {
 }
 
 function main : () -> int = {
-    let i : int = 0;
-    let sum : int = 0;
+    mut i : int = 0;
+    mut sum : int = 0;
 
     while is_less_than_20(i) {
         i = i + 1;

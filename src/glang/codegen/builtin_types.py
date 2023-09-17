@@ -1,4 +1,5 @@
 import uuid
+from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
@@ -9,6 +10,7 @@ from .interfaces import SpecializationItem, Type, TypeDefinition, format_special
 from .user_facing_errors import (
     ArrayDimensionError,
     FailedLookupError,
+    GrapheneError,
     InvalidIntSize,
     VoidArrayDeclaration,
     VoidStructDeclaration,
@@ -16,22 +18,18 @@ from .user_facing_errors import (
 
 
 class PlaceholderDefinition(TypeDefinition):
-    def replace_with(self, other: TypeDefinition) -> None:
-        # This abomination exists so that we can substitute a placeholder
-        #  definition using `NamedType.update_with_finalized_alias()` even after
-        #  calling `Type.convert_to_reference()` (which makes a shallow copy).
-        #  Since this method operates in place, it updates the definition in
-        #  both type copies simultaneously.
-
-        # TODO: rework references enough that this isn't necessary
-        self.__class__ = type(other)
-        self.__dict__ = other.__dict__
-
     def are_equivalent(self, other: TypeDefinition) -> bool:
         assert other is self
         return True
 
     def format_for_output_to_user(self) -> str:
+        assert False
+
+    def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
+        if kind.is_reference():
+            return AnonymousType(
+                ReferenceDefinition(parent, kind == Type.Kind.MUTABLE_REF)
+            )
         assert False
 
     @property
@@ -64,14 +62,14 @@ class NamedType(Type):
         self,
         name: str,
         specialization: list[SpecializationItem],
+        definition: TypeDefinition,
+        alias: Optional[Type],
     ) -> None:
-        # NameType is initially created WITHOUT a definition
-        # The definition is substituted later to allow recursive types
-        super().__init__(PlaceholderDefinition(), False)
+        super().__init__(definition)
 
         self.name = name
         self.specialization = specialization
-        self.alias: Optional[Type] = None
+        self.alias: Optional[Type] = alias
 
     def should_defer_to_alias_for_ir(self) -> bool:
         return isinstance(self.alias, NamedType)
@@ -81,26 +79,30 @@ class NamedType(Type):
         assert isinstance(self.definition, PlaceholderDefinition)
 
         self.alias = alias
-        self.definition.replace_with(alias.definition)
-        self.is_reference = alias.is_reference
+        self.definition = alias.definition
 
     def get_name(self) -> str:
         specialization = format_specialization(self.specialization)
         return f"{self.name}{specialization}"
 
     def format_for_output_to_user(self, full=False) -> str:
-        if self.definition.is_always_a_reference:
-            reference_suffix = "" if self.is_reference else "unborrowed"
-        else:
-            reference_suffix = "&" if self.is_reference else ""
-
+        name_fmt = f"{self.name}{format_specialization(self.specialization)}"
         if not full:
-            return self.get_name() + reference_suffix
+            return name_fmt
 
-        return (
-            f"typedef {self.get_name()} : "
-            f"{self.definition.format_for_output_to_user()}{reference_suffix}"
-        )
+        return f"typedef {name_fmt} : {self.definition.format_for_output_to_user()}"
+
+    def convert_to_storage_type(self, kind: Type.Kind) -> Type:
+        if kind == self.storage_kind:
+            return self
+
+        if kind.is_reference():
+            # Convert us (a value type) into a reference type
+            return self.definition.copy_with_storage_kind(self, kind)
+
+        # Convert us (a reference type) into a value type
+        assert self.alias is not None
+        return self.alias.convert_to_storage_type(kind)
 
     @property
     def ir_mangle(self) -> str:
@@ -108,8 +110,7 @@ class NamedType(Type):
             assert self.alias is not None
             return self.alias.ir_mangle
 
-        prefix = "__R_" if self.is_reference else "__T_"
-
+        prefix = "__T_"
         if len(self.specialization) == 0:
             return prefix + self.name
 
@@ -128,9 +129,6 @@ class NamedType(Type):
 
     @property
     def ir_type(self) -> str:
-        if self.is_reference:
-            return "ptr"
-
         if self.should_defer_to_alias_for_ir():
             assert self.alias is not None
             return self.alias.ir_type
@@ -139,30 +137,64 @@ class NamedType(Type):
 
 
 class AnonymousType(Type):
-    def __init__(self, definition: TypeDefinition) -> None:
-        super().__init__(definition, definition.is_always_a_reference)
-
     def format_for_output_to_user(self, full=False) -> str:
-        if self.definition.is_always_a_reference:
-            reference_suffix = "" if self.is_reference else " (unborrowed)"
-        else:
-            reference_suffix = "&" if self.is_reference else ""
+        return self.definition.format_for_output_to_user()
 
-        return self.definition.format_for_output_to_user() + reference_suffix
+    def convert_to_storage_type(self, kind: Type.Kind) -> Type:
+        if kind == self.storage_kind:
+            return self
+
+        return self.definition.copy_with_storage_kind(self, kind)
 
     @property
     def ir_mangle(self) -> str:
-        prefix = "__R_" if self.is_reference else "__ANON_"
-        return prefix + self.definition.ir_mangle
+        return self.definition.ir_mangle
 
     @property
     def ir_type(self) -> str:
-        if self.is_reference:
-            return "ptr"
         return self.definition.ir_type
 
 
-class PrimitiveDefinition(TypeDefinition):
+class ValueTypeDefinition(TypeDefinition):
+    def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
+        assert self.storage_kind != kind
+        assert kind.is_reference()
+        return AnonymousType(ReferenceDefinition(parent, kind == Type.Kind.MUTABLE_REF))
+
+
+class PtrTypeDefinition(TypeDefinition):
+    def __init__(self, is_mut: bool) -> None:
+        super().__init__()
+        self.is_mut = is_mut
+
+    @abstractmethod
+    def copy_with_storage_kind(self, _: Type, kind: Type.Kind) -> Type:
+        pass
+
+    @property
+    def is_finite(self) -> bool:
+        return True
+
+    @property
+    def ir_type(self) -> str:
+        return "ptr"
+
+    @property
+    def size(self) -> int:
+        return get_ptr_type_info().size.in_bytes
+
+    @property
+    def alignment(self) -> int:
+        return get_ptr_type_info().align.in_bytes
+
+    @property
+    def storage_kind(self) -> Type.Kind:
+        if self.is_mut:
+            return Type.Kind.MUTABLE_REF
+        return Type.Kind.CONST_REF
+
+
+class PrimitiveDefinition(ValueTypeDefinition):
     def __init__(self, size: int, ir_type: str, name: str) -> None:
         super().__init__()
 
@@ -200,16 +232,13 @@ class PrimitiveDefinition(TypeDefinition):
 
 class PrimitiveType(NamedType):
     def __init__(self, name: str, definition: TypeDefinition) -> None:
-        super().__init__(name, [])
-        self.definition = definition
+        super().__init__(name, [], definition, None)
 
     def format_for_output_to_user(self, full=False) -> str:
         return super().format_for_output_to_user(False)
 
     @property
     def ir_type(self) -> str:
-        if self.is_reference:
-            return "ptr"
         return self.definition.ir_type
 
 
@@ -318,7 +347,7 @@ class BoolType(PrimitiveType):
         super().__init__("bool", BoolDefinition())
 
 
-class StructDefinition(TypeDefinition):
+class StructDefinition(ValueTypeDefinition):
     def __init__(self, members: list[tuple[str, Type]]) -> None:
         super().__init__()
 
@@ -383,7 +412,7 @@ class StructDefinition(TypeDefinition):
         raise FailedLookupError("struct member", "{" + target_name + " : ... }")
 
 
-class StackArrayDefinition(TypeDefinition):
+class StackArrayDefinition(ValueTypeDefinition):
     def __init__(self, member: Type, dimensions: list[int]) -> None:
         super().__init__()
 
@@ -431,12 +460,49 @@ class StackArrayDefinition(TypeDefinition):
         return get_abi().compute_stack_array_alignment(self.size, self.member.alignment)
 
 
-class HeapArrayDefinition(TypeDefinition):
-    def __init__(self, member: Type, known_dimensions: list[int]) -> None:
-        super().__init__()
+class ReferenceDefinition(PtrTypeDefinition):
+    def __init__(self, value_type: Type, is_mut: bool) -> None:
+        super().__init__(is_mut)
+
+        # TODO: user-facing error
+        assert not value_type.storage_kind.is_reference()
+        self.value_type = value_type
+
+    def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
+        if kind == Type.Kind.VALUE:
+            return self.value_type
+
+        assert kind == self.storage_kind
+        return parent
+
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        if not isinstance(other, ReferenceDefinition):
+            return False
+
+        if other.is_mut != self.is_mut:
+            return False
+
+        return self.value_type == other.value_type
+
+    def format_for_output_to_user(self) -> str:
+        mut = " mut" if self.is_mut else ""
+        return f"{self.value_type.format_for_output_to_user()}{mut}&"
+
+    @property
+    def ir_mangle(self) -> str:
+        const = "" if self.is_mut else "C"
+        return f"__{const}R_{self.value_type.ir_mangle}"
+
+
+class HeapArrayDefinition(PtrTypeDefinition):
+    def __init__(
+        self, member: Type, known_dimensions: list[int], storage: Type.Kind
+    ) -> None:
+        super().__init__(storage == Type.Kind.MUTABLE_REF)
 
         self.member = member
         self.known_dimensions = known_dimensions
+        self.is_illegal_value_type = not storage.is_reference()
 
         if any(dim < 0 for dim in self.known_dimensions):
             raise ArrayDimensionError(self.format_for_output_to_user())
@@ -447,46 +513,46 @@ class HeapArrayDefinition(TypeDefinition):
                 self.member.format_for_output_to_user(True),
             )
 
+    def copy_with_storage_kind(self, _: Type, kind: Type.Kind) -> Type:
+        return AnonymousType(
+            HeapArrayDefinition(self.member, self.known_dimensions, kind)
+        )
+
     def are_equivalent(self, other: TypeDefinition) -> bool:
         if not isinstance(other, HeapArrayDefinition):
             return False
 
         return (
-            other.member == self.member
+            other.is_mut == self.is_mut
             and other.known_dimensions == self.known_dimensions
+            and other.is_illegal_value_type == self.is_illegal_value_type
+            and other.member == self.member
         )
 
     def format_for_output_to_user(self) -> str:
+        if self.is_illegal_value_type:
+            ref_str = "<unborrowed>"
+        else:
+            ref_str = "mut&" if self.is_mut else "&"
+
         if len(self.known_dimensions) == 0:
-            return f"{self.member.format_for_output_to_user()}[&]"
+            return f"{self.member.format_for_output_to_user()}[{ref_str}]"
 
-        dimensions_format = ", ".join(map(str, self.known_dimensions))
-        return f"{self.member.format_for_output_to_user()}[&, {dimensions_format}]"
-
-    @property
-    def is_finite(self) -> bool:
-        return False
-
-    @property
-    def ir_type(self) -> str:
-        assert False  # The containing type should always be a reference
+        dim_fmt = ", ".join(map(str, self.known_dimensions))
+        return f"{self.member.format_for_output_to_user()}[{ref_str}, {dim_fmt}]"
 
     @property
     def ir_mangle(self) -> str:
+        assert not self.is_illegal_value_type
         dimensions = "_".join(map(str, self.known_dimensions))
-        return f"__UA_{self.member.ir_mangle}__{dimensions}"
+        const = "" if self.is_mut else "C"
+        return f"__UA{const}_{self.member.ir_mangle}__{dimensions}__"
 
     @property
-    def size(self) -> int:
-        assert False
-
-    @property
-    def alignment(self) -> int:
-        assert False
-
-    @property
-    def is_always_a_reference(self) -> bool:
-        return True
+    def storage_kind(self) -> Type.Kind:
+        if self.is_illegal_value_type:
+            return Type.Kind.VALUE
+        return super().storage_kind
 
 
 class CharArrayDefinition(StackArrayDefinition):

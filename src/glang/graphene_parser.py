@@ -7,6 +7,7 @@ from uuid import UUID
 
 from . import codegen as cg
 from .codegen.user_facing_errors import (
+    BorrowWithNoAddressError,
     CircularImportException,
     ErrorWithLineInfo,
     ErrorWithLocationInfo,
@@ -101,7 +102,7 @@ class TypeParser(lp.Interpreter):
         )
 
     def ReferenceType(self, node: lp.ReferenceType) -> cg.UnresolvedType:
-        return cg.UnresolvedReferenceType(self.parse_type(node.value_type))
+        return cg.UnresolvedReferenceType(self.parse_type(node.value_type), node.is_mut)
 
     def StackArrayType(self, node: lp.StackArrayType) -> cg.UnresolvedType:
         return cg.UnresolvedStackArrayType(
@@ -113,6 +114,7 @@ class TypeParser(lp.Interpreter):
         return cg.UnresolvedHeapArrayType(
             self.parse_type(node.base_type),
             tuple(self.parse_constant(item) for item in node.size),
+            node.is_mut,
         )
 
     def StructType(self, node: lp.StructType) -> cg.UnresolvedType:
@@ -477,7 +479,7 @@ class ExpressionParser(lp.Interpreter):
         expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
 
         # Implicitly take reference to string literal
-        return expr.add_parent(cg.BorrowExpression(expr.expression(), True))
+        return expr.add_parent(cg.BorrowExpression(expr.expression(), False))
 
     def OperatorUse(self, node: lp.OperatorUse) -> FlattenedExpression:
         lhs = self.parse_expr(node.lhs)
@@ -582,8 +584,20 @@ class ExpressionParser(lp.Interpreter):
         # resolution figure it out, although this isn't very explicit.
         if isinstance(node, lp.UFCS_Call):
             this_arg = self.parse_expr(node.expression)
-            if this_arg.expression().is_indirect_pointer_to_type:
+            # TODO: should there be syntax for this? It seems a bit adhoc
+            indirection_kind = this_arg.expression().underlying_indirection_kind
+            if indirection_kind == cg.Type.Kind.CONST_REF:
                 this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
+            elif indirection_kind == cg.Type.Kind.MUTABLE_REF:
+                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), True))
+            elif indirection_kind == cg.Type.Kind.VALUE:
+                # (&a):fn(), (&mut a):fn(), or rvalue():fn();
+                # We do not allow the 3rd option
+                pure = this_arg.expression().get_equivalent_pure_type()
+                if pure.storage_kind == cg.Type.Kind.VALUE:
+                    raise BorrowWithNoAddressError(pure.format_for_output_to_user())
+            else:
+                assert False
 
             unresolved_args.insert(0, this_arg)
 
@@ -614,7 +628,7 @@ class ExpressionParser(lp.Interpreter):
         temp_var = cg.StackVariable("", expr.type(), True, True)  # FIXME
         self._scope.add_variable(temp_var)
 
-        expr.subexpressions.append(cg.VariableAssignment(temp_var, expr.expression()))
+        expr.subexpressions.append(cg.VariableInitialize(temp_var, expr.expression()))
         return expr.add_parent(cg.VariableReference(temp_var))
 
     def ArrayIndexAccess(self, node: lp.ArrayIndexAccess) -> FlattenedExpression:
@@ -639,7 +653,7 @@ class ExpressionParser(lp.Interpreter):
         # TODO: make this const-correct
         # I've temporarily disabled this so we can parse the parser as it
         #  transitions to using the new syntax
-        return lhs.add_parent(cg.BorrowExpression(lhs.expression(), False))
+        return lhs.add_parent(cg.BorrowExpression(lhs.expression(), node.is_mut))
 
     def UnnamedInitializerList(
         self, node: lp.UnnamedInitializerList
@@ -722,14 +736,14 @@ def generate_variable_declaration(
             "variable", node.variable, var_type.format_for_output_to_user()
         )
 
-    var = cg.StackVariable(node.variable, var_type, False, rhs is not None)
+    var = cg.StackVariable(node.variable, var_type, node.is_mut, rhs is not None)
     scope.add_variable(var)
 
     if rhs is None:
         return
 
     scope.add_generatable(rhs.subexpressions)
-    scope.add_generatable(cg.VariableAssignment(var, rhs.expression()))
+    scope.add_generatable(cg.VariableInitialize(var, rhs.expression()))
 
 
 def generate_if_statement(
@@ -797,16 +811,17 @@ def generate_for_statement(
     iter_expr = parser.parse_expr(node.iterator)
 
     #    Save the iterator onto the stack (for referencing)
+    store_in_mutable = not iter_expr.type().storage_kind.is_reference()
     iter_variable = cg.StackVariable(
-        f"__for_iter_{outer_scope.id}", iter_expr.type(), False, True
+        f"__for_iter_{outer_scope.id}", iter_expr.type(), store_in_mutable, True
     )
     outer_scope.add_variable(iter_variable)
     outer_scope.add_generatable(iter_expr.subexpressions)
     outer_scope.add_generatable(
-        cg.VariableAssignment(iter_variable, iter_expr.expression())
+        cg.VariableInitialize(iter_variable, iter_expr.expression())
     )
     var_ref = cg.VariableReference(iter_variable)
-    borrowed_iter_expr = cg.BorrowExpression(var_ref, False)
+    borrowed_iter_expr = cg.BorrowExpression(var_ref, True)
     outer_scope.add_generatable([var_ref, borrowed_iter_expr])
 
     # Inner scope
@@ -825,7 +840,7 @@ def generate_for_statement(
     )
     inner_scope.add_variable(iter_result_variable)
     inner_scope.add_generatable(
-        cg.VariableAssignment(iter_result_variable, get_next_expr)
+        cg.VariableInitialize(iter_result_variable, get_next_expr)
     )
 
     # For loop is just syntax sugar for a while loop
@@ -854,7 +869,7 @@ def generate_assignment(
     if node.operator == "=":
         scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
     else:
-        borrowed_lhs = cg.BorrowExpression(lhs.expression(), False)
+        borrowed_lhs = cg.BorrowExpression(lhs.expression(), True)
         scope.add_generatable(borrowed_lhs)
         scope.add_generatable(
             program.lookup_call_expression(

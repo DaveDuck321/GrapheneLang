@@ -1,3 +1,4 @@
+@require_once "span.c3"
 @require_once "wrappers.c3"
 
 function [This, Next] is_one_of : (thing : This, next : Next) -> bool = {
@@ -14,19 +15,21 @@ function [This, Next, Others...] is_one_of : (thing : This, next : Next, others 
     return is_one_of(thing, others...);
 }
 
-function [T] index_of : (span : Span<T>&, thing : T) -> isize = {
+function [Iter, T] index_of : (view : Iter, thing : T) -> isize = {
     // TODO: support enumerate
-    for i in range(span.length) {
-        if span.data[i] == thing {
-            return i;
+    mut index : int = 0;
+    for candidate_item in view {
+        if candidate_item == thing {
+            return index;
         }
+        index += 1;
     }
     return -1;
 }
 
 function [T] reverse : (buffer : Span<T>&) -> void = {
-    let rhs : isize = buffer.length - 1;
-    let lhs : isize = 0;
+    mut rhs : isize = buffer.length - 1;
+    mut lhs : isize = 0;
     while rhs > lhs {
         let old_lhs : T = buffer.data[lhs];
         buffer.data[lhs] = buffer.data[rhs];
@@ -37,15 +40,15 @@ function [T] reverse : (buffer : Span<T>&) -> void = {
     }
 }
 
-function [T] bisect_left : (span : Span<T>, elem : T) -> isize = {
-    let lo : isize = 0;
-    let hi : isize = span.length;
+function [T] bisect_left : (view : View<T>, elem : T) -> isize = {
+    mut lo : isize = 0;
+    mut hi : isize = view.length;
 
     while lo < hi {
         // Avoid overflows when averaging.
         let mid : isize = lo + (hi - lo) / 2;
 
-        if span.data[mid] < elem {
+        if view.data[mid] < elem {
             lo = mid + 1;
         }
         else {
@@ -54,12 +57,4 @@ function [T] bisect_left : (span : Span<T>, elem : T) -> isize = {
     }
 
     return lo;
-}
-
-function [T] max : (left : T, right : T) -> T = {
-    if left < right {
-        return right;
-    }
-
-    return left;
 }

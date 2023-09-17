@@ -11,6 +11,7 @@ from .builtin_types import (
     FunctionSignature,
     HeapArrayDefinition,
     NamedType,
+    PlaceholderDefinition,
     PrimitiveType,
     StackArrayDefinition,
     StructDefinition,
@@ -338,22 +339,25 @@ class UnresolvedGenericType(UnresolvedType):
 @dataclass(frozen=True)
 class UnresolvedReferenceType(UnresolvedType):
     value_type: UnresolvedType
+    is_mutable: bool
 
     def format_for_output_to_user(self) -> str:
-        return self.value_type.format_for_output_to_user() + "&"
+        ref_fmt = " mut&" if self.is_mutable else "&"
+        return self.value_type.format_for_output_to_user() + ref_fmt
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedReferenceType(
-            self.value_type.produce_specialized_copy(generics)
+            self.value_type.produce_specialized_copy(generics), self.is_mutable
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         # TODO: support circular references
         resolved_value = self.value_type.resolve(lookup)
-        if resolved_value.is_reference:
+        if resolved_value.storage_kind.is_reference():
             raise DoubleReferenceError(resolved_value.format_for_output_to_user(True))
 
-        return resolved_value.convert_to_reference_type()
+        storage = Type.Kind.MUTABLE_REF if self.is_mutable else Type.Kind.CONST_REF
+        return resolved_value.convert_to_storage_type(storage)
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return self.value_type.get_generics_taking_part_in_pattern_match()
@@ -361,7 +365,13 @@ class UnresolvedReferenceType(UnresolvedType):
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
-        if not target.is_reference:
+        if target.storage_kind == Type.Kind.VALUE:
+            return None
+
+        if (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable:
+            return None
+
+        if isinstance(target.definition, HeapArrayDefinition):
             return None
 
         return self.value_type.pattern_match(
@@ -476,6 +486,7 @@ class UnresolvedStackArrayType(UnresolvedType):
 class UnresolvedHeapArrayType(UnresolvedType):
     member_type: UnresolvedType
     known_dimensions: tuple[CompileTimeConstant, ...]
+    is_mutable: bool
 
     def format_for_output_to_user(self) -> str:
         member_format = self.member_type.format_for_output_to_user()
@@ -485,7 +496,8 @@ class UnresolvedHeapArrayType(UnresolvedType):
         dimensions_format = ", ".join(
             dimension.format_for_output_to_user() for dimension in self.known_dimensions
         )
-        return f"{member_format}[&, {dimensions_format}]"
+        mut = "mut" if self.is_mutable else ""
+        return f"{member_format}[{mut}&, {dimensions_format}]"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
         return UnresolvedHeapArrayType(
@@ -493,6 +505,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
             tuple(
                 dim.produce_specialized_copy(generics) for dim in self.known_dimensions
             ),
+            self.is_mutable,
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
@@ -501,7 +514,10 @@ class UnresolvedHeapArrayType(UnresolvedType):
             resolved_dimensions.append(dimension.resolve())
 
         resolved_member = self.member_type.resolve(lookup)
-        return AnonymousType(HeapArrayDefinition(resolved_member, resolved_dimensions))
+        storage_kind = Type.Kind.MUTABLE_REF if self.is_mutable else Type.Kind.CONST_REF
+        return AnonymousType(
+            HeapArrayDefinition(resolved_member, resolved_dimensions, storage_kind)
+        )
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set().union(
@@ -516,6 +532,10 @@ class UnresolvedHeapArrayType(UnresolvedType):
         self, target: Type, out: GenericMapping, depth: int
     ) -> Optional[int]:
         if not isinstance(target.definition, HeapArrayDefinition):
+            return None
+
+        # TODO: do we pattern match mutable refs into constant refs?
+        if (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable:
             return None
 
         if len(self.known_dimensions) != len(target.definition.known_dimensions):
@@ -693,7 +713,9 @@ class UnresolvedFunctionSignature:
             self.get_generics_taking_part_in_pattern_match() - generics.mapping.keys()
         )
         if len(unmatched_generics) != 0:
-            raise PatternMatchDeductionFailure(self.name, unmatched_generics.pop().name)
+            raise PatternMatchDeductionFailure(
+                self.format_for_output_to_user(), unmatched_generics.pop().name
+            )
 
         if self.parameter_pack_argument_name is None:
             assert len(generics.pack) == 0
@@ -948,7 +970,9 @@ class SymbolTable:
                 return other
 
         # Else resolve it from scratch
-        resolved_type = NamedType(typedef.name, specialization)
+        resolved_type = NamedType(
+            typedef.name, specialization, PlaceholderDefinition(), None
+        )
         try:
             # Prematurely assume type is resolvable (for cyclic types)
             self._resolved_types[typedef.uuid].append(resolved_type)
@@ -1319,8 +1343,8 @@ class SymbolTable:
 
     def get_ir_for_initialization(self) -> list[str]:
         ir: list[str] = []
-        for type_name in self._resolved_types:
-            for defined_type in self._resolved_types[type_name]:
+        for key in self._resolved_types:
+            for defined_type in self._resolved_types[key]:
                 if defined_type.alias is None:
                     continue  # Skip over primitive types
 

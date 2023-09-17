@@ -23,14 +23,13 @@ from .generatable import (
     ReturnStatement,
     StackVariable,
     StaticVariable,
-    VariableAssignment,
+    VariableInitialize,
     WhileStatement,
 )
 from .interfaces import (
     Generatable,
     GenericArgument,
     GenericMapping,
-    Parameter,
     SpecializationItem,
     Type,
     TypedExpression,

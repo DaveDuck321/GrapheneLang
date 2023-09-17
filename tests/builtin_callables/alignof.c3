@@ -11,7 +11,7 @@ typedef MyArray : i8[5]
 
 function main: () -> int = {
     // TODO: we get an uninitialized variable warning without the =0
-    let align : isize = 0;
+    mut align : isize = 0;
 
     align = __builtin_alignof<i16>();
     if align != 2 {

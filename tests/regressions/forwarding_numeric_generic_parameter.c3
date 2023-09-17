@@ -3,7 +3,7 @@ typedef[@Len] T1 : S<@Len>
 
 
 function main : () -> int = {
-    let a : T1<10>;
+    mut a : T1<10>;
     a[8] = 6;
     return a[8];
 }

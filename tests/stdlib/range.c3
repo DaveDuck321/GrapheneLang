@@ -2,7 +2,7 @@
 @require_once "std/iterators.c3"
 
 function main : () -> int = {
-    let sum : int = 0;
+    mut sum : int = 0;
     for i in range(10) {
         sum += i;
     }

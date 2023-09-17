@@ -2,7 +2,7 @@
 @require_once "syscalls.c3"
 
 function strlen : (cstr: u8[&]) -> isize = {
-    let len : isize = 0;
+    mut len : isize = 0;
     let null : u8[1]& = "\0";
 
     while cstr[len] != null[0] {
@@ -13,7 +13,7 @@ function strlen : (cstr: u8[&]) -> isize = {
 }
 
 function main : (argc: int, argv: u8[&][&]) -> int = {
-    let i : int = 0;
+    mut i : int = 0;
 
     while i < argc {
         sys_write(/* stdout */ 1, &argv[i], strlen(&argv[i]));

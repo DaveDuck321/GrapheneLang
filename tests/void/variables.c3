@@ -1,5 +1,5 @@
 function main : () -> int = {
-    let x : void;
+    mut x : void;
 
     return 0;
 }

@@ -4,7 +4,7 @@
 @require_once "_stuff.c3"
 
 function main : () -> int = {
-    let a : SubDirStruct;
+    mut a : SubDirStruct;
 
     return __builtin_add(do_thing(), do_stuff());
 }

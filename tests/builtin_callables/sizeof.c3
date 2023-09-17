@@ -12,7 +12,7 @@ typedef MyArray2 : i8[5]
 
 function main: () -> int = {
     // TODO: we get an uninitialized variable warning without the =0
-    let size : isize = 0;
+    mut size : isize = 0;
 
     size = __builtin_sizeof<i16>();
     if size != 2 {

@@ -3,9 +3,9 @@
 }
 
 function main : () -> int = {
-    let x : int = 1;
-    let a : int = 2;
-    let b : int& = &a;
+    mut x : int = 1;
+    mut a : int = 2;
+    let b : int mut& = &mut a;
 
     x = 3;
     b = 4;  // Sets `a` to 4

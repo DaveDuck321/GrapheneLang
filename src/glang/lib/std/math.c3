@@ -7,3 +7,19 @@ function [T] abs : (value : T) -> TypeIf<T, IsIntegral<T>> = {
         return value;
     }
 }
+
+function [T] max : (left : T, right : T) -> T = {
+    if left < right {
+        return right;
+    } else {
+        return left;
+    }
+}
+
+function [T] min : (left : T, right : T) -> T = {
+    if left < right {
+        return left;
+    } else {
+        return right;
+    }
+}

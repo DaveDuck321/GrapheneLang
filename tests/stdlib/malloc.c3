@@ -11,15 +11,15 @@ typedef MyStruct : {
 }
 
 function main : () -> int = {
-    let allocator : Allocator = initialize_allocator();
+    mut allocator : Allocator = initialize_allocator();
 
-    let allocated_memory: Ptr<int>[1028];
-    let allocated_structs: Ptr<MyStruct>[512];
+    mut allocated_memory: Ptr<int>[1028];
+    mut allocated_structs: Ptr<MyStruct>[512];
 
     // Allocate int array
-    let i: int = 0;
+    mut i: int = 0;
     while i < 1028 {
-        let allocated : int& = &allocator:allocate<int>();
+        let allocated : int mut& = &mut allocator:allocate<int>();
         allocated_memory[i] = {&allocated};
         allocated = i;
         i = i + 1;
@@ -44,7 +44,7 @@ function main : () -> int = {
     // Allocate an unrelated struct array
     i = 0;
     while i < 512 {
-        let allocated : MyStruct& = &allocator:allocate<MyStruct>();
+        let allocated : MyStruct mut& = &mut allocator:allocate<MyStruct>();
         allocated_structs[i] = {&allocated};
         allocated = {-1, -1, 0, false, 89};
         i = i + 1;
@@ -70,7 +70,7 @@ function main : () -> int = {
     // Allocate the struct array again to flush out any safety issues
     i = 0;
     while i < 512 {
-        let allocated : MyStruct& = &allocator:allocate<MyStruct>();
+        let allocated : MyStruct mut& = &mut allocator:allocate<MyStruct>();
         allocated_structs[i] = {&allocated};
         allocated = {-1, -1, 0, false, 7};
         i = i + 1;

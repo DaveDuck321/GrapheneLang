@@ -7,7 +7,7 @@ function foo : (i : int&) -> void = {
         return;
     }
 
-    let x : int;
+    mut x : int;
 
     // We need to add an implicit `ret void` here or LLVM will complain.
 }

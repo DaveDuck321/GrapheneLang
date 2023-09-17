@@ -6,6 +6,9 @@
 @require_once "std/wrappers.c3"
 @require_once "std/iterators.c3"
 
+typedef StringViewIter : ContiguousContainerIter<View<u8>&, u8&>
+typedef VectorIter<JSON_Node> : ContiguousContainerIter<Vector<JSON_Node>&, JSON_Node mut&>
+
 typedef Cursor : {
     iter      : StringViewIter,
     allocator : Allocator,  // FIXME use global allocator.
@@ -22,40 +25,43 @@ typedef JSON_Node : {
 
 // TODO something like new<JSON_Node> would be nice, but we don't support
 // function specializations.
-function new_json_node : (node_type : int, allocator : Allocator&) -> JSON_Node = {
+function new_json_node : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
     return {
         node_type,
-        make_optional<StringView>(),
-        make_vector<JSON_Node>(&allocator),
+        make<Optional<StringView>>(),
+        make<Vector<JSON_Node>>(&mut allocator),
     };
 }
 
-function has_next : (cursor : Cursor&) -> bool = {
+function has_next : (cursor : Cursor mut&) -> bool = {
     return cursor.iter:has_next();
 }
 
-function peak : (cursor : Cursor&) -> Optional<u8> = {
+function peak : (cursor : Cursor mut&) -> Optional<u8> = {
     if cursor.iter:has_next() {
-        return make_optional(cursor.iter:peak());
+        return make<Optional<u8>>(cursor.iter:peak());
     }
-
-    return make_optional<u8>();
+    return make<Optional<u8>>();
 }
 
-function next : (cursor : Cursor&) -> Optional<u8> = {
+function next : (cursor : Cursor mut&) -> Optional<u8> = {
     if cursor.iter:has_next() {
-        return make_optional<u8>(cursor.iter:get_next());
+        return make<Optional<u8>>(cursor.iter:__builtin_get_next());
     }
 
-    return make_optional<u8>();
+    return make<Optional<u8>>();
 }
 
+function position : (cursor : Cursor mut&) -> isize = { return (&cursor):position();}
 function position : (cursor : Cursor&) -> isize = {
-    return cursor.iter.index;
+    // Looking into the iterator like this is sorta cursed
+    return cursor.iter.current_index;
 }
 
 function slice_between : (cursor: Cursor&, start_offset : iptr, end_offset : isize) -> StringView = {
-    return cursor.iter.span:slice_between(start_offset, end_offset);
+    // Looking into the iterator like this is sorta cursed
+    let slice_view : View<u8> = cursor.iter.container:slice_between(start_offset, end_offset);
+    return { slice_view };
 }
 
 function is_json_whitespace : (token : u8) -> bool = {
@@ -66,7 +72,7 @@ function is_json_whitespace : (token : u8) -> bool = {
            or token == char("\r") or token == char("\t");
 }
 
-function eat : (cursor : Cursor&, token : u8) -> bool = {
+function eat : (cursor : Cursor mut&, token : u8) -> bool = {
     // TODO this should be let (can't use with has_value() right now).
     let next_char : Optional<u8> = cursor:peak();
 
@@ -78,7 +84,7 @@ function eat : (cursor : Cursor&, token : u8) -> bool = {
     return false;
 }
 
-function eat : (cursor : Cursor&, string : StringView) -> bool = {
+function eat : (cursor : Cursor mut&, string : StringView) -> bool = {
     for token in string:get_iter() {
         if !cursor:eat(token) {
             return false;
@@ -88,7 +94,7 @@ function eat : (cursor : Cursor&, string : StringView) -> bool = {
     return true;
 }
 
-function eat_whitespace : (cursor: Cursor&) -> void = {
+function eat_whitespace : (cursor: Cursor mut&) -> void = {
     while cursor:has_next() {
         let next_char : Optional<u8> = cursor:peak();
         runtime_assert(next_char:has_value());
@@ -103,18 +109,18 @@ function eat_whitespace : (cursor: Cursor&) -> void = {
 }
 
 // TODO return ErrorOr<JSON_Node>.
-function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
+function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     if !cursor:eat(char("{")) {
-        return make_optional<JSON_Node>();
+        return make<Optional<JSON_Node>>();
     }
 
-    let node : JSON_Node = new_json_node(/* object */ 6, &cursor.allocator);
+    mut node : JSON_Node = new_json_node(/* object */ 6, &mut cursor.allocator);
 
     cursor:eat_whitespace();
 
     if cursor:eat(char("}")) {
         // Empty object.
-        return make_optional(node);
+        return make<Optional<JSON_Node>>(node);
     }
 
     while true {
@@ -124,7 +130,7 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
         if !string_node:has_value() {
             node.children:deallocate();
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
 
         node.children:push_back(string_node:data());
@@ -133,76 +139,76 @@ function parse_object : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
         if !cursor:eat(char(":")) {
             node.children:deallocate();
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
 
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
         if !value_node:has_value() {
             node.children:deallocate();
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
 
         node.children:push_back(value_node:data());
 
         if cursor:eat(char("}")) {
             // We're done.
-            return make_optional(node);
+            return make<Optional<JSON_Node>>(node);
         }
 
         if !cursor:eat(char(",")) {
             node.children:deallocate();
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
     }
 
     // Unreachable.
     runtime_assert(false);
-    return make_optional(node);
+    return make<Optional<JSON_Node>>(node);
 }
 
-function parse_array : (cursor : Cursor&) -> Optional<JSON_Node> = {
+function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     if !cursor:eat(char("[")) {
-        return make_optional<JSON_Node>();
+        return make<Optional<JSON_Node>>();
     }
 
-    let node : JSON_Node = new_json_node(/* array */ 5, &cursor.allocator);
+    mut node : JSON_Node = new_json_node(/* array */ 5, &mut cursor.allocator);
 
     cursor:eat_whitespace();
 
     if cursor:eat(char("]")) {
         // Empty array.
-        return make_optional(node);
+        return make<Optional<JSON_Node>>(node);
     }
 
     while true {
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
         if !value_node:has_value() {
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
 
         node.children:push_back(value_node:data());
 
         if cursor:eat(char("]")) {
             // We're done.
-            return make_optional(node);
+            return make<Optional<JSON_Node>>(node);
         }
 
         if !cursor:eat(char(",")) {
             node.children:deallocate();
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
     }
 
     // Unreachable.
-    return make_optional<JSON_Node>();
+    return make<Optional<JSON_Node>>();
 }
 
-function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
+function parse_value : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     let optional_next_token : Optional<u8> = cursor:peak();
     if !optional_next_token:has_value() {
-        return make_optional<JSON_Node>();
+        return make<Optional<JSON_Node>>();
     }
 
     let next_token : u8 = optional_next_token:data();
@@ -220,22 +226,22 @@ function parse_value : (cursor : Cursor&) -> Optional<JSON_Node> = {
     }
 
     if cursor:eat(sv("null")) {
-        return make_optional(new_json_node(/* null */ 0, &cursor.allocator));
+        return make<Optional<JSON_Node>>(new_json_node(/* null */ 0, &mut cursor.allocator));
     }
 
     if cursor:eat(sv("true")) {
-        return make_optional(new_json_node(/* true */ 1, &cursor.allocator));
+        return make<Optional<JSON_Node>>(new_json_node(/* true */ 1, &mut cursor.allocator));
     }
 
     if cursor:eat(sv("false")) {
-        return make_optional(new_json_node(/* false */ 2, &cursor.allocator));
+        return make<Optional<JSON_Node>>(new_json_node(/* false */ 2, &mut cursor.allocator));
     }
 
     // Numbers don't have a prefix character, so just try and parse them.
     return cursor:parse_number();
 }
 
-function parse_element : (cursor : Cursor&) -> Optional<JSON_Node> = {
+function parse_element : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     cursor:eat_whitespace();
 
     let value_node : Optional<JSON_Node> = cursor:parse_value();
@@ -254,21 +260,24 @@ function is_control_character : (char : u8) -> bool = {
     return (char & ~0x1f) == 0x0;
 }
 
-function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
+function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     if !cursor:eat(char("\"")) {
-        return make_optional<JSON_Node>();
+        return make<Optional<JSON_Node>>();
     }
 
-    let in_escape_seq : bool = false;
+    mut in_escape_seq : bool = false;
     // FIXME stop leaking the vector.
-    let string : Vector<u8> = make_vector<u8>(&cursor.allocator);
+    mut string : Vector<u8> = make<Vector<u8>>(&mut cursor.allocator);
 
     while cursor:has_next() {
         if !in_escape_seq and cursor:eat(char("\"")) {
-            let node : JSON_Node = new_json_node(/* string */ 3, &cursor.allocator);
-            node.value = make_optional(string:data());
+            mut node : JSON_Node = new_json_node(/* string */ 3, &mut cursor.allocator);
 
-            return make_optional(node);
+            // TODO: https://github.com/DaveDuck321/GrapheneLang/issues/124
+            let value: StringView = {(&string):view()};
+            node.value = make<Optional<StringView>>(value);
+
+            return make<Optional<JSON_Node>>(node);
         }
 
         let char_opt : Optional<u8> = cursor:next();
@@ -277,7 +286,7 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
 
         // Reject strings with control characters.
         if is_control_character(char) {
-            return make_optional<JSON_Node>();
+            return make<Optional<JSON_Node>>();
         }
 
         if in_escape_seq {
@@ -315,16 +324,16 @@ function parse_string : (cursor : Cursor&) -> Optional<JSON_Node> = {
         }
     }
 
-    return make_optional<JSON_Node>();
+    return make<Optional<JSON_Node>>();
 }
 
 function is_digit_helper : (token : Optional<u8>) -> bool = {
     return token:has_value() and ascii_is_digit(token:data());
 }
 
-function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
+function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     let start_pos : isize = cursor:position();
-    let is_valid : bool = false;
+    mut is_valid : bool = false;
 
     // This is optional, so discard the return value.
     cursor:eat(char("-"));
@@ -345,19 +354,19 @@ function parse_number : (cursor : Cursor&) -> Optional<JSON_Node> = {
     let end_pos : isize = cursor:position();
 
     if !is_valid {
-        return make_optional<JSON_Node>();
+        return make<Optional<JSON_Node>>();
     }
 
-    let node : JSON_Node = new_json_node(/* string */ 4, &cursor.allocator);
-    node.value = make_optional(cursor:slice_between(start_pos, end_pos));
+    mut node : JSON_Node = new_json_node(/* string */ 4, &mut cursor.allocator);
+    node.value = make<Optional<StringView>>((&cursor):slice_between(start_pos, end_pos));
 
-    return make_optional(node);
+    return make<Optional<JSON_Node>>(node);
 }
 
 // TODO this and write below should be the only public functions.
 function json_parse : (source : StringView) -> Optional<JSON_Node> = {
     // FIXME memory safety, memory leaks.
-    let cursor : Cursor = {
+    mut cursor : Cursor = {
         source:get_iter(), initialize_allocator()
     };
 
@@ -375,10 +384,10 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
         return result;
     }
 
-    return make_optional<JSON_Node>();
+    return make<Optional<JSON_Node>>();
 }
 
-function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
     // null
     if node.type == 0 {
         return io:write(sv("null"));
@@ -399,16 +408,16 @@ function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStrea
         // Allowed to fail.
         if node.value:has_value() {
             let string : StringView = node.value:data();
-            let buffer : Span<u8> = io:request_buffer(string.length + 2);
+            let buffer : Span<u8> = io:request_buffer(string:length() + 2);
 
             buffer.data[0] = char("\"");
             buffer.data[buffer.length - 1] = char("\"");
-            for i in range(string.length) {
-                buffer.data[i + 1] = string.data[i];
+            for i in range(string:length()) {
+                buffer.data[i + 1] = string.buffer.data[i];
             }
 
             io:consume_length(buffer.length);
-            return {&buffer.data, buffer.length};
+            return {buffer:to_view()};
         }
     }
 
@@ -425,8 +434,8 @@ function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStrea
         // FIXME we should be using a buffer here.
         io:write(sv("["));
 
-        let iter : VectorIter<JSON_Node> = node.children:get_iter();
-        for element in &iter {
+        mut iter : VectorIter<JSON_Node> = node.children:get_iter();
+        for element in &mut iter {
             io:write(element);
             if iter:has_next() {
                 io:write(sv(", "));
@@ -441,12 +450,12 @@ function [IO] write : (io : IO&, node : JSON_Node) -> TypeIf<StringView, IsStrea
         // FIXME we should be using a buffer here.
         io:write(sv("{"));
 
-        let iter : VectorIter<JSON_Node> = node.children:get_iter();
-        let flag : bool = true;
+        mut iter : VectorIter<JSON_Node> = node.children:get_iter();
+        mut flag : bool = true;
 
         // XXX we have to borrow the iterator, otherwise it is not updated
         // in place by the implicit call to get_next().
-        for element in &iter {
+        for element in &mut iter {
             io:write(element);
 
             if flag {

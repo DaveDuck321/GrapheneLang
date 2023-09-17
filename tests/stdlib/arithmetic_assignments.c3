@@ -2,7 +2,7 @@
 
 
 function main : () -> int = {
-    let a : int = 9;
+    mut a : int = 9;
     let b : i8 = __builtin_narrow<i8>(7);
 
     a += b;

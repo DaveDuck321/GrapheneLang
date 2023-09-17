@@ -1,7 +1,7 @@
 @require_once "std/arithmetic.c3"
 
 function main : () -> int = {
-    let a : int = 0;
+    mut a : int = 0;
 
     if 7 == 8 {
         return 1;

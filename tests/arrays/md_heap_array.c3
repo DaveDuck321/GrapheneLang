@@ -1,8 +1,8 @@
 @require_once "std/arithmetic.c3"
 
 function main : () -> int = {
-    let stack_array : i32[2, 2, 2];
-    let heap_array : i32[&, 2, 2] = &stack_array;
+    mut stack_array : i32[2, 2, 2];
+    let heap_array : i32[mut&, 2, 2] = &mut stack_array;
 
     heap_array[0, 0, 1] = 1;
     heap_array[0, 1, 1] = 1;

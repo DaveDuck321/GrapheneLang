@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
-from copy import copy
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Iterable, Iterator, Optional
 
-from ..target import get_llvm_type_info
+from .user_facing_errors import MutableVariableContainsAReference
 
 
 class TypeDefinition(ABC):
@@ -16,6 +16,10 @@ class TypeDefinition(ABC):
 
     @abstractmethod
     def format_for_output_to_user(self) -> str:
+        pass
+
+    @abstractmethod
+    def copy_with_storage_kind(self, parent_type: "Type", kind: "Type.Kind") -> "Type":
         pass
 
     @property
@@ -48,32 +52,33 @@ class TypeDefinition(ABC):
         return False
 
     @property
-    def is_always_a_reference(self) -> bool:
-        return False
+    def storage_kind(self) -> "Type.Kind":
+        return Type.Kind.VALUE
 
     def __repr__(self) -> str:
         return f"TypeDefinition({self.format_for_output_to_user()})"
 
 
 class Type(ABC):
-    def __init__(self, definition: TypeDefinition, is_reference: bool) -> None:
+    class Kind(Enum):
+        VALUE = 1
+        MUTABLE_REF = 2
+        CONST_REF = 3
+
+        def is_reference(self) -> bool:
+            return self != Type.Kind.VALUE
+
+    def __init__(self, definition: TypeDefinition) -> None:
         self.definition = definition
-        self.is_reference = is_reference
 
         self._visited_in_finite_resolution = False
 
     def __eq__(self, other: Any) -> bool:
         assert isinstance(other, Type)
-        return (
-            other.is_reference == self.is_reference
-            and self.definition.are_equivalent(other.definition)
-        )
+        return self.definition.are_equivalent(other.definition)
 
     @property
     def is_finite(self) -> bool:
-        if self.is_reference:
-            return True
-
         if self._visited_in_finite_resolution:
             return False
 
@@ -84,25 +89,22 @@ class Type(ABC):
 
     @property
     def size(self) -> int:
-        if self.is_reference:
-            return get_llvm_type_info("ptr").size.in_bytes
         return self.definition.size
 
     @property
     def alignment(self) -> int:
-        if self.is_reference:
-            return get_llvm_type_info("ptr").align.in_bytes
         return self.definition.alignment
 
-    def convert_to_value_type(self) -> "Type":
-        result = copy(self)
-        result.is_reference = False
-        return result
+    @property
+    def storage_kind(self) -> Kind:
+        return self.definition.storage_kind
 
-    def convert_to_reference_type(self) -> "Type":
-        result = copy(self)
-        result.is_reference = True
-        return result
+    def convert_to_value_type(self) -> "Type":
+        return self.convert_to_storage_type(Type.Kind.VALUE)
+
+    @abstractmethod
+    def convert_to_storage_type(self, kind: Kind) -> "Type":
+        pass
 
     @abstractmethod
     def format_for_output_to_user(self, full=False) -> str:
@@ -119,18 +121,23 @@ class Type(ABC):
         pass
 
     def __repr__(self) -> str:
-        return f"Type({self.format_for_output_to_user()})"
+        return f"Type({self.format_for_output_to_user(True)})"
 
 
 class Variable(ABC):
-    # TODO much of this interface is common with TypedExpression. Maybe they
-    # should have a shared base class.
-    def __init__(self, name: str, var_type: Type, constant: bool) -> None:
+    def __init__(self, name: str, var_type: Type, is_mutable: bool) -> None:
         super().__init__()
 
         self._name = name
         self.type = var_type
-        self.constant = constant
+        self.is_mutable = is_mutable
+
+        # We cannot store references in mutable variables. Since there is no
+        #  syntax to reassign the reference
+        if self.type.storage_kind.is_reference() and self.is_mutable:
+            raise MutableVariableContainsAReference(
+                self._name, self.type.format_for_output_to_user(True)
+            )
 
         self.ir_reg: Optional[int] = None
 
@@ -153,7 +160,7 @@ class Variable(ABC):
         pass
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._name}: {repr(self.type)})"
+        return f"{self.__class__.__name__}({self._name}: {repr(self.type)}, is_mut: {self.is_mutable})"
 
     @abstractmethod
     def assert_can_read_from(self) -> None:
@@ -192,16 +199,16 @@ class TypedExpression(Generatable):
     def __init__(
         self,
         expr_type: Optional[Type],
-        is_indirect_pointer_to_type: bool,
+        underlying_indirection_kind: Type.Kind,
         was_reference_type_at_any_point: bool = False,
     ) -> None:
         super().__init__()
         # It is the callers responsibility to escape double indirections
-        if expr_type is not None and expr_type.is_reference:
-            assert not is_indirect_pointer_to_type
+        if expr_type is not None and expr_type.storage_kind.is_reference():
+            assert not underlying_indirection_kind.is_reference()
 
         self._underlying_type = expr_type
-        self.is_indirect_pointer_to_type = is_indirect_pointer_to_type
+        self.underlying_indirection_kind = underlying_indirection_kind
 
         # Used for better error messages
         self.was_reference_type_at_any_point = was_reference_type_at_any_point
@@ -214,13 +221,18 @@ class TypedExpression(Generatable):
         return self._underlying_type
 
     def get_equivalent_pure_type(self) -> Type:
-        if self.is_indirect_pointer_to_type:
-            return self.underlying_type.convert_to_reference_type()
+        if self.underlying_indirection_kind.is_reference():
+            return self.underlying_type.convert_to_storage_type(
+                self.underlying_indirection_kind
+            )
         return self.underlying_type
 
     @property
     def has_address(self) -> bool:
-        return self.underlying_type.is_reference or self.is_indirect_pointer_to_type
+        return (
+            self.underlying_type.storage_kind.is_reference()
+            or self.underlying_indirection_kind.is_reference()
+        )
 
     def is_return_guaranteed(self) -> bool:
         # At the moment no TypedExpression can return
@@ -233,7 +245,7 @@ class TypedExpression(Generatable):
 
     @property
     def ir_type_annotation(self) -> str:
-        if self.is_indirect_pointer_to_type:
+        if self.underlying_indirection_kind.is_reference():
             return "ptr"
 
         return self.underlying_type.ir_type
@@ -327,13 +339,3 @@ def format_generics(args: Iterable[GenericArgument], pack_name: Optional[str]) -
         return ""
 
     return f" [{str.join(', ', formatted_generics)}]"
-
-
-@dataclass
-class Parameter:
-    name: str
-    type: Type
-
-    def __eq__(self, _: Any) -> bool:
-        # No one was using this :).
-        assert False

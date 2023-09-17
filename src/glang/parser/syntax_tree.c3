@@ -237,38 +237,38 @@ typedef JSON_Stream : {
 typedef JSON_Object : {
     is_open : bool,
     length : int,
-    stream : JSON_Stream&,
+    stream : JSON_Stream mut&,
 }
 
-function new_object : (stream : JSON_Stream&) -> JSON_Object = {
+function new_object : (stream : JSON_Stream mut&) -> JSON_Object = {
     stream:write("{");
-    return {true, 0, &stream};
+    return {true, 0, &mut stream};
 }
 
-function [@Len] add_meta : (object : JSON_Object&, type : u8[@Len]&, meta : Meta) -> JSON_Object& = {
-    return &object:add_meta(sv(&type), meta);
+function [@Len] add_meta : (object : JSON_Object mut&, type : u8[@Len]&, meta : Meta) -> JSON_Object mut& = {
+    return &mut object:add_meta(sv(&type), meta);
 }
 
-function add_meta : (object : JSON_Object&, type : StringView, meta : Meta) -> JSON_Object& = {
+function add_meta : (object : JSON_Object mut&, type : StringView, meta : Meta) -> JSON_Object mut& = {
     object:add("__type__", type);
     object:add("meta", meta);
-    return &object;
+    return &mut object;
 }
 
-function [T, @Len] add : (object : JSON_Object&, key : u8[@Len]&, value : T) -> JSON_Object& = {
-    return &object:add(sv(&key), value);
+function [T, @Len] add : (object : JSON_Object mut&, key : u8[@Len]&, value : T) -> JSON_Object mut& = {
+    return &mut object:add(sv(&key), value);
 }
 
-function [T] add : (object : JSON_Object&, key : StringView, value : T) -> JSON_Object& = {
+function [T] add : (object : JSON_Object mut&, key : StringView, value : T) -> JSON_Object mut& = {
     if object.length != 0 {
         object.stream:write(",");
     }
     object.length += 1;
     object.stream:write_key_value_pair(key, value);
-    return &object;
+    return &mut object;
 }
 
-function end : (object : JSON_Object&) -> void = {
+function end : (object : JSON_Object mut&) -> void = {
     runtime_assert(object.is_open);
     object.is_open = false;
     object.stream:write("}");
@@ -282,7 +282,7 @@ function raw : (value : ProgramSlice) -> RawValue = {
     return { value };
 }
 
-function close : (stream : JSON_Stream&) -> void = {
+function close : (stream : JSON_Stream mut&) -> void = {
     stream.file:close();
 }
 
@@ -290,33 +290,34 @@ function get_meta : (slice : ProgramSlice) -> Meta = {
     return { slice.start_offset, slice.end_offset };
 }
 
-function get_sv : (stream : JSON_Stream&, slice : ProgramSlice) -> StringView = {
-    return stream.program:slice_between(slice.start_offset, slice.end_offset);
+function get_sv : (stream : JSON_Stream mut&, slice : ProgramSlice) -> StringView = {
+    let view : View<u8> = slice_between(&stream.program.buffer, slice.start_offset, slice.end_offset);
+    return {view};
 }
 
-function [@Len] write : (stream : JSON_Stream&, text : u8[@Len]&) -> void = {
+function [@Len] write : (stream : JSON_Stream mut&, text : u8[@Len]&) -> void = {
     stream.file:write(sv(&text));
 }
 
-function write : (stream : JSON_Stream&, text : StringView) -> void = {
+function write : (stream : JSON_Stream mut&, text : StringView) -> void = {
     stream.file:write(text);
 }
 
-function [T] write_key_value_pair : (stream : JSON_Stream&, key : StringView, value : T) -> void = {
+function [T] write_key_value_pair : (stream : JSON_Stream mut&, key : StringView, value : T) -> void = {
     stream:write_json_value(&key);
     stream:write(":");
     stream:write_json_value(&value);
 }
 
-function write_json_value : (stream : JSON_Stream&, _ : Null&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, _ : Null&) -> void = {
     stream:write(sv("null"));
 }
 
-function write_json_value : (stream : JSON_Stream&, value : RawValue&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, value : RawValue&) -> void = {
     stream:write(stream:get_sv(value.value));
 }
 
-function [T] write_json_value : (stream : JSON_Stream&, opt : Optional<T>&) -> void = {
+function [T] write_json_value : (stream : JSON_Stream mut&, opt : Optional<T>&) -> void = {
     if opt:has_value() {
         stream:write_json_value(&opt:data());
     } else {
@@ -325,12 +326,12 @@ function [T] write_json_value : (stream : JSON_Stream&, opt : Optional<T>&) -> v
     }
 }
 
-function write_json_value : (stream : JSON_Stream&, slice : ProgramSlice&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, slice : ProgramSlice&) -> void = {
     let view : StringView = stream:get_sv(slice);
     stream:write_json_value(&view);
 }
 
-function write_escaped : (stream : JSON_Stream&, text : StringView) -> void = {
+function write_escaped : (stream : JSON_Stream mut&, text : StringView) -> void = {
     for char in text:get_iter() {
         if is_one_of(char, "\""[0], "\\"[0]) {
             stream.file:write_char("\\"[0]);
@@ -339,24 +340,24 @@ function write_escaped : (stream : JSON_Stream&, text : StringView) -> void = {
     }
 }
 
-function write_json_value : (stream : JSON_Stream&, text : StringView&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, text : StringView&) -> void = {
     // Escape everything that would break JSON
     stream:write("\"");
     stream:write_escaped(text);
     stream:write("\"");
 }
 
-function write_json_value : (stream : JSON_Stream&, number : isize&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, number : isize&) -> void = {
     stream.file:write(number);
 }
 
-function write_json_value : (stream : JSON_Stream&, value : bool&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, value : bool&) -> void = {
     stream.file:write(value);
 }
 
-function [T] write_json_value : (stream : JSON_Stream&, values : Vector<T>&) -> void = {
+function [T] write_json_value : (stream : JSON_Stream mut&, values : Vector<T>&) -> void = {
     stream:write("[");
-    let values_iter : VectorIter<T> = values:get_iter();
+    mut values_iter : ContiguousContainerIter<Vector<T>&, T&> = values:get_citer();
     if !values_iter:has_next() {
         stream:write("]");
         return;
@@ -370,11 +371,11 @@ function [T] write_json_value : (stream : JSON_Stream&, values : Vector<T>&) -> 
     stream:write("]");
 }
 
-function write_json_value : (stream : JSON_Stream&, meta : Meta&) -> void = {
-    let start_position : FilePosition = stream.line_number_lookup:lookup_position(meta.start_offset);
-    let end_position : FilePosition = stream.line_number_lookup:lookup_position(meta.end_offset);
+function write_json_value : (stream : JSON_Stream mut&, meta : Meta&) -> void = {
+    let start_position : FilePosition = (&stream.line_number_lookup):lookup_position(meta.start_offset);
+    let end_position : FilePosition = (&stream.line_number_lookup):lookup_position(meta.end_offset);
 
-    let object : JSON_Object = stream:new_object();
+    mut object : JSON_Object = stream:new_object();
     object
         :add("__type__", sv("Meta"))
         :add("start", start_position)
@@ -382,8 +383,8 @@ function write_json_value : (stream : JSON_Stream&, meta : Meta&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, offset : FilePosition&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, offset : FilePosition&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add("__type__", sv("FilePosition"))
         :add("line", offset.line)
@@ -391,7 +392,7 @@ function write_json_value : (stream : JSON_Stream&, offset : FilePosition&) -> v
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, feature : TopLevelFeature&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, feature : TopLevelFeature&) -> void = {
     // These are some hacky vtables
     if feature.type == 0 {
         stream:write_json_value(&addr_to_ref<Typedef>(feature.pointer));
@@ -408,8 +409,8 @@ function write_json_value : (stream : JSON_Stream&, feature : TopLevelFeature&) 
     runtime_assert(false);
 }
 
-function write_json_value : (stream : JSON_Stream&, constant : CompileTimeConstant&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, constant : CompileTimeConstant&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     if constant.is_identifier {
         object:add_meta("NumericGenericIdentifier", get_meta(constant.value));
         object:add("value", constant.value);
@@ -420,12 +421,12 @@ function write_json_value : (stream : JSON_Stream&, constant : CompileTimeConsta
     object:end();
 }
 
-function write_json_value : (stream : JSON_Stream&, fn : FunctionType&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, fn : FunctionType&) -> void = {
     // TODO
 }
 
-function write_json_value : (stream : JSON_Stream&, array : ArrayType&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, array : ArrayType&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     if array.is_heap_array {
         object:add_meta("HeapArrayType", array.meta);
         object:add("is_mut", array.is_mut);
@@ -438,8 +439,8 @@ function write_json_value : (stream : JSON_Stream&, array : ArrayType&) -> void 
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : RefType&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : RefType&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("ReferenceType", node.meta)
         :add("value_type", node.type)
@@ -447,8 +448,8 @@ function write_json_value : (stream : JSON_Stream&, node : RefType&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : NamedType&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : NamedType&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("NamedType", node.meta)
         :add("name", node.name)
@@ -456,25 +457,25 @@ function write_json_value : (stream : JSON_Stream&, node : NamedType&) -> void =
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : StructType&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : StructType&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("StructType", node.meta)
         :add("members", node.members)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : PackType&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : PackType&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("PackType", node.meta)
         :add("type_", node.type)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : GenericDefinition&) -> void = {
-    let object : JSON_Object = stream:new_object();
-    let type : StringView;
+function write_json_value : (stream : JSON_Stream mut&, node : GenericDefinition&) -> void = {
+    mut object : JSON_Object = stream:new_object();
+    mut type : StringView;
     if node.type == 0 {
         type = sv("TypeGenericDefinition");
     } else {
@@ -489,7 +490,7 @@ function write_json_value : (stream : JSON_Stream&, node : GenericDefinition&) -
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, specialization_item : Specialization&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, specialization_item : Specialization&) -> void = {
     if specialization_item.type == 0 {
         stream:write_json_value(&addr_to_ref<Type>(specialization_item.pointer));
         return;
@@ -501,7 +502,7 @@ function write_json_value : (stream : JSON_Stream&, specialization_item : Specia
     runtime_assert(false);
 }
 
-function write_json_value : (stream : JSON_Stream&, type : Type&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, type : Type&) -> void = {
     if type.type == 0 {
         stream:write_json_value(&addr_to_ref<FunctionType>(type.pointer));
         return;
@@ -530,7 +531,7 @@ function write_json_value : (stream : JSON_Stream&, type : Type&) -> void = {
     runtime_assert(false);
 }
 
-function write_json_value : (stream : JSON_Stream&, node : TypedMember&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, node : TypedMember&) -> void = {
     stream:write("[");
     stream:write_json_value(&node.name);
     stream:write(",");
@@ -538,10 +539,10 @@ function write_json_value : (stream : JSON_Stream&, node : TypedMember&) -> void
     stream:write("]");
 }
 
-function write_json_value : (stream : JSON_Stream&, fn_def : FunctionDefinition&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, fn_def : FunctionDefinition&) -> void = {
     runtime_assert(0 <= fn_def.type and fn_def.type <= 4);
 
-    let object : JSON_Object = stream:new_object();
+    mut object : JSON_Object = stream:new_object();
     object
         :add("name", fn_def.name)
         :add("args", fn_def.args)
@@ -573,16 +574,16 @@ function write_json_value : (stream : JSON_Stream&, fn_def : FunctionDefinition&
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : RequireOnce&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : RequireOnce&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("RequireOnce", node.meta)
         :add("path", node.path)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Typedef&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : Typedef&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("Typedef", node.meta)
         :add("name", node.name)
@@ -592,15 +593,15 @@ function write_json_value : (stream : JSON_Stream&, node : Typedef&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Scope&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : Scope&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("Scope", node.meta)
         :add("lines", node.lines)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, line : Line&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, line : Line&) -> void = {
     if line.type == 0 {
         stream:write_json_value(&addr_to_ref<Expression>(line.pointer));
         return;
@@ -636,8 +637,8 @@ function write_json_value : (stream : JSON_Stream&, line : Line&) -> void = {
     runtime_assert(false);
 }
 
-function write_json_value : (stream : JSON_Stream&, node : If&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : If&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("If", node.meta)
         :add("condition", node.condition)
@@ -646,8 +647,8 @@ function write_json_value : (stream : JSON_Stream&, node : If&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : While&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : While&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("While", node.meta)
         :add("condition", node.condition)
@@ -655,8 +656,8 @@ function write_json_value : (stream : JSON_Stream&, node : While&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : For&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : For&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("For", node.meta)
         :add("variable", node.variable)
@@ -665,16 +666,16 @@ function write_json_value : (stream : JSON_Stream&, node : For&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Return&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : Return&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("Return", node.meta)
         :add("expression", node.expression)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Assignment&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : Assignment&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("Assignment", node.meta)
         :add("lhs", node.lhs)
@@ -683,8 +684,8 @@ function write_json_value : (stream : JSON_Stream&, node : Assignment&) -> void 
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : VariableDeclaration&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : VariableDeclaration&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("VariableDeclaration", node.meta)
         :add("is_mut", node.is_mut)
@@ -694,7 +695,7 @@ function write_json_value : (stream : JSON_Stream&, node : VariableDeclaration&)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Expression&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, node : Expression&) -> void = {
     if node.type == 0 {
         stream:write_json_value(&addr_to_ref<FunctionCall>(node.pointer));
         return;
@@ -750,7 +751,7 @@ function write_json_value : (stream : JSON_Stream&, node : Expression&) -> void 
     runtime_assert(false);
 }
 
-function write_json_value : (stream : JSON_Stream&, node : NamedExpression&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, node : NamedExpression&) -> void = {
     stream:write("[");
     stream:write_json_value(&node.name);
     stream:write(",");
@@ -758,8 +759,8 @@ function write_json_value : (stream : JSON_Stream&, node : NamedExpression&) -> 
     stream:write("]");
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Operator&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : Operator&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("OperatorUse", node.meta)
         :add("name", node.name)
@@ -768,8 +769,8 @@ function write_json_value : (stream : JSON_Stream&, node : Operator&) -> void = 
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : UnaryOperator&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : UnaryOperator&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("UnaryOperatorUse", node.meta)
         :add("name", node.name)
@@ -777,8 +778,8 @@ function write_json_value : (stream : JSON_Stream&, node : UnaryOperator&) -> vo
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : LogicalOperator&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : LogicalOperator&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("LogicalOperatorUse", node.meta)
         :add("name", node.name)
@@ -787,8 +788,8 @@ function write_json_value : (stream : JSON_Stream&, node : LogicalOperator&) -> 
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Borrow&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : Borrow&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("Borrow", node.meta)
         :add("is_mut", node.is_mut)
@@ -796,8 +797,8 @@ function write_json_value : (stream : JSON_Stream&, node : Borrow&) -> void = {
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : FunctionCall&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : FunctionCall&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("FunctionCall", node.meta)
         :add("name", node.name)
@@ -806,8 +807,8 @@ function write_json_value : (stream : JSON_Stream&, node : FunctionCall&) -> voi
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : UFCS_Call&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : UFCS_Call&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("UFCS_Call", node.meta)
         :add("expression", node.expression)
@@ -817,18 +818,18 @@ function write_json_value : (stream : JSON_Stream&, node : UFCS_Call&) -> void =
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : PackExpansion&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : PackExpansion&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("PackExpansion", node.meta)
         :add("expression", node.expression)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : Constant&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, node : Constant&) -> void = {
     runtime_assert(0 <= node.type and node.type <= 5);
 
-    let object : JSON_Object = stream:new_object();
+    mut object : JSON_Object = stream:new_object();
     let meta : Meta = get_meta(node.value);
 
     // JSON supports some types natively, no need to export all of them as strings
@@ -859,32 +860,32 @@ function write_json_value : (stream : JSON_Stream&, node : Constant&) -> void = 
     object:end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : NamedInitializerList&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : NamedInitializerList&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("NamedInitializerList", node.meta)
         :add("args", node.args)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : UnnamedInitializerList&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : UnnamedInitializerList&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("UnnamedInitializerList", node.meta)
         :add("args", node.args)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : VariableAccess&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : VariableAccess&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("VariableAccess", get_meta(node.name))
         :add("name", node.name)
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : ArrayIndexAccess&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : ArrayIndexAccess&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("ArrayIndexAccess", node.meta)
         :add("expression", node.expression)
@@ -892,8 +893,8 @@ function write_json_value : (stream : JSON_Stream&, node : ArrayIndexAccess&) ->
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream&, node : StructIndexAccess&) -> void = {
-    let object : JSON_Object = stream:new_object();
+function write_json_value : (stream : JSON_Stream mut&, node : StructIndexAccess&) -> void = {
+    mut object : JSON_Object = stream:new_object();
     object
         :add_meta("StructIndexAccess", node.meta)
         :add("expression", node.expression)

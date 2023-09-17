@@ -5,8 +5,8 @@ typedef MyStruct : {a: int, x: int}
 }
 
 function main : () -> int = {
-    let struct : MyStruct;
-    let b : int& = &struct.a;
+    mut struct : MyStruct;
+    let b : int mut& = &mut struct.a;
 
     b = 6;  // Sets `struct.a` to 6
     struct.x = 5;  // Sets `struct.x` to 5

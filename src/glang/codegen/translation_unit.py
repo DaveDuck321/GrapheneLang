@@ -12,7 +12,7 @@ from .builtin_types import (
     get_builtin_types,
 )
 from .expressions import FunctionCallExpression, FunctionParameter
-from .generatable import Scope, StackVariable, StaticVariable, VariableAssignment
+from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
 from .interfaces import SpecializationItem, Type, TypedExpression
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
@@ -71,7 +71,7 @@ class Function:
         fn_param_var = StackVariable(param_name, param_type, False, True)
         self.top_level_scope.add_variable(fn_param_var)
 
-        fn_param_var_assignment = VariableAssignment(fn_param_var, fn_param)
+        fn_param_var_assignment = VariableInitialize(fn_param_var, fn_param)
         self.top_level_scope.add_generatable(fn_param_var_assignment)
 
     def __repr__(self) -> str:
@@ -161,7 +161,7 @@ class Program:
         encoded_str, encoded_length = encode_string(string)
         str_type = AnonymousType(CharArrayDefinition(encoded_str, encoded_length))
         static_storage = StaticVariable(
-            f'string literal: "{string}"', str_type, True, encoded_str
+            f'string literal: "{string}"', str_type, False, encoded_str
         )
         self.add_static_variable(static_storage)
 

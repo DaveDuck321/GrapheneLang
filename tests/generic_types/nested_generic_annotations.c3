@@ -3,7 +3,7 @@
 typedef[T, U] struct_t: {a: T<U>}
 
 function main: () -> int = {
-    let s: struct_t<int, int>; // unused typedef's are not parsed
+    mut s: struct_t<int, int>; // unused typedef's are not parsed
 
     return 0;
 }

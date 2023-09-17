@@ -3,7 +3,7 @@
 
 function main : () -> int = {
     let a : bool = true;
-    let b : bool = false;
+    mut b : bool = false;
 
     if a & b != false {
         return 1;

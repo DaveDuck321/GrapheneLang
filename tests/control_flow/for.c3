@@ -6,18 +6,18 @@ function range : (lower: int, upper: int) -> Range = {
     return {lower, upper};
 }
 
-@implicit has_next : (range: Range&) -> bool = {
+@implicit has_next : (range: Range mut&) -> bool = {
     return range.upper > range.lower;
 }
 
-@implicit get_next : (range: Range&) -> int = {
+@implicit get_next : (range: Range mut&) -> int = {
     let return_value: int = range.lower;
     range.lower += 1;
     return return_value;
 }
 
 function main : () -> int = {
-    let sum : int = 0;
+    mut sum : int = 0;
     for i in range(0, 10) {
         sum += i;
     }

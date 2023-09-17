@@ -6,13 +6,13 @@
     return __builtin_subtract(0, val);
 }
 
-function add: (this: int&, that: int) -> int& = {
+function add: (this: int mut&, that: int) -> int mut& = {
     this = this + that;
-    return &this;
+    return &mut this;
 }
 
 function main: () -> int = {
-    let x: int = 2;
+    mut x: int = 2;
     return x:add(-1):add(3);
 }
 
