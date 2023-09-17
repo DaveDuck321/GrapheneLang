@@ -65,6 +65,9 @@ class Type(ABC):
         MUTABLE_REF = 2
         CONST_REF = 3
 
+        def is_reference(self) -> bool:
+            return self != Type.Kind.VALUE
+
     def __init__(self, definition: TypeDefinition) -> None:
         self.definition = definition
 
@@ -131,7 +134,7 @@ class Variable(ABC):
 
         # We cannot store references in mutable variables. Since there is no
         #  syntax to reassign the reference
-        if self.type.storage_kind != Type.Kind.VALUE and self.is_mutable:
+        if self.type.storage_kind.is_reference() and self.is_mutable:
             raise MutableVariableContainsAReference(
                 self._name, self.type.format_for_output_to_user(True)
             )
@@ -201,8 +204,8 @@ class TypedExpression(Generatable):
     ) -> None:
         super().__init__()
         # It is the callers responsibility to escape double indirections
-        if expr_type is not None and expr_type.storage_kind != Type.Kind.VALUE:
-            assert underlying_indirection_kind == Type.Kind.VALUE
+        if expr_type is not None and expr_type.storage_kind.is_reference():
+            assert not underlying_indirection_kind.is_reference()
 
         self._underlying_type = expr_type
         self.underlying_indirection_kind = underlying_indirection_kind
@@ -218,7 +221,7 @@ class TypedExpression(Generatable):
         return self._underlying_type
 
     def get_equivalent_pure_type(self) -> Type:
-        if self.underlying_indirection_kind != Type.Kind.VALUE:
+        if self.underlying_indirection_kind.is_reference():
             return self.underlying_type.convert_to_storage_type(
                 self.underlying_indirection_kind
             )
@@ -227,8 +230,8 @@ class TypedExpression(Generatable):
     @property
     def has_address(self) -> bool:
         return (
-            self.underlying_type.storage_kind != Type.Kind.VALUE
-            or self.underlying_indirection_kind != Type.Kind.VALUE
+            self.underlying_type.storage_kind.is_reference()
+            or self.underlying_indirection_kind.is_reference()
         )
 
     def is_return_guaranteed(self) -> bool:
@@ -242,7 +245,7 @@ class TypedExpression(Generatable):
 
     @property
     def ir_type_annotation(self) -> str:
-        if self.underlying_indirection_kind != Type.Kind.VALUE:
+        if self.underlying_indirection_kind.is_reference():
             return "ptr"
 
         return self.underlying_type.ir_type

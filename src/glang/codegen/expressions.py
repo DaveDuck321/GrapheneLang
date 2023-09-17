@@ -58,7 +58,7 @@ class VariableReference(TypedExpression):
         # Calculate the constness
         # 1) If the variable refers to a reference, the storage MUST be const,
         #     the reference inherits its constness from the reference type
-        if variable.type.storage_kind != Type.Kind.VALUE:
+        if variable.type.storage_kind.is_reference():
             assert not variable.is_mutable
             indirection_kind = variable.type.storage_kind
 
@@ -72,7 +72,7 @@ class VariableReference(TypedExpression):
         super().__init__(
             variable.type.convert_to_value_type(),
             indirection_kind,
-            variable.type.storage_kind != Type.Kind.VALUE,
+            variable.type.storage_kind.is_reference(),
         )
 
         self.variable = variable
@@ -98,7 +98,7 @@ class VariableReference(TypedExpression):
         self._ir_ref = self.variable.ir_ref_without_type_annotation
 
         ir = []
-        if self.variable.type.storage_kind != Type.Kind.VALUE:
+        if self.variable.type.storage_kind.is_reference():
             self._ir_ref = f"%{self.dereference_double_indirection(reg_gen, ir)}"
 
         return ir
@@ -135,7 +135,7 @@ class FunctionCallExpression(TypedExpression):
         super().__init__(
             signature.return_type.convert_to_value_type(),
             signature.return_type.storage_kind,
-            signature.return_type.storage_kind != Type.Kind.VALUE,
+            signature.return_type.storage_kind.is_reference(),
         )
 
         for arg, arg_type in zip(args, signature.arguments, strict=True):
@@ -193,10 +193,10 @@ class BorrowExpression(TypedExpression):
     def __init__(self, expr: TypedExpression, is_explicitly_mutable: bool) -> None:
         self._expr = expr
 
-        if expr.underlying_type.storage_kind != Type.Kind.VALUE:
+        if expr.underlying_type.storage_kind.is_reference():
             raise DoubleBorrowError(expr.underlying_type.format_for_output_to_user())
 
-        if expr.underlying_indirection_kind == Type.Kind.VALUE:
+        if not expr.underlying_indirection_kind.is_reference():
             raise BorrowWithNoAddressError(
                 expr.underlying_type.format_for_output_to_user()
             )
@@ -292,7 +292,7 @@ class StructMemberAccess(TypedExpression):
 
         # Prevent double indirection, dereference the element pointer to get the
         # underlying reference
-        if self._member_type.storage_kind != Type.Kind.VALUE:
+        if self._member_type.storage_kind.is_reference():
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir
@@ -419,7 +419,7 @@ class ArrayIndexAccess(TypedExpression):
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)}",
         ]
 
-        if self._element_type.storage_kind != Type.Kind.VALUE:
+        if self._element_type.storage_kind.is_reference():
             self.result_reg = self.dereference_double_indirection(reg_gen, ir)
 
         return ir

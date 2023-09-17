@@ -811,7 +811,7 @@ def generate_for_statement(
     iter_expr = parser.parse_expr(node.iterator)
 
     #    Save the iterator onto the stack (for referencing)
-    store_in_mutable = iter_expr.type().storage_kind == cg.Type.Kind.VALUE
+    store_in_mutable = not iter_expr.type().storage_kind.is_reference()
     iter_variable = cg.StackVariable(
         f"__for_iter_{outer_scope.id}", iter_expr.type(), store_in_mutable, True
     )

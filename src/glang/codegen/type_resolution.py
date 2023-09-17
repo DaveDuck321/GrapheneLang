@@ -353,7 +353,7 @@ class UnresolvedReferenceType(UnresolvedType):
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         # TODO: support circular references
         resolved_value = self.value_type.resolve(lookup)
-        if resolved_value.storage_kind != Type.Kind.VALUE:
+        if resolved_value.storage_kind.is_reference():
             raise DoubleReferenceError(resolved_value.format_for_output_to_user(True))
 
         storage = Type.Kind.MUTABLE_REF if self.is_mutable else Type.Kind.CONST_REF

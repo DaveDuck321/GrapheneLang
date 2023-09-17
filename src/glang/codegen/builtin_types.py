@@ -26,7 +26,7 @@ class PlaceholderDefinition(TypeDefinition):
         assert False
 
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
-        if kind != Type.Kind.VALUE:
+        if kind.is_reference():
             return AnonymousType(
                 ReferenceDefinition(parent, kind == Type.Kind.MUTABLE_REF)
             )
@@ -96,7 +96,7 @@ class NamedType(Type):
         if kind == self.storage_kind:
             return self
 
-        if kind != Type.Kind.VALUE:
+        if kind.is_reference():
             # Convert us (a value type) into a reference type
             return self.definition.copy_with_storage_kind(self, kind)
 
@@ -158,7 +158,7 @@ class AnonymousType(Type):
 class ValueTypeDefinition(TypeDefinition):
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
         assert self.storage_kind != kind
-        assert kind != Type.Kind.VALUE
+        assert kind.is_reference()
         return AnonymousType(ReferenceDefinition(parent, kind == Type.Kind.MUTABLE_REF))
 
 
@@ -465,7 +465,7 @@ class ReferenceDefinition(PtrTypeDefinition):
         super().__init__(is_mut)
 
         # TODO: user-facing error
-        assert value_type.storage_kind == Type.Kind.VALUE
+        assert not value_type.storage_kind.is_reference()
         self.value_type = value_type
 
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
@@ -502,7 +502,7 @@ class HeapArrayDefinition(PtrTypeDefinition):
 
         self.member = member
         self.known_dimensions = known_dimensions
-        self.is_illegal_value_type = storage == Type.Kind.VALUE
+        self.is_illegal_value_type = not storage.is_reference()
 
         if any(dim < 0 for dim in self.known_dimensions):
             raise ArrayDimensionError(self.format_for_output_to_user())

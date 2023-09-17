@@ -412,7 +412,7 @@ class IntToPtrExpression(BuiltinCallable):
 
         (self._ptr_type,) = specialization
         assert isinstance(self._ptr_type, Type)
-        assert self._ptr_type.storage_kind != Type.Kind.VALUE
+        assert self._ptr_type.storage_kind.is_reference()
 
         (self._src_expr,) = arguments
         assert isinstance(self._src_expr.underlying_type, GenericIntType)
@@ -468,8 +468,9 @@ class BitcastExpression(BuiltinCallable):
 
         # We can bitcast from ptr->ptr or non-aggregate->non-aggregate
         #  We can also bitcast away const
-        assert (self._target_type.storage_kind == Type.Kind.VALUE) == (
-            src_type.storage_kind == Type.Kind.VALUE
+        assert (
+            self._target_type.storage_kind.is_reference()
+            == src_type.storage_kind.is_reference()
         )
 
         # TODO: support floats, support references

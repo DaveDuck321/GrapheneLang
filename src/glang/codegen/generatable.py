@@ -411,7 +411,7 @@ class Assignment(Generatable):
 
         storage_kind = dst.get_equivalent_pure_type().storage_kind
 
-        if storage_kind == Type.Kind.VALUE:
+        if not storage_kind.is_reference():
             raise AssignmentToNonPointerError(
                 dst.underlying_type.format_for_output_to_user()
             )

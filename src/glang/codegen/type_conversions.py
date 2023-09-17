@@ -161,7 +161,7 @@ def implicit_conversion_impl(
     promotion_cost: int = 0
 
     # Always dereference implicit addresses
-    if src.underlying_indirection_kind != Type.Kind.VALUE:
+    if src.underlying_indirection_kind.is_reference():
         expr_list.append(SquashIntoUnderlyingType(src))
 
     # Initializer lists (+ anything else that depends on the TypedExpression)
@@ -198,7 +198,7 @@ def implicit_conversion_impl(
     last_array_def = last_type().convert_to_value_type().definition
     dest_array_def = dest_type.convert_to_value_type().definition
     if (
-        last_type().storage_kind != Type.Kind.VALUE
+        last_type().storage_kind.is_reference()
         and last_type().storage_kind == dest_type.storage_kind
         and isinstance(last_array_def, (HeapArrayDefinition, StackArrayDefinition))
         and isinstance(dest_array_def, (HeapArrayDefinition, StackArrayDefinition))
