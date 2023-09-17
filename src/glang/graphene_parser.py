@@ -7,7 +7,7 @@ from uuid import UUID
 
 from . import codegen as cg
 from .codegen.user_facing_errors import (
-    AssignmentToNonPointerError,
+    BorrowWithNoAddressError,
     CircularImportException,
     ErrorWithLineInfo,
     ErrorWithLocationInfo,
@@ -595,7 +595,7 @@ class ExpressionParser(lp.Interpreter):
                 # We do not allow the 3rd option
                 pure = this_arg.expression().get_equivalent_pure_type()
                 if pure.storage_kind == cg.Type.Kind.VALUE:
-                    raise AssignmentToNonPointerError(pure.format_for_output_to_user())
+                    raise BorrowWithNoAddressError(pure.format_for_output_to_user())
             else:
                 assert False
 
