@@ -486,7 +486,7 @@ class UnresolvedStackArrayType(UnresolvedType):
 class UnresolvedHeapArrayType(UnresolvedType):
     member_type: UnresolvedType
     known_dimensions: tuple[CompileTimeConstant, ...]
-    is_mut: bool
+    is_mutable: bool
 
     def format_for_output_to_user(self) -> str:
         member_format = self.member_type.format_for_output_to_user()
@@ -496,7 +496,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
         dimensions_format = ", ".join(
             dimension.format_for_output_to_user() for dimension in self.known_dimensions
         )
-        mut = "mut" if self.is_mut else ""
+        mut = "mut" if self.is_mutable else ""
         return f"{member_format}[{mut}&, {dimensions_format}]"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
@@ -505,7 +505,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
             tuple(
                 dim.produce_specialized_copy(generics) for dim in self.known_dimensions
             ),
-            self.is_mut,
+            self.is_mutable,
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
@@ -514,7 +514,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
             resolved_dimensions.append(dimension.resolve())
 
         resolved_member = self.member_type.resolve(lookup)
-        storage_kind = Type.Kind.MUTABLE_REF if self.is_mut else Type.Kind.CONST_REF
+        storage_kind = Type.Kind.MUTABLE_REF if self.is_mutable else Type.Kind.CONST_REF
         return AnonymousType(
             HeapArrayDefinition(resolved_member, resolved_dimensions, storage_kind)
         )
@@ -535,7 +535,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
             return None
 
         # TODO: do we pattern match mutable refs into constant refs?
-        if (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mut:
+        if (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable:
             return None
 
         if len(self.known_dimensions) != len(target.definition.known_dimensions):
