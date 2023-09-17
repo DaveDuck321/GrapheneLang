@@ -3,7 +3,7 @@
 
 function strlen : (cstr: u8[&]) -> isize = {
     let len : isize = 0;
-    const null : u8[1]& = "\0";
+    let null : u8[1]& = "\0";
 
     while cstr[len] != null[0] {
         len = len + 1;

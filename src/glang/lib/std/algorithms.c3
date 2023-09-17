@@ -43,7 +43,7 @@ function [T] bisect_left : (span : Span<T>, elem : T) -> isize = {
 
     while lo < hi {
         // Avoid overflows when averaging.
-        const mid : isize = lo + (hi - lo) / 2;
+        let mid : isize = lo + (hi - lo) / 2;
 
         if span.data[mid] < elem {
             lo = mid + 1;

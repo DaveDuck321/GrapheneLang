@@ -16,7 +16,7 @@ from .user_facing_errors import (
 
 
 class PlaceholderDefinition(TypeDefinition):
-    def replace_with(self, other: TypeDefinition) -> bool:
+    def replace_with(self, other: TypeDefinition) -> None:
         # This abomination exists so that we can substitute a placeholder
         #  definition using `NamedType.update_with_finalized_alias()` even after
         #  calling `Type.convert_to_reference()` (which makes a shallow copy).
@@ -89,11 +89,10 @@ class NamedType(Type):
         return f"{self.name}{specialization}"
 
     def format_for_output_to_user(self, full=False) -> str:
-        reference_suffix = (
-            "&"
-            if self.is_reference and not self.definition.is_always_a_reference
-            else ""
-        )
+        if self.definition.is_always_a_reference:
+            reference_suffix = "" if self.is_reference else "unborrowed"
+        else:
+            reference_suffix = "&" if self.is_reference else ""
 
         if not full:
             return self.get_name() + reference_suffix
@@ -144,11 +143,11 @@ class AnonymousType(Type):
         super().__init__(definition, definition.is_always_a_reference)
 
     def format_for_output_to_user(self, full=False) -> str:
-        reference_suffix = (
-            "&"
-            if self.is_reference and not self.definition.is_always_a_reference
-            else ""
-        )
+        if self.definition.is_always_a_reference:
+            reference_suffix = "" if self.is_reference else " (unborrowed)"
+        else:
+            reference_suffix = "&" if self.is_reference else ""
+
         return self.definition.format_for_output_to_user() + reference_suffix
 
     @property

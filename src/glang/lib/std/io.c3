@@ -56,7 +56,7 @@ function consume_length : (io : BufferedFile&, length : isize) -> void = {
 
 function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
     // BUG: try removing the '&' here... the error message is nonsense
-    const fd : int = sys_open(&file_path.data, mode, 0x00);
+    let fd : int = sys_open(&file_path.data, mode, 0x00);
     runtime_assert(fd > 0);
     return {fd};
 }
@@ -95,7 +95,7 @@ function puts : (str : StringView) -> int = {
         {"\n", 1}
     };
 
-    const ret : isize = sys_writev(/* stdout */ 1, &iov, 2);
+    let ret : isize = sys_writev(/* stdout */ 1, &iov, 2);
 
     if ret != -1 {
         // Upon successful completion, puts() shall return a non-negative

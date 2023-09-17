@@ -4,6 +4,7 @@ from .builtin_types import BoolType, CharArrayDefinition, VoidType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
+    AssignmentToBorrowedReference,
     AssignmentToNonPointerError,
     FailedLookupError,
     OperandError,
@@ -416,10 +417,15 @@ class Assignment(Generatable):
                 dst.underlying_type.format_for_output_to_user()
             )
 
+        if dst.underlying_type.is_reference:
+            raise AssignmentToBorrowedReference(
+                dst.underlying_type.format_for_output_to_user()
+            )
+
         self._dst = dst
         self._src = src
 
-        self._target_type = dst.underlying_type.convert_to_value_type()
+        self._target_type = dst.underlying_type
         assert_is_implicitly_convertible(self._src, self._target_type, "assignment")
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:

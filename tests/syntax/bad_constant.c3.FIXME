@@ -1,8 +1,8 @@
 function main : () -> void = {
-    const a : int;
+    let a : int;
 }
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 2
-/// const a : int;
+/// let a : int;
 /// ^
 /// Error: invalid syntax, a constant cannot be declared uninitialized

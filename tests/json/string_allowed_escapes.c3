@@ -2,7 +2,7 @@
 @require_once "std/string.c3"
 
 function main : () -> int = {
-    const input : StringView = sv("[\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"]"); // ["\"\\\/\b\f\n\r\t"]
+    let input : StringView = sv("[\"\\\"\\\\\\/\\b\\f\\n\\r\\t\"]"); // ["\"\\\/\b\f\n\r\t"]
     let result : Optional<JSON_Node> = json_parse(input);
 
     // Should be accepted.

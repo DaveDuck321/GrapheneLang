@@ -4,7 +4,7 @@ typedef S : {
 }
 
 function main : () -> int = {
-    const s : S = {0, 0};
+    let s : S = {0, 0};
     return s.a;
 }
 

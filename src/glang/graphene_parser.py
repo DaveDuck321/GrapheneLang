@@ -636,7 +636,10 @@ class ExpressionParser(lp.Interpreter):
 
     def Borrow(self, node: lp.Borrow) -> FlattenedExpression:
         lhs = self.parse_expr(node.expression)
-        return lhs.add_parent(cg.BorrowExpression(lhs.expression(), node.is_const))
+        # TODO: make this const-correct
+        # I've temporarily disabled this so we can parse the parser as it
+        #  transitions to using the new syntax
+        return lhs.add_parent(cg.BorrowExpression(lhs.expression(), False))
 
     def UnnamedInitializerList(
         self, node: lp.UnnamedInitializerList
@@ -719,7 +722,7 @@ def generate_variable_declaration(
             "variable", node.variable, var_type.format_for_output_to_user()
         )
 
-    var = cg.StackVariable(node.variable, var_type, node.is_const, rhs is not None)
+    var = cg.StackVariable(node.variable, var_type, False, rhs is not None)
     scope.add_variable(var)
 
     if rhs is None:

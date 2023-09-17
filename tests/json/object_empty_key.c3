@@ -2,7 +2,7 @@
 @require_once "std/string.c3"
 
 function main : () -> int = {
-    const input : StringView = sv("{\"\":0}");
+    let input : StringView = sv("{\"\":0}");
     let result : Optional<JSON_Node> = json_parse(input);
 
     // Should be accepted.

@@ -3,7 +3,7 @@
 @require_once "std/unistd.c3"
 
 function main : () -> int = {
-    const pid : pid_t = fork();
+    let pid : pid_t = fork();
 
     if pid != 0 {
         puts<6>("Parent");
