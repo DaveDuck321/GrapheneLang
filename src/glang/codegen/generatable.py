@@ -382,7 +382,7 @@ class VariableInitialize(Generatable):
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir_lines += [
             f"store {conv_value.ir_ref_with_type_annotation}, {self.variable.ir_ref}, "
-            f"align {conv_value.get_equivalent_pure_type().alignment}"
+            f"align {conv_value.result_type_as_if_borrowed.alignment}"
         ]
 
         return ir_lines
@@ -401,30 +401,26 @@ class Assignment(Generatable):
     def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
         super().__init__()
 
-        if dst.underlying_type.storage_kind != Type.Kind.VALUE:
-            raise AssignmentToBorrowedReference(
-                dst.underlying_type.format_for_output_to_user()
-            )
+        if dst.result_type.storage_kind.is_reference():
+            raise AssignmentToBorrowedReference(dst.format_for_output_to_user())
 
         dst.assert_can_write_to()
         src.assert_can_read_from()
 
-        storage_kind = dst.get_equivalent_pure_type().storage_kind
+        storage_kind = dst.result_type_as_if_borrowed.storage_kind
 
         if not storage_kind.is_reference():
-            raise AssignmentToNonPointerError(
-                dst.underlying_type.format_for_output_to_user()
-            )
+            raise AssignmentToNonPointerError(dst.format_for_output_to_user())
 
         if storage_kind == Type.Kind.CONST_REF:
             raise CannotAssignToAConstant(
-                dst.get_equivalent_pure_type().format_for_output_to_user()
+                dst.result_type_as_if_borrowed.format_for_output_to_user()
             )
 
         self._dst = dst
         self._src = src
 
-        self._target_type = dst.underlying_type
+        self._target_type = dst.result_type
         assert_is_implicitly_convertible(self._src, self._target_type, "assignment")
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -441,7 +437,7 @@ class Assignment(Generatable):
             *conversion_ir,
             f"store {converted_src.ir_ref_with_type_annotation}, "
             f"{self._dst.ir_ref_with_type_annotation}, "
-            f"align {self._dst.get_equivalent_pure_type().alignment}",
+            f"align {self._dst.result_type_as_if_borrowed.alignment}",
         ]
 
     def is_return_guaranteed(self) -> bool:

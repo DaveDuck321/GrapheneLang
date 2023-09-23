@@ -668,11 +668,10 @@ class UnresolvedFunctionSignature:
     parameter_pack_argument_name: Optional[str]
     return_type: UnresolvedType
 
-    def collapse_into_type(self, arg: TypedExpression | Type) -> Type:
-        if isinstance(arg, InitializerList):
-            raise NotImplementedError()
+    @staticmethod
+    def collapse_into_type(arg: TypedExpression | Type) -> Type:
         if isinstance(arg, TypedExpression):
-            return arg.underlying_type
+            return arg.result_type
         if isinstance(arg, Type):
             return arg
 
@@ -789,12 +788,6 @@ class UnresolvedFunctionSignature:
         ):
             if len(unresolved_arg.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
-
-            if isinstance(target_arg, InitializerList):
-                # See: `docs/types_overview.c3`
-                # TODO: we should convert this to an anonymous struct
-                #   for now we just ignore initializer lists
-                continue
 
             arg_type = self.collapse_into_type(target_arg)
             result = unresolved_arg.pattern_match(arg_type, out, depth + 1)

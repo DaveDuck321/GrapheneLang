@@ -9,13 +9,13 @@ from .builtin_types import (
     IPtrType,
     SizeType,
 )
-from .expressions import ConstantExpression
+from .expressions import ConstantExpression, StaticTypedExpression
 from .interfaces import SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
 
-class BuiltinCallable(TypedExpression):
+class BuiltinCallable(StaticTypedExpression):
     @abstractmethod
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
@@ -35,11 +35,11 @@ class UnaryIntegerExpression(BuiltinCallable):
         assert self.IR_FORMAT_STR is not None
         assert len(specialization) == 0
 
-        definition = self._arg.underlying_type.definition
+        definition = self._arg.result_type.definition
         assert isinstance(definition, (IntegerDefinition, BoolDefinition))
 
-        self._arg_type = self._arg.underlying_type.convert_to_value_type()
-        TypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE)
+        self._arg_type = self._arg.result_type.convert_to_value_type()
+        StaticTypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._arg})"
@@ -102,15 +102,17 @@ class BasicIntegerExpression(BuiltinCallable):
         assert self.SIGNED_IR is not None
         assert self.UNSIGNED_IR is not None
         assert len(specialization) == 0
-        lhs_definition = lhs.underlying_type.definition
-        rhs_definition = rhs.underlying_type.definition
+        lhs_definition = lhs.result_type.definition
+        rhs_definition = rhs.result_type.definition
         assert isinstance(lhs_definition, (IntegerDefinition, BoolDefinition))
         assert isinstance(rhs_definition, (IntegerDefinition, BoolDefinition))
-        assert lhs.underlying_type == rhs.underlying_type
+        assert lhs.result_type == rhs.result_type
 
-        TypedExpression.__init__(self, self.get_result_type(arguments), Type.Kind.VALUE)
+        StaticTypedExpression.__init__(
+            self, self.get_result_type(arguments), Type.Kind.VALUE
+        )
 
-        self._arg_type = lhs.underlying_type.convert_to_value_type()
+        self._arg_type = lhs.result_type.convert_to_value_type()
         self._lhs = lhs
         self._rhs = rhs
 
@@ -160,7 +162,7 @@ class BasicIntegerExpression(BuiltinCallable):
 class ArithmeticExpression(BasicIntegerExpression):
     @staticmethod
     def get_result_type(arguments: list[TypedExpression]) -> Type:
-        return arguments[0].underlying_type.convert_to_value_type()
+        return arguments[0].result_type.convert_to_value_type()
 
 
 class AddExpression(ArithmeticExpression):
@@ -264,7 +266,9 @@ class AlignOfExpression(BuiltinCallable):
             SizeType(), str(self._argument_type.alignment)
         )
 
-        TypedExpression.__init__(self, self._result.underlying_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(
+            self, self._result.underlying_type, Type.Kind.VALUE
+        )
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
@@ -296,7 +300,9 @@ class SizeOfExpression(BuiltinCallable):
 
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
-        TypedExpression.__init__(self, self._result.underlying_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(
+            self, self._result.underlying_type, Type.Kind.VALUE
+        )
 
     def __repr__(self) -> str:
         return f"SizeOf({self._argument_type})"
@@ -325,7 +331,7 @@ class NarrowExpression(BuiltinCallable):
         (return_type,) = specialization
         assert isinstance(return_type, Type)
 
-        self._arg_value_type = self._argument.underlying_type.convert_to_value_type()
+        self._arg_value_type = self._argument.result_type.convert_to_value_type()
 
         to_definition = return_type.definition
         from_definition = self._arg_value_type.definition
@@ -335,7 +341,7 @@ class NarrowExpression(BuiltinCallable):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        TypedExpression.__init__(self, return_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, return_type, Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"Narrow({self._argument} to {self.underlying_type})"
@@ -376,7 +382,7 @@ class PtrToIntExpression(BuiltinCallable):
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        TypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -415,9 +421,9 @@ class IntToPtrExpression(BuiltinCallable):
         assert self._ptr_type.storage_kind.is_reference()
 
         (self._src_expr,) = arguments
-        assert isinstance(self._src_expr.underlying_type, GenericIntType)
+        assert isinstance(self._src_expr.result_type, GenericIntType)
 
-        TypedExpression.__init__(
+        StaticTypedExpression.__init__(
             self, self._ptr_type.convert_to_value_type(), self._ptr_type.storage_kind
         )
 
@@ -427,7 +433,7 @@ class IntToPtrExpression(BuiltinCallable):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # Remove any indirect references
         conv_src_expr, extra_exprs = do_implicit_conversion(
-            self._src_expr, self._src_expr.underlying_type
+            self._src_expr, self._src_expr.result_type
         )
 
         ir = self.expand_ir(extra_exprs, reg_gen)
@@ -464,7 +470,7 @@ class BitcastExpression(BuiltinCallable):
         (self._target_type,) = specialization
         assert isinstance(self._target_type, Type)
 
-        src_type = self._src_expr.underlying_type
+        src_type = self._src_expr.result_type
 
         # We can bitcast from ptr->ptr or non-aggregate->non-aggregate
         #  We can also bitcast away const
@@ -479,7 +485,7 @@ class BitcastExpression(BuiltinCallable):
 
         assert self._target_type.size == src_type.size
 
-        TypedExpression.__init__(
+        StaticTypedExpression.__init__(
             self,
             self._target_type.convert_to_value_type(),
             self._target_type.storage_kind,
@@ -491,7 +497,7 @@ class BitcastExpression(BuiltinCallable):
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # Remove any indirect references
         conv_src_expr, extra_exprs = do_implicit_conversion(
-            self._src_expr, self._src_expr.underlying_type
+            self._src_expr, self._src_expr.result_type
         )
 
         ir = self.expand_ir(extra_exprs, reg_gen)
