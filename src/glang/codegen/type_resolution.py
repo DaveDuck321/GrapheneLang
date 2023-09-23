@@ -351,7 +351,6 @@ class UnresolvedReferenceType(UnresolvedType):
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        # TODO: support circular references
         resolved_value = self.value_type.resolve(lookup)
         if resolved_value.storage_kind.is_reference():
             raise DoubleReferenceError(resolved_value.format_for_output_to_user(True))
@@ -418,8 +417,26 @@ class UnresolvedStructType(UnresolvedType):
             )
         )
 
-    def pattern_match(self, _1: Type, _2: GenericMapping, _3: int) -> Optional[int]:
-        assert False  # TODO
+    def pattern_match(
+        self, target: Type, generics: GenericMapping, depth: int
+    ) -> Optional[int]:
+        if not isinstance(target.definition, StructDefinition):
+            return None
+
+        cost = 0
+        for our_member, target_member in zip(self.members, target.definition.members):
+            if our_member[0] != target_member[0]:
+                return None  # Struct member names don't match
+
+            if len(our_member[1].get_generics_taking_part_in_pattern_match()) == 0:
+                continue  # No need to pattern match, use type equality
+
+            result = our_member[1].pattern_match(target_member[1], generics, depth + 1)
+            if result is None:
+                return None
+            cost += result
+
+        return cost
 
 
 @dataclass(frozen=True)
@@ -1089,7 +1106,6 @@ class SymbolTable:
         #
         # A function may deduce its specialization based on its arguments
         #   For now, either the full specialization must be given or none at all
-        #   TODO: relax this requirement
         #
         # We choose which function gets priority based on the following criteria:
         #   1) When initialized the signature MUST not create a substitution failure
@@ -1113,7 +1129,6 @@ class SymbolTable:
                 continue
 
             # We've matched the pattern, now we specialize the candidate
-            # TODO: catch these errors
             specialized = candidate.produce_specialized_copy(generics)
             all_candidates.append((cost, specialized))
 
@@ -1205,7 +1220,6 @@ class SymbolTable:
                 continue
 
             # We've matched the pattern, now we specialize the candidate
-            # TODO: catch these errors
             specialized = candidate.produce_specialized_copy(generics)
             all_candidates.append((cost, specialized))
 
