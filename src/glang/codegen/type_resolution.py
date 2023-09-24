@@ -145,7 +145,8 @@ class GenericValueReference(CompileTimeConstant):
         return self.name
 
     def produce_specialized_copy(self, generics: GenericMapping) -> CompileTimeConstant:
-        assert self.argument in generics.mapping
+        if self.argument not in generics.mapping:
+            return self
 
         specialized_value = generics.mapping[self.argument]
         if not isinstance(specialized_value, int):
@@ -307,7 +308,8 @@ class UnresolvedGenericType(UnresolvedType):
         return self.name
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
-        assert self.argument in generics.mapping
+        if self.argument not in generics.mapping:
+            return self
 
         specialized_type = generics.mapping[self.argument]
         if not isinstance(specialized_type, Type):
@@ -724,14 +726,6 @@ class UnresolvedFunctionSignature:
         self,
         generics: GenericMapping,
     ) -> "UnresolvedFunctionSignature":
-        unmatched_generics = (
-            self.get_generics_taking_part_in_pattern_match() - generics.mapping.keys()
-        )
-        if len(unmatched_generics) != 0:
-            raise PatternMatchDeductionFailure(
-                self.format_for_output_to_user(), unmatched_generics.pop().name
-            )
-
         if self.parameter_pack_argument_name is None:
             assert len(generics.pack) == 0
 
@@ -753,25 +747,22 @@ class UnresolvedFunctionSignature:
             self.name,
             tuple(new_specialization),
             tuple(arguments),
-            None,  # We have just expanded the parameter pack
+            self.parameter_pack_argument_name if len(generics.pack) == 0 else None,
             self.return_type.produce_specialized_copy(generics),
         )
 
-    def pattern_match(
+    def pattern_match_specialization(
         self,
-        target_args: list[TypedExpression] | list[Type],
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
         depth: int,
     ) -> Optional[int]:
         cost = 0
-
-        # Match the specialization
         for target_item, item in zip(
             target_specialization, self.expanded_specialization
         ):
             if isinstance(item, CompileTimeConstant) != isinstance(target_item, int):
-                return False
+                return None
 
             if len(item.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
@@ -789,6 +780,15 @@ class UnresolvedFunctionSignature:
                 return None
 
             cost += result
+        return cost
+
+    def pattern_match_args(
+        self,
+        target_args: list[TypedExpression] | list[Type],
+        out: GenericMapping,
+        depth: int,
+    ) -> Optional[int]:
+        cost = 0
 
         # Check the argument count
         if self.parameter_pack_argument_name is None:
@@ -893,25 +893,35 @@ class FunctionDeclaration:
         generic_format = format_generics(self.generics, self.pack_type_name)
         return f"{prefix}{generic_format} {self.signature.format_for_output_to_user()}"
 
-    def pattern_match(
+    def pattern_match_specialization(
         self,
-        target_args: list[TypedExpression] | list[Type],
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
     ) -> Optional[int]:
-        return self.signature.pattern_match(target_args, target_specialization, out, 0)
+        return self.signature.pattern_match_specialization(
+            target_specialization, out, 0
+        )
+
+    def pattern_match_args(
+        self,
+        target_args: list[TypedExpression] | list[Type],
+        out: GenericMapping,
+    ) -> Optional[int]:
+        return self.signature.pattern_match_args(target_args, out, 0)
 
     def produce_specialized_copy(
         self, generics: GenericMapping
     ) -> "FunctionDeclaration":
-        assert len(self.mapping.mapping) == 0 and len(self.mapping.pack) == 0
+        assert len(self.mapping.pack) == 0
+
+        remaining_generics = set(self.generics) - set(generics.mapping)
         return FunctionDeclaration(
             self.is_foreign,
             self.arg_names,
             self.pack_type_name,
-            tuple(),
+            tuple(remaining_generics),
             self.signature.produce_specialized_copy(generics),
-            generics,
+            self.mapping + generics,
             self.loc,
             self.uuid,
         )
@@ -1122,14 +1132,34 @@ class SymbolTable:
 
         all_candidates: list[tuple[int, FunctionDeclaration]] = []
         for candidate in self._unresolved_fndefs[name]:
+            # The user provides a partial specialization
             generics = GenericMapping({}, [])
-            cost = candidate.pattern_match(args, given_specialization, generics)
-            if cost is None:
+            cost1 = candidate.pattern_match_specialization(
+                given_specialization, generics
+            )
+            if cost1 is None:
+                continue
+
+            partially_specialized = candidate.produce_specialized_copy(generics)
+
+            # Deduce any remaining generics
+            generics = GenericMapping({}, [])
+            cost2 = partially_specialized.pattern_match_args(args, generics)
+            if cost2 is None:
                 continue
 
             # We've matched the pattern, now we specialize the candidate
-            specialized = candidate.produce_specialized_copy(generics)
-            all_candidates.append((cost, specialized))
+            specialized = partially_specialized.produce_specialized_copy(generics)
+            unmatched_generics = (
+                specialized.signature.get_generics_taking_part_in_pattern_match()
+            )
+            if len(unmatched_generics) != 0:
+                raise PatternMatchDeductionFailure(
+                    specialized.format_for_output_to_user(),
+                    unmatched_generics.pop().name,
+                )
+
+            all_candidates.append((cost1 + cost2, specialized))
 
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])

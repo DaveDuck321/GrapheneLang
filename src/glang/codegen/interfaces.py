@@ -326,6 +326,11 @@ class GenericMapping:
     mapping: dict[GenericArgument, SpecializationItem]
     pack: list[Type]
 
+    def __add__(self, other: Any) -> "GenericMapping":
+        assert isinstance(other, GenericMapping)
+        assert len(self.pack) == 0 or len(other.pack) == 0
+        return GenericMapping({**self.mapping, **other.mapping}, self.pack + other.pack)
+
 
 def do_specializations_match(
     s1: list[SpecializationItem], s2: list[SpecializationItem]
