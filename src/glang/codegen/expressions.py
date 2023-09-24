@@ -1,8 +1,6 @@
 from abc import abstractmethod
 from typing import Iterator, Optional
 
-from glang.codegen.interfaces import Type, TypedExpression
-
 from .builtin_types import (
     AnonymousType,
     BoolType,
