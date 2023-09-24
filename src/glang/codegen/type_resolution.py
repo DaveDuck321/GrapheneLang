@@ -16,7 +16,6 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
-from .expressions import InitializerList
 from .interfaces import (
     GenericArgument,
     GenericMapping,
@@ -953,7 +952,9 @@ class SymbolTable:
         )
 
         # Remember which functions need codegen
-        self._already_codegened: dict[UUID, list[FunctionSignature]] = defaultdict(list)
+        self._already_codegened: dict[
+            UUID, list[tuple[FunctionDeclaration, FunctionSignature]]
+        ] = defaultdict(list)
         self._remaining_to_codegen: list[
             tuple[FunctionDeclaration, FunctionSignature]
         ] = []
@@ -1077,15 +1078,13 @@ class SymbolTable:
     def add_function_to_codegen(
         self, declaration: FunctionDeclaration, signature: FunctionSignature
     ) -> None:
-        for other in self._already_codegened[declaration.uuid]:
-            if (
-                do_specializations_match(other.specialization, signature.specialization)
-                and other.arguments == signature.arguments
-                and other.return_type == signature.return_type
+        for other_def, other_sig in self._already_codegened[declaration.uuid]:
+            if declaration.uuid == other_def.uuid and do_specializations_match(
+                other_sig.specialization, signature.specialization
             ):
                 return  # Already codegened
 
-        self._already_codegened[declaration.uuid].append(signature)
+        self._already_codegened[declaration.uuid].append((declaration, signature))
         self._remaining_to_codegen.append((declaration, signature))
 
     def lookup_function(
@@ -1322,16 +1321,8 @@ class SymbolTable:
                 continue
 
             try:
-                resolved_specialization = [
-                    self.resolve_specialization_item(item)
-                    for item in fn.signature.expanded_specialization
-                ]
-                resolved_args = [
-                    self.resolve_type(item) for item in fn.signature.arguments
-                ]
-                self.lookup_function(
-                    fn.signature.name, resolved_specialization, resolved_args, True
-                )
+                signature = self.resolve_function(fn)
+                self.add_function_to_codegen(fn, signature)
             except GrapheneError as e:
                 raise ErrorWithLocationInfo(
                     e.message, fn.loc, "function declaration"
