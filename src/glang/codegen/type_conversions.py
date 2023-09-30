@@ -1,7 +1,12 @@
 from functools import cached_property
 from typing import Iterator, Optional
 
-from .builtin_types import HeapArrayDefinition, IntegerDefinition, StackArrayDefinition
+from .builtin_types import (
+    HeapArrayDefinition,
+    IEEEFloatDefinition,
+    IntegerDefinition,
+    StackArrayDefinition,
+)
 from .interfaces import Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
@@ -40,33 +45,37 @@ class SquashIntoUnderlyingType(TypedExpression):
         raise OperandError("cannot modify a squashed value")
 
 
-class PromoteInteger(TypedExpression):
+class PromoteNumeric(TypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
         src_definition = src.underlying_type.definition
 
         assert not src.has_address
         assert dest_type.storage_kind == Type.Kind.VALUE
-        assert isinstance(src_definition, IntegerDefinition)
-        assert isinstance(dest_type.definition, IntegerDefinition)
-        assert src_definition.is_signed == dest_type.definition.is_signed
-        assert src_definition.bits < dest_type.definition.bits
+        assert src_definition.size < dest_type.size
+
+        if isinstance(src_definition, IntegerDefinition):
+            assert isinstance(dest_type.definition, IntegerDefinition)
+            assert src_definition.is_signed == dest_type.definition.is_signed
+            self.instruction = "sext" if src_definition.is_signed else "zext"
+        else:
+            assert isinstance(src_definition, IEEEFloatDefinition)
+            assert isinstance(dest_type.definition, IEEEFloatDefinition)
+            self.instruction = "fpext"
 
         super().__init__(dest_type, Type.Kind.VALUE)
 
         self.src = src
-        self.is_signed = src_definition.is_signed
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#sext-to-instruction
         # https://llvm.org/docs/LangRef.html#zext-to-instruction
+        # https://llvm.org/docs/LangRef.html#fpext-to-instruction
 
         self.result_reg = next(reg_gen)
 
-        instruction = "sext" if self.is_signed else "zext"
-
-        # <result> = {s,z}ext <ty> <value> to <ty2> ; yields ty2
+        # <result> = {s,z,fp}ext <ty> <value> to <ty2> ; yields ty2
         return [
-            f"%{self.result_reg} = {instruction} "
+            f"%{self.result_reg} = {self.instruction} "
             f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}"
         ]
 
@@ -192,7 +201,16 @@ def implicit_conversion_impl(
         and last_def.bits < dest_def.bits
     ):
         promotion_cost += dest_def.bits // last_def.bits
-        expr_list.append(PromoteInteger(last_expr(), dest_type))
+        expr_list.append(PromoteNumeric(last_expr(), dest_type))
+
+    # Floating point promotion
+    if (
+        isinstance(last_def, IEEEFloatDefinition)
+        and isinstance(dest_def, IEEEFloatDefinition)
+        and last_def.size < dest_def.size
+    ):
+        promotion_cost += dest_def.size // last_def.size
+        expr_list.append(PromoteNumeric(last_expr(), dest_type))
 
     # Array reference equivalence
     last_array_def = last_type().convert_to_value_type().definition
@@ -227,8 +245,6 @@ def implicit_conversion_impl(
         ):
             # TODO: promotion cost going from known size to smaller/ unknown size
             expr_list.append(Reinterpret(last_expr(), dest_type))
-
-    # TODO float promotion.
 
     if last_type() != dest_type:
         raise TypeCheckerError(

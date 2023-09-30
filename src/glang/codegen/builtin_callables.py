@@ -5,6 +5,7 @@ from .builtin_types import (
     BoolDefinition,
     BoolType,
     GenericIntType,
+    IEEEFloatDefinition,
     IntegerDefinition,
     IPtrType,
     SizeType,
@@ -84,10 +85,11 @@ class UnaryMinusExpression(UnaryIntegerExpression):
     IR_FORMAT_STR = "sub {type} 0, {arg}"
 
 
-class BasicIntegerExpression(BuiltinCallable):
-    SIGNED_IR = ""
-    UNSIGNED_IR = ""
-    USER_FACING_NAME = ""
+class BasicNumericExpression(BuiltinCallable):
+    FLOATING_POINT_IR = None
+    SIGNED_IR = None
+    UNSIGNED_IR = None
+    USER_FACING_NAME = None
 
     @staticmethod
     @abstractmethod
@@ -99,13 +101,17 @@ class BasicIntegerExpression(BuiltinCallable):
     ) -> None:
         lhs, rhs = arguments
         # This is not a user-facing function, we don't need sensible error messages
-        assert self.SIGNED_IR is not None
-        assert self.UNSIGNED_IR is not None
+        assert self.USER_FACING_NAME is not None
+
         assert len(specialization) == 0
         lhs_definition = lhs.underlying_type.definition
         rhs_definition = rhs.underlying_type.definition
-        assert isinstance(lhs_definition, (IntegerDefinition, BoolDefinition))
-        assert isinstance(rhs_definition, (IntegerDefinition, BoolDefinition))
+        assert isinstance(
+            lhs_definition, (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
+        )
+        assert isinstance(
+            rhs_definition, (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
+        )
         assert lhs.underlying_type == rhs.underlying_type
 
         TypedExpression.__init__(self, self.get_result_type(arguments), Type.Kind.VALUE)
@@ -128,7 +134,9 @@ class BasicIntegerExpression(BuiltinCallable):
 
         self.result_reg = next(reg_gen)
 
-        if isinstance(self._arg_type.definition, IntegerDefinition):
+        if isinstance(self._arg_type.definition, IEEEFloatDefinition):
+            ir = self.FLOATING_POINT_IR
+        elif isinstance(self._arg_type.definition, IntegerDefinition):
             ir = (
                 self.SIGNED_IR
                 if self._arg_type.definition.is_signed
@@ -137,6 +145,8 @@ class BasicIntegerExpression(BuiltinCallable):
         else:
             assert isinstance(self._arg_type.definition, BoolDefinition)
             ir = self.UNSIGNED_IR
+
+        assert ir is not None
 
         # eg. for addition
         # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
@@ -157,37 +167,42 @@ class BasicIntegerExpression(BuiltinCallable):
         raise OperandError(f"cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
 
 
-class ArithmeticExpression(BasicIntegerExpression):
+class ArithmeticExpression(BasicNumericExpression):
     @staticmethod
     def get_result_type(arguments: list[TypedExpression]) -> Type:
         return arguments[0].underlying_type.convert_to_value_type()
 
 
 class AddExpression(ArithmeticExpression):
+    FLOATING_POINT_IR = "fadd"
     SIGNED_IR = "add nsw"
     UNSIGNED_IR = "add nuw"
     USER_FACING_NAME = "__builtin_add"
 
 
 class SubExpression(ArithmeticExpression):
+    FLOATING_POINT_IR = "fsub"
     SIGNED_IR = "sub nsw"
     UNSIGNED_IR = "sub nuw"
     USER_FACING_NAME = "__builtin_subtract"
 
 
 class MultiplyExpression(ArithmeticExpression):
+    FLOATING_POINT_IR = "fmul"
     SIGNED_IR = "mul nsw"
     UNSIGNED_IR = "mul nuw"
     USER_FACING_NAME = "__builtin_multiply"
 
 
 class DivideExpression(ArithmeticExpression):
+    FLOATING_POINT_IR = "fdiv"
     SIGNED_IR = "sdiv"
     UNSIGNED_IR = "udiv"
     USER_FACING_NAME = "__builtin_divide"
 
 
 class RemainderExpression(ArithmeticExpression):
+    FLOATING_POINT_IR = "frem"
     SIGNED_IR = "srem"
     UNSIGNED_IR = "urem"
     USER_FACING_NAME = "__builtin_remainder"
@@ -225,25 +240,28 @@ class BitwiseXorExpression(ArithmeticExpression):
     USER_FACING_NAME = "__builtin_bitwise_xor"
 
 
-class CompareExpression(BasicIntegerExpression):
+class CompareExpression(BasicNumericExpression):
     @staticmethod
     def get_result_type(arguments: list[TypedExpression]) -> Type:
         return BoolType()
 
 
 class IsEqualExpression(CompareExpression):
+    FLOATING_POINT_IR = "fcmp oeq"  # Ordered and equal (can we relax this?)
     SIGNED_IR = "icmp eq"
     UNSIGNED_IR = "icmp eq"
     USER_FACING_NAME = "__builtin_is_equal"
 
 
 class IsGreaterThanExpression(CompareExpression):
+    FLOATING_POINT_IR = "fcmp ogt"
     SIGNED_IR = "icmp sgt"
     UNSIGNED_IR = "icmp ugt"
     USER_FACING_NAME = "__builtin_is_greater_than"
 
 
 class IsLessThanExpression(CompareExpression):
+    FLOATING_POINT_IR = "fcmp olt"
     SIGNED_IR = "icmp slt"
     UNSIGNED_IR = "icmp ult"
     USER_FACING_NAME = "__builtin_is_less_than"
@@ -523,8 +541,9 @@ class BitcastExpression(BuiltinCallable):
 
 def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
     def get_integer_builtin(
-        expression_class: type[BasicIntegerExpression | UnaryIntegerExpression],
+        expression_class: type[BasicNumericExpression | UnaryIntegerExpression],
     ):
+        assert expression_class.USER_FACING_NAME is not None
         return (expression_class.USER_FACING_NAME, expression_class)
 
     integer_instructions = dict(
