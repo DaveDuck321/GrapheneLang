@@ -24,9 +24,10 @@ class BuiltinCallable(TypedExpression):
         pass
 
 
-class UnaryIntegerExpression(BuiltinCallable):
+class UnaryExpression(BuiltinCallable):
     IR_FORMAT_STR = ""
     USER_FACING_NAME = ""
+    EXPECTED_TYPES = tuple()
 
     def __init__(
         self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
@@ -37,7 +38,7 @@ class UnaryIntegerExpression(BuiltinCallable):
         assert len(specialization) == 0
 
         definition = self._arg.underlying_type.definition
-        assert isinstance(definition, (IntegerDefinition, BoolDefinition))
+        assert isinstance(definition, self.EXPECTED_TYPES)
 
         self._arg_type = self._arg.underlying_type.convert_to_value_type()
         TypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE)
@@ -75,14 +76,22 @@ class UnaryIntegerExpression(BuiltinCallable):
         raise OperandError(f"cannot assign to `{self.USER_FACING_NAME}(..., ...)`")
 
 
-class BitwiseNotExpression(UnaryIntegerExpression):
+class BitwiseNotExpression(UnaryExpression):
+    EXPECTED_TYPES = (IntegerDefinition, BoolDefinition)
     USER_FACING_NAME = "__builtin_bitwise_not"
     IR_FORMAT_STR = "xor {type} -1, {arg}"
 
 
-class UnaryMinusExpression(UnaryIntegerExpression):
+class UnaryIntegerMinusExpression(UnaryExpression):
+    EXPECTED_TYPES = IntegerDefinition
     USER_FACING_NAME = "__builtin_minus"
     IR_FORMAT_STR = "sub {type} 0, {arg}"
+
+
+class UnaryFloatingMinusExpression(UnaryExpression):
+    EXPECTED_TYPES = IEEEFloatDefinition
+    USER_FACING_NAME = "__builtin_fminus"
+    IR_FORMAT_STR = "fneg {type} {arg}"
 
 
 class BasicNumericExpression(BuiltinCallable):
@@ -540,15 +549,15 @@ class BitcastExpression(BuiltinCallable):
 
 
 def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
-    def get_integer_builtin(
-        expression_class: type[BasicNumericExpression | UnaryIntegerExpression],
+    def get_arithmetic_builtin(
+        expression_class: type[BasicNumericExpression | UnaryExpression],
     ):
         assert expression_class.USER_FACING_NAME is not None
         return (expression_class.USER_FACING_NAME, expression_class)
 
     integer_instructions = dict(
         map(
-            get_integer_builtin,
+            get_arithmetic_builtin,
             [
                 AddExpression,
                 SubExpression,
@@ -564,7 +573,8 @@ def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
                 IsEqualExpression,
                 IsGreaterThanExpression,
                 IsLessThanExpression,
-                UnaryMinusExpression,
+                UnaryIntegerMinusExpression,
+                UnaryFloatingMinusExpression,
                 BitwiseNotExpression,
             ],
         )

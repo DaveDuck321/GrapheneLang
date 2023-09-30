@@ -10,7 +10,6 @@ from .interfaces import SpecializationItem, Type, TypeDefinition, format_special
 from .user_facing_errors import (
     ArrayDimensionError,
     FailedLookupError,
-    GrapheneError,
     InvalidIntSize,
     VoidArrayDeclaration,
     VoidStructDeclaration,
