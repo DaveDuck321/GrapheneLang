@@ -209,6 +209,32 @@ class InvalidIntSize(GrapheneError):
         )
 
 
+class InvalidFloatLiteralTooLarge(GrapheneError):
+    def __init__(
+        self,
+        type_name: str,
+        actual_value: str,
+        expected_upper: int,
+    ) -> None:
+        super().__init__(
+            f"Error: '{type_name}' cannot represent '{actual_value}' since it is "
+            "too large and would be truncated to +infty. Only values below "
+            f"{expected_upper} can be represented."
+        )
+
+
+class InvalidFloatLiteralPrecision(GrapheneError):
+    def __init__(
+        self,
+        type_name: str,
+        actual_value: str,
+    ) -> None:
+        super().__init__(
+            f"Error: '{type_name}' cannot represent '{actual_value}' since there "
+            f"is insufficient precision for a normalized representation."
+        )
+
+
 class ArrayIndexCount(GrapheneError):
     def __init__(self, type_name: str, actual: int, expected: int) -> None:
         super().__init__(

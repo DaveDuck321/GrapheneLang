@@ -6,6 +6,7 @@ from operator import mul
 from typing import Callable, Optional
 
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
+from .floats import float_literal_to_exact_hex
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
     ArrayDimensionError,
@@ -335,8 +336,7 @@ class IEEEFloatDefinition(PrimitiveDefinition):
         super().__init__(size_in_bits // 8, ir_type, name)
 
     def graphene_literal_to_ir_constant(self, value_str: str) -> str:
-        # TODO: check precision is adequate to represent the number
-        return value_str
+        return float_literal_to_exact_hex(value_str, 8 * self.size)
 
     def are_equivalent(self, other: TypeDefinition) -> bool:
         if not isinstance(other, IEEEFloatDefinition):
