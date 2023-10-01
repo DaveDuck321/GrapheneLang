@@ -256,7 +256,22 @@ function get_next_bool_token : (cursor : Cursor mut&) -> ProgramSlice = {
     }
 }
 
-function get_next_decimal_token : (cursor : Cursor mut&) -> ProgramSlice = {
+// TODO: merge constant and compile time constant
+typedef NumericToken : {
+    data : ProgramSlice,
+    type : int, // 1: float, 2: int, 5: hex (matching `Constant`)
+}
+
+function get_next_numeric_token : (cursor : Cursor mut&) -> NumericToken = {
+    // TODO: binary/ octal
+    if cursor:is_next("0x") {
+        return {cursor:get_next_hex_token(), 5 /* Hex */};
+    }
+
+    // Parse floating point and integer constants
+    mut has_seen_decimal_point : bool = false;
+    mut has_seen_exponent : bool = false;
+
     mut token : ProgramSlice = cursor:slice(0);
     if cursor:try_skip_next("-") {
         token.end_offset += 1;
@@ -267,6 +282,38 @@ function get_next_decimal_token : (cursor : Cursor mut&) -> ProgramSlice = {
         if ascii_is_digit(next_char) {
             cursor.position += 1;
             token.end_offset += 1;
+
+            if cursor:get_char() == char(".") {
+                if has_seen_decimal_point {
+                    syntax_error(&mut cursor, sv("cannot have two decimal points in a floating point constant"));
+                }
+                if has_seen_exponent {
+                    syntax_error(&mut cursor, sv("cannot have decimal place in floating point exponent"));
+                }
+                has_seen_decimal_point = true;
+
+                cursor.position += 1;
+                token.end_offset += 1;
+            }
+
+            if ascii_to_upper(cursor:get_char()) == char("E") {
+                if has_seen_exponent {
+                    syntax_error(&mut cursor, sv("cannot have two exponents in a floating point constant"));
+                }
+                has_seen_exponent = true;
+
+                cursor.position += 1;
+                token.end_offset += 1;
+
+                if cursor:get_char() == char("-") or cursor:get_char() == char("+") {
+                    cursor.position += 1;
+                    token.end_offset += 1;
+                }
+
+                if !ascii_is_digit(cursor:get_char()) {
+                    syntax_error(&mut cursor, sv("illegal digit '%' in floating constant"), decode_utf8(next_char));
+                }
+            }
         } else {
             // Otherwise its a syntax error
             syntax_error(&mut cursor, sv("illegal digit '%' in decimal constant"), decode_utf8(next_char));
@@ -276,15 +323,10 @@ function get_next_decimal_token : (cursor : Cursor mut&) -> ProgramSlice = {
         syntax_error(&mut cursor, sv("expected decimal constant"));
     }
 
-    return token;
-}
-
-function get_next_numeric_token : (cursor : Cursor mut&) -> ProgramSlice = {
-    // TODO: binary/ octal
-    if cursor:is_next("0x") {
-        return cursor:get_next_hex_token();
+    if has_seen_decimal_point or has_seen_exponent {
+        return {token, 1 /* Floating point */};
     } else {
-        return cursor:get_next_decimal_token();
+        return {token, 2 /* Int */};
     }
 }
 
@@ -482,8 +524,11 @@ function parse_compile_time_constant : (cursor : Cursor mut&) -> CompileTimeCons
         let identifier : ProgramSlice = cursor:get_next_at_identifier();
         return {true, identifier};
     } else {
-        let number : ProgramSlice = cursor:get_next_numeric_token();
-        return {false, number};
+        let number : NumericToken = cursor:get_next_numeric_token();
+        if number.type == 1 {
+            syntax_error(&mut cursor, sv("floating point literals cannot be used as a compile time constant"));
+        }
+        return {false, number.data};
     }
 }
 
@@ -902,15 +947,11 @@ function parse_non_operator_expression_prefix : (cursor : Cursor mut&) -> Expres
         constant = {3, cursor:get_next_bool_token()};
         return {1, ref_to_addr(&constant), get_meta(constant.value)};
     }
-    if cursor:is_next("0x") {
-        let constant : Constant mut& = &mut cursor.allocator:allocate<Constant>();
-        constant = {5, cursor:get_next_hex_token()};
-        return {1, ref_to_addr(&constant), get_meta(constant.value)};
-    }
     if ascii_is_digit(cursor:get_char()) {
-        // TODO: float support
         let constant : Constant mut& = &mut cursor.allocator:allocate<Constant>();
-        constant = {2, cursor:get_next_decimal_token()};
+
+        let token : NumericToken = cursor:get_next_numeric_token();
+        constant = {token.type, token.data};
         return {1, ref_to_addr(&constant), get_meta(constant.value)};
     }
     if cursor:is_next("\"") {
@@ -959,10 +1000,11 @@ function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expr
 
     if cursor:try_skip_next("&") {
         let is_mut : bool = cursor:try_skip_next_and_surrounding_white_space("mut");
+        let is_any : bool = !is_mut and cursor:try_skip_next_and_surrounding_white_space("any");
         let rhs : Expression = cursor:parse_maybe_unary_or_borrow_expression();
 
         let borrow : Borrow mut& = &mut cursor.allocator:allocate<Borrow>();
-        borrow = {is_mut, rhs, meta(start_offset, borrow.meta.end_offset)};
+        borrow = {is_mut, is_any, rhs, meta(start_offset, borrow.meta.end_offset)};
         return {11, ref_to_addr(&borrow), borrow.meta};
     }
 
