@@ -8,6 +8,7 @@ URL:            https://github.com/DaveDuck321/GrapheneLang
 Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
 Source1:        %{url}/archive/refs/tags/bootstrap/1.tar.gz
 Source2:        %{url}/archive/refs/tags/bootstrap/2.tar.gz
+Source3:        %{url}/archive/refs/tags/bootstrap/4.tar.gz
 
 BuildRequires:  python3-devel
 BuildRequires:  clang
@@ -30,6 +31,7 @@ A Graphene front-end for LLVM (TODO).
 # Unpacks the nth source archive to the GrapheneLang-bootstrap-n subdirectory.
 %setup -D -T -n %{source_dir} -a 1
 %setup -D -T -n %{source_dir} -a 2
+%setup -D -T -n %{source_dir} -a 3
 
 # Go back to our build directory.
 cd %{_builddir}/%{source_dir}
