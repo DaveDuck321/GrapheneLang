@@ -9,7 +9,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llvm-version: [15, 16]
+        llvm-version: [16, 17]
         runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
 
     runs-on: ${{ matrix.runner }}
