@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "glang"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
   { name = "Antros Economides", email = "antroseconomides@hotmail.co.uk" },
   { name = "Tom Grant", email = "thomas.grant.mail@gmail.com" },
