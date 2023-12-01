@@ -61,7 +61,11 @@ function [T] range : (lower : T, upper : T, step : T) -> Range<T> = {
 }
 
 @implicit [T] has_next : (range : Range<T> mut&) -> bool = {
-    return range.lower < range.upper;
+    if range.step > 0 {
+        return range.lower < range.upper;
+    } else {
+        return range.lower > range.upper;
+    }
 }
 
 // ContiguousContainerIter
