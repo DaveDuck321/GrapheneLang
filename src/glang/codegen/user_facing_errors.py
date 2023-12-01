@@ -128,7 +128,7 @@ class PatternMatchDeductionFailure(GrapheneError):
     def __init__(self, fn_name: str, unmatched_generic: str) -> None:
         super().__init__(
             f"Error: cannot deduce generic type '{unmatched_generic}' "
-            f"in function '{fn_name}', manual specialization is required"
+            f"in '{fn_name}', manual specialization is required"
         )
 
 
@@ -332,14 +332,6 @@ class InvalidInitializerListConversion(TypeCheckerError):
         super(GrapheneError, self).__init__(
             f"Error: initializer list of the form '{init_list_name}' cannot be "
             f"converted to '{struct_type}'"
-        )
-
-
-class InvalidInitializerListDeduction(TypeCheckerError):
-    def __init__(self, init_list_name: str) -> None:
-        super(GrapheneError, self).__init__(
-            "Error: cannot deduce the destination type for initializer list "
-            f"'{init_list_name}' without a strongly typed context"
         )
 
 

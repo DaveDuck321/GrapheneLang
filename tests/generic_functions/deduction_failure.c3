@@ -7,4 +7,4 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 4, in 'function main: () -> int'
-/// Error: cannot deduce generic type 'T' in function 'hello<T> : () -> void', manual specialization is required
+/// Error: cannot deduce generic type 'T' in 'function [[]T[]] hello<T> : () -> void', manual specialization is required

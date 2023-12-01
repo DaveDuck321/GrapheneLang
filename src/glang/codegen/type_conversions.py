@@ -1,32 +1,28 @@
-from functools import cached_property
 from typing import Iterator, Optional
 
 from .builtin_types import HeapArrayDefinition, IntegerDefinition, StackArrayDefinition
-from .interfaces import Type, TypedExpression
+from .interfaces import StaticTypedExpression, Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
-class SquashIntoUnderlyingType(TypedExpression):
+class RemoveIndirection(StaticTypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        # Converts a TypedExpression into an underlying type with no indirection
-        super().__init__(ref.underlying_type, Type.Kind.VALUE)
-
+        super().__init__(ref.result_type, Type.Kind.VALUE)
         self.ref = ref
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#load-instruction
-
         self.result_reg = next(reg_gen)
-        return_type_ir = self.ref.underlying_type.ir_type
+        return_type_ir = self.ref.result_type.ir_type
 
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         return [
             f"%{self.result_reg} = load {return_type_ir}, "
             f"{self.ref.ir_ref_with_type_annotation}, "
-            f"align {self.get_equivalent_pure_type().alignment}"
+            f"align {self.result_type_as_if_borrowed.alignment}"
         ]
 
-    @cached_property
+    @property
     def ir_ref_without_type_annotation(self) -> str:
         return f"%{self.result_reg}"
 
@@ -40,9 +36,11 @@ class SquashIntoUnderlyingType(TypedExpression):
         raise OperandError("cannot modify a squashed value")
 
 
-class PromoteInteger(TypedExpression):
+class PromoteInteger(StaticTypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
-        src_definition = src.underlying_type.definition
+        super().__init__(dest_type, Type.Kind.VALUE)
+
+        src_definition = src.result_type.definition
 
         assert not src.has_address
         assert dest_type.storage_kind == Type.Kind.VALUE
@@ -50,8 +48,6 @@ class PromoteInteger(TypedExpression):
         assert isinstance(dest_type.definition, IntegerDefinition)
         assert src_definition.is_signed == dest_type.definition.is_signed
         assert src_definition.bits < dest_type.definition.bits
-
-        super().__init__(dest_type, Type.Kind.VALUE)
 
         self.src = src
         self.is_signed = src_definition.is_signed
@@ -75,7 +71,7 @@ class PromoteInteger(TypedExpression):
         return f"%{self.result_reg}"
 
     def __repr__(self) -> str:
-        return f"PromoteInteger({self.src.underlying_type} to {self.underlying_type})"
+        return f"PromoteInteger({self.src} to {self.underlying_type})"
 
     def assert_can_read_from(self) -> None:
         self.src.assert_can_read_from()
@@ -85,37 +81,24 @@ class PromoteInteger(TypedExpression):
         raise OperandError("cannot modify promoted integers")
 
 
-class Reinterpret(TypedExpression):
+class Reinterpret(StaticTypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
-        # Bit cast between anything
+        assert src.has_address and not src.underlying_indirection_kind.is_reference()
+        assert dest_type.storage_kind.is_reference()
+
         super().__init__(dest_type, Type.Kind.VALUE)
 
         self._src = src
-        self._no_conversion_needed = (
-            self._src.get_equivalent_pure_type().ir_type
-            == self.get_equivalent_pure_type().ir_type
-        )
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        # https://llvm.org/docs/LangRef.html#bitcast-to-instruction
-
-        if self._no_conversion_needed:
-            return []
-
-        self.result_reg = next(reg_gen)
-        return [
-            f"%{self.result_reg} = bitcast {self._src.ir_ref_with_type_annotation} "
-            f"to {self.get_equivalent_pure_type().ir_type}"
-        ]
+        return []
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
-        if self._no_conversion_needed:
-            return self._src.ir_ref_without_type_annotation
-        return f"%{self.result_reg}"
+        return self._src.ir_ref_without_type_annotation
 
     def __repr__(self) -> str:
-        return f"Reinterpret({self._src.underlying_type} to {self.underlying_type})"
+        return f"Reinterpret({self._src} to {self.underlying_type})"
 
     def assert_can_read_from(self) -> None:
         self._src.assert_can_read_from()
@@ -156,13 +139,13 @@ def implicit_conversion_impl(
         return expr_list[-1]
 
     def last_type() -> Type:
-        return expr_list[-1].underlying_type
+        return expr_list[-1].result_type
 
     promotion_cost: int = 0
 
     # Always dereference implicit addresses
     if src.underlying_indirection_kind.is_reference():
-        expr_list.append(SquashIntoUnderlyingType(src))
+        expr_list.append(RemoveIndirection(src))
 
     # Initializer lists (+ anything else that depends on the TypedExpression)
     additional_cost, exprs = src.try_convert_to_type(dest_type)
@@ -172,12 +155,15 @@ def implicit_conversion_impl(
     # We never implicitly dereferenced
     if last_type().storage_kind != dest_type.storage_kind:
         maybe_missing_borrow = False
-        if src.underlying_type == dest_type.convert_to_storage_type(Type.Kind.VALUE):
-            maybe_missing_borrow = src.was_reference_type_at_any_point
+        if last_type() == dest_type.convert_to_storage_type(Type.Kind.VALUE):
+            maybe_missing_borrow = (
+                isinstance(src, StaticTypedExpression)
+                and src.was_reference_type_at_any_point
+            )
 
         raise TypeCheckerError(
             context,
-            src.underlying_type.format_for_output_to_user(True),
+            src.format_for_output_to_user(),
             dest_type.format_for_output_to_user(True),
             maybe_missing_borrow,
         )
@@ -233,7 +219,7 @@ def implicit_conversion_impl(
     if last_type() != dest_type:
         raise TypeCheckerError(
             context,
-            src.underlying_type.format_for_output_to_user(),
+            src.format_for_output_to_user(),
             dest_type.format_for_output_to_user(),
         )
 
@@ -259,7 +245,7 @@ def assert_is_implicitly_convertible(
 def get_implicit_conversion_cost(
     src: Type | TypedExpression, dest_type: Type
 ) -> Optional[int]:
-    class Wrapper(TypedExpression):
+    class Wrapper(StaticTypedExpression):
         def __init__(self, expr_type: Type) -> None:
             super().__init__(expr_type, Type.Kind.VALUE)
 

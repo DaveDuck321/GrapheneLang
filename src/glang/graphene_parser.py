@@ -419,7 +419,7 @@ class FlattenedExpression:
         return self.subexpressions[-1]
 
     def type(self) -> cg.Type:
-        return self.expression().underlying_type
+        return self.expression().result_type
 
 
 def is_flattened_expression_iterable(
@@ -593,9 +593,9 @@ class ExpressionParser(lp.Interpreter):
             elif indirection_kind == cg.Type.Kind.VALUE:
                 # (&a):fn(), (&mut a):fn(), or rvalue():fn();
                 # We do not allow the 3rd option
-                pure = this_arg.expression().get_equivalent_pure_type()
-                if pure.storage_kind == cg.Type.Kind.VALUE:
-                    raise BorrowWithNoAddressError(pure.format_for_output_to_user())
+                possible = this_arg.expression().result_type_as_if_borrowed
+                if possible.storage_kind == cg.Type.Kind.VALUE:
+                    raise BorrowWithNoAddressError(possible.format_for_output_to_user())
             else:
                 assert False
 
@@ -836,7 +836,7 @@ def generate_for_statement(
     inner_scope.add_generatable(get_next_expr)
 
     iter_result_variable = cg.StackVariable(
-        node.variable, get_next_expr.underlying_type, False, True
+        node.variable, get_next_expr.result_type, False, True
     )
     inner_scope.add_variable(iter_result_variable)
     inner_scope.add_generatable(

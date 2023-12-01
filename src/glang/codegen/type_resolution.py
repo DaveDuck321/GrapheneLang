@@ -16,7 +16,6 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
-from .expressions import InitializerList
 from .interfaces import (
     GenericArgument,
     GenericMapping,
@@ -146,7 +145,8 @@ class GenericValueReference(CompileTimeConstant):
         return self.name
 
     def produce_specialized_copy(self, generics: GenericMapping) -> CompileTimeConstant:
-        assert self.argument in generics.mapping
+        if self.argument not in generics.mapping:
+            return self
 
         specialized_value = generics.mapping[self.argument]
         if not isinstance(specialized_value, int):
@@ -308,7 +308,8 @@ class UnresolvedGenericType(UnresolvedType):
         return self.name
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
-        assert self.argument in generics.mapping
+        if self.argument not in generics.mapping:
+            return self
 
         specialized_type = generics.mapping[self.argument]
         if not isinstance(specialized_type, Type):
@@ -351,7 +352,6 @@ class UnresolvedReferenceType(UnresolvedType):
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        # TODO: support circular references
         resolved_value = self.value_type.resolve(lookup)
         if resolved_value.storage_kind.is_reference():
             raise DoubleReferenceError(resolved_value.format_for_output_to_user(True))
@@ -418,8 +418,26 @@ class UnresolvedStructType(UnresolvedType):
             )
         )
 
-    def pattern_match(self, _1: Type, _2: GenericMapping, _3: int) -> Optional[int]:
-        assert False  # TODO
+    def pattern_match(
+        self, target: Type, generics: GenericMapping, depth: int
+    ) -> Optional[int]:
+        if not isinstance(target.definition, StructDefinition):
+            return None
+
+        cost = 0
+        for our_member, target_member in zip(self.members, target.definition.members):
+            if our_member[0] != target_member[0]:
+                return None  # Struct member names don't match
+
+            if len(our_member[1].get_generics_taking_part_in_pattern_match()) == 0:
+                continue  # No need to pattern match, use type equality
+
+            result = our_member[1].pattern_match(target_member[1], generics, depth + 1)
+            if result is None:
+                return None
+            cost += result
+
+        return cost
 
 
 @dataclass(frozen=True)
@@ -668,11 +686,10 @@ class UnresolvedFunctionSignature:
     parameter_pack_argument_name: Optional[str]
     return_type: UnresolvedType
 
-    def collapse_into_type(self, arg: TypedExpression | Type) -> Type:
-        if isinstance(arg, InitializerList):
-            raise NotImplementedError()
+    @staticmethod
+    def collapse_into_type(arg: TypedExpression | Type) -> Type:
         if isinstance(arg, TypedExpression):
-            return arg.underlying_type
+            return arg.result_type
         if isinstance(arg, Type):
             return arg
 
@@ -709,14 +726,6 @@ class UnresolvedFunctionSignature:
         self,
         generics: GenericMapping,
     ) -> "UnresolvedFunctionSignature":
-        unmatched_generics = (
-            self.get_generics_taking_part_in_pattern_match() - generics.mapping.keys()
-        )
-        if len(unmatched_generics) != 0:
-            raise PatternMatchDeductionFailure(
-                self.format_for_output_to_user(), unmatched_generics.pop().name
-            )
-
         if self.parameter_pack_argument_name is None:
             assert len(generics.pack) == 0
 
@@ -738,25 +747,22 @@ class UnresolvedFunctionSignature:
             self.name,
             tuple(new_specialization),
             tuple(arguments),
-            None,  # We have just expanded the parameter pack
+            self.parameter_pack_argument_name if len(generics.pack) == 0 else None,
             self.return_type.produce_specialized_copy(generics),
         )
 
-    def pattern_match(
+    def pattern_match_specialization(
         self,
-        target_args: list[TypedExpression] | list[Type],
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
         depth: int,
     ) -> Optional[int]:
         cost = 0
-
-        # Match the specialization
         for target_item, item in zip(
             target_specialization, self.expanded_specialization
         ):
             if isinstance(item, CompileTimeConstant) != isinstance(target_item, int):
-                return False
+                return None
 
             if len(item.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
@@ -774,6 +780,15 @@ class UnresolvedFunctionSignature:
                 return None
 
             cost += result
+        return cost
+
+    def pattern_match_args(
+        self,
+        target_args: list[TypedExpression] | list[Type],
+        out: GenericMapping,
+        depth: int,
+    ) -> Optional[int]:
+        cost = 0
 
         # Check the argument count
         if self.parameter_pack_argument_name is None:
@@ -789,12 +804,6 @@ class UnresolvedFunctionSignature:
         ):
             if len(unresolved_arg.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
-
-            if isinstance(target_arg, InitializerList):
-                # See: `docs/types_overview.c3`
-                # TODO: we should convert this to an anonymous struct
-                #   for now we just ignore initializer lists
-                continue
 
             arg_type = self.collapse_into_type(target_arg)
             result = unresolved_arg.pattern_match(arg_type, out, depth + 1)
@@ -884,25 +893,35 @@ class FunctionDeclaration:
         generic_format = format_generics(self.generics, self.pack_type_name)
         return f"{prefix}{generic_format} {self.signature.format_for_output_to_user()}"
 
-    def pattern_match(
+    def pattern_match_specialization(
         self,
-        target_args: list[TypedExpression] | list[Type],
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
     ) -> Optional[int]:
-        return self.signature.pattern_match(target_args, target_specialization, out, 0)
+        return self.signature.pattern_match_specialization(
+            target_specialization, out, 0
+        )
+
+    def pattern_match_args(
+        self,
+        target_args: list[TypedExpression] | list[Type],
+        out: GenericMapping,
+    ) -> Optional[int]:
+        return self.signature.pattern_match_args(target_args, out, 0)
 
     def produce_specialized_copy(
         self, generics: GenericMapping
     ) -> "FunctionDeclaration":
-        assert len(self.mapping.mapping) == 0 and len(self.mapping.pack) == 0
+        assert len(self.mapping.pack) == 0
+
+        remaining_generics = set(self.generics) - set(generics.mapping)
         return FunctionDeclaration(
             self.is_foreign,
             self.arg_names,
             self.pack_type_name,
-            tuple(),
+            tuple(remaining_generics),
             self.signature.produce_specialized_copy(generics),
-            generics,
+            self.mapping + generics,
             self.loc,
             self.uuid,
         )
@@ -943,7 +962,9 @@ class SymbolTable:
         )
 
         # Remember which functions need codegen
-        self._already_codegened: dict[UUID, list[FunctionSignature]] = defaultdict(list)
+        self._already_codegened: dict[
+            UUID, list[tuple[FunctionDeclaration, FunctionSignature]]
+        ] = defaultdict(list)
         self._remaining_to_codegen: list[
             tuple[FunctionDeclaration, FunctionSignature]
         ] = []
@@ -1067,15 +1088,13 @@ class SymbolTable:
     def add_function_to_codegen(
         self, declaration: FunctionDeclaration, signature: FunctionSignature
     ) -> None:
-        for other in self._already_codegened[declaration.uuid]:
-            if (
-                do_specializations_match(other.specialization, signature.specialization)
-                and other.arguments == signature.arguments
-                and other.return_type == signature.return_type
+        for other_def, other_sig in self._already_codegened[declaration.uuid]:
+            if declaration.uuid == other_def.uuid and do_specializations_match(
+                other_sig.specialization, signature.specialization
             ):
                 return  # Already codegened
 
-        self._already_codegened[declaration.uuid].append(signature)
+        self._already_codegened[declaration.uuid].append((declaration, signature))
         self._remaining_to_codegen.append((declaration, signature))
 
     def lookup_function(
@@ -1096,7 +1115,6 @@ class SymbolTable:
         #
         # A function may deduce its specialization based on its arguments
         #   For now, either the full specialization must be given or none at all
-        #   TODO: relax this requirement
         #
         # We choose which function gets priority based on the following criteria:
         #   1) When initialized the signature MUST not create a substitution failure
@@ -1114,15 +1132,34 @@ class SymbolTable:
 
         all_candidates: list[tuple[int, FunctionDeclaration]] = []
         for candidate in self._unresolved_fndefs[name]:
+            # The user provides a partial specialization
             generics = GenericMapping({}, [])
-            cost = candidate.pattern_match(args, given_specialization, generics)
-            if cost is None:
+            cost1 = candidate.pattern_match_specialization(
+                given_specialization, generics
+            )
+            if cost1 is None:
+                continue
+
+            partially_specialized = candidate.produce_specialized_copy(generics)
+
+            # Deduce any remaining generics
+            generics = GenericMapping({}, [])
+            cost2 = partially_specialized.pattern_match_args(args, generics)
+            if cost2 is None:
                 continue
 
             # We've matched the pattern, now we specialize the candidate
-            # TODO: catch these errors
-            specialized = candidate.produce_specialized_copy(generics)
-            all_candidates.append((cost, specialized))
+            specialized = partially_specialized.produce_specialized_copy(generics)
+            unmatched_generics = (
+                specialized.signature.get_generics_taking_part_in_pattern_match()
+            )
+            if len(unmatched_generics) != 0:
+                raise PatternMatchDeductionFailure(
+                    specialized.format_for_output_to_user(),
+                    unmatched_generics.pop().name,
+                )
+
+            all_candidates.append((cost1 + cost2, specialized))
 
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])
@@ -1212,7 +1249,6 @@ class SymbolTable:
                 continue
 
             # We've matched the pattern, now we specialize the candidate
-            # TODO: catch these errors
             specialized = candidate.produce_specialized_copy(generics)
             all_candidates.append((cost, specialized))
 
@@ -1315,16 +1351,8 @@ class SymbolTable:
                 continue
 
             try:
-                resolved_specialization = [
-                    self.resolve_specialization_item(item)
-                    for item in fn.signature.expanded_specialization
-                ]
-                resolved_args = [
-                    self.resolve_type(item) for item in fn.signature.arguments
-                ]
-                self.lookup_function(
-                    fn.signature.name, resolved_specialization, resolved_args, True
-                )
+                signature = self.resolve_function(fn)
+                self.add_function_to_codegen(fn, signature)
             except GrapheneError as e:
                 raise ErrorWithLocationInfo(
                     e.message, fn.loc, "function declaration"
