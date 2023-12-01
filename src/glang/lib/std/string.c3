@@ -42,6 +42,18 @@ function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>&, u8&
     return lhs.buffer == rhs.buffer;
 }
 
+function slice_to : (sv : StringView&, end : isize) -> StringView = {
+    return { sv.buffer:slice_to(end) };
+}
+
+function slice_from : (sv : StringView&, start : isize) -> StringView = {
+    return { sv.buffer:slice_from(start) };
+}
+
+function slice_between : (sv : StringView&, start : isize, end : isize) -> StringView = {
+    return { sv.buffer:slice_between(start, end) };
+}
+
 // CString
 function length : (str: CString&) -> isize = {
     mut len : isize = 0;
@@ -111,4 +123,16 @@ function ascii_is_matched_pair : (lhs : u8, rhs : u8) -> bool = {
 function char : (literal : u8[1]&) -> u8 = {
     // TODO: add char literals
     return literal[0];
+}
+
+function[Int] unstringify : (view : StringView) -> TypeIf<Int, IsIntegral<Int>> = {
+    mut result : Int = 0;
+
+    for char in view:get_iter() {
+        runtime_assert(ascii_is_digit(char));
+        result *= 10;
+        result += as_arithmetic(char) - as_arithmetic(char("0"));
+    }
+
+    return result;
 }
