@@ -1109,7 +1109,7 @@ class SymbolTable:
         if name not in self._unresolved_fndefs:
             # Substitution impossible
             raise FailedLookupError(
-                "function", f"function {name}{format_arguments(args)}"
+                "function", f"function {name} : {format_arguments(args)}"
             )
 
         all_candidates: list[tuple[int, FunctionDeclaration]] = []
