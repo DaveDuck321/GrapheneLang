@@ -1,5 +1,6 @@
 @require_once "std/rb_tree.c3"
 @require_once "std/format.c3"
+@require_once "std/assert.c3"
 
 function main : () -> int = {
     let tree : RB_Tree<int> = make<RB_Tree<int>>();
@@ -15,10 +16,11 @@ function main : () -> int = {
     print(tree:search(1));
     print(tree:search(0));
 
-    tree:delete(0);
-    tree:delete(1);
-    tree:delete(2);
-    tree:delete(3);
+    runtime_assert(tree:delete(0));
+    runtime_assert(tree:delete(1));
+    runtime_assert(tree:delete(2));
+    runtime_assert(tree:delete(3));
+    runtime_assert(!tree:delete(4));
 
     print(tree:search(4));
     print(tree:search(3));

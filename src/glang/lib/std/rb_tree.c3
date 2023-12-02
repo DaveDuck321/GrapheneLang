@@ -474,11 +474,14 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
     }
 }
 
-function [K] delete : (self : RB_Tree<K>&, key : K) -> void = {
+function [K] delete : (self : RB_Tree<K>&, key : K) -> bool = {
     let node : Optional<RB_Node<K>&> = self:search_impl(key);
 
     // Do nothing if the key is not in the tree.
     if node:has_value() {
         self:delete_impl(&node:data());
+        return true;
     }
+
+    return false;
 }
