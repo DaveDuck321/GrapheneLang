@@ -322,21 +322,21 @@ function [K] maximum : (tree : RB_Tree<K>&) -> Optional<K> = {
 }
 
 function [K] fix_after_delete_impl : (
-    self : RB_Tree<K>&, x : Optional<RB_Node<K>&>, y : RB_Node<K>&
+    self : RB_Tree<K>&, x : Optional<RB_Node<K>&>, x_parent : RB_Node<K>&
 ) -> Optional<RB_Node<K>&> = {
-    // x is guaranteed not to be the root. y is guaranteed to be x's parent.
-    let x_side : bool = which_child_am_i(x, &y);
+    // x is guaranteed not to be the root.
+    let x_side : bool = which_child_am_i(x, &x_parent);
     let w_side : bool = !x_side;
 
     // x's sibling, w, cannot be a leaf node (nil node). If x is double black,
     // then its sibling tree must also have a height of at least 2 black nodes.
-    let w : RB_Node<K>& = &y:get_child(w_side):data();
+    let w : RB_Node<K>& = &x_parent:get_child(w_side):data();
 
     // Case 1: w is red.
     if w.colour == RED() {
         // The rotation makes x's new sibling black.
-        self:rotate(&y, x_side);
-        y.colour = RED();
+        self:rotate(&x_parent, x_side);
+        x_parent.colour = RED();
         w.colour = BLACK();
 
         // x is unchanged; we loop again and enter one of the other three cases.
@@ -346,11 +346,11 @@ function [K] fix_after_delete_impl : (
     // Case 2: w is black, w's children are black.
     if w.left:is_black() and w.right:is_black() {
         // Colour w red, to decrement the height of the sibling tree (in term of
-        // black nodes). This allows us to move x up to our parent: if y was
-        // black, then now it is double black; if it was red, then now it is
+        // black nodes). This allows us to move x up to our parent: if x_parent
+        // was black, then now it is double black; if it was red, then now it is
         // red-and-black.
         w.colour = RED();
-        return make_optional(&y);
+        return make_optional(&x_parent);
     }
 
     // Case 3: w is black with red close and black distant child.
@@ -368,14 +368,15 @@ function [K] fix_after_delete_impl : (
     // Case 4: w is black and w's distant child is red.
     runtime_assert(w:get_child(w_side):is_red());
 
-    // Essentially, we make w y's parent, which means that there is an
+    // Essentially, we make w x_parent's parent, which means that there is an
     // additional black node now in the path of x. This allows us to remove the
     // double black. The root of the sibling tree is now w's red child, which
     // we colour black to compensate.
-    self:rotate(&y, x_side);
+    self:rotate(&x_parent, x_side);
 
-    // w takes y's colour, so the colour of this subtree's root is preserved.
-    w.colour = y.colour;
+    // w takes x_parent's colour, so the colour of this subtree's root is
+    // preserved.
+    w.colour = x_parent.colour;
 
     // We have removed one black node from w's side of the tree (w itself), so
     // we need to make its red child black to compensate (as it is now the root
@@ -389,20 +390,22 @@ function [K] fix_after_delete_impl : (
 }
 
 function [K] fix_after_delete : (
-    self : RB_Tree<K>&, x : Optional<RB_Node<K>&>, y : Optional<RB_Node<K>&>
+    self : RB_Tree<K>&,
+    x : Optional<RB_Node<K>&>,
+    x_parent : Optional<RB_Node<K>&>
 ) -> void = {
     // x is "double black" inside the loop.
     while x != self.root and x:is_black() {
-        // x might be a leaf node (nil node), so take its parent, y as an
-        // argument. y is an optional, as the root node has no parent. However,
-        // it should have a value in all other cases.
-        x = self:fix_after_delete_impl(x, &y:data());
+        // x might be a leaf node (nil node), so take its parent as an argument.
+        // x_parent is an optional, as the root node has no parent. However, it
+        // should have a value in all other cases.
+        x = self:fix_after_delete_impl(x, &x_parent:data());
 
         // In cases 1 and 3, x is unchanged, so it could still be an empty
         // optional, representing a leaf node (nil node). In the other cases, x
-        // moves up the tree, so we must update y.
+        // moves up the tree, so we must update x_parent.
         if x:has_value() {
-            y = x:data().parent;
+            x_parent = x:data().parent;
         }
     }
 
@@ -414,11 +417,11 @@ function [K] fix_after_delete : (
 
 function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
     // x is the "double black" or "red-and-black" node which we use to fix any
-    // red-black tree violations that arise from the deletion. y is its parent,
-    // as x might be a leaf node (nil node), which is represented as an empty
-    // optional.
+    // red-black tree violations that arise from the deletion. x_parent is used
+    // to keep track of its parent node, as x might be a leaf node (nil node),
+    // which is represented as an empty optional.
     let x : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
-    let y : Optional<RB_Node<K>&>;
+    let x_parent : Optional<RB_Node<K>&>;
     let must_fix : bool = u.colour == BLACK();
 
     if u.left:has_value() and u.right:has_value() {
@@ -430,9 +433,9 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
         if &v != &u.right:data() {
             // v doesn't have a left child, otherwise that child would be the
             // minimum. It might have a right child though, so replace v with
-            // its right child before we move it around the tree. Set y before
-            // the shift, as v might be an empty optional.
-            y = v.parent;
+            // its right child before we move it around the tree. Set x_parent
+            // before the shift, as v might be an empty optional.
+            x_parent = v.parent;
             self:shift_nodes(&v, v.right);
 
             // v now adopts the branch on the right of u. We could have made v
@@ -443,7 +446,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
             v.right:data().parent:store(&v);
         }
         else {
-            y = make_optional(&v);
+            x_parent = make_optional(&v);
         }
 
         // Replace u with v.
@@ -457,7 +460,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
         // Get the child that might have the value.
         let side : bool = left_if(u.left:has_value());
         x = u:get_child(side);
-        y = u.parent;
+        x_parent = u.parent;
 
         // And replace u with it. It's fine if x is empty; the code is just
         // simpler this way.
@@ -467,7 +470,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
     self.allocator:deallocate(&u);
 
     if must_fix {
-        self:fix_after_delete(x, y);
+        self:fix_after_delete(x, x_parent);
     }
 }
 
