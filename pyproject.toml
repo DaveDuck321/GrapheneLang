@@ -46,7 +46,7 @@ lint = ["pylint $(git ls-files \\*.py)"]
 dependencies = ["interegular~=0.3.2", "lark~=1.1.7"]
 
 [tool.hatch.envs.test.scripts]
-run = "python tests/run_tests.py"
+run = "python tests/run_tests.py {args}"
 
 
 # Style environment. Does not depend on the project.
