@@ -68,7 +68,13 @@ class Function:
         self._parameters.append(fn_param)
         self.top_level_scope.add_generatable(fn_param)
 
-        fn_param_var = StackVariable(param_name, param_type, False, True)
+        # Allow assignments to parameters passed by value (but our references
+        # still need to be immutable).
+        is_value_type = param_type.storage_kind == Type.Kind.VALUE
+
+        fn_param_var = StackVariable(
+            param_name, param_type, is_mutable=is_value_type, initialized=True
+        )
         self.top_level_scope.add_variable(fn_param_var)
 
         fn_param_var_assignment = VariableInitialize(fn_param_var, fn_param)
