@@ -275,7 +275,7 @@ function [K, Comparable] search : (
     return make_optional<K>();
 }
 
-function [K] shift_nodes : (
+function [K] replace_node_with : (
     self : RB_Tree<K>&, old : RB_Node<K>&, new : Optional<RB_Node<K>&>
 ) -> void = {
     // Make old's parent point to new instead of old.
@@ -433,7 +433,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
             // its right child before we move it around the tree. Set x_parent
             // before the shift, as v might be an empty optional.
             x_parent = v.parent;
-            self:shift_nodes(&v, v.right);
+            self:replace_node_with(&v, v.right);
 
             // v now adopts the branch on the right of u. We could have made v
             // the right child of u now, but there's no point, as we are about
@@ -447,7 +447,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
         }
 
         // Replace u with v.
-        self:shift_nodes(&u, make_optional(&v));
+        self:replace_node_with(&u, make_optional(&v));
         v.left = u.left;
         v.left:data().parent:store(&v);
         v.colour = u.colour;
@@ -461,7 +461,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
 
         // And replace u with it. It's fine if x is empty; the code is just
         // simpler this way.
-        self:shift_nodes(&u, x);
+        self:replace_node_with(&u, x);
     }
 
     self.allocator:deallocate(&u);
