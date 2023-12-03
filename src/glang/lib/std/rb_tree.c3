@@ -251,8 +251,8 @@ function [K] insert : (self : RB_Tree<K>&, key : K) -> void = {
     self:fix_after_insert(&u_ptr:data():data());
 }
 
-function [K] search_impl : (
-    self : RB_Tree<K>&, key : K
+function [K, Comparable] search_impl : (
+    self : RB_Tree<K>&, key : Comparable
 ) -> Optional<RB_Node<K>&> = {
     let u : Optional<RB_Node<K>&> = self.root;
 
@@ -263,7 +263,9 @@ function [K] search_impl : (
     return u;
 }
 
-function [K] search : (self : RB_Tree<K>&, key : K) -> Optional<K> = {
+function [K, Comparable] search : (
+    self : RB_Tree<K>&, key : Comparable
+) -> Optional<K> = {
     let result : Optional<RB_Node<K>&> = self:search_impl(key);
 
     if result:has_value() {
