@@ -248,11 +248,6 @@ function [K] insert : (self : RB_Tree<K>&, key : K) -> void = {
 
     u_ptr:data():store(&self:new<RB_Node<K>>(key, p_opt));
 
-    if p_opt:has_value() {
-        let p : RB_Node<K>& = &p_opt:data();
-        p:get_child(left_if(key < p.key)) = u_ptr:data();
-    }
-
     self:fix_after_insert(&u_ptr:data():data());
 }
 

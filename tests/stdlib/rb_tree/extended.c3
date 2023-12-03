@@ -1,5 +1,6 @@
-@require_once "std/rb_tree.c3"
 @require_once "std/iterators.c3"
+@require_once "std/rb_tree.c3"
+@require_once "std/util.c3"
 @require_once "std/wrappers.c3"
 
 function [K] child_is_valid_rb_tree: (
@@ -12,6 +13,12 @@ function [K] child_is_valid_rb_tree: (
     }
 
     let child : RB_Node<K>& = &child_opt:data();
+
+    // Check that the child's parent reference is correct.
+    if !child.parent:has_value() or
+        ref_to_addr(&child.parent:data()) != ref_to_addr(&node) {
+        return make_optional<int>();
+    }
 
     if side == LEFT() {
         if child.key >= node.key {
