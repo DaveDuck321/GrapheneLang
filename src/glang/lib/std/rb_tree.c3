@@ -431,7 +431,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
             // v doesn't have a left child, otherwise that child would be the
             // minimum. It might have a right child though, so replace v with
             // its right child before we move it around the tree. Set x_parent
-            // before the shift, as v might be an empty optional.
+            // before the shift, as the right child might be an empty optional.
             x_parent = v.parent;
             self:replace_node_with(&v, v.right);
 
