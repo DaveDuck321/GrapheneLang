@@ -418,7 +418,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
     // to keep track of its parent node, as x might be a leaf node (nil node),
     // which is represented as an empty optional.
     let x : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
-    let x_parent : Optional<RB_Node<K>&>;
+    let x_parent : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
     let must_fix : bool = (u.colour == BLACK());
 
     if u.left:has_value() and u.right:has_value() {
