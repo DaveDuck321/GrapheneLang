@@ -424,7 +424,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
     if u.left:has_value() and u.right:has_value() {
         // u has two children.
         let v : RB_Node<K>& = &u.right:data():minmax(LEFT());
-        must_fix = v.colour == BLACK();
+        must_fix = (v.colour == BLACK());
         x = v.right;
 
         if &v != &u.right:data() {
