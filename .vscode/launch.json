@@ -8,7 +8,7 @@
             "name": "Python: driver with demo.c3",
             "type": "python",
             "request": "launch",
-            "program": "driver.py",
+            "module": "src.glang.driver",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
