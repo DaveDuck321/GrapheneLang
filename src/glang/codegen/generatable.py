@@ -412,7 +412,7 @@ class Assignment(Generatable):
         if not storage_kind.is_reference():
             raise AssignmentToNonPointerError(dst.format_for_output_to_user())
 
-        if storage_kind == Type.Kind.CONST_REF:
+        if not storage_kind.is_mutable_reference():
             raise CannotAssignToAConstant(
                 dst.result_type_as_if_borrowed.format_for_output_to_user()
             )
