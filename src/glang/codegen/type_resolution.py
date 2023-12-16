@@ -368,7 +368,11 @@ class UnresolvedReferenceType(UnresolvedType):
         if target.storage_kind == Type.Kind.VALUE:
             return None
 
-        if (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable:
+        if (
+            target.storage_kind.is_reference()
+            and target.storage_kind != Type.Kind.MUTABLE_OR_CONST_REF
+            and (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable
+        ):
             return None
 
         if isinstance(target.definition, HeapArrayDefinition):
@@ -552,8 +556,11 @@ class UnresolvedHeapArrayType(UnresolvedType):
         if not isinstance(target.definition, HeapArrayDefinition):
             return None
 
-        # TODO: do we pattern match mutable refs into constant refs?
-        if (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable:
+        if (
+            target.storage_kind.is_reference()
+            and target.storage_kind != Type.Kind.MUTABLE_OR_CONST_REF
+            and (target.storage_kind == Type.Kind.MUTABLE_REF) != self.is_mutable
+        ):
             return None
 
         if len(self.known_dimensions) != len(target.definition.known_dimensions):

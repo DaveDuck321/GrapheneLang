@@ -64,9 +64,14 @@ class Type(ABC):
         VALUE = 1
         MUTABLE_REF = 2
         CONST_REF = 3
+        # Mutable reference, but implicitly convertible to a const reference.
+        MUTABLE_OR_CONST_REF = 4
 
         def is_reference(self) -> bool:
             return self != Type.Kind.VALUE
+
+        def is_mutable_reference(self) -> bool:
+            return self in (self.MUTABLE_REF, self.MUTABLE_OR_CONST_REF)
 
     def __init__(self, definition: TypeDefinition) -> None:
         self.definition = definition

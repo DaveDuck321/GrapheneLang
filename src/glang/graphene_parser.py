@@ -479,7 +479,9 @@ class ExpressionParser(lp.Interpreter):
         expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
 
         # Implicitly take reference to string literal
-        return expr.add_parent(cg.BorrowExpression(expr.expression(), False))
+        return expr.add_parent(
+            cg.BorrowExpression(expr.expression(), cg.Type.Kind.CONST_REF)
+        )
 
     def OperatorUse(self, node: lp.OperatorUse) -> FlattenedExpression:
         lhs = self.parse_expr(node.lhs)
@@ -588,11 +590,15 @@ class ExpressionParser(lp.Interpreter):
             match this_arg.expression().underlying_indirection_kind:
                 case cg.Type.Kind.CONST_REF:
                     this_arg.add_parent(
-                        cg.BorrowExpression(this_arg.expression(), False)
+                        cg.BorrowExpression(
+                            this_arg.expression(), cg.Type.Kind.CONST_REF
+                        )
                     )
                 case cg.Type.Kind.MUTABLE_REF:
                     this_arg.add_parent(
-                        cg.BorrowExpression(this_arg.expression(), True)
+                        cg.BorrowExpression(
+                            this_arg.expression(), cg.Type.Kind.MUTABLE_OR_CONST_REF
+                        )
                     )
                 case cg.Type.Kind.VALUE:
                     # (&a):fn(), (&mut a):fn(), or rvalue():fn();
@@ -603,6 +609,7 @@ class ExpressionParser(lp.Interpreter):
                             possible.format_for_output_to_user()
                         )
                 case _:
+                    # cg.Type.Kind.MUTABLE_OR_CONST_REF shouldn't be possible.
                     raise AssertionError()
 
             unresolved_args.insert(0, this_arg)
@@ -656,10 +663,12 @@ class ExpressionParser(lp.Interpreter):
 
     def Borrow(self, node: lp.Borrow) -> FlattenedExpression:
         lhs = self.parse_expr(node.expression)
-        # TODO: make this const-correct
-        # I've temporarily disabled this so we can parse the parser as it
-        #  transitions to using the new syntax
-        return lhs.add_parent(cg.BorrowExpression(lhs.expression(), node.is_mut))
+        return lhs.add_parent(
+            cg.BorrowExpression(
+                lhs.expression(),
+                cg.Type.Kind.MUTABLE_REF if node.is_mut else cg.Type.Kind.CONST_REF,
+            )
+        )
 
     def UnnamedInitializerList(
         self, node: lp.UnnamedInitializerList
@@ -827,7 +836,7 @@ def generate_for_statement(
         cg.VariableInitialize(iter_variable, iter_expr.expression())
     )
     var_ref = cg.VariableReference(iter_variable)
-    borrowed_iter_expr = cg.BorrowExpression(var_ref, True)
+    borrowed_iter_expr = cg.BorrowExpression(var_ref, cg.Type.Kind.MUTABLE_REF)
     outer_scope.add_generatable([var_ref, borrowed_iter_expr])
 
     # Inner scope
@@ -875,7 +884,7 @@ def generate_assignment(
     if node.operator == "=":
         scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
     else:
-        borrowed_lhs = cg.BorrowExpression(lhs.expression(), True)
+        borrowed_lhs = cg.BorrowExpression(lhs.expression(), cg.Type.Kind.MUTABLE_REF)
         scope.add_generatable(borrowed_lhs)
         scope.add_generatable(
             program.lookup_call_expression(

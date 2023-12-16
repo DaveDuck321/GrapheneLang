@@ -152,21 +152,31 @@ def implicit_conversion_impl(
     promotion_cost += additional_cost
     expr_list.extend(exprs)
 
-    # We never implicitly dereferenced
-    if last_type().storage_kind != dest_type.storage_kind:
-        maybe_missing_borrow = False
-        if last_type() == dest_type.convert_to_storage_type(Type.Kind.VALUE):
+    match (last_type().storage_kind, dest_type.storage_kind):
+        case Type.Kind.MUTABLE_OR_CONST_REF, dest_kind if dest_kind.is_reference():
+            expr_list.append(
+                Reinterpret(
+                    last_expr(),
+                    last_type().convert_to_storage_type(dest_kind),
+                )
+            )
+            # Preferentially select the mutable overload.
+            if dest_kind == Type.Kind.CONST_REF:
+                promotion_cost += 1
+        case a, b if a != b:
+            # We never implicitly dereference.
             maybe_missing_borrow = (
-                isinstance(src, StaticTypedExpression)
+                last_type() == dest_type.convert_to_storage_type(Type.Kind.VALUE)
+                and isinstance(src, StaticTypedExpression)
                 and src.was_reference_type_at_any_point
             )
 
-        raise TypeCheckerError(
-            context,
-            src.format_for_output_to_user(),
-            dest_type.format_for_output_to_user(True),
-            maybe_missing_borrow,
-        )
+            raise TypeCheckerError(
+                context,
+                src.format_for_output_to_user(),
+                dest_type.format_for_output_to_user(True),
+                maybe_missing_borrow,
+            )
 
     # Integer promotion.
     last_def = last_type().definition

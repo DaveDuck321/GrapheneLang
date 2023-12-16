@@ -196,7 +196,7 @@ class FunctionCallExpression(StaticTypedExpression):
 
 
 class BorrowExpression(StaticTypedExpression):
-    def __init__(self, expr: TypedExpression, is_explicitly_mutable: bool) -> None:
+    def __init__(self, expr: TypedExpression, borrow_kind: Type.Kind) -> None:
         self._expr = expr
 
         rhs_type = expr.result_type
@@ -206,17 +206,24 @@ class BorrowExpression(StaticTypedExpression):
         if not expr.underlying_indirection_kind.is_reference():
             raise BorrowWithNoAddressError(rhs_type.format_for_output_to_user())
 
-        if expr.underlying_indirection_kind == Type.Kind.CONST_REF:
-            # TODO: should a mutable borrow of a constant value give a constant borrow?
-            if is_explicitly_mutable:
-                # TODO: is this error message sufficient?
-                raise MutableBorrowOfNonMutable(
-                    expr.result_type_as_if_borrowed.format_for_output_to_user()
-                )
+        # NOTE we are kinda abusing Type.Kind here.
+        assert borrow_kind.is_reference()
 
-        self._is_mut = is_explicitly_mutable
+        if (
+            borrow_kind == Type.Kind.MUTABLE_REF
+            and not expr.underlying_indirection_kind.is_mutable_reference()
+        ):
+            # TODO: is this error message sufficient?
+            raise MutableBorrowOfNonMutable(
+                expr.result_type_as_if_borrowed.format_for_output_to_user()
+            )
 
-        storage_type = Type.Kind.MUTABLE_REF if self._is_mut else Type.Kind.CONST_REF
+        self._is_mut = (
+            borrow_kind.is_mutable_reference()
+            and expr.underlying_indirection_kind.is_mutable_reference()
+        )
+
+        storage_type = borrow_kind if self._is_mut else Type.Kind.CONST_REF
 
         # TODO: this is a bit more permissive that I'd like, but we (need)? to support
         #       indirect initialization by first assigning to a reference
