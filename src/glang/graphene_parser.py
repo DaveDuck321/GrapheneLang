@@ -585,19 +585,25 @@ class ExpressionParser(lp.Interpreter):
         if isinstance(node, lp.UFCS_Call):
             this_arg = self.parse_expr(node.expression)
             # TODO: should there be syntax for this? It seems a bit adhoc
-            indirection_kind = this_arg.expression().underlying_indirection_kind
-            if indirection_kind == cg.Type.Kind.CONST_REF:
-                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
-            elif indirection_kind == cg.Type.Kind.MUTABLE_REF:
-                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), True))
-            elif indirection_kind == cg.Type.Kind.VALUE:
-                # (&a):fn(), (&mut a):fn(), or rvalue():fn();
-                # We do not allow the 3rd option
-                possible = this_arg.expression().result_type_as_if_borrowed
-                if possible.storage_kind == cg.Type.Kind.VALUE:
-                    raise BorrowWithNoAddressError(possible.format_for_output_to_user())
-            else:
-                assert False
+            match this_arg.expression().underlying_indirection_kind:
+                case cg.Type.Kind.CONST_REF:
+                    this_arg.add_parent(
+                        cg.BorrowExpression(this_arg.expression(), False)
+                    )
+                case cg.Type.Kind.MUTABLE_REF:
+                    this_arg.add_parent(
+                        cg.BorrowExpression(this_arg.expression(), True)
+                    )
+                case cg.Type.Kind.VALUE:
+                    # (&a):fn(), (&mut a):fn(), or rvalue():fn();
+                    # We do not allow the 3rd option
+                    possible = this_arg.expression().result_type_as_if_borrowed
+                    if possible.storage_kind == cg.Type.Kind.VALUE:
+                        raise BorrowWithNoAddressError(
+                            possible.format_for_output_to_user()
+                        )
+                case _:
+                    raise AssertionError()
 
             unresolved_args.insert(0, this_arg)
 
