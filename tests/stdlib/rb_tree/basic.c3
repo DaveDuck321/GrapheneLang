@@ -3,7 +3,7 @@
 @require_once "std/assert.c3"
 
 function main : () -> int = {
-    let tree : RB_Tree<int> = make<RB_Tree<int>>();
+    mut tree : RB_Tree<int> = make<RB_Tree<int>>();
 
     tree:insert(0);
     tree:insert(1);

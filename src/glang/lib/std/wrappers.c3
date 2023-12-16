@@ -1,6 +1,7 @@
 @require_once "type_traits.c3"
 
 typedef [T] Ptr : { data : T& }
+typedef [T] MutPtr : { data : T mut& }
 typedef [T] MaybeNullPtr : Optional<Ptr<T>>
 
 // Maybe FIXME: this isn't really ergonomic, this SFINAE avoids &/ mut& code duplication
@@ -15,6 +16,15 @@ function [T] data : (self : Ptr<T>&) -> T& = {
 
 function [T] data : (self : Ptr<T> mut&) -> T& = {
     return &self.data;
+}
+
+// MutPtr
+function [T] data : (self : MutPtr<T>&) -> T mut& = {
+    return &mut self.data;
+}
+
+function [T] data : (self : MutPtr<T> mut&) -> T mut& = {
+    return &mut self.data;
 }
 
 // Generic Optional
@@ -55,9 +65,20 @@ function [T] has_value : (self : Optional<T>&) -> bool = {
     return self._has_value;
 }
 
+function [IO, T] write : (
+    io : IO mut&, optional : Optional<T>
+) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+    if optional:has_value() {
+        return io:write(optional:data());
+    }
+
+    return io:write("<empty>");
+}
+
+
 // Optional<T&>
-function [T] make<T&> : (value : T&) -> Optional<T&> = {
-    return { ref_to_addr(&value) };
+function [T] make<Optional<T&>> : () -> Optional<T&> = {
+    return { 0 };
 }
 
 function [T] make<T&> : (value : T&) -> Optional<T&> = {
@@ -93,11 +114,11 @@ function [T] has_value : (self : Optional<T&> mut&) -> bool = {
 
 // HUGE DUPLICATION FOR MUTABLE REFERENCE
 // Optional<T&>
-function [T] make<T&> : (value : T mut&) -> Optional<T mut&> = {
-    return { ref_to_addr(&value) };
+function [T] make<Optional<T mut&>> : () -> Optional<T mut&> = {
+    return { 0 };
 }
 
-function [T] make<T&> : (value : T mut&) -> Optional<T mut&> = {
+function [T] make<T mut&> : (value : T mut&) -> Optional<T mut&> = {
     return { ref_to_addr(&value) };
 }
 
@@ -107,6 +128,10 @@ function [T] store : (self : Optional<T mut&> mut&, value : T mut&) -> void = {
 
 function [T] erase : (self : Optional<T mut&> mut&) -> void = {
     self._ptr = 0;
+}
+
+function [T] data : (self : Optional<T mut&>&) -> T mut& = {
+    return &mut addr_to_mut_ref<T>(self._ptr);
 }
 
 function [T] data : (self : Optional<T mut&> mut&) -> T mut& = {

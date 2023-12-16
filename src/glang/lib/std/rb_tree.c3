@@ -27,14 +27,14 @@ function left_if : (condition : bool) -> bool = {
 
 typedef [K] RB_Node : {
     key    : K,
-    left   : Optional<RB_Node<K>&>,
-    right  : Optional<RB_Node<K>&>,
-    parent : Optional<RB_Node<K>&>,
+    left   : Optional<RB_Node<K> mut&>,
+    right  : Optional<RB_Node<K> mut&>,
+    parent : Optional<RB_Node<K> mut&>,
     colour : bool
 }
 
 typedef [K] RB_Tree : {
-    root : Optional<RB_Node<K>&>,
+    root : Optional<RB_Node<K> mut&>,
     allocator : Allocator,  // FIXME use global allocator.
 }
 
@@ -47,7 +47,7 @@ typedef [K] RB_Tree : {
 }
 
 @operator [K] == : (
-    left : Optional<RB_Node<K>&>, right : Optional<RB_Node<K>&>
+    left : Optional<RB_Node<K> mut&>, right : Optional<RB_Node<K> mut&>
 ) -> bool = {
     if left:has_value() and right:has_value() {
         return &left:data() == &right:data();
@@ -57,46 +57,46 @@ typedef [K] RB_Tree : {
 }
 
 @operator [K] != : (
-    left : Optional<RB_Node<K>&>, right : Optional<RB_Node<K>&>
+    left : Optional<RB_Node<K> mut&>, right : Optional<RB_Node<K> mut&>
 ) -> bool = {
     return !(left == right);
 }
 
 function [K] new<RB_Node<K>> : (
-    self : RB_Tree<K>&, key : K, parent : Optional<RB_Node<K>&>
-) -> RB_Node<K>& = {
-    let node : RB_Node<K>& = &self.allocator:allocate<RB_Node<K>>();
+    self : RB_Tree<K> mut&, key : K, parent : Optional<RB_Node<K> mut&>
+) -> RB_Node<K> mut& = {
+    let node : RB_Node<K> mut& = &mut self.allocator:allocate<RB_Node<K>>();
 
     node = {
         .key = key,
-        .left = make_optional<RB_Node<K>&>(),
-        .right = make_optional<RB_Node<K>&>(),
+        .left = make<Optional<RB_Node<K> mut&>>(),
+        .right = make<Optional<RB_Node<K> mut&>>(),
         .parent = parent,
         .colour = RED(), // NOTE new nodes are red.
     };
 
-    return &node;
+    return &mut node;
 }
 
 function [K] make<RB_Tree<K>> : () -> RB_Tree<K> = {
     return {
-        .root = make_optional<RB_Node<K>&>(),
+        .root = make<Optional<RB_Node<K> mut&>>(),
         .allocator = initialize_allocator(),
     };
 }
 
 function [K] get_child : (
-    node : RB_Node<K>&, side : bool
-) -> Optional<RB_Node<K>&>& = {
+    node : RB_Node<K> mut&, side : bool
+) -> Optional<RB_Node<K> mut&> mut& = {
     if side == LEFT() {
-        return &node.left;
+        return &mut node.left;
     }
 
-    return &node.right;
+    return &mut node.right;
 }
 
 function [K] which_child_am_i : (
-    node : Optional<RB_Node<K>&>, parent : RB_Node<K>&
+    node : Optional<RB_Node<K> mut&>, parent : RB_Node<K> mut&
 ) -> bool = {
     // Use this overload if node could be a leaf node (nil node).
 
@@ -109,20 +109,20 @@ function [K] which_child_am_i : (
     return RIGHT();
 }
 
-function [K] which_child_am_i : (node : RB_Node<K>&) -> bool = {
-    return which_child_am_i(make_optional(&node), &node.parent:data());
+function [K] which_child_am_i : (node : RB_Node<K> mut&) -> bool = {
+    return which_child_am_i(make(&mut node), &mut node.parent:data());
 }
 
-function [K] is_red : (node_opt : Optional<RB_Node<K>&>&) -> bool = {
+function [K] is_red : (node_opt : Optional<RB_Node<K> mut&>&) -> bool = {
     // Using property 3 of red-black trees: every leaf node (nil node) is black.
     return node_opt:has_value() and node_opt:data().colour == RED();
 }
 
-function [K] is_black : (node_opt : Optional<RB_Node<K>&>&) -> bool = {
+function [K] is_black : (node_opt : Optional<RB_Node<K> mut&>&) -> bool = {
     return !node_opt:is_red();
 }
 
-function [K] colour_black : (node_opt : Optional<RB_Node<K>&>&) -> void = {
+function [K] colour_black : (node_opt : Optional<RB_Node<K> mut&> mut&) -> void = {
     // Using property 3 of red-black trees: every leaf node (nil node) is black.
     if node_opt:has_value() {
         node_opt:data().colour = BLACK();
@@ -130,41 +130,41 @@ function [K] colour_black : (node_opt : Optional<RB_Node<K>&>&) -> void = {
 }
 
 function [K] rotate : (
-    self : RB_Tree<K>&, u : RB_Node<K>&, side : bool
+    self : RB_Tree<K> mut&, u : RB_Node<K> mut&, side : bool
 ) -> void = {
     // If we are rotating left, get the right child.
-    let v : RB_Node<K>& = &u:get_child(!side):data();
+    let v : RB_Node<K> mut& = &mut u:get_child(!side):data();
 
     // Move child from v to u, and update the child's parent pointer.
     u:get_child(!side) = v:get_child(side);
     if u:get_child(!side):has_value() {
-        u:get_child(!side):data().parent:store(&u);
+        u:get_child(!side):data().parent:store(&mut u);
     }
 
     // Replace u with v.
     v.parent = u.parent;
     if v.parent:has_value() {
-        const u_side : bool = u:which_child_am_i();
-        u.parent:data():get_child(u_side):store(&v);
+        let u_side : bool = u:which_child_am_i();
+        u.parent:data():get_child(u_side):store(&mut v);
     }
     else {
-        self.root:store(&v);
+        self.root:store(&mut v);
     }
 
     // Make u a child of v;
-    v:get_child(side):store(&u);
-    u.parent:store(&v);
+    v:get_child(side):store(&mut u);
+    u.parent:store(&mut v);
 }
 
 function [K] fix_after_insert : (
-    self : RB_Tree<K>&, node : RB_Node<K>&
+    self : RB_Tree<K> mut&, node : RB_Node<K> mut&
 ) -> void = {
     // We need to use a Ptr here so that we can update the value on every
     // iteration.
-    let u_ptr : Ptr<RB_Node<K>> = {&node};
+    mut u_ptr : MutPtr<RB_Node<K>> = {&mut node};
 
     while u_ptr:data().colour == RED() {
-        let u : RB_Node<K>& = &u_ptr:data();
+        let u : RB_Node<K> mut& = &mut u_ptr:data();
 
         // Case 4: u has no parent.
         if !u.parent:has_value() {
@@ -173,7 +173,7 @@ function [K] fix_after_insert : (
             return;
         }
 
-        let v : RB_Node<K>& = &u.parent:data();
+        let v : RB_Node<K> mut& = &mut u.parent:data();
 
         // Case 1: u has a black parent.
         if v.colour == BLACK() {
@@ -184,7 +184,7 @@ function [K] fix_after_insert : (
 
         // u has a red parent. Property 2 of red-black trees states that the
         // root node is black, therefore v also has a parent.
-        let w : RB_Node<K>& = &v.parent:data();
+        let w : RB_Node<K> mut& = &mut v.parent:data();
 
         // Case 2: u has a red parent and a red uncle.
         if w.left:is_red() and w.right:is_red() {
@@ -193,19 +193,19 @@ function [K] fix_after_insert : (
 
             // Push the issue up the tree.
             w.colour = RED();
-            u_ptr = {&w};
+            u_ptr = {&mut w};
             // TODO continue;
         }
         else {
             // Case 3: u has a red parent and a black uncle.
-            const u_side : bool = u:which_child_am_i();
-            const uncle_side : bool = !v:which_child_am_i();
+            let u_side : bool = u:which_child_am_i();
+            let uncle_side : bool = !v:which_child_am_i();
 
             if u_side != uncle_side {
                 // Case 3a: u is away from its uncle.
                 // Rotate, then leave u red and colour w, its new sibling, red.
                 // Their new parent should thus be black.
-                self:rotate(&w, !u_side);
+                self:rotate(&mut w, !u_side);
                 v.colour = BLACK();
                 w.colour = RED();
             }
@@ -213,8 +213,8 @@ function [K] fix_after_insert : (
                 // Case 3b: u is towards its uncle.
                 // Now u becomes the parent of v and w. Colour it black, leave v
                 // red, and make w red.
-                self:rotate(&v, !u_side);
-                self:rotate(&w, u_side);
+                self:rotate(&mut v, !u_side);
+                self:rotate(&mut w, u_side);
                 u.colour = BLACK();
                 w.colour = RED();
             }
@@ -224,12 +224,12 @@ function [K] fix_after_insert : (
     }
 }
 
-function [K] insert : (self : RB_Tree<K>&, key : K) -> void = {
-    let p_opt : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
-    let u_ptr : Ptr<Optional<RB_Node<K>&>> = {&self.root};
+function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
+    mut p_opt : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>();
+    mut u_ptr : MutPtr<Optional<RB_Node<K> mut&>> = {&mut self.root};
 
     while u_ptr:data():has_value() {
-        let u : RB_Node<K>& = &u_ptr:data():data();
+        let u : RB_Node<K> mut& = &mut u_ptr:data():data();
 
         if key == u.key {
             // Key already exists. Overwrite it with the new key (if the tree is
@@ -241,20 +241,20 @@ function [K] insert : (self : RB_Tree<K>&, key : K) -> void = {
         }
 
         // Keep track of the parent node.
-        p_opt:store(&u_ptr:data():data());
+        p_opt:store(&mut u_ptr:data():data());
 
-        u_ptr = {&u:get_child(left_if(key < u.key))};
+        u_ptr = {&mut u:get_child(left_if(key < u.key))};
     }
 
-    u_ptr:data():store(&self:new<RB_Node<K>>(key, p_opt));
+    u_ptr:data():store(&mut self:new<RB_Node<K>>(key, p_opt));
 
-    self:fix_after_insert(&u_ptr:data():data());
+    self:fix_after_insert(&mut u_ptr:data():data());
 }
 
 function [K, Comparable] search_impl : (
-    self : RB_Tree<K>&, key : Comparable
-) -> Optional<RB_Node<K>&> = {
-    let u : Optional<RB_Node<K>&> = self.root;
+    self : RB_Tree<K> mut&, key : Comparable
+) -> Optional<RB_Node<K> mut&> = {
+    mut u : Optional<RB_Node<K> mut&> = self.root;
 
     while u:has_value() and key != u:data().key {
         u = u:data():get_child(left_if(key < u:data().key));
@@ -264,19 +264,19 @@ function [K, Comparable] search_impl : (
 }
 
 function [K, Comparable] search : (
-    self : RB_Tree<K>&, key : Comparable
+    self : RB_Tree<K> mut&, key : Comparable
 ) -> Optional<K> = {
-    let result : Optional<RB_Node<K>&> = self:search_impl(key);
+    mut result : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
     if result:has_value() {
-        return make_optional(result:data().key);
+        return make(result:data().key);
     }
 
-    return make_optional<K>();
+    return make<Optional<K>>();
 }
 
 function [K] replace_node_with : (
-    self : RB_Tree<K>&, old : RB_Node<K>&, new : Optional<RB_Node<K>&>
+    self : RB_Tree<K> mut&, old : RB_Node<K> mut&, new : Optional<RB_Node<K> mut&>
 ) -> void = {
     // Make old's parent point to new instead of old.
     if old.parent:has_value() {
@@ -292,47 +292,47 @@ function [K] replace_node_with : (
     }
 }
 
-function [K] minmax : (node : RB_Node<K>&, direction : bool) -> RB_Node<K>& = {
-    let u : Ptr<RB_Node<K>> = {&node};
+function [K] minmax : (node : RB_Node<K> mut&, direction : bool) -> RB_Node<K> mut& = {
+    mut u : MutPtr<RB_Node<K>> = {&mut node};
 
     // TODO some sort of lambda/local function would really help here.
     while u:data():get_child(direction):has_value() {
-        u = {&u:data():get_child(direction):data()};
+        u = {&mut u:data():get_child(direction):data()};
     }
 
-    return &u:data();
+    return &mut u:data();
 }
 
-function [K] minmax : (tree : RB_Tree<K>&, direction : bool) -> Optional<K> = {
+function [K] minmax : (tree : RB_Tree<K> mut&, direction : bool) -> Optional<K> = {
     if tree.root:has_value() {
-        return make_optional(tree.root:data():minmax(direction).key);
+        return make(tree.root:data():minmax(direction).key);
     }
-    return make_optional<K>();
+    return make<Optional<K>>();
 }
 
-function [K] minimum : (tree : RB_Tree<K>&) -> Optional<K> = {
+function [K] minimum : (tree : RB_Tree<K> mut&) -> Optional<K> = {
     return tree:minmax(LEFT());
 }
 
-function [K] maximum : (tree : RB_Tree<K>&) -> Optional<K> = {
+function [K] maximum : (tree : RB_Tree<K> mut&) -> Optional<K> = {
     return tree:minmax(RIGHT());
 }
 
 function [K] fix_after_delete_impl : (
-    self : RB_Tree<K>&, x : Optional<RB_Node<K>&>, x_parent : RB_Node<K>&
-) -> Optional<RB_Node<K>&> = {
+    self : RB_Tree<K> mut&, x : Optional<RB_Node<K> mut&>, x_parent : RB_Node<K> mut&
+) -> Optional<RB_Node<K> mut&> = {
     // x is guaranteed not to be the root.
-    let x_side : bool = which_child_am_i(x, &x_parent);
-    let w_side : bool = !x_side;
+    mut x_side : bool = which_child_am_i(x, &mut x_parent);
+    mut w_side : bool = !x_side;
 
     // x's sibling, w, cannot be a leaf node (nil node). If x is double black,
     // then its sibling tree must also have a height of at least 2 black nodes.
-    let w : RB_Node<K>& = &x_parent:get_child(w_side):data();
+    let w : RB_Node<K> mut& = &mut x_parent:get_child(w_side):data();
 
     // Case 1: w is red.
     if w.colour == RED() {
         // The rotation makes x's new sibling black.
-        self:rotate(&x_parent, x_side);
+        self:rotate(&mut x_parent, x_side);
         x_parent.colour = RED();
         w.colour = BLACK();
 
@@ -347,14 +347,14 @@ function [K] fix_after_delete_impl : (
         // was black, then now it is double black; if it was red, then now it is
         // red-and-black.
         w.colour = RED();
-        return make_optional(&x_parent);
+        return make(&mut x_parent);
     }
 
     // Case 3: w is black with red close and black distant child.
     if w:get_child(x_side):is_red() and w:get_child(w_side):is_black() {
         // Make w's red child w's new parent, and colour it black, such that x's
         // sibling is now black. w must in turn become red, to compensate.
-        self:rotate(&w, w_side);
+        self:rotate(&mut w, w_side);
         w.colour = RED();
         w.parent:colour_black();
 
@@ -369,7 +369,7 @@ function [K] fix_after_delete_impl : (
     // additional black node now in the path of x. This allows us to remove the
     // double black. The root of the sibling tree is now w's red child, which
     // we colour black to compensate.
-    self:rotate(&x_parent, x_side);
+    self:rotate(&mut x_parent, x_side);
 
     // w takes x_parent's colour, so the colour of this subtree's root is
     // preserved.
@@ -387,16 +387,16 @@ function [K] fix_after_delete_impl : (
 }
 
 function [K] fix_after_delete : (
-    self : RB_Tree<K>&,
-    x : Optional<RB_Node<K>&>,
-    x_parent : Optional<RB_Node<K>&>
+    self : RB_Tree<K> mut&,
+    x : Optional<RB_Node<K> mut&>,
+    x_parent : Optional<RB_Node<K> mut&>
 ) -> void = {
     // x is "double black" inside the loop.
     while x != self.root and x:is_black() {
         // x might be a leaf node (nil node), so take its parent as an argument.
         // x_parent is an optional, as the root node has no parent. However, it
         // should have a value in all other cases.
-        x = self:fix_after_delete_impl(x, &x_parent:data());
+        x = self:fix_after_delete_impl(x, &mut x_parent:data());
 
         // In cases 1 and 3, x is unchanged, so it could still be an empty
         // optional, representing a leaf node (nil node). In the other cases, x
@@ -412,18 +412,18 @@ function [K] fix_after_delete : (
     x:colour_black();
 }
 
-function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
+function [K] delete_impl : (self : RB_Tree<K> mut&, u : RB_Node<K> mut&) -> void = {
     // x is the "double black" or "red-and-black" node which we use to fix any
     // red-black tree violations that arise from the deletion. x_parent is used
     // to keep track of its parent node, as x might be a leaf node (nil node),
     // which is represented as an empty optional.
-    let x : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
-    let x_parent : Optional<RB_Node<K>&> = make_optional<RB_Node<K>&>();
-    let must_fix : bool = (u.colour == BLACK());
+    mut x : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>();
+    mut x_parent : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>();
+    mut must_fix : bool = (u.colour == BLACK());
 
     if u.left:has_value() and u.right:has_value() {
         // u has two children.
-        let v : RB_Node<K>& = &u.right:data():minmax(LEFT());
+        let v : RB_Node<K> mut& = &mut u.right:data():minmax(LEFT());
         must_fix = (v.colour == BLACK());
         x = v.right;
 
@@ -433,23 +433,24 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
             // its right child before we move it around the tree. Set x_parent
             // before the shift, as the right child might be an empty optional.
             x_parent = v.parent;
-            self:replace_node_with(&v, v.right);
+            self:replace_node_with(&mut v, v.right);
 
             // v now adopts the branch on the right of u. We could have made v
             // the right child of u now, but there's no point, as we are about
             // to remove u and relink its children anyway. v is effectively the
             // right child of u now though.
             v.right = u.right;
-            v.right:data().parent:store(&v);
+            let x : RB_Node<K> mut& = &mut v.right:data();
+            x.parent:store(&mut v);
         }
         else {
-            x_parent = make_optional(&v);
+            x_parent = make(&mut v);
         }
 
         // Replace u with v.
-        self:replace_node_with(&u, make_optional(&v));
+        self:replace_node_with(&mut u, make(&mut v));
         v.left = u.left;
-        v.left:data().parent:store(&v);
+        v.left:data().parent:store(&mut v);
         v.colour = u.colour;
     }
     else {
@@ -461,7 +462,7 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
 
         // And replace u with it. It's fine if x is empty; the code is just
         // simpler this way.
-        self:replace_node_with(&u, x);
+        self:replace_node_with(&mut u, x);
     }
 
     self.allocator:deallocate(&u);
@@ -471,12 +472,12 @@ function [K] delete_impl : (self : RB_Tree<K>&, u : RB_Node<K>&) -> void = {
     }
 }
 
-function [K] delete : (self : RB_Tree<K>&, key : K) -> bool = {
-    let node : Optional<RB_Node<K>&> = self:search_impl(key);
+function [K] delete : (self : RB_Tree<K> mut&, key : K) -> bool = {
+    mut node : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
     // Do nothing if the key is not in the tree.
     if node:has_value() {
-        self:delete_impl(&node:data());
+        self:delete_impl(&mut node:data());
         return true;
     }
 

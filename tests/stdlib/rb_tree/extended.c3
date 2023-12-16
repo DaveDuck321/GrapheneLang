@@ -4,40 +4,40 @@
 @require_once "std/wrappers.c3"
 
 function [K] child_is_valid_rb_tree: (
-    node : RB_Node<K>&, side : bool
+    node : RB_Node<K> mut&, side : bool
 ) -> Optional<int> = {
-    let child_opt : Optional<RB_Node<K>&> = node:get_child(side);
+    let child_opt : Optional<RB_Node<K> mut&> = node:get_child(side);
 
     if !child_opt:has_value() {
-        return make_optional(1);
+        return make<Optional<int>>(1);
     }
 
-    let child : RB_Node<K>& = &child_opt:data();
+    let child : RB_Node<K> mut& = &mut child_opt:data();
 
     // Check that the child's parent reference is correct.
     if !child.parent:has_value() or
         ref_to_addr(&child.parent:data()) != ref_to_addr(&node) {
-        return make_optional<int>();
+        return make<Optional<int>>();
     }
 
     if side == LEFT() {
         if child.key >= node.key {
-            return make_optional<int>();
+            return make<Optional<int>>();
         }
     }
     else {
         if child.key <= node.key {
-            return make_optional<int>();
+            return make<Optional<int>>();
         }
     }
 
     return child:is_valid_rb_tree_impl();
 }
 
-function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
+function [K] is_valid_rb_tree_impl : (node : RB_Node<K> mut&) -> Optional<int> = {
     // Property 4: if a node is red, both of its children are black.
     if node.colour == RED() and (node.left:is_red() or node.right:is_red()) {
-        return make_optional<int>();
+        return make<Optional<int>>();
     }
 
     // Property 3: every leaf node (nil node) is black.
@@ -45,26 +45,26 @@ function [K] is_valid_rb_tree_impl : (node : RB_Node<K>&) -> Optional<int> = {
     // hold the same number of black nodes.
     let black_count_l : Optional<int> = node:child_is_valid_rb_tree(LEFT());
     if !black_count_l:has_value() {
-        return make_optional<int>();
+        return make<Optional<int>>();
     }
 
     let black_count_r : Optional<int> = node:child_is_valid_rb_tree(RIGHT());
     if !black_count_r:has_value() {
-        return make_optional<int>();
+        return make<Optional<int>>();
     }
 
     if black_count_l:data() != black_count_r:data() {
-        return make_optional<int>();
+        return make<Optional<int>>();
     }
 
     if node.colour == BLACK() {
-        return make_optional(black_count_l:data() + 1);
+        return make<Optional<int>>(black_count_l:data() + 1);
     }
 
     return black_count_l;
 }
 
-function [K] is_valid_rb_tree : (tree : RB_Tree<K>&) -> bool = {
+function [K] is_valid_rb_tree : (tree : RB_Tree<K> mut&) -> bool = {
     // Property 2: the root node is black.
     if tree.root:is_red() {
         return false;
@@ -79,8 +79,8 @@ function [K] is_valid_rb_tree : (tree : RB_Tree<K>&) -> bool = {
 }
 
 function main : () -> int = {
-    let tree : RB_Tree<int> = make<RB_Tree<int>>();
-    let n : int = 1000;
+    mut tree : RB_Tree<int> = make<RB_Tree<int>>();
+    mut n : int = 1000;
 
     for i in range(n) {
         tree:insert(i);
