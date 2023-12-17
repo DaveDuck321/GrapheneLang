@@ -6,6 +6,7 @@ from .builtin_types import (
     UIntType,
     VoidType,
 )
+from .debug import DIFile
 from .expressions import (
     ArrayIndexAccess,
     BorrowExpression,

@@ -400,6 +400,7 @@ class ImportParser(lp.Interpreter):
             self._program,
             self._fn_parser,
             file_path,
+            cg.DIFile(next(self._program._metadata_gen), Path(file_path)),
             self._include_path[:-1],  # Last element is always '.'
             self._included_from,
             self._already_processed,
@@ -949,7 +950,13 @@ def generate_function(
     body: Optional[lp.GenericFunctionDefinition],
 ) -> None:
     try:
-        fn = cg.Function(declaration.arg_names, signature, declaration.pack_type_name)
+        fn = cg.Function(
+            declaration.arg_names,
+            signature,
+            declaration.pack_type_name,
+            program.di_file,  # FIXME wrong file!
+            program.di_compile_unit,
+        )
     except GrapheneError as e:
         assert isinstance(declaration.loc, SourceLocation)
         raise ErrorWithLineInfo(e.message, declaration.loc.line, "function declaration")
@@ -978,6 +985,7 @@ def append_file_to_program(
     program: cg.Program,
     function_parser: FunctionSignatureParser,
     file_path: ResolvedPath,
+    di_file: cg.DIFile,
     include_path: list[Path],
     included_from: list[ResolvedPath],
     already_processed: set[ResolvedPath],
@@ -1014,7 +1022,7 @@ def append_file_to_program(
 def generate_ir_from_source(
     file_path: Path, include_path: list[Path], debug_compiler: bool = False
 ) -> str:
-    program = cg.Program()
+    program = cg.Program(file_path)
     try:
         # Initial pass resolves all builtin types
         program.symbol_table.resolve_all_non_generics()
@@ -1024,6 +1032,7 @@ def generate_ir_from_source(
             program,
             fn_parser,
             ResolvedPath(file_path),
+            program.di_file,
             include_path,
             [],
             set(),
@@ -1057,4 +1066,4 @@ def generate_ir_from_source(
 
         sys.exit(1)
 
-    return "\n".join(program.generate_ir())
+    return program.generate_ir()

@@ -1,6 +1,8 @@
+from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import count
-from typing import Optional
+from pathlib import Path
+from typing import Iterator, Optional
 
 from .. import target
 from .builtin_callables import get_builtin_callables
@@ -11,6 +13,14 @@ from .builtin_types import (
     IntType,
     get_builtin_types,
 )
+from .debug import (
+    DICompileUnit,
+    DIFile,
+    DISubprogram,
+    DISubroutineType,
+    Metadata,
+    MetadataFlag,
+)
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
 from .interfaces import SpecializationItem, Type, TypedExpression
@@ -20,17 +30,31 @@ from .type_resolution import FunctionDeclaration, SymbolTable
 from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
 
 
+@dataclass
+class IROutput:
+    lines: list[str] = field(default_factory=list)
+    metadata: list[Metadata] = field(default_factory=list)
+
+    def extend(self, other: "IROutput") -> None:
+        self.lines.extend(other.lines)
+        self.metadata.extend(other.metadata)
+
+
 class Function:
     def __init__(
         self,
         parameter_names: tuple[str, ...],
         signature: FunctionSignature,
         parameter_pack_name: Optional[str],
+        di_file: DIFile,
+        di_unit: DICompileUnit,
     ) -> None:
         if parameter_pack_name is None:
             assert len(parameter_names) == len(signature.arguments)
 
         self._signature = signature
+        self._di_file = di_file
+        self._di_unit = di_unit
 
         # These two counters could be merged.
         self.label_id_iter = count()
@@ -100,11 +124,24 @@ class Function:
     def get_next_label_id(self) -> int:
         return next(self.label_id_iter)
 
-    def generate_ir(self) -> list[str]:
+    def generate_ir(self, metadata_gen: Iterator[int]) -> IROutput:
         # https://llvm.org/docs/LangRef.html#functions
         assert not self.is_foreign
         if not self._signature.return_type.definition.is_void:
             assert self.top_level_scope.is_return_guaranteed()
+
+        di_subroutine_type = DISubroutineType(next(metadata_gen))
+
+        di_subprogram = DISubprogram(
+            next(metadata_gen),
+            self._signature.name,
+            self._signature.mangled_name,
+            di_subroutine_type,
+            self._di_file,
+            0,  # TODO line number.
+            self._di_unit,
+            not self._signature.is_foreign,
+        )
 
         reg_gen = count(0)  # First register is %0
 
@@ -118,23 +155,26 @@ class Function:
         def indent_ir(lines: list[str]):
             return map(lambda line: line if line.endswith(":") else f"  {line}", lines)
 
-        return [
-            (
-                f"define dso_local {self._signature.return_type.ir_type}"
-                f" @{self.mangled_name}({args_ir}) {{"
-            ),
-            "begin:",  # Name the implicit basic block
-            *indent_ir(self.top_level_scope.generate_ir(reg_gen)),
-            "}",
-        ]
+        return IROutput(
+            [
+                (
+                    f"define dso_local {self._signature.return_type.ir_type}"
+                    f" @{self.mangled_name}({args_ir}) !dbg !{di_subprogram.id} {{"
+                ),
+                "begin:",  # Name the implicit basic block
+                *indent_ir(self.top_level_scope.generate_ir(reg_gen)),
+                "}",
+            ],
+            [di_subroutine_type, di_subprogram],
+        )
 
 
 class Program:
-    def __init__(self) -> None:
+    def __init__(self, file: Path) -> None:
         super().__init__()
         self._builtin_callables = get_builtin_callables()
 
-        self._fn_bodies = []
+        self._fn_bodies: list[Function] = []
         self.symbol_table = SymbolTable()
 
         self._string_cache: dict[str, StaticVariable] = {}
@@ -143,6 +183,12 @@ class Program:
         self._has_main: bool = False
 
         self._functions_to_codegen: list[tuple[FunctionSignature, FunctionDeclaration]]
+
+        self._metadata_gen = count(0)
+
+        self.di_file = DIFile(next(self._metadata_gen), file)
+        self.di_compile_unit = DICompileUnit(next(self._metadata_gen), self.di_file)
+
         for builtin_type in get_builtin_types():
             self.symbol_table.add_builtin_type(builtin_type)
 
@@ -180,22 +226,47 @@ class Program:
     def add_function_body(self, function: Function) -> None:
         self._fn_bodies.append(function)
 
-    def generate_ir(self) -> list[str]:
-        lines: list[str] = []
+    def generate_ir(self) -> str:
+        output = IROutput([], [self.di_file, self.di_compile_unit])
 
-        lines.append(f'target datalayout = "{target.get_datalayout()}"')
-        lines.append(f'target triple = "{target.get_target_triple()}"')
+        output.lines.append(f'target datalayout = "{target.get_datalayout()}"')
+        output.lines.append(f'target triple = "{target.get_target_triple()}"')
 
-        lines.append("")
+        output.lines.append("")
         var_reg_gen = count(0)
         for variable in self._static_variables:
-            lines.extend(variable.generate_ir(var_reg_gen))
+            output.lines.extend(variable.generate_ir(var_reg_gen))
 
-        lines.append("")
-        lines.extend(self.symbol_table.get_ir_for_initialization())
+        output.lines.append("")
+        output.lines.extend(self.symbol_table.get_ir_for_initialization())
 
-        lines.append("")
+        output.lines.append("")
         for func in self._fn_bodies:
-            lines.extend(func.generate_ir())
+            output.extend(func.generate_ir(self._metadata_gen))
 
-        return lines
+        # behaviour = 1 (Error)
+        # Emits an error if two values disagree, otherwise the resulting value
+        # is that of the operands.
+        dwarf_version_metadata = MetadataFlag(
+            next(self._metadata_gen), 1, "Dwarf Version", 4
+        )
+        debug_info_version_metadata = MetadataFlag(
+            next(self._metadata_gen), 1, "Debug Info Version", 3
+        )
+
+        output.metadata.extend((dwarf_version_metadata, debug_info_version_metadata))
+
+        source = "\n".join(output.lines)
+        source += "\n\n"
+
+        source += "\n".join(
+            (
+                f"!llvm.dbg.cu = !{{!{self.di_compile_unit.id}}}",
+                f"!llvm.module.flags = !{{!{dwarf_version_metadata.id}, !{debug_info_version_metadata.id}}}",
+            )
+        )
+        source += "\n\n"
+
+        source += "\n".join(map(lambda m: f"!{m.id} = {m}", output.metadata))
+
+        return source
