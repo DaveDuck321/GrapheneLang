@@ -208,7 +208,12 @@ def run_test_print_result(test_path: Path) -> bool:
 
 def run_tests(tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        passed = sum(executor.map(run_test_print_result, tests))
+        try:
+            passed = sum(executor.map(run_test_print_result, tests))
+        except KeyboardInterrupt:
+            # Stop the currently running tests from spamming the output.
+            io_lock.acquire()
+            return 0
 
     # TODO print skipped test count.
     failed = len(tests) - passed
