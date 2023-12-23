@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from typing import Iterator
 
 from ..parser.lexer_parser import Meta
 from .builtin_types import (
@@ -10,7 +9,6 @@ from .builtin_types import (
     IPtrType,
     SizeType,
 )
-from .debug import DISubprogram
 from .expressions import ConstantExpression, StaticTypedExpression
 from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
