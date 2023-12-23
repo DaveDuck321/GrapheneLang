@@ -3,9 +3,22 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
+
+from glang.codegen.debug import DIType
 
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
+from .debug import (
+    DIBasicType,
+    DICompositeType,
+    DIDerivedType,
+    DISubrange,
+    DIType,
+    Metadata,
+    MetadataList,
+    Tag,
+    TypeKind,
+)
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
     ArrayDimensionError,
@@ -50,6 +63,9 @@ class PlaceholderDefinition(TypeDefinition):
 
     @property
     def alignment(self) -> int:
+        assert False
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
         assert False
 
 
@@ -260,6 +276,9 @@ class VoidDefinition(PrimitiveDefinition):
     def is_void(self) -> bool:
         return True
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        assert False
+
 
 class VoidType(PrimitiveType):
     def __init__(self) -> None:
@@ -292,6 +311,17 @@ class IntegerDefinition(PrimitiveDefinition):
         if not isinstance(other, IntegerDefinition):
             return False
         return self.is_signed == other.is_signed and self.bits == other.bits
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return [
+            DIBasicType(
+                next(metadata_gen),
+                self._name,
+                self.bits,
+                Tag.base_type,
+                TypeKind.signed if self.is_signed else TypeKind.unsigned,
+            )
+        ]
 
 
 class GenericIntType(PrimitiveType):
@@ -339,6 +369,17 @@ class BoolDefinition(PrimitiveDefinition):
         # We happen to be using the same boolean constants as LLVM IR.
         assert value in ("true", "false")
         return value
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return [
+            DIBasicType(
+                next(metadata_gen),
+                self._name,
+                self._size * 8,
+                Tag.base_type,
+                TypeKind.boolean,
+            )
+        ]
 
 
 class BoolType(PrimitiveType):
@@ -410,6 +451,41 @@ class StructDefinition(ValueTypeDefinition):
 
         raise FailedLookupError("struct member", "{" + target_name + " : ... }")
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        # FIXME struct name (guess we have to pass it from the wrapping type?).
+        other_metadata: list[Metadata] = []
+        di_derived_types: list[DIDerivedType] = []
+        for m_name, m_type in self.members:
+            base_types = m_type.to_di_type(metadata_gen)
+            assert isinstance(base_types[-1], DIType)
+            other_metadata.extend(base_types)
+
+            di_derived_types.append(
+                DIDerivedType(
+                    next(metadata_gen),
+                    m_name,
+                    8 * m_type.size,
+                    Tag.member,
+                    base_types[-1],
+                )
+            )
+
+        metadata_list = MetadataList(next(metadata_gen), di_derived_types)
+
+        return [
+            *other_metadata,
+            *di_derived_types,
+            metadata_list,
+            DICompositeType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.structure_type,
+                None,
+                metadata_list,
+            ),
+        ]
+
 
 class StackArrayDefinition(ValueTypeDefinition):
     def __init__(self, member: Type, dimensions: list[int]) -> None:
@@ -458,6 +534,28 @@ class StackArrayDefinition(ValueTypeDefinition):
     def alignment(self) -> int:
         return get_abi().compute_stack_array_alignment(self.size, self.member.alignment)
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        # FIXME array name.
+        base_types = self.member.to_di_type(metadata_gen)
+        assert isinstance(base_types[-1], DIType)
+
+        di_subranges = [DISubrange(next(metadata_gen), d) for d in self.dimensions]
+        metadata_list = MetadataList(next(metadata_gen), di_subranges)
+
+        return [
+            *base_types,
+            *di_subranges,
+            metadata_list,
+            DICompositeType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.array_type,
+                base_types[-1],
+                metadata_list,
+            ),
+        ]
+
 
 class ReferenceDefinition(PtrTypeDefinition):
     def __init__(self, value_type: Type, storage_kind: Type.Kind) -> None:
@@ -496,6 +594,21 @@ class ReferenceDefinition(PtrTypeDefinition):
     def ir_mangle(self) -> str:
         const = "" if self.is_mut else "C"
         return f"__{const}R_{self.value_type.ir_mangle}"
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        base_types = self.value_type.to_di_type(metadata_gen)
+        assert isinstance(base_types[-1], DIType)
+
+        return [
+            *base_types,
+            DIDerivedType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.reference_type,
+                base_types[-1],
+            ),
+        ]
 
 
 class HeapArrayDefinition(PtrTypeDefinition):
@@ -557,6 +670,21 @@ class HeapArrayDefinition(PtrTypeDefinition):
         if self.is_illegal_value_type:
             return Type.Kind.VALUE
         return super().storage_kind
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        base_types = self.member.to_di_type(metadata_gen)
+        assert isinstance(base_types[-1], DIType)
+
+        return [
+            *base_types,
+            DIDerivedType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.pointer_type,
+                base_types[-1],
+            ),
+        ]
 
 
 class CharArrayDefinition(StackArrayDefinition):

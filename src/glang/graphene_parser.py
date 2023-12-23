@@ -484,7 +484,7 @@ class ExpressionParser(lp.Interpreter):
         return FlattenedExpression([const_expr])
 
     def StringConstant(self, node: lp.StringConstant) -> FlattenedExpression:
-        str_static_storage = self._program.add_static_string(node.value)
+        str_static_storage = self._program.add_static_string(node.value, node.meta)
         expr = FlattenedExpression(
             [cg.VariableReference(str_static_storage, node.meta)]
         )
@@ -652,7 +652,9 @@ class ExpressionParser(lp.Interpreter):
         if expr.expression().has_address:
             return expr
 
-        temp_var = cg.StackVariable("", expr.type(), True, True)  # FIXME
+        temp_var = cg.StackVariable(
+            "", expr.type(), True, True, meta, self._function._di_file
+        )  # FIXME
         self._scope.add_variable(temp_var)
 
         expr.subexpressions.append(
@@ -774,7 +776,14 @@ def generate_variable_declaration(
             "variable", node.variable, var_type.format_for_output_to_user()
         )
 
-    var = cg.StackVariable(node.variable, var_type, node.is_mut, rhs is not None)
+    var = cg.StackVariable(
+        node.variable,
+        var_type,
+        node.is_mut,
+        rhs is not None,
+        node.meta,
+        function._di_file,
+    )
     scope.add_variable(var)
 
     if rhs is None:
@@ -854,7 +863,12 @@ def generate_for_statement(
     #    Save the iterator onto the stack (for referencing)
     store_in_mutable = not iter_expr.type().storage_kind.is_reference()
     iter_variable = cg.StackVariable(
-        f"__for_iter_{outer_scope.id}", iter_expr.type(), store_in_mutable, True
+        f"__for_iter_{outer_scope.id}",
+        iter_expr.type(),
+        store_in_mutable,
+        True,
+        node.meta,
+        function._di_file,
     )
     outer_scope.add_variable(iter_variable)
     outer_scope.add_generatable(iter_expr.subexpressions)
@@ -879,7 +893,12 @@ def generate_for_statement(
     inner_scope.add_generatable(get_next_expr)
 
     iter_result_variable = cg.StackVariable(
-        node.variable, get_next_expr.result_type, False, True
+        node.variable,
+        get_next_expr.result_type,
+        False,
+        True,
+        node.meta,
+        function._di_file,
     )
     inner_scope.add_variable(iter_result_variable)
     inner_scope.add_generatable(

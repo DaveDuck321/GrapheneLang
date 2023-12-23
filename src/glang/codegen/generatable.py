@@ -2,6 +2,7 @@ from typing import Iterable, Iterator, Optional
 
 from ..parser.lexer_parser import Meta
 from .builtin_types import BoolType, CharArrayDefinition, VoidType
+from .debug import DIFile, DILocalVariable, DILocation
 from .interfaces import (
     Generatable,
     IRContext,
@@ -23,9 +24,15 @@ from .user_facing_errors import (
 
 class StackVariable(Variable):
     def __init__(
-        self, name: str, var_type: Type, is_mutable: bool, initialized: bool
+        self,
+        name: str,
+        var_type: Type,
+        is_mutable: bool,
+        initialized: bool,
+        meta: Meta,
+        di_file: DIFile,
     ) -> None:
-        super().__init__(name, var_type, is_mutable)
+        super().__init__(name, var_type, is_mutable, meta, di_file)
 
         self.initialized = initialized
 
@@ -40,17 +47,42 @@ class StackVariable(Variable):
         # alloca returns a pointer.
         return f"ptr {self.ir_ref_without_type_annotation}"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> IROutput:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         assert self.ir_reg is None
-        self.ir_reg = next(reg_gen)
+        self.ir_reg = ctx.next_reg()
+        ir = IROutput()
 
         # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
         #            [, align <alignment>] [, addrspace(<num>)]
-        return IROutput(
-            [
-                f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.alignment}"
-            ]
+        ir.lines.append(
+            f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.alignment}"
         )
+
+        di_types = self.type.to_di_type(ctx.metadata_gen)
+        ir.metadata.extend(di_types)
+
+        di_local_variable = DILocalVariable(
+            ctx.next_meta(),
+            self._name,
+            None,  # FIXME specify arg for function arguments.
+            ctx.scope,
+            self._di_file,
+            self._meta.start.line,
+            di_types[-1],
+        )
+        ir.metadata.append(di_local_variable)
+
+        di_location = DILocation(
+            ctx.next_meta(), self._meta.start.line, self._meta.start.column, ctx.scope
+        )
+        ir.metadata.append(di_location)
+
+        ir.lines.append(
+            f"call void @llvm.dbg.declare(metadata {self.ir_ref}, metadata !{di_local_variable.id},"
+            f" metadata !DIExpression()), !dbg !{di_location.id}"
+        )
+
+        return ir
 
     def assert_can_read_from(self) -> None:
         # Can ready any initialized variable.
@@ -67,11 +99,17 @@ class StackVariable(Variable):
 
 class StaticVariable(Variable):
     def __init__(
-        self, name: str, var_type: Type, is_mutable: bool, graphene_literal: str
+        self,
+        name: str,
+        var_type: Type,
+        is_mutable: bool,
+        graphene_literal: str,
+        meta: Meta,
+        di_file: DIFile,
     ) -> None:
         assert var_type.storage_kind == Type.Kind.VALUE
         self._graphene_literal = graphene_literal
-        super().__init__(name, var_type, is_mutable)
+        super().__init__(name, var_type, is_mutable, meta, di_file)
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -84,7 +122,7 @@ class StaticVariable(Variable):
     def ir_ref(self) -> str:
         return f"{self.type.ir_type} {self.ir_ref_without_type_annotation}"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> IROutput:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         additional_prefix = "global" if self.is_mutable else "unnamed_addr constant"
 
         literal = self.type.definition.graphene_literal_to_ir_constant(
@@ -100,7 +138,7 @@ class StaticVariable(Variable):
         #            [, no_sanitize_address] [, no_sanitize_hwaddress]
         #            [, sanitize_address_dyninit] [, sanitize_memtag]
         #            (, !name !N)*
-        self.ir_reg = next(reg_gen)
+        self.ir_reg = ctx.next_reg()
         return IROutput(
             [
                 f"{self.ir_ref_without_type_annotation} = private {additional_prefix} "
@@ -194,7 +232,7 @@ class Scope(Generatable):
         #   This prevents a large loop causing a stack overflow
         if self._outer_scope is None:
             for variable in self._allocations:
-                contained_ir.extend(variable.generate_ir(ctx.reg_gen))
+                contained_ir.extend(variable.generate_ir(ctx))
 
         for line in self._lines:
             contained_ir.extend(line.generate_ir(ctx))

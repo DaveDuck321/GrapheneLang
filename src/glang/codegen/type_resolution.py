@@ -45,7 +45,6 @@ from .user_facing_errors import (
     PatternMatchDeductionFailure,
     RedeclarationWithIncorrectSpecializationCount,
     RedefinitionError,
-    SourceLocation,
     SpecializationFailed,
     SubstitutionFailure,
 )

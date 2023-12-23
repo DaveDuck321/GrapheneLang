@@ -13,7 +13,14 @@ from .builtin_types import (
     IntType,
     get_builtin_types,
 )
-from .debug import DICompileUnit, DIFile, DISubprogram, DISubroutineType, MetadataFlag
+from .debug import (
+    DICompileUnit,
+    DIFile,
+    DISubprogram,
+    DISubroutineType,
+    MetadataFlag,
+    Tag,
+)
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
 from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
@@ -82,8 +89,9 @@ class Function:
         # still need to be immutable).
         is_value_type = param_type.storage_kind == Type.Kind.VALUE
 
+        # FIXME pass the true meta.
         fn_param_var = StackVariable(
-            param_name, param_type, is_mutable=is_value_type, initialized=True
+            param_name, param_type, is_value_type, True, self._meta, self._di_file
         )
         self.top_level_scope.add_variable(fn_param_var)
 
@@ -116,7 +124,9 @@ class Function:
         if not self._signature.return_type.definition.is_void:
             assert self.top_level_scope.is_return_guaranteed()
 
-        di_subroutine_type = DISubroutineType(next(metadata_gen))
+        di_subroutine_type = DISubroutineType(
+            next(metadata_gen), None, 0, Tag.unspecified_type
+        )
 
         di_subprogram = DISubprogram(
             next(metadata_gen),
@@ -195,14 +205,19 @@ class Program:
         )
         return FunctionCallExpression(signature, fn_args, meta)
 
-    def add_static_string(self, string: str) -> StaticVariable:
+    def add_static_string(self, string: str, meta: Meta) -> StaticVariable:
         if string in self._string_cache:
             return self._string_cache[string]
 
         encoded_str, encoded_length = encode_string(string)
         str_type = AnonymousType(CharArrayDefinition(encoded_str, encoded_length))
         static_storage = StaticVariable(
-            f'string literal: "{string}"', str_type, False, encoded_str
+            f'string literal: "{string}"',
+            str_type,
+            False,
+            encoded_str,
+            meta,
+            self.di_files[0],  # FIXME this is wrong.
         )
         self.add_static_variable(static_storage)
 
@@ -227,12 +242,19 @@ class Program:
         output.lines.append(f'target triple = "{target.get_target_triple()}"')
 
         output.lines.append("")
-        var_reg_gen = count(0)
+        # FIXME the file passed in is wrong (although we aren't using it yet).
+        ctx = IRContext(count(0), count(0), self.di_files[0])
         for variable in self._static_variables:
-            output.extend(variable.generate_ir(var_reg_gen))
+            output.extend(variable.generate_ir(ctx))
 
         output.lines.append("")
         output.lines.extend(self.symbol_table.get_ir_for_initialization())
+
+        # We need to declare any debugger intrinsics we use for some reason.
+        output.lines.append("")
+        output.lines.append(
+            "declare void @llvm.dbg.declare(metadata, metadata, metadata)"
+        )
 
         output.lines.append("")
         for func in self._fn_bodies:

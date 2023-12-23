@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Iterator, Optional
 
-from ..codegen.debug import DILocation, DISubprogram, Metadata
+from ..codegen.debug import DIFile, DILocation, DIScope, DIType, Metadata
 from ..parser.lexer_parser import Meta
 from .user_facing_errors import MutableVariableContainsAReference
 
@@ -56,6 +56,10 @@ class TypeDefinition(ABC):
     @property
     def storage_kind(self) -> "Type.Kind":
         return Type.Kind.VALUE
+
+    @abstractmethod
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        pass
 
     def __repr__(self) -> str:
         return f"TypeDefinition({self.format_for_output_to_user()})"
@@ -127,6 +131,9 @@ class Type(ABC):
     def ir_type(self) -> str:
         pass
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return self.definition.to_di_type(metadata_gen)
+
     def __repr__(self) -> str:
         return f"Type({self.format_for_output_to_user(True)})"
 
@@ -145,7 +152,7 @@ class IROutput:
 class IRContext:
     reg_gen: Iterator[int]
     metadata_gen: Iterator[int]
-    scope: DISubprogram
+    scope: DIScope
 
     def next_reg(self) -> int:
         return next(self.reg_gen)
@@ -155,12 +162,16 @@ class IRContext:
 
 
 class Variable(ABC):
-    def __init__(self, name: str, var_type: Type, is_mutable: bool) -> None:
+    def __init__(
+        self, name: str, var_type: Type, is_mutable: bool, meta: Meta, di_file: DIFile
+    ) -> None:
         super().__init__()
 
         self._name = name
         self.type = var_type
         self.is_mutable = is_mutable
+        self._meta = meta
+        self._di_file = di_file
 
         # We cannot store references in mutable variables. Since there is no
         #  syntax to reassign the reference
@@ -186,7 +197,7 @@ class Variable(ABC):
         pass
 
     @abstractmethod
-    def generate_ir(self, reg_gen: Iterator[int]) -> IROutput:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         pass
 
     def __repr__(self) -> str:
@@ -231,7 +242,7 @@ class Generatable(ABC):
         assert self.meta is not None
 
         di_location = DILocation(
-            next(ctx.metadata_gen),
+            ctx.next_meta(),
             self.meta.start.line,
             self.meta.start.column,
             ctx.scope,
