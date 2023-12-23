@@ -13,13 +13,7 @@ from .builtin_types import (
     IntType,
     get_builtin_types,
 )
-from .debug import (
-    DICompileUnit,
-    DIFile,
-    DISubprogram,
-    DISubroutineType,
-    MetadataFlag,
-)
+from .debug import DICompileUnit, DIFile, DISubprogram, DISubroutineType, MetadataFlag
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
 from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
