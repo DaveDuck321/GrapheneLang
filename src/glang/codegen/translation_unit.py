@@ -124,7 +124,7 @@ class Function:
             self._signature.mangled_name,
             di_subroutine_type,
             self._di_file,
-            0,  # TODO line number.
+            self._meta.start.line,
             self._di_unit,
             not self._signature.is_foreign,
         )
