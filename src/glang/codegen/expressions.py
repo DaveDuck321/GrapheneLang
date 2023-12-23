@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import Iterator, Optional
 
+from ..parser.lexer_parser import Meta
 from .builtin_types import (
     AnonymousType,
     BoolType,
@@ -39,7 +40,7 @@ from .user_facing_errors import (
 
 class ConstantExpression(StaticTypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
-        super().__init__(cst_type, Type.Kind.VALUE)
+        super().__init__(cst_type, Type.Kind.VALUE, None)
 
         self.value = cst_type.definition.graphene_literal_to_ir_constant(value)
 
@@ -60,7 +61,7 @@ class ConstantExpression(StaticTypedExpression):
 
 
 class VariableReference(StaticTypedExpression):
-    def __init__(self, variable: Variable) -> None:
+    def __init__(self, variable: Variable, meta: Meta) -> None:
         # Calculate the constness
         # 1) If the variable refers to a reference, the storage MUST be const,
         #     the reference inherits its constness from the reference type
@@ -78,7 +79,8 @@ class VariableReference(StaticTypedExpression):
         super().__init__(
             variable.type.convert_to_value_type(),
             indirection_kind,
-            variable.type.storage_kind.is_reference(),
+            meta,
+            was_reference_type_at_any_point=variable.type.storage_kind.is_reference(),
         )
 
         self.variable = variable
@@ -111,8 +113,8 @@ class VariableReference(StaticTypedExpression):
 
 
 class FunctionParameter(StaticTypedExpression):
-    def __init__(self, expr_type: Type) -> None:
-        super().__init__(expr_type, Type.Kind.VALUE)
+    def __init__(self, expr_type: Type, meta: Meta) -> None:
+        super().__init__(expr_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"FunctionParameter({self.underlying_type})"
@@ -136,12 +138,13 @@ class FunctionParameter(StaticTypedExpression):
 
 class FunctionCallExpression(StaticTypedExpression):
     def __init__(
-        self, signature: FunctionSignature, args: list[TypedExpression]
+        self, signature: FunctionSignature, args: list[TypedExpression], meta: Meta
     ) -> None:
         super().__init__(
             signature.return_type.convert_to_value_type(),
             signature.return_type.storage_kind,
-            signature.return_type.storage_kind.is_reference(),
+            meta,
+            was_reference_type_at_any_point=signature.return_type.storage_kind.is_reference(),
         )
 
         for arg, arg_type in zip(args, signature.arguments, strict=True):
@@ -196,7 +199,9 @@ class FunctionCallExpression(StaticTypedExpression):
 
 
 class BorrowExpression(StaticTypedExpression):
-    def __init__(self, expr: TypedExpression, borrow_kind: Type.Kind) -> None:
+    def __init__(
+        self, expr: TypedExpression, borrow_kind: Type.Kind, meta: Meta
+    ) -> None:
         self._expr = expr
 
         rhs_type = expr.result_type
@@ -231,7 +236,7 @@ class BorrowExpression(StaticTypedExpression):
             expr.assert_can_write_to()
 
         super().__init__(
-            rhs_type.convert_to_storage_type(storage_type), Type.Kind.VALUE
+            rhs_type.convert_to_storage_type(storage_type), Type.Kind.VALUE, meta
         )
 
     def __repr__(self) -> str:
@@ -251,7 +256,7 @@ class BorrowExpression(StaticTypedExpression):
 
 
 class StructMemberAccess(StaticTypedExpression):
-    def __init__(self, lhs: TypedExpression, member_name: str) -> None:
+    def __init__(self, lhs: TypedExpression, member_name: str, meta: Meta) -> None:
         self._member_name = member_name
         self._lhs = lhs
 
@@ -278,7 +283,7 @@ class StructMemberAccess(StaticTypedExpression):
         else:
             storage_kind = lhs.result_type_as_if_borrowed.storage_kind
 
-        super().__init__(self._member_type.convert_to_value_type(), storage_kind)
+        super().__init__(self._member_type.convert_to_value_type(), storage_kind, meta)
 
     def generate_ir_from_known_address(self, reg_gen: Iterator[int]) -> list[str]:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
@@ -344,7 +349,7 @@ class StructMemberAccess(StaticTypedExpression):
 
 class ArrayIndexAccess(StaticTypedExpression):
     def __init__(
-        self, array_ptr: TypedExpression, indices: list[TypedExpression]
+        self, array_ptr: TypedExpression, indices: list[TypedExpression], meta: Meta
     ) -> None:
         # NOTE: needs address since getelementptr must be used for runtime indexing
         assert array_ptr.has_address
@@ -389,7 +394,7 @@ class ArrayIndexAccess(StaticTypedExpression):
 
         result_type = array_ptr.result_type_as_if_borrowed
         super().__init__(
-            self._element_type.convert_to_value_type(), result_type.storage_kind
+            self._element_type.convert_to_value_type(), result_type.storage_kind, meta
         )
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -447,7 +452,9 @@ class ArrayIndexAccess(StaticTypedExpression):
 
 
 class ArrayInitializer(StaticTypedExpression):
-    def __init__(self, array_type: Type, element_exprs: list[TypedExpression]) -> None:
+    def __init__(
+        self, array_type: Type, element_exprs: list[TypedExpression], meta: Meta
+    ) -> None:
         assert array_type.storage_kind == Type.Kind.VALUE
         assert isinstance(array_type.definition, StackArrayDefinition)
         # TODO support for multidimensional arrays?
@@ -473,7 +480,7 @@ class ArrayInitializer(StaticTypedExpression):
             self._conversion_exprs.extend(extra_exprs)
             self.implicit_conversion_cost += conversion_cost
 
-        super().__init__(array_type, Type.Kind.VALUE)
+        super().__init__(array_type, Type.Kind.VALUE, meta)
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
@@ -507,7 +514,9 @@ class ArrayInitializer(StaticTypedExpression):
 
 
 class StructInitializer(StaticTypedExpression):
-    def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
+    def __init__(
+        self, struct_type: Type, member_exprs: list[TypedExpression], meta: Meta
+    ) -> None:
         assert struct_type.storage_kind == Type.Kind.VALUE
         assert isinstance(struct_type.definition, StructDefinition)
         assert len(member_exprs) == len(struct_type.definition.members)
@@ -532,7 +541,7 @@ class StructInitializer(StaticTypedExpression):
             self._conversion_exprs.extend(extra_exprs)
             self.implicit_conversion_cost += conversion_cost
 
-        super().__init__(struct_type, Type.Kind.VALUE)
+        super().__init__(struct_type, Type.Kind.VALUE, meta)
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
         ir: list[str] = self.expand_ir(self._conversion_exprs, reg_gen)
@@ -595,13 +604,16 @@ class InitializerList(TypedExpression):
             )
 
         ordered_members = self.get_ordered_members(other)
-        struct_initializer = StructInitializer(other, ordered_members)
+        assert self.meta is not None
+        struct_initializer = StructInitializer(other, ordered_members, self.meta)
         return struct_initializer.implicit_conversion_cost, [struct_initializer]
 
 
 class NamedInitializerList(InitializerList):
-    def __init__(self, members: list[TypedExpression], names: list[str]) -> None:
-        super().__init__(Type.Kind.VALUE)
+    def __init__(
+        self, members: list[TypedExpression], names: list[str], meta: Meta
+    ) -> None:
+        super().__init__(Type.Kind.VALUE, meta)
         self._members = dict(zip(names, members, strict=True))
 
     @property
@@ -642,8 +654,8 @@ class NamedInitializerList(InitializerList):
 
 
 class UnnamedInitializerList(InitializerList):
-    def __init__(self, members: list[TypedExpression]) -> None:
-        super().__init__(Type.Kind.VALUE)
+    def __init__(self, members: list[TypedExpression], meta: Meta) -> None:
+        super().__init__(Type.Kind.VALUE, meta)
 
         self._members = members
 
@@ -687,7 +699,8 @@ class UnnamedInitializerList(InitializerList):
         # Unnamed initializer lists can also be converted to stack arrays.
         if isinstance(other.definition, StackArrayDefinition):
             ordered_members = self.get_ordered_members(other)
-            array_initializer = ArrayInitializer(other, ordered_members)
+            assert self.meta is not None
+            array_initializer = ArrayInitializer(other, ordered_members, self.meta)
             return array_initializer.implicit_conversion_cost, [array_initializer]
 
         # If other is not a stack array, then delegate to the parent class. It
@@ -703,8 +716,9 @@ class LogicalOperator(StaticTypedExpression):
         lhs_expression: TypedExpression,
         rhs_generatables: list[Generatable],
         rhs_expression: TypedExpression,
+        meta: Meta,
     ) -> None:
-        super().__init__(BoolType(), Type.Kind.VALUE)
+        super().__init__(BoolType(), Type.Kind.VALUE, meta)
 
         assert operator in ("and", "or")
 

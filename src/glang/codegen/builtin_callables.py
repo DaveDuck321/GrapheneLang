@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from typing import Iterator
 
+from ..parser.lexer_parser import Meta
 from .builtin_types import (
     BoolDefinition,
     BoolType,
@@ -18,7 +19,10 @@ from .user_facing_errors import OperandError
 class BuiltinCallable(StaticTypedExpression):
     @abstractmethod
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         pass
 
@@ -28,7 +32,10 @@ class UnaryIntegerExpression(BuiltinCallable):
     USER_FACING_NAME = ""
 
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         (self._arg,) = arguments
 
@@ -39,7 +46,7 @@ class UnaryIntegerExpression(BuiltinCallable):
         assert isinstance(definition, (IntegerDefinition, BoolDefinition))
 
         self._arg_type = self._arg.result_type.convert_to_value_type()
-        StaticTypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._arg})"
@@ -95,7 +102,10 @@ class BasicIntegerExpression(BuiltinCallable):
         pass
 
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         lhs, rhs = arguments
         # This is not a user-facing function, we don't need sensible error messages
@@ -109,7 +119,7 @@ class BasicIntegerExpression(BuiltinCallable):
         assert lhs.result_type == rhs.result_type
 
         StaticTypedExpression.__init__(
-            self, self.get_result_type(arguments), Type.Kind.VALUE
+            self, self.get_result_type(arguments), Type.Kind.VALUE, meta
         )
 
         self._arg_type = lhs.result_type.convert_to_value_type()
@@ -256,6 +266,7 @@ class AlignOfExpression(BuiltinCallable):
         self,
         specialization: list[SpecializationItem],
         arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
@@ -267,7 +278,7 @@ class AlignOfExpression(BuiltinCallable):
         )
 
         StaticTypedExpression.__init__(
-            self, self._result.underlying_type, Type.Kind.VALUE
+            self, self._result.underlying_type, Type.Kind.VALUE, meta
         )
 
     def __repr__(self) -> str:
@@ -292,6 +303,7 @@ class SizeOfExpression(BuiltinCallable):
         self,
         specialization: list[SpecializationItem],
         arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
@@ -301,7 +313,7 @@ class SizeOfExpression(BuiltinCallable):
         self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
 
         StaticTypedExpression.__init__(
-            self, self._result.underlying_type, Type.Kind.VALUE
+            self, self._result.underlying_type, Type.Kind.VALUE, meta
         )
 
     def __repr__(self) -> str:
@@ -326,6 +338,7 @@ class NarrowExpression(BuiltinCallable):
         self,
         specialization: list[SpecializationItem],
         arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         (self._argument,) = arguments
         (return_type,) = specialization
@@ -341,7 +354,7 @@ class NarrowExpression(BuiltinCallable):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        StaticTypedExpression.__init__(self, return_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, return_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"Narrow({self._argument} to {self.underlying_type})"
@@ -372,7 +385,10 @@ class NarrowExpression(BuiltinCallable):
 
 class PtrToIntExpression(BuiltinCallable):
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(specialization) == 0
         assert len(arguments) == 1
@@ -382,7 +398,7 @@ class PtrToIntExpression(BuiltinCallable):
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        StaticTypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -411,7 +427,10 @@ class PtrToIntExpression(BuiltinCallable):
 
 class IntToPtrExpression(BuiltinCallable):
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(specialization) == 1
         assert len(arguments) == 1
@@ -424,7 +443,10 @@ class IntToPtrExpression(BuiltinCallable):
         assert isinstance(self._src_expr.result_type, GenericIntType)
 
         StaticTypedExpression.__init__(
-            self, self._ptr_type.convert_to_value_type(), self._ptr_type.storage_kind
+            self,
+            self._ptr_type.convert_to_value_type(),
+            self._ptr_type.storage_kind,
+            meta,
         )
 
     def __repr__(self) -> str:
@@ -459,7 +481,10 @@ class IntToPtrExpression(BuiltinCallable):
 
 class BitcastExpression(BuiltinCallable):
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(specialization) == 1
         assert len(arguments) == 1
@@ -489,6 +514,7 @@ class BitcastExpression(BuiltinCallable):
             self,
             self._target_type.convert_to_value_type(),
             self._target_type.storage_kind,
+            meta,
         )
 
     def __repr__(self) -> str:

@@ -6,6 +6,7 @@ from itertools import groupby
 from typing import Callable, Iterable, Optional
 from uuid import UUID, uuid4
 
+from ..parser.lexer_parser import Meta
 from .builtin_types import (
     AnonymousType,
     FunctionSignature,
@@ -43,6 +44,7 @@ from .user_facing_errors import (
     PatternMatchDeductionFailure,
     RedeclarationWithIncorrectSpecializationCount,
     RedefinitionError,
+    SourceLocation,
     SpecializationFailed,
     SubstitutionFailure,
 )
@@ -842,6 +844,7 @@ class FunctionDeclaration:
     signature: UnresolvedFunctionSignature
     mapping: GenericMapping
     loc: Location
+    meta: Meta
     uuid: UUID
 
     @staticmethod
@@ -856,6 +859,7 @@ class FunctionDeclaration:
         parameter_pack_argument_name: Optional[str],
         return_type: UnresolvedType,
         location: Location,
+        meta: Meta,
     ):
         explicitly_matched_generics = set().union(
             *(
@@ -892,6 +896,7 @@ class FunctionDeclaration:
             signature,
             GenericMapping({}, []),
             location,
+            meta,
             uuid4(),
         )
 
@@ -930,6 +935,7 @@ class FunctionDeclaration:
             self.signature.produce_specialized_copy(generics),
             self.mapping + generics,
             self.loc,
+            self.meta,
             self.uuid,
         )
 

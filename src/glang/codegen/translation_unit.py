@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 from .. import target
+from ..parser.lexer_parser import Meta
 from .builtin_callables import get_builtin_callables
 from .builtin_types import (
     AnonymousType,
@@ -48,6 +49,7 @@ class Function:
         parameter_pack_name: Optional[str],
         di_file: DIFile,
         di_unit: DICompileUnit,
+        meta: Meta,
     ) -> None:
         if parameter_pack_name is None:
             assert len(parameter_names) == len(signature.arguments)
@@ -55,11 +57,12 @@ class Function:
         self._signature = signature
         self._di_file = di_file
         self._di_unit = di_unit
+        self._meta = meta
 
         # These two counters could be merged.
         self.label_id_iter = count()
         self.scope_id_iter = count()
-        self.top_level_scope = Scope(self.get_next_scope_id())
+        self.top_level_scope = Scope(self.get_next_scope_id(), self._meta)
 
         # Implicit stack variable allocation for parameters
         #   TODO: constant parameters (when/ if added to grammar)
@@ -88,7 +91,8 @@ class Function:
                 )
 
     def _add_parameter(self, param_name: str, param_type: Type):
-        fn_param = FunctionParameter(param_type)
+        # FIXME pass the true meta.
+        fn_param = FunctionParameter(param_type, self._meta)
         self._parameters.append(fn_param)
         self.top_level_scope.add_generatable(fn_param)
 
@@ -101,7 +105,7 @@ class Function:
         )
         self.top_level_scope.add_variable(fn_param_var)
 
-        fn_param_var_assignment = VariableInitialize(fn_param_var, fn_param)
+        fn_param_var_assignment = VariableInitialize(fn_param_var, fn_param, self._meta)
         self.top_level_scope.add_generatable(fn_param_var_assignment)
 
     def __repr__(self) -> str:
@@ -197,14 +201,15 @@ class Program:
         fn_name: str,
         fn_specialization: list[SpecializationItem],
         fn_args: list[TypedExpression],
+        meta: Meta,
     ) -> TypedExpression:
         if fn_name in self._builtin_callables:
-            return self._builtin_callables[fn_name](fn_specialization, fn_args)
+            return self._builtin_callables[fn_name](fn_specialization, fn_args, meta)
 
         signature, _ = self.symbol_table.lookup_function(
             fn_name, fn_specialization, fn_args, True
         )
-        return FunctionCallExpression(signature, fn_args)
+        return FunctionCallExpression(signature, fn_args, meta)
 
     def add_static_string(self, string: str) -> StaticVariable:
         if string in self._string_cache:

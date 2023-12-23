@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Iterable, Iterator, Optional
 
+from ..parser.lexer_parser import Meta
 from .user_facing_errors import MutableVariableContainsAReference
 
 
@@ -177,6 +178,11 @@ class Variable(ABC):
 
 
 class Generatable(ABC):
+    def __init__(self, meta: Optional[Meta]) -> None:
+        super().__init__()
+
+        self.meta = meta
+
     def generate_ir(self, _: Iterator[int]) -> list[str]:
         return []
 
@@ -202,10 +208,9 @@ class Generatable(ABC):
 
 class TypedExpression(Generatable):
     def __init__(
-        self,
-        underlying_indirection_kind: Type.Kind,
+        self, underlying_indirection_kind: Type.Kind, meta: Optional[Meta]
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
         self.underlying_indirection_kind = underlying_indirection_kind
         self.result_reg: Optional[int] = None
 
@@ -281,6 +286,7 @@ class StaticTypedExpression(TypedExpression):
         self,
         expr_type: Type,
         underlying_indirection_kind: Type.Kind,
+        meta: Optional[Meta],
         was_reference_type_at_any_point: bool = False,
     ) -> None:
         # It is the caller's responsibility to escape double indirections
@@ -290,7 +296,7 @@ class StaticTypedExpression(TypedExpression):
         self.underlying_type = expr_type
 
         self.was_reference_type_at_any_point = was_reference_type_at_any_point
-        super().__init__(underlying_indirection_kind)
+        super().__init__(underlying_indirection_kind, meta)
 
     @property
     def result_type(self) -> Type:

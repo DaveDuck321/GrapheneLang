@@ -1,5 +1,6 @@
 from typing import Iterable, Iterator, Optional
 
+from ..parser.lexer_parser import Meta
 from .builtin_types import BoolType, CharArrayDefinition, VoidType
 from .interfaces import Generatable, Type, TypedExpression, Variable
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
@@ -104,8 +105,10 @@ class StaticVariable(Variable):
 
 
 class Scope(Generatable):
-    def __init__(self, scope_id: int, outer_scope: Optional["Scope"] = None) -> None:
-        super().__init__()
+    def __init__(
+        self, scope_id: int, meta: Meta, outer_scope: Optional["Scope"] = None
+    ) -> None:
+        super().__init__(meta)
 
         assert scope_id >= 0
         self.id = scope_id
@@ -211,8 +214,9 @@ class IfElseStatement(Generatable):
         condition: TypedExpression,
         if_scope: Scope,
         else_scope: Scope,
+        meta: Meta,
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
 
         condition.assert_can_read_from()
         assert_is_implicitly_convertible(condition, BoolType(), "if condition")
@@ -276,8 +280,9 @@ class WhileStatement(Generatable):
         condition: TypedExpression,
         condition_generatable: list[Generatable],
         inner_scope: Scope,
+        meta: Meta,
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
 
         condition.assert_can_read_from()
         assert_is_implicitly_convertible(condition, BoolType(), "while condition")
@@ -321,9 +326,12 @@ class WhileStatement(Generatable):
 
 class ReturnStatement(Generatable):
     def __init__(
-        self, return_type: Type, returned_expr: Optional[TypedExpression] = None
+        self,
+        return_type: Type,
+        meta: Meta,
+        returned_expr: Optional[TypedExpression] = None,
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
 
         if returned_expr is not None:
             returned_expr.assert_can_read_from()
@@ -363,8 +371,10 @@ class ReturnStatement(Generatable):
 
 
 class VariableInitialize(Generatable):
-    def __init__(self, variable: StackVariable, value: TypedExpression) -> None:
-        super().__init__()
+    def __init__(
+        self, variable: StackVariable, value: TypedExpression, meta: Meta
+    ) -> None:
+        super().__init__(meta)
 
         value.assert_can_read_from()
         assert_is_implicitly_convertible(value, variable.type, "variable assignment")
@@ -398,8 +408,8 @@ class VariableInitialize(Generatable):
 
 
 class Assignment(Generatable):
-    def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
-        super().__init__()
+    def __init__(self, dst: TypedExpression, src: TypedExpression, meta: Meta) -> None:
+        super().__init__(meta)
 
         if dst.result_type.storage_kind.is_reference():
             raise AssignmentToBorrowedReference(dst.format_for_output_to_user())

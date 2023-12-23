@@ -7,7 +7,7 @@ from .user_facing_errors import OperandError, TypeCheckerError
 
 class RemoveIndirection(StaticTypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        super().__init__(ref.result_type, Type.Kind.VALUE)
+        super().__init__(ref.result_type, Type.Kind.VALUE, ref.meta)
         self.ref = ref
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -38,7 +38,7 @@ class RemoveIndirection(StaticTypedExpression):
 
 class PromoteInteger(StaticTypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
-        super().__init__(dest_type, Type.Kind.VALUE)
+        super().__init__(dest_type, Type.Kind.VALUE, src.meta)
 
         src_definition = src.result_type.definition
 
@@ -86,7 +86,7 @@ class Reinterpret(StaticTypedExpression):
         assert src.has_address and not src.underlying_indirection_kind.is_reference()
         assert dest_type.storage_kind.is_reference()
 
-        super().__init__(dest_type, Type.Kind.VALUE)
+        super().__init__(dest_type, Type.Kind.VALUE, src.meta)
 
         self._src = src
 
@@ -257,7 +257,7 @@ def get_implicit_conversion_cost(
 ) -> Optional[int]:
     class Wrapper(StaticTypedExpression):
         def __init__(self, expr_type: Type) -> None:
-            super().__init__(expr_type, Type.Kind.VALUE)
+            super().__init__(expr_type, Type.Kind.VALUE, None)
 
         @property
         def ir_ref_without_type_annotation(self) -> str:
