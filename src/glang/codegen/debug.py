@@ -68,3 +68,13 @@ class DISubprogram(Metadata):
             f"scopeLine: {self.line}, type: !{self.subroutine_type.id}, unit: !{self.unit.id}, "
             f"{sp_flags})"
         )
+
+
+@dataclass
+class DILocation(Metadata):
+    line: int
+    column: int
+    scope: DISubprogram
+
+    def __repr__(self) -> str:
+        return f"!DILocation(line: {self.line}, column: {self.column}, scope: !{self.scope.id})"

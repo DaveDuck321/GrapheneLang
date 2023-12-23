@@ -1,7 +1,13 @@
 from typing import Iterator, Optional
 
 from .builtin_types import HeapArrayDefinition, IntegerDefinition, StackArrayDefinition
-from .interfaces import StaticTypedExpression, Type, TypedExpression
+from .interfaces import (
+    IRContext,
+    IROutput,
+    StaticTypedExpression,
+    Type,
+    TypedExpression,
+)
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
@@ -10,17 +16,22 @@ class RemoveIndirection(StaticTypedExpression):
         super().__init__(ref.result_type, Type.Kind.VALUE, ref.meta)
         self.ref = ref
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#load-instruction
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
         return_type_ir = self.ref.result_type.ir_type
 
+        ir = IROutput()
+        di_location = self.add_di_location(ctx, ir)
+
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
-        return [
+        ir.lines.append(
             f"%{self.result_reg} = load {return_type_ir}, "
             f"{self.ref.ir_ref_with_type_annotation}, "
-            f"align {self.result_type_as_if_borrowed.alignment}"
-        ]
+            f"align {self.result_type_as_if_borrowed.alignment}, !dbg !{di_location.id}"
+        )
+
+        return ir
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -52,19 +63,24 @@ class PromoteInteger(StaticTypedExpression):
         self.src = src
         self.is_signed = src_definition.is_signed
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#sext-to-instruction
         # https://llvm.org/docs/LangRef.html#zext-to-instruction
 
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
+        ir = IROutput()
+        di_location = self.add_di_location(ctx, ir)
 
         instruction = "sext" if self.is_signed else "zext"
 
         # <result> = {s,z}ext <ty> <value> to <ty2> ; yields ty2
-        return [
+        ir.lines.append(
             f"%{self.result_reg} = {instruction} "
-            f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}"
-        ]
+            f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}, "
+            f"!dbg !{di_location.id}"
+        )
+
+        return ir
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -89,9 +105,6 @@ class Reinterpret(StaticTypedExpression):
         super().__init__(dest_type, Type.Kind.VALUE, src.meta)
 
         self._src = src
-
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        return []
 
     @property
     def ir_ref_without_type_annotation(self) -> str:

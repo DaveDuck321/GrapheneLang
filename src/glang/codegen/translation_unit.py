@@ -1,4 +1,3 @@
-from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import count
 from pathlib import Path
@@ -19,26 +18,15 @@ from .debug import (
     DIFile,
     DISubprogram,
     DISubroutineType,
-    Metadata,
     MetadataFlag,
 )
 from .expressions import FunctionCallExpression, FunctionParameter
 from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
-from .interfaces import SpecializationItem, Type, TypedExpression
+from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
 from .strings import encode_string
 from .type_conversions import get_implicit_conversion_cost
 from .type_resolution import FunctionDeclaration, SymbolTable
 from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
-
-
-@dataclass
-class IROutput:
-    lines: list[str] = field(default_factory=list)
-    metadata: list[Metadata] = field(default_factory=list)
-
-    def extend(self, other: "IROutput") -> None:
-        self.lines.extend(other.lines)
-        self.metadata.extend(other.metadata)
 
 
 class Function:
@@ -147,10 +135,10 @@ class Function:
             not self._signature.is_foreign,
         )
 
-        reg_gen = count(0)  # First register is %0
+        ctx = IRContext(count(0), metadata_gen, di_subprogram)
 
         for param in self._parameters:
-            param.set_reg(next(reg_gen))
+            param.set_reg(ctx.next_reg())
 
         args_ir = ", ".join(
             map(lambda param: param.ir_ref_with_type_annotation, self._parameters)
@@ -159,6 +147,8 @@ class Function:
         def indent_ir(lines: list[str]):
             return map(lambda line: line if line.endswith(":") else f"  {line}", lines)
 
+        body_ir = self.top_level_scope.generate_ir(ctx)
+
         return IROutput(
             [
                 (
@@ -166,10 +156,10 @@ class Function:
                     f" @{self.mangled_name}({args_ir}) !dbg !{di_subprogram.id} {{"
                 ),
                 "begin:",  # Name the implicit basic block
-                *indent_ir(self.top_level_scope.generate_ir(reg_gen)),
+                *indent_ir(body_ir.lines),
                 "}",
             ],
-            [di_subroutine_type, di_subprogram],
+            [di_subroutine_type, di_subprogram, *body_ir.metadata],
         )
 
 
@@ -240,7 +230,7 @@ class Program:
         output.lines.append("")
         var_reg_gen = count(0)
         for variable in self._static_variables:
-            output.lines.extend(variable.generate_ir(var_reg_gen))
+            output.extend(variable.generate_ir(var_reg_gen))
 
         output.lines.append("")
         output.lines.extend(self.symbol_table.get_ir_for_initialization())

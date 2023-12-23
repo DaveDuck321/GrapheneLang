@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Iterator, Optional
 
+from ..codegen.debug import DILocation, DISubprogram, Metadata
 from ..parser.lexer_parser import Meta
 from .user_facing_errors import MutableVariableContainsAReference
 
@@ -130,6 +131,29 @@ class Type(ABC):
         return f"Type({self.format_for_output_to_user(True)})"
 
 
+@dataclass
+class IROutput:
+    lines: list[str] = field(default_factory=list)
+    metadata: list[Metadata] = field(default_factory=list)
+
+    def extend(self, other: "IROutput") -> None:
+        self.lines.extend(other.lines)
+        self.metadata.extend(other.metadata)
+
+
+@dataclass
+class IRContext:
+    reg_gen: Iterator[int]
+    metadata_gen: Iterator[int]
+    scope: DISubprogram
+
+    def next_reg(self) -> int:
+        return next(self.reg_gen)
+
+    def next_meta(self) -> int:
+        return next(self.metadata_gen)
+
+
 class Variable(ABC):
     def __init__(self, name: str, var_type: Type, is_mutable: bool) -> None:
         super().__init__()
@@ -162,7 +186,7 @@ class Variable(ABC):
         pass
 
     @abstractmethod
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, reg_gen: Iterator[int]) -> IROutput:
         pass
 
     def __repr__(self) -> str:
@@ -183,8 +207,8 @@ class Generatable(ABC):
 
         self.meta = meta
 
-    def generate_ir(self, _: Iterator[int]) -> list[str]:
-        return []
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        return IROutput()
 
     @abstractmethod
     def is_return_guaranteed(self) -> bool:
@@ -195,15 +219,26 @@ class Generatable(ABC):
         pass
 
     @staticmethod
-    def expand_ir(
-        generatables: Iterable["Generatable"], reg_gen: Iterator[int]
-    ) -> list[str]:
-        ir_lines: list[str] = []
+    def expand_ir(generatables: Iterable["Generatable"], ctx: IRContext) -> IROutput:
+        ir_output = IROutput()
 
         for generatable in generatables:
-            ir_lines.extend(generatable.generate_ir(reg_gen))
+            ir_output.extend(generatable.generate_ir(ctx))
 
-        return ir_lines
+        return ir_output
+
+    def add_di_location(self, ctx: IRContext, ir: IROutput) -> DILocation:
+        assert self.meta is not None
+
+        di_location = DILocation(
+            next(ctx.metadata_gen),
+            self.meta.start.line,
+            self.meta.start.column,
+            ctx.scope,
+        )
+        ir.metadata.append(di_location)
+
+        return di_location
 
 
 class TypedExpression(Generatable):
@@ -246,16 +281,16 @@ class TypedExpression(Generatable):
     def ir_type_annotation(self) -> str:
         pass
 
-    def dereference_double_indirection(
-        self, reg_gen: Iterator[int], ir: list[str]
-    ) -> int:
+    def dereference_double_indirection(self, ctx: IRContext, ir: IROutput) -> int:
         # Converts a double indirection eg. address of reference into a reference
         assert self.has_address
 
-        store_at = next(reg_gen)
-        ir.append(
+        di_location = self.add_di_location(ctx, ir)
+
+        store_at = ctx.next_reg()
+        ir.lines.append(
             f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
-            f"align {self.result_type_as_if_borrowed.alignment}"
+            f"align {self.result_type_as_if_borrowed.alignment}, !dbg !{di_location.id}"
         )
         return store_at
 
