@@ -17,6 +17,7 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
+from .debug import DIFile
 from .interfaces import (
     GenericArgument,
     GenericMapping,
@@ -845,6 +846,7 @@ class FunctionDeclaration:
     mapping: GenericMapping
     loc: Location
     meta: Meta
+    di_file: DIFile
     uuid: UUID
 
     @staticmethod
@@ -860,6 +862,7 @@ class FunctionDeclaration:
         return_type: UnresolvedType,
         location: Location,
         meta: Meta,
+        di_file: DIFile,
     ):
         explicitly_matched_generics = set().union(
             *(
@@ -897,6 +900,7 @@ class FunctionDeclaration:
             GenericMapping({}, []),
             location,
             meta,
+            di_file,
             uuid4(),
         )
 
@@ -936,6 +940,7 @@ class FunctionDeclaration:
             self.mapping + generics,
             self.loc,
             self.meta,
+            self.di_file,
             self.uuid,
         )
 

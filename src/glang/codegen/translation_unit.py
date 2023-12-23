@@ -174,8 +174,8 @@ class Program:
 
         self._metadata_gen = count(0)
 
-        self.di_file = DIFile(next(self._metadata_gen), file)
-        self.di_compile_unit = DICompileUnit(next(self._metadata_gen), self.di_file)
+        self.di_files = [DIFile(next(self._metadata_gen), file)]
+        self.di_compile_unit = DICompileUnit(next(self._metadata_gen), self.di_files[0])
 
         for builtin_type in get_builtin_types():
             self.symbol_table.add_builtin_type(builtin_type)
@@ -215,8 +215,13 @@ class Program:
     def add_function_body(self, function: Function) -> None:
         self._fn_bodies.append(function)
 
+    def add_secondary_file(self, path: Path) -> DIFile:
+        di_file = DIFile(next(self._metadata_gen), path)
+        self.di_files.append(di_file)
+        return di_file
+
     def generate_ir(self) -> str:
-        output = IROutput([], [self.di_file, self.di_compile_unit])
+        output = IROutput(metadata=[self.di_compile_unit, *self.di_files])
 
         output.lines.append(f'target datalayout = "{target.get_datalayout()}"')
         output.lines.append(f'target triple = "{target.get_target_triple()}"')

@@ -212,6 +212,7 @@ class FunctionSignatureParser(lp.Interpreter):
         super().__init__()
 
         self._current_file: Optional[str] = None
+        self._current_di_file: Optional[cg.DIFile] = None
         self._include_hierarchy: Optional[tuple[str, ...]] = None
 
         self._program = program
@@ -222,8 +223,10 @@ class FunctionSignatureParser(lp.Interpreter):
         file_name: str,
         include_hierarchy: list[str],
         top_level_features: list[lp.TopLevelFeature],
+        di_file: cg.DIFile,
     ) -> None:
         self._current_file = file_name
+        self._current_di_file = di_file
         self._include_hierarchy = tuple(include_hierarchy)
         for feature in top_level_features:
             if isinstance(feature, lp.FunctionDefinition):
@@ -253,6 +256,7 @@ class FunctionSignatureParser(lp.Interpreter):
             yield declaration, signature, body
 
     def GenericFunctionDefinition(self, node: lp.GenericFunctionDefinition) -> None:
+        assert self._current_di_file is not None
         assert self._current_file is not None
         assert self._include_hierarchy is not None
 
@@ -320,11 +324,13 @@ class FunctionSignatureParser(lp.Interpreter):
             unresolved_return,
             location,
             node.meta,
+            self._current_di_file,
         )
         self._function_mapping[fn_declaration.uuid] = node
         self._program.symbol_table.add_function(fn_declaration)
 
     def ForeignFunction(self, node: lp.ForeignFunction) -> None:
+        assert self._current_di_file is not None
         assert self._current_file is not None
         assert self._include_hierarchy is not None
 
@@ -343,6 +349,7 @@ class FunctionSignatureParser(lp.Interpreter):
                 node.meta.start.line, self._current_file, self._include_hierarchy
             ),
             node.meta,
+            self._current_di_file,
         )
         self._program.symbol_table.add_function(fn_declaration)
 
@@ -402,7 +409,6 @@ class ImportParser(lp.Interpreter):
             self._program,
             self._fn_parser,
             file_path,
-            cg.DIFile(next(self._program._metadata_gen), Path(file_path)),
             self._include_path[:-1],  # Last element is always '.'
             self._included_from,
             self._already_processed,
@@ -981,7 +987,7 @@ def generate_function(
             declaration.arg_names,
             signature,
             declaration.pack_type_name,
-            program.di_file,  # FIXME wrong file!
+            declaration.di_file,
             program.di_compile_unit,
             declaration.meta,
         )
@@ -1016,12 +1022,14 @@ def append_file_to_program(
     program: cg.Program,
     function_parser: FunctionSignatureParser,
     file_path: ResolvedPath,
-    di_file: cg.DIFile,
     include_path: list[Path],
     included_from: list[ResolvedPath],
     already_processed: set[ResolvedPath],
+    di_file: Optional[cg.DIFile] = None,
 ) -> None:
     already_processed.add(file_path)
+    if di_file is None:
+        di_file = program.add_secondary_file(Path(file_path))
 
     try:
         top_level_features = lp.run_lexer_parser(Path(file_path))
@@ -1039,7 +1047,7 @@ def append_file_to_program(
         ).parse_file(top_level_features)
 
         function_parser.parse_file(
-            str(file_path), list(map(str, included_from)), top_level_features
+            str(file_path), list(map(str, included_from)), top_level_features, di_file
         )
         program.symbol_table.resolve_all_non_generics()
     except ErrorWithLineInfo as exc:
@@ -1063,10 +1071,10 @@ def generate_ir_from_source(
             program,
             fn_parser,
             ResolvedPath(file_path),
-            program.di_file,
             include_path,
             [],
             set(),
+            program.di_files[0],
         )
 
         for declaration, signature, body in fn_parser.get_functions_to_codegen():
