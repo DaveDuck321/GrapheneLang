@@ -162,6 +162,7 @@ class FunctionCallExpression(StaticTypedExpression):
         # https://llvm.org/docs/LangRef.html#call-instruction
 
         ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
         conv_args: list[TypedExpression] = []
 
         for arg, arg_type in zip(self.args, self.signature.arguments, strict=True):
@@ -172,14 +173,12 @@ class FunctionCallExpression(StaticTypedExpression):
 
         args_ir = map(lambda arg: arg.ir_ref_with_type_annotation, conv_args)
 
-        call_expr = f"call {self.signature.ir_ref}({str.join(', ', args_ir)})"
-
-        dbg = self.add_di_location(ctx, ir)
+        call_expr = f"call {self.signature.ir_ref}({str.join(', ', args_ir)}), {dbg}"
 
         # We cannot assign `void` to a register.
         if not self.signature.return_type.definition.is_void:
             self.result_reg = ctx.next_reg()
-            call_expr = f"%{self.result_reg} = {call_expr}, {dbg}"
+            call_expr = f"%{self.result_reg} = {call_expr}"
 
         ir.lines.append(call_expr)
 
