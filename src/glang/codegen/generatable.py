@@ -244,13 +244,13 @@ class IfElseStatement(Generatable):
 
         ir = self.expand_ir(extra_exprs, ctx)
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # br i1 <cond>, label <iftrue>, label <iffalse>
         ir.lines.append(
             f"br {conv_condition.ir_ref_with_type_annotation}, "
             f"label %{self.if_scope.start_label}, label %{self.else_scope.start_label}, "
-            f"!dbg !{di_location.id}"
+            f"{dbg}"
         )
 
         # If body
@@ -259,9 +259,7 @@ class IfElseStatement(Generatable):
 
         if not self.if_scope.is_return_guaranteed():
             # Jump to the end of the if/else statement.
-            ir.lines.append(
-                f"br label %{self.else_scope.end_label}, !dbg !{di_location.id}"
-            )
+            ir.lines.append(f"br label %{self.else_scope.end_label}, {dbg}")
             need_label_after_statement = True
 
         # Else body
@@ -270,9 +268,7 @@ class IfElseStatement(Generatable):
 
         if not self.else_scope.is_return_guaranteed():
             # Jump to the end of the if/else statement.
-            ir.lines.append(
-                f"br label %{self.else_scope.end_label}, !dbg !{di_location.id}"
-            )
+            ir.lines.append(f"br label %{self.else_scope.end_label}, {dbg}")
             need_label_after_statement = True
 
         if need_label_after_statement:
@@ -318,9 +314,7 @@ class WhileStatement(Generatable):
         conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
 
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
-
-        dbg = f"!dbg !{di_location.id}"
+        dbg = self.add_di_location(ctx, ir)
 
         # br i1 <cond>, label <iftrue>, label <iffalse>
         ir.lines.extend(
@@ -377,8 +371,7 @@ class ReturnStatement(Generatable):
         # https://llvm.org/docs/LangRef.html#i-ret
 
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
-        dbg = f"!dbg !{di_location.id}"
+        dbg = self.add_di_location(ctx, ir)
 
         # We have to use return_type instead of returned_expr.underlying_type,
         # as returned_expr might be an initializer list, which throws when its
@@ -425,12 +418,12 @@ class VariableInitialize(Generatable):
 
         ir = self.expand_ir(extra_exprs, ctx)
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir.lines.append(
             f"store {conv_value.ir_ref_with_type_annotation}, {self.variable.ir_ref}, "
-            f"align {conv_value.result_type_as_if_borrowed.alignment}, !dbg !{di_location.id}"
+            f"align {conv_value.result_type_as_if_borrowed.alignment}, {dbg}"
         )
 
         return ir
@@ -479,13 +472,13 @@ class Assignment(Generatable):
 
         ir = self.expand_ir(src_conversions, ctx)
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
         ir.lines.append(
             f"store {converted_src.ir_ref_with_type_annotation}, "
             f"{self._dst.ir_ref_with_type_annotation}, "
-            f"align {self._dst.result_type_as_if_borrowed.alignment}, !dbg !{di_location.id}"
+            f"align {self._dst.result_type_as_if_borrowed.alignment}, {dbg}"
         )
 
         return ir

@@ -69,9 +69,9 @@ class UnaryIntegerExpression(BuiltinCallable):
             }
         )
 
-        di_location = self.add_di_location(ctx, ir_output)
+        dbg = self.add_di_location(ctx, ir_output)
 
-        ir_output.lines.append(f"%{self.result_reg} = {op}, !dbg !{di_location.id}")
+        ir_output.lines.append(f"%{self.result_reg} = {op}, {dbg}")
         return ir_output
 
     @property
@@ -154,13 +154,13 @@ class BasicIntegerExpression(BuiltinCallable):
             assert isinstance(self._arg_type.definition, BoolDefinition)
             ir = self.UNSIGNED_IR
 
-        di_location = self.add_di_location(ctx, ir_output)
+        dbg = self.add_di_location(ctx, ir_output)
 
         # eg. for addition
         # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
         ir_output.lines.append(
             f"%{self.result_reg} = {ir} {conv_lhs.ir_ref_with_type_annotation}, "
-            f"{conv_rhs.ir_ref_without_type_annotation}, !dbg !{di_location.id}"
+            f"{conv_rhs.ir_ref_without_type_annotation}, {dbg}"
         )
 
         return ir_output
@@ -374,13 +374,13 @@ class NarrowExpression(BuiltinCallable):
         )
         ir_output = self.expand_ir(extra_exprs_arg, ctx)
 
-        di_location = self.add_di_location(ctx, ir_output)
+        dbg = self.add_di_location(ctx, ir_output)
 
         self.result_reg = ctx.next_reg()
 
         ir_output.lines.append(
             f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation}"
-            f" to {self.underlying_type.ir_type}, !dbg !{di_location.id}"
+            f" to {self.underlying_type.ir_type}, {dbg}"
         )
 
         return ir_output
@@ -422,12 +422,12 @@ class PtrToIntExpression(BuiltinCallable):
 
         self.result_reg = ctx.next_reg()
 
-        di_location = self.add_di_location(ctx, ir_output)
+        dbg = self.add_di_location(ctx, ir_output)
 
         # <result> = ptrtoint <ty> <value> to <ty2>
         ir_output.lines.append(
             f"%{self.result_reg} = ptrtoint {self._src_expr.ir_ref_with_type_annotation}"
-            f" to {self.underlying_type.ir_type}, !dbg !{di_location.id}"
+            f" to {self.underlying_type.ir_type}, {dbg}"
         )
 
         return ir_output
@@ -480,12 +480,12 @@ class IntToPtrExpression(BuiltinCallable):
 
         self.result_reg = ctx.next_reg()
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = inttoptr <ty> <value> to <ty2>
         ir.lines.append(
             f"%{self.result_reg} = inttoptr {conv_src_expr.ir_ref_with_type_annotation}"
-            f" to {self.ir_type_annotation}, !dbg !{di_location.id}"
+            f" to {self.ir_type_annotation}, {dbg}"
         )
 
         return ir
@@ -557,12 +557,12 @@ class BitcastExpression(BuiltinCallable):
 
         self.result_ref = f"%{ctx.next_reg()}"
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = bitcast <ty> <value> to <ty2>
         ir.lines.append(
             f"{self.result_ref} = bitcast {conv_src_expr.ir_ref_with_type_annotation}"
-            f" to {self.ir_type_annotation}, !dbg !{di_location.id}",
+            f" to {self.ir_type_annotation}, {dbg}",
         )
 
         return ir

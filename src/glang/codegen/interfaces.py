@@ -227,7 +227,7 @@ class Generatable(ABC):
 
         return ir_output
 
-    def add_di_location(self, ctx: IRContext, ir: IROutput) -> DILocation:
+    def add_di_location(self, ctx: IRContext, ir: IROutput) -> str:
         assert self.meta is not None
 
         di_location = DILocation(
@@ -238,7 +238,7 @@ class Generatable(ABC):
         )
         ir.metadata.append(di_location)
 
-        return di_location
+        return f"!dbg !{di_location.id}"
 
 
 class TypedExpression(Generatable):
@@ -285,12 +285,12 @@ class TypedExpression(Generatable):
         # Converts a double indirection eg. address of reference into a reference
         assert self.has_address
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         store_at = ctx.next_reg()
         ir.lines.append(
             f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
-            f"align {self.result_type_as_if_borrowed.alignment}, !dbg !{di_location.id}"
+            f"align {self.result_type_as_if_borrowed.alignment}, {dbg}"
         )
         return store_at
 

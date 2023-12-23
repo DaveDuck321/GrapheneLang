@@ -174,12 +174,12 @@ class FunctionCallExpression(StaticTypedExpression):
 
         call_expr = f"call {self.signature.ir_ref}({str.join(', ', args_ir)})"
 
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # We cannot assign `void` to a register.
         if not self.signature.return_type.definition.is_void:
             self.result_reg = ctx.next_reg()
-            call_expr = f"%{self.result_reg} = {call_expr}, !dbg !{di_location.id}"
+            call_expr = f"%{self.result_reg} = {call_expr}, {dbg}"
 
         ir.lines.append(call_expr)
 
@@ -299,14 +299,14 @@ class StructMemberAccess(StaticTypedExpression):
 
         self.result_reg = ctx.next_reg()
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         ir.lines.append(
             f"%{self.result_reg} = getelementptr inbounds {self._struct_type.ir_type},"
             f" {self._lhs.ir_ref_with_type_annotation}, "
             f"{pointer_offset.ir_ref_with_type_annotation}, {index.ir_ref_with_type_annotation},"
-            f" !dbg !{di_location.id}"
+            f" {dbg}"
         )
 
         # Prevent double indirection, dereference the element pointer to get the
@@ -322,11 +322,11 @@ class StructMemberAccess(StaticTypedExpression):
         # <result> = extractvalue <aggregate type> <val>, <idx>{, <idx>}*
         self.result_reg = ctx.next_reg()
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         ir.lines.append(
             f"%{self.result_reg} = extractvalue {self._lhs.ir_ref_with_type_annotation},"
-            f" {self._index}, !dbg !{di_location.id}"
+            f" {self._index}, {dbg}"
         )
 
         return ir
@@ -439,13 +439,13 @@ class ArrayIndexAccess(StaticTypedExpression):
             indices_ir.append(index.ir_ref_with_type_annotation)
 
         self.result_reg = ctx.next_reg()
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
         ir.lines.append(
             f"%{self.result_reg} = getelementptr inbounds {gep_type_ir},"
             f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)},"
-            f" !dbg !{di_location.id}",
+            f" {dbg}",
         )
 
         if self._element_type.storage_kind.is_reference():
@@ -502,14 +502,14 @@ class ArrayInitializer(StaticTypedExpression):
 
     def generate_ir(self, ctx: IRContext) -> IROutput:
         ir = self.expand_ir(self._conversion_exprs, ctx)
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         previous_ref = "undef"
         for index, value in enumerate(self._elements):
             current_ref = f"%{ctx.next_reg()}"
             ir.lines.append(
                 f"{current_ref} = insertvalue {self.ir_type_annotation} {previous_ref}, "
-                f"{value.ir_ref_with_type_annotation}, {index}, !dbg !{di_location.id}"
+                f"{value.ir_ref_with_type_annotation}, {index}, {dbg}"
             )
 
             previous_ref = current_ref
@@ -564,14 +564,14 @@ class StructInitializer(StaticTypedExpression):
 
     def generate_ir(self, ctx: IRContext) -> IROutput:
         ir = self.expand_ir(self._conversion_exprs, ctx)
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         previous_ref = "undef"
         for index, value in enumerate(self._members):
             current_ref = f"%{ctx.next_reg()}"
             ir.lines.append(
                 f"{current_ref} = insertvalue {self.ir_type_annotation} {previous_ref}, "
-                f"{value.ir_ref_with_type_annotation}, {index}, !dbg !{di_location.id}"
+                f"{value.ir_ref_with_type_annotation}, {index}, {dbg}"
             )
 
             previous_ref = current_ref
@@ -765,7 +765,7 @@ class LogicalOperator(StaticTypedExpression):
         # https://llvm.org/docs/LangRef.html#br-instruction
         # https://llvm.org/docs/LangRef.html#phi-instruction
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         lhs_label = f"l{self.operator}{self.label_id}.lhs"
         rhs_start_label = f"l{self.operator}{self.label_id}.rhs_start"
@@ -782,7 +782,7 @@ class LogicalOperator(StaticTypedExpression):
         # entirely unnecessary if we knew what the current label name was, but
         # we don't!
         # br label <dest>
-        ir.lines.append(f"br label %{lhs_label}, !dbg !{di_location.id}")
+        ir.lines.append(f"br label %{lhs_label}, {dbg}")
 
         # lhs body.
         ir.lines.append(f"{lhs_label}:")
@@ -797,7 +797,7 @@ class LogicalOperator(StaticTypedExpression):
         # br i1 <cond>, label <iftrue>, label <iffalse>
         ir.lines.append(
             f"br {conv_lhs.ir_ref_with_type_annotation}, "
-            f"label %{label_if_true}, label %{label_if_false}, !dbg !{di_location.id}"
+            f"label %{label_if_true}, label %{label_if_false}, {dbg}"
         )
 
         # rhs body.
@@ -815,11 +815,11 @@ class LogicalOperator(StaticTypedExpression):
         #  label contains `self.rhs_expression`. Since Phi needs control flow
         #  information, we generate a label and branch directly to phi.
         # TODO: we can generate cleaner IR be recording expressions' labels
-        ir.lines.append(f"br label %{rhs_end_label}, !dbg !{di_location.id}")
+        ir.lines.append(f"br label %{rhs_end_label}, {dbg}")
         ir.lines.append(f"{rhs_end_label}:")
 
         # phi's block: all control flows branch into this label
-        ir.lines.append(f"br label %{end_label}, !dbg !{di_location.id}")
+        ir.lines.append(f"br label %{end_label}, {dbg}")
         ir.lines.append(f"{end_label}:")
 
         # The IR is in SSA form, so we need a phi node to obtain the result of
@@ -830,7 +830,7 @@ class LogicalOperator(StaticTypedExpression):
             f"{self.ir_ref_without_type_annotation} = phi {self.ir_type_annotation} "
             f"[ {conv_lhs.ir_ref_without_type_annotation}, %{lhs_label} ], "
             f"[ {conv_rhs.ir_ref_without_type_annotation}, %{rhs_end_label} ], "
-            f"!dbg !{di_location.id}"
+            f"{dbg}"
         )
 
         return ir

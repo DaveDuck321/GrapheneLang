@@ -22,13 +22,13 @@ class RemoveIndirection(StaticTypedExpression):
         return_type_ir = self.ref.result_type.ir_type
 
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
         ir.lines.append(
             f"%{self.result_reg} = load {return_type_ir}, "
             f"{self.ref.ir_ref_with_type_annotation}, "
-            f"align {self.result_type_as_if_borrowed.alignment}, !dbg !{di_location.id}"
+            f"align {self.result_type_as_if_borrowed.alignment}, {dbg}"
         )
 
         return ir
@@ -69,7 +69,7 @@ class PromoteInteger(StaticTypedExpression):
 
         self.result_reg = ctx.next_reg()
         ir = IROutput()
-        di_location = self.add_di_location(ctx, ir)
+        dbg = self.add_di_location(ctx, ir)
 
         instruction = "sext" if self.is_signed else "zext"
 
@@ -77,7 +77,7 @@ class PromoteInteger(StaticTypedExpression):
         ir.lines.append(
             f"%{self.result_reg} = {instruction} "
             f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}, "
-            f"!dbg !{di_location.id}"
+            f"{dbg}"
         )
 
         return ir
