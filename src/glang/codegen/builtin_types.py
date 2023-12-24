@@ -5,7 +5,7 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Iterator, Optional
 
-from glang.codegen.debug import DIType
+from glang.codegen.debug import DIType, Metadata
 
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
 from .debug import (
@@ -452,13 +452,28 @@ class StructDefinition(ValueTypeDefinition):
         raise FailedLookupError("struct member", "{" + target_name + " : ... }")
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        # HACK to get recursive types to work.
+        if cached := getattr(self, "_di_type", None):
+            assert isinstance(cached, DICompositeType)
+            return [cached]
+
+        self._di_type = DICompositeType(
+            next(metadata_gen),
+            None,
+            8 * self.size,
+            Tag.structure_type,
+            None,
+            None,
+        )
+
         # FIXME struct name (guess we have to pass it from the wrapping type?).
         other_metadata: list[Metadata] = []
         di_derived_types: list[DIDerivedType] = []
+        curr_offset = 0
         for m_name, m_type in self.members:
-            base_types = m_type.to_di_type(metadata_gen)
-            assert isinstance(base_types[-1], DIType)
-            other_metadata.extend(base_types)
+            base_type_metadata = m_type.to_di_type(metadata_gen)
+            other_metadata.extend(base_type_metadata)
+            assert isinstance(base_type_metadata[-1], DIType)
 
             di_derived_types.append(
                 DIDerivedType(
@@ -466,25 +481,17 @@ class StructDefinition(ValueTypeDefinition):
                     m_name,
                     8 * m_type.size,
                     Tag.member,
-                    base_types[-1],
+                    base_type_metadata[-1],
+                    8 * curr_offset,
                 )
             )
 
-        metadata_list = MetadataList(next(metadata_gen), di_derived_types)
+            curr_offset += m_type.size
 
-        return [
-            *other_metadata,
-            *di_derived_types,
-            metadata_list,
-            DICompositeType(
-                next(metadata_gen),
-                None,
-                8 * self.size,
-                Tag.structure_type,
-                None,
-                metadata_list,
-            ),
-        ]
+        metadata_list = MetadataList(next(metadata_gen), di_derived_types)
+        self._di_type.elements = metadata_list
+
+        return [*other_metadata, *di_derived_types, metadata_list, self._di_type]
 
 
 class StackArrayDefinition(ValueTypeDefinition):
@@ -536,14 +543,14 @@ class StackArrayDefinition(ValueTypeDefinition):
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
         # FIXME array name.
-        base_types = self.member.to_di_type(metadata_gen)
-        assert isinstance(base_types[-1], DIType)
+        base_type_metadata = self.member.to_di_type(metadata_gen)
+        assert isinstance(base_type_metadata[-1], DIType)
 
         di_subranges = [DISubrange(next(metadata_gen), d) for d in self.dimensions]
         metadata_list = MetadataList(next(metadata_gen), di_subranges)
 
         return [
-            *base_types,
+            *base_type_metadata,
             *di_subranges,
             metadata_list,
             DICompositeType(
@@ -551,7 +558,7 @@ class StackArrayDefinition(ValueTypeDefinition):
                 None,
                 8 * self.size,
                 Tag.array_type,
-                base_types[-1],
+                base_type_metadata[-1],
                 metadata_list,
             ),
         ]
@@ -596,17 +603,18 @@ class ReferenceDefinition(PtrTypeDefinition):
         return f"__{const}R_{self.value_type.ir_mangle}"
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        base_types = self.value_type.to_di_type(metadata_gen)
-        assert isinstance(base_types[-1], DIType)
+        base_type_metadata = self.value_type.to_di_type(metadata_gen)
+        assert isinstance(base_type_metadata[-1], DIType)
 
         return [
-            *base_types,
+            *base_type_metadata,
             DIDerivedType(
                 next(metadata_gen),
                 None,
                 8 * self.size,
                 Tag.reference_type,
-                base_types[-1],
+                base_type_metadata[-1],
+                None,
             ),
         ]
 
@@ -672,17 +680,18 @@ class HeapArrayDefinition(PtrTypeDefinition):
         return super().storage_kind
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        base_types = self.member.to_di_type(metadata_gen)
-        assert isinstance(base_types[-1], DIType)
+        base_type_metadata = self.member.to_di_type(metadata_gen)
+        assert isinstance(base_type_metadata[-1], DIType)
 
         return [
-            *base_types,
+            *base_type_metadata,
             DIDerivedType(
                 next(metadata_gen),
                 None,
                 8 * self.size,
                 Tag.pointer_type,
-                base_types[-1],
+                base_type_metadata[-1],
+                None,
             ),
         ]
 

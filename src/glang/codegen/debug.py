@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from inspect import getmembers
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -98,12 +99,40 @@ class TypeKind(StrEnum):
     ASCII = "DW_ATE_ASCII"
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class Metadata:
     id: int
 
+    def __hash__(self) -> int:
+        return hash(self.id)
 
-@dataclass
+    def __eq__(self, value: object) -> bool:
+        return isinstance(value, Metadata) and self.id == value.id
+
+    def __repr__(self) -> str:
+        contents: list[str] = []
+
+        for key, value in getmembers(self):
+            # Hide implementation details.
+            if key.startswith("_") or key == "id":
+                continue
+
+            if value is None:
+                continue
+
+            # Use type() instead of isinstance() to exclude subclasses of str
+            # (notably, StrEnum).
+            if type(value) == str:
+                value = f'"{value}"'
+            if isinstance(value, Metadata):
+                value = f"!{value.id}"
+
+            contents.append(f"{key}: {value}")
+
+        return f"!{self.__class__.__name__}({str.join(', ', contents)})"
+
+
+@dataclass(repr=False, eq=False, slots=True)
 class MetadataFlag(Metadata):
     behaviour: int
     metadata: str
@@ -113,7 +142,7 @@ class MetadataFlag(Metadata):
         return f'!{{i32 {self.behaviour}, !"{self.metadata}", i32 {self.value}}}'
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class MetadataList(Metadata):
     children: Sequence[Metadata]
 
@@ -121,30 +150,31 @@ class MetadataList(Metadata):
         return "!{" + ", ".join(map(lambda c: f"!{c.id}", self.children)) + "}"
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DISubrange(Metadata):
     count: int
 
-    def __repr__(self) -> str:
-        return f"!DISubrange(count: {self.count})"
 
-
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DIScope(Metadata):
     pass
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DIFile(DIScope):
-    file: Path
+    # TODO checksum.
+    _file: Path
 
-    def __repr__(self) -> str:
-        # TODO checksum.
-        path = self.file.resolve(strict=True)
-        return f'!DIFile(filename: "{path.name}", directory: "{path.parent}")'
+    @property
+    def filename(self) -> str:
+        return self._file.name
+
+    @property
+    def directory(self) -> str:
+        return str(self._file.resolve(strict=True).parent)
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DICompileUnit(DIScope):
     file: DIFile
 
@@ -159,80 +189,55 @@ class DICompileUnit(DIScope):
         )
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DILocation(Metadata):
     line: int
     column: int
     scope: DIScope
 
-    def __repr__(self) -> str:
-        return f"!DILocation(line: {self.line}, column: {self.column}, scope: !{self.scope.id})"
 
-
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DIType(DIScope):
     name: Optional[str]
-    size_in_bits: int
+    _size_in_bits: int
     tag: Tag
 
+    @property
+    def size(self) -> int:
+        return self._size_in_bits
 
-@dataclass
+
+@dataclass(repr=False, eq=False, slots=True)
 class DIBasicType(DIType):
     encoding: TypeKind
 
-    def __repr__(self) -> str:
-        name_flag = f'name: "{self.name}",' if self.name is not None else ""
-        return (
-            f"!DIBasicType({name_flag} size: {self.size_in_bits}, tag: {self.tag}, "
-            f"encoding: {self.encoding})"
-        )
 
-
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DICompositeType(DIType):
-    base_type: Optional[DIType]
+    baseType: Optional[DIType]
     elements: Optional[MetadataList]
     # TODO
     # scope: DIScope
     # file: DIFile
     # line: int
 
-    def __repr__(self) -> str:
+    def __post_init__(self) -> None:
         # Required for arrays, or clang segfaults.
         if self.tag == Tag.array_type:
             assert self.elements is not None
-            assert self.base_type
-
-        name_flag = f'name: "{self.name}", ' if self.name is not None else ""
-        base_type_flag = (
-            f"baseType: !{self.base_type.id}, " if self.base_type is not None else ""
-        )
-        subrange_flag = (
-            f"elements: !{self.elements.id}, " if self.elements is not None else ""
-        )
-        return (
-            f"!DICompositeType({name_flag}{base_type_flag}{subrange_flag}"
-            f"size: {self.size_in_bits}, tag: {self.tag})"
-        )
+            assert self.baseType is not None
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DIDerivedType(DIType):
     # scope: DIScope
     # file: DIFile
     # line: int
-    base_type: DIType
-    # offset: int
-
-    def __repr__(self) -> str:
-        name_flag = f'name: "{self.name}",' if self.name is not None else ""
-        return (
-            f"!DIDerivedType({name_flag} size: {self.size_in_bits}, tag: {self.tag},"
-            f"baseType: !{self.base_type.id})"
-        )
+    baseType: DIType
+    offset: Optional[int]
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DISubroutineType(DIType):
     # TODO implementation.
 
@@ -240,7 +245,7 @@ class DISubroutineType(DIType):
         return f"!DISubroutineType(types: !{{null, null}})"
 
 
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DILocalVariable(Metadata):
     name: str
     arg: Optional[int]
@@ -249,15 +254,8 @@ class DILocalVariable(Metadata):
     line: int
     type: DIType
 
-    def __repr__(self) -> str:
-        arg_flag = f", arg: {self.arg}" if self.arg is not None else ""
-        return (
-            f'!DILocalVariable(name: "{self.name}", scope: !{self.scope.id}, '
-            f"file: !{self.file.id}, line: {self.line}, type: !{self.type.id}{arg_flag})"
-        )
 
-
-@dataclass
+@dataclass(repr=False, eq=False, slots=True)
 class DISubprogram(DIScope):
     name: str
     linkage_name: str

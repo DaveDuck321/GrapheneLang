@@ -2,7 +2,7 @@ from typing import Iterable, Iterator, Optional
 
 from ..parser.lexer_parser import Meta
 from .builtin_types import BoolType, CharArrayDefinition, VoidType
-from .debug import DIFile, DILocalVariable, DILocation
+from .debug import DIFile, DILocalVariable, DILocation, DIType
 from .interfaces import (
     Generatable,
     IRContext,
@@ -58,8 +58,9 @@ class StackVariable(Variable):
             f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.alignment}"
         )
 
-        di_types = self.type.to_di_type(ctx.metadata_gen)
-        ir.metadata.extend(di_types)
+        metadata = self.type.to_di_type(ctx.metadata_gen)
+        ir.metadata.extend(metadata)
+        assert isinstance(metadata[-1], DIType)
 
         di_local_variable = DILocalVariable(
             ctx.next_meta(),
@@ -68,7 +69,7 @@ class StackVariable(Variable):
             ctx.scope,
             self._di_file,
             self._meta.start.line,
-            di_types[-1],
+            metadata[-1],
         )
         ir.metadata.append(di_local_variable)
 
