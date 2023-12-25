@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from hashlib import file_digest
 from inspect import getmembers
 from pathlib import Path
 from typing import Optional, Sequence
@@ -99,6 +100,12 @@ class TypeKind(StrEnum):
     ASCII = "DW_ATE_ASCII"
 
 
+class ChecksumKind(StrEnum):
+    MD5 = "CSK_MD5"
+    SHA1 = "CSK_SHA1"
+    SHA256 = "CSK_SHA256"
+
+
 @dataclass(repr=False, eq=False)
 class Metadata:
     id: int
@@ -162,7 +169,6 @@ class DIScope(Metadata):
 
 @dataclass(repr=False, eq=False)
 class DIFile(DIScope):
-    # TODO checksum.
     _file: Path
 
     @property
@@ -172,6 +178,15 @@ class DIFile(DIScope):
     @property
     def directory(self) -> str:
         return str(self._file.resolve(strict=True).parent)
+
+    @property
+    def checksum(self) -> str:
+        with self._file.open("rb") as file:
+            return file_digest(file, "sha256").hexdigest()
+
+    @property
+    def checksumkind(self) -> ChecksumKind:
+        return ChecksumKind.SHA256
 
 
 @dataclass(repr=False, eq=False)
