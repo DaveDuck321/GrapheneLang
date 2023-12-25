@@ -99,7 +99,7 @@ class TypeKind(StrEnum):
     ASCII = "DW_ATE_ASCII"
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class Metadata:
     id: int
 
@@ -132,7 +132,7 @@ class Metadata:
         return f"!{self.__class__.__name__}({str.join(', ', contents)})"
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class MetadataFlag(Metadata):
     behaviour: int
     metadata: str
@@ -142,7 +142,7 @@ class MetadataFlag(Metadata):
         return f'!{{i32 {self.behaviour}, !"{self.metadata}", i32 {self.value}}}'
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class MetadataList(Metadata):
     children: Sequence[Metadata]
 
@@ -150,17 +150,17 @@ class MetadataList(Metadata):
         return "!{" + ", ".join(map(lambda c: f"!{c.id}", self.children)) + "}"
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DISubrange(Metadata):
     count: int
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DIScope(Metadata):
     pass
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DIFile(DIScope):
     # TODO checksum.
     _file: Path
@@ -174,7 +174,7 @@ class DIFile(DIScope):
         return str(self._file.resolve(strict=True).parent)
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DICompileUnit(DIScope):
     file: DIFile
 
@@ -189,14 +189,14 @@ class DICompileUnit(DIScope):
         )
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DILocation(Metadata):
     line: int
     column: int
     scope: DIScope
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DIType(DIScope):
     name: Optional[str]
     _size_in_bits: int
@@ -207,12 +207,12 @@ class DIType(DIScope):
         return self._size_in_bits
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DIBasicType(DIType):
     encoding: TypeKind
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DICompositeType(DIType):
     baseType: Optional[DIType]
     elements: Optional[MetadataList]
@@ -228,7 +228,7 @@ class DICompositeType(DIType):
             assert self.baseType is not None
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DIDerivedType(DIType):
     # scope: DIScope
     # file: DIFile
@@ -237,7 +237,7 @@ class DIDerivedType(DIType):
     offset: Optional[int]
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DISubroutineType(DIType):
     # TODO implementation.
 
@@ -245,7 +245,7 @@ class DISubroutineType(DIType):
         return f"!DISubroutineType(types: !{{null, null}})"
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DILocalVariable(Metadata):
     name: str
     arg: Optional[int]
@@ -255,7 +255,7 @@ class DILocalVariable(Metadata):
     type: DIType
 
 
-@dataclass(repr=False, eq=False, slots=True)
+@dataclass(repr=False, eq=False)
 class DISubprogram(DIScope):
     name: str
     linkage_name: str
