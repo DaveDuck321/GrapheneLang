@@ -27,8 +27,7 @@ jobs:
     - name: Install Python 3.11
       run: |
         sudo apt-get update
-        sudo apt-get install -y $PYTHON_CMD $PYTHON_CMD-venv
-        $PYTHON_CMD -m venv venv/bin/activate
+        sudo apt-get install -y $PYTHON_CMD
     - name: Install hatch
       run: |
         $PYTHON_CMD -m pip install --upgrade pip
