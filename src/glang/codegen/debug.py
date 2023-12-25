@@ -181,9 +181,9 @@ class DICompileUnit(DIScope):
     def __repr__(self) -> str:
         # TODO print glang version.
         # NOTE clang checks that the language is valid... so let's pretend we
-        # are C.
+        # are C++ (gdb prefixes all the structs with `struct` if we use C).
         return (
-            f"distinct !DICompileUnit(language: DW_LANG_C, file: !{self.file.id}, "
+            f"distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !{self.file.id}, "
             'producer: "glang", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, '
             "splitDebugInlining: false, nameTableKind: None)"
         )
