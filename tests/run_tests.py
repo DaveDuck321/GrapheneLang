@@ -1,7 +1,7 @@
-from fnmatch import fnmatchcase
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
+from fnmatch import fnmatchcase
 from importlib import resources
 from multiprocessing import cpu_count
 from os import getenv
