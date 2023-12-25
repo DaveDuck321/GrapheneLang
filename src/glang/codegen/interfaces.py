@@ -141,11 +141,11 @@ class Type(ABC):
 @dataclass
 class IROutput:
     lines: list[str] = field(default_factory=list)
-    metadata: list[Metadata] = field(default_factory=list)
+    metadata: set[Metadata] = field(default_factory=set)
 
     def extend(self, other: "IROutput") -> None:
         self.lines.extend(other.lines)
-        self.metadata.extend(other.metadata)
+        self.metadata.update(other.metadata)
 
 
 @dataclass
@@ -247,7 +247,7 @@ class Generatable(ABC):
             self.meta.start.column,
             ctx.scope,
         )
-        ir.metadata.append(di_location)
+        ir.metadata.add(di_location)
 
         return f"!dbg !{di_location.id}"
 

@@ -163,7 +163,7 @@ class Function:
                 *indent_ir(body_ir.lines),
                 "}",
             ],
-            [di_subroutine_type, di_subprogram, *body_ir.metadata],
+            {di_subroutine_type, di_subprogram, *body_ir.metadata},
         )
 
 
@@ -236,7 +236,7 @@ class Program:
         return di_file
 
     def generate_ir(self) -> str:
-        output = IROutput(metadata=[self.di_compile_unit, *self.di_files])
+        output = IROutput(metadata={self.di_compile_unit, *self.di_files})
 
         output.lines.append(f'target datalayout = "{target.get_datalayout()}"')
         output.lines.append(f'target triple = "{target.get_target_triple()}"')
@@ -270,7 +270,7 @@ class Program:
             next(self._metadata_gen), 1, "Debug Info Version", 3
         )
 
-        output.metadata.extend((dwarf_version_metadata, debug_info_version_metadata))
+        output.metadata.update((dwarf_version_metadata, debug_info_version_metadata))
 
         source = "\n".join(output.lines)
         source += "\n\n"

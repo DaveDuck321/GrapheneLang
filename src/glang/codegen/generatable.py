@@ -59,7 +59,7 @@ class StackVariable(Variable):
         )
 
         metadata = self.type.to_di_type(ctx.metadata_gen)
-        ir.metadata.extend(metadata)
+        ir.metadata.update(metadata)
         assert isinstance(metadata[-1], DIType)
 
         di_local_variable = DILocalVariable(
@@ -71,12 +71,12 @@ class StackVariable(Variable):
             self._meta.start.line,
             metadata[-1],
         )
-        ir.metadata.append(di_local_variable)
+        ir.metadata.add(di_local_variable)
 
         di_location = DILocation(
             ctx.next_meta(), self._meta.start.line, self._meta.start.column, ctx.scope
         )
-        ir.metadata.append(di_location)
+        ir.metadata.add(di_location)
 
         ir.lines.append(
             f"call void @llvm.dbg.declare(metadata {self.ir_ref}, metadata !{di_local_variable.id},"
