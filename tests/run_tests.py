@@ -148,7 +148,6 @@ def run_test(file_path: Path) -> bool:
     # @GREP_IR
     for needle in config.grep_ir_strs:
         if not fnmatchcase(ir_output, f"*{needle}*"):
-            print(needle, ir_output)
             raise IRGrepFailure(needle)
 
     # @RUN
