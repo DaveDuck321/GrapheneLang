@@ -5,8 +5,6 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Iterator, Optional
 
-from glang.codegen.debug import DIType, Metadata
-
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
 from .debug import (
     DIBasicType,
