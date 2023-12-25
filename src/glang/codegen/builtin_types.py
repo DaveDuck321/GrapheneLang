@@ -475,7 +475,6 @@ class StructDefinition(ValueTypeDefinition):
             None,
         )
 
-        # FIXME struct name (guess we have to pass it from the wrapping type?).
         other_metadata: list[Metadata] = []
         di_derived_types: list[DIDerivedType] = []
         curr_offset = 0
@@ -551,7 +550,6 @@ class StackArrayDefinition(ValueTypeDefinition):
         return get_abi().compute_stack_array_alignment(self.size, self.member.alignment)
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        # FIXME array name.
         base_type_metadata = self.member.to_di_type(metadata_gen)
         assert isinstance(base_type_metadata[-1], DIType)
 
