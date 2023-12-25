@@ -1,12 +1,12 @@
-typedef S : { ptr : S&, x : int }
+typedef [T] S : { ptr : S<T>&, x : T }
 
 function main : () -> int = {
-    mut s : S;
+    mut s : S<int>;
     return 0;
 }
 
 /// @COMPILE
-/// @GREP_IR !DICompositeType(elements: !?, size: 128, tag: DW_TAG_structure_type)
+/// @GREP_IR !DICompositeType(elements: !?, name: "S<int>", size: 128, tag: DW_TAG_structure_type)
 /// @GREP_IR !DIDerivedType(baseType: !?, size: 64, tag: DW_TAG_reference_type)
 /// @GREP_IR !DIDerivedType(baseType: !?, name: "ptr", offset: 0, size: 64, tag: DW_TAG_member)
 /// @GREP_IR !DIBasicType(encoding: DW_ATE_signed, name: "int", size: 32, tag: DW_TAG_base_type)

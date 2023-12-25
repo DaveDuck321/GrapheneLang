@@ -5,6 +5,8 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Iterator, Optional
 
+from glang.codegen.debug import Metadata
+
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
 from .debug import (
     DIBasicType,
@@ -78,6 +80,8 @@ class NamedType(Type):
         super().__init__(definition)
 
         self.name = name
+        # TODO pass template parameter names; these are required for
+        # DITemplateParameter.
         self.specialization = specialization
         self.alias: Optional[Type] = alias
 
@@ -92,11 +96,10 @@ class NamedType(Type):
         self.definition = alias.definition
 
     def get_name(self) -> str:
-        specialization = format_specialization(self.specialization)
-        return f"{self.name}{specialization}"
+        return f"{self.name}{format_specialization(self.specialization)}"
 
     def format_for_output_to_user(self, full=False) -> str:
-        name_fmt = f"{self.name}{format_specialization(self.specialization)}"
+        name_fmt = self.get_name()
         if not full:
             return name_fmt
 
@@ -144,6 +147,15 @@ class NamedType(Type):
             return self.alias.ir_type
 
         return f"%type.{self.ir_mangle}"
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        metadata = super().to_di_type(metadata_gen)
+
+        # The definition doesn't know its name.
+        assert isinstance(metadata[-1], DIType)
+        metadata[-1].name = self.get_name()
+
+        return metadata
 
 
 class AnonymousType(Type):
@@ -450,6 +462,7 @@ class StructDefinition(ValueTypeDefinition):
         raise FailedLookupError("struct member", "{" + target_name + " : ... }")
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        # TODO template parameters (see DWARF5 2.23).
         # HACK to get recursive types to work.
         if cached := getattr(self, "_di_type", None):
             assert isinstance(cached, DICompositeType)
