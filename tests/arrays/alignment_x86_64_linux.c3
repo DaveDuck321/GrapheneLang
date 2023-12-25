@@ -11,5 +11,5 @@ function main : () -> int = {
 
 /// @FOR x86_64_linux
 /// @COMPILE
-/// @GREP_IR [3 x i32], align 4
-/// @GREP_IR [4 x i32], align 16
+/// @GREP_IR [[]3 x i32[]], align 4
+/// @GREP_IR [[]4 x i32[]], align 16

@@ -26,5 +26,5 @@ function main : () -> int = {
 }
 
 /// @COMPILE
-/// @GREP_IR getelementptr inbounds [2 x [2 x i32]]
+/// @GREP_IR getelementptr inbounds [[]2 x [[]2 x i32[]][]]
 /// @RUN
