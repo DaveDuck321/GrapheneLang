@@ -227,7 +227,7 @@ class InvalidFloatLiteralTooLarge(GrapheneError):
             if char1 != char2
         ][0]
 
-        upper_truncated = f"{min_str[0]}.{min_str[1:first_diff]}e+{len(min_str)-1}"
+        upper_truncated = f"{max_str[0]}.{max_str[1:first_diff+1]}e+{len(max_str)-1}"
 
         super().__init__(
             f"Error: '{type_name}' cannot represent '{actual_value}' since it is "
