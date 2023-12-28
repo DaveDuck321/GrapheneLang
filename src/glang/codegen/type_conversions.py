@@ -6,7 +6,7 @@ from .builtin_types import (
     IntegerDefinition,
     StackArrayDefinition,
 )
-from .interfaces import Type, TypedExpression, StaticTypedExpression
+from .interfaces import StaticTypedExpression, Type, TypedExpression
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
