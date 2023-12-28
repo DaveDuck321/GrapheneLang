@@ -26,11 +26,8 @@ class PlaceholderDefinition(TypeDefinition):
         assert False
 
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
-        if kind.is_reference():
-            return AnonymousType(
-                ReferenceDefinition(parent, kind == Type.Kind.MUTABLE_REF)
-            )
-        assert False
+        assert kind.is_reference()
+        return AnonymousType(ReferenceDefinition(parent, kind))
 
     @property
     def is_finite(self) -> bool:
@@ -159,13 +156,14 @@ class ValueTypeDefinition(TypeDefinition):
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
         assert self.storage_kind != kind
         assert kind.is_reference()
-        return AnonymousType(ReferenceDefinition(parent, kind == Type.Kind.MUTABLE_REF))
+        return AnonymousType(ReferenceDefinition(parent, kind))
 
 
 class PtrTypeDefinition(TypeDefinition):
-    def __init__(self, is_mut: bool) -> None:
+    def __init__(self, storage_kind: Type.Kind) -> None:
         super().__init__()
-        self.is_mut = is_mut
+        # Illegal value types are allowed (used by arrays).
+        self._storage_kind = storage_kind
 
     @abstractmethod
     def copy_with_storage_kind(self, _: Type, kind: Type.Kind) -> Type:
@@ -189,9 +187,11 @@ class PtrTypeDefinition(TypeDefinition):
 
     @property
     def storage_kind(self) -> Type.Kind:
-        if self.is_mut:
-            return Type.Kind.MUTABLE_REF
-        return Type.Kind.CONST_REF
+        return self._storage_kind
+
+    @property
+    def is_mut(self) -> bool:
+        return self.storage_kind.is_mutable_reference()
 
 
 class PrimitiveDefinition(ValueTypeDefinition):
@@ -482,8 +482,9 @@ class StackArrayDefinition(ValueTypeDefinition):
 
 
 class ReferenceDefinition(PtrTypeDefinition):
-    def __init__(self, value_type: Type, is_mut: bool) -> None:
-        super().__init__(is_mut)
+    def __init__(self, value_type: Type, storage_kind: Type.Kind) -> None:
+        assert storage_kind.is_reference()
+        super().__init__(storage_kind)
 
         # TODO: user-facing error
         assert not value_type.storage_kind.is_reference()
@@ -493,8 +494,12 @@ class ReferenceDefinition(PtrTypeDefinition):
         if kind == Type.Kind.VALUE:
             return self.value_type
 
-        assert kind == self.storage_kind
-        return parent
+        if kind == self.storage_kind:
+            return parent
+
+        assert self.storage_kind == Type.Kind.MUTABLE_OR_CONST_REF
+
+        return AnonymousType(ReferenceDefinition(self.value_type, kind))
 
     def are_equivalent(self, other: TypeDefinition) -> bool:
         if not isinstance(other, ReferenceDefinition):
@@ -519,7 +524,7 @@ class HeapArrayDefinition(PtrTypeDefinition):
     def __init__(
         self, member: Type, known_dimensions: list[int], storage: Type.Kind
     ) -> None:
-        super().__init__(storage == Type.Kind.MUTABLE_REF)
+        super().__init__(storage)
 
         self.member = member
         self.known_dimensions = known_dimensions

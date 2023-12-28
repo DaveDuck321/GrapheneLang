@@ -1000,11 +1000,10 @@ function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expr
 
     if cursor:try_skip_next("&") {
         let is_mut : bool = cursor:try_skip_next_and_surrounding_white_space("mut");
-        let is_any : bool = !is_mut and cursor:try_skip_next_and_surrounding_white_space("any");
         let rhs : Expression = cursor:parse_maybe_unary_or_borrow_expression();
 
         let borrow : Borrow mut& = &mut cursor.allocator:allocate<Borrow>();
-        borrow = {is_mut, is_any, rhs, meta(start_offset, borrow.meta.end_offset)};
+        borrow = {is_mut, rhs, meta(start_offset, borrow.meta.end_offset)};
         return {11, ref_to_addr(&borrow), borrow.meta};
     }
 

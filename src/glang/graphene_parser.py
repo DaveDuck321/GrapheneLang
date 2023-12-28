@@ -419,7 +419,7 @@ class FlattenedExpression:
         return self.subexpressions[-1]
 
     def type(self) -> cg.Type:
-        return self.expression().underlying_type
+        return self.expression().result_type
 
 
 def is_flattened_expression_iterable(
@@ -483,7 +483,9 @@ class ExpressionParser(lp.Interpreter):
         expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
 
         # Implicitly take reference to string literal
-        return expr.add_parent(cg.BorrowExpression(expr.expression(), False))
+        return expr.add_parent(
+            cg.BorrowExpression(expr.expression(), cg.Type.Kind.CONST_REF)
+        )
 
     def OperatorUse(self, node: lp.OperatorUse) -> FlattenedExpression:
         lhs = self.parse_expr(node.lhs)
@@ -589,19 +591,30 @@ class ExpressionParser(lp.Interpreter):
         if isinstance(node, lp.UFCS_Call):
             this_arg = self.parse_expr(node.expression)
             # TODO: should there be syntax for this? It seems a bit adhoc
-            indirection_kind = this_arg.expression().underlying_indirection_kind
-            if indirection_kind == cg.Type.Kind.CONST_REF:
-                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), False))
-            elif indirection_kind == cg.Type.Kind.MUTABLE_REF:
-                this_arg.add_parent(cg.BorrowExpression(this_arg.expression(), True))
-            elif indirection_kind == cg.Type.Kind.VALUE:
-                # (&a):fn(), (&mut a):fn(), or rvalue():fn();
-                # We do not allow the 3rd option
-                pure = this_arg.expression().get_equivalent_pure_type()
-                if pure.storage_kind == cg.Type.Kind.VALUE:
-                    raise BorrowWithNoAddressError(pure.format_for_output_to_user())
-            else:
-                assert False
+            match this_arg.expression().underlying_indirection_kind:
+                case cg.Type.Kind.CONST_REF:
+                    this_arg.add_parent(
+                        cg.BorrowExpression(
+                            this_arg.expression(), cg.Type.Kind.CONST_REF
+                        )
+                    )
+                case cg.Type.Kind.MUTABLE_REF:
+                    this_arg.add_parent(
+                        cg.BorrowExpression(
+                            this_arg.expression(), cg.Type.Kind.MUTABLE_OR_CONST_REF
+                        )
+                    )
+                case cg.Type.Kind.VALUE:
+                    # (&a):fn(), (&mut a):fn(), or rvalue():fn();
+                    # We do not allow the 3rd option
+                    possible = this_arg.expression().result_type_as_if_borrowed
+                    if possible.storage_kind == cg.Type.Kind.VALUE:
+                        raise BorrowWithNoAddressError(
+                            possible.format_for_output_to_user()
+                        )
+                case _:
+                    # cg.Type.Kind.MUTABLE_OR_CONST_REF shouldn't be possible.
+                    raise AssertionError()
 
             unresolved_args.insert(0, this_arg)
 
@@ -654,10 +667,12 @@ class ExpressionParser(lp.Interpreter):
 
     def Borrow(self, node: lp.Borrow) -> FlattenedExpression:
         lhs = self.parse_expr(node.expression)
-        # TODO: make this const-correct
-        # I've temporarily disabled this so we can parse the parser as it
-        #  transitions to using the new syntax
-        return lhs.add_parent(cg.BorrowExpression(lhs.expression(), node.is_mut))
+        return lhs.add_parent(
+            cg.BorrowExpression(
+                lhs.expression(),
+                cg.Type.Kind.MUTABLE_REF if node.is_mut else cg.Type.Kind.CONST_REF,
+            )
+        )
 
     def UnnamedInitializerList(
         self, node: lp.UnnamedInitializerList
@@ -825,7 +840,7 @@ def generate_for_statement(
         cg.VariableInitialize(iter_variable, iter_expr.expression())
     )
     var_ref = cg.VariableReference(iter_variable)
-    borrowed_iter_expr = cg.BorrowExpression(var_ref, True)
+    borrowed_iter_expr = cg.BorrowExpression(var_ref, cg.Type.Kind.MUTABLE_REF)
     outer_scope.add_generatable([var_ref, borrowed_iter_expr])
 
     # Inner scope
@@ -840,7 +855,7 @@ def generate_for_statement(
     inner_scope.add_generatable(get_next_expr)
 
     iter_result_variable = cg.StackVariable(
-        node.variable, get_next_expr.underlying_type, False, True
+        node.variable, get_next_expr.result_type, False, True
     )
     inner_scope.add_variable(iter_result_variable)
     inner_scope.add_generatable(
@@ -873,7 +888,7 @@ def generate_assignment(
     if node.operator == "=":
         scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
     else:
-        borrowed_lhs = cg.BorrowExpression(lhs.expression(), True)
+        borrowed_lhs = cg.BorrowExpression(lhs.expression(), cg.Type.Kind.MUTABLE_REF)
         scope.add_generatable(borrowed_lhs)
         scope.add_generatable(
             program.lookup_call_expression(

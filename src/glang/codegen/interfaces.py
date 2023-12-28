@@ -64,9 +64,14 @@ class Type(ABC):
         VALUE = 1
         MUTABLE_REF = 2
         CONST_REF = 3
+        # Mutable reference, but implicitly convertible to a const reference.
+        MUTABLE_OR_CONST_REF = 4
 
         def is_reference(self) -> bool:
             return self != Type.Kind.VALUE
+
+        def is_mutable_reference(self) -> bool:
+            return self in (self.MUTABLE_REF, self.MUTABLE_OR_CONST_REF)
 
     def __init__(self, definition: TypeDefinition) -> None:
         self.definition = definition
@@ -198,41 +203,29 @@ class Generatable(ABC):
 class TypedExpression(Generatable):
     def __init__(
         self,
-        expr_type: Optional[Type],
         underlying_indirection_kind: Type.Kind,
-        was_reference_type_at_any_point: bool = False,
     ) -> None:
         super().__init__()
-        # It is the callers responsibility to escape double indirections
-        if expr_type is not None and expr_type.storage_kind.is_reference():
-            assert not underlying_indirection_kind.is_reference()
-
-        self._underlying_type = expr_type
         self.underlying_indirection_kind = underlying_indirection_kind
-
-        # Used for better error messages
-        self.was_reference_type_at_any_point = was_reference_type_at_any_point
-
         self.result_reg: Optional[int] = None
 
     @property
-    def underlying_type(self) -> Type:
-        assert self._underlying_type is not None
-        return self._underlying_type
-
-    def get_equivalent_pure_type(self) -> Type:
-        if self.underlying_indirection_kind.is_reference():
-            return self.underlying_type.convert_to_storage_type(
-                self.underlying_indirection_kind
-            )
-        return self.underlying_type
+    @abstractmethod
+    def result_type(self) -> Type:
+        pass
 
     @property
+    def result_type_as_if_borrowed(self) -> Type:
+        if self.underlying_indirection_kind.is_reference():
+            return self.result_type.convert_to_storage_type(
+                self.underlying_indirection_kind
+            )
+        return self.result_type
+
+    @property
+    @abstractmethod
     def has_address(self) -> bool:
-        return (
-            self.underlying_type.storage_kind.is_reference()
-            or self.underlying_indirection_kind.is_reference()
-        )
+        pass
 
     def is_return_guaranteed(self) -> bool:
         # At the moment no TypedExpression can return
@@ -244,11 +237,9 @@ class TypedExpression(Generatable):
         return f"{self.ir_type_annotation} {self.ir_ref_without_type_annotation}"
 
     @property
+    @abstractmethod
     def ir_type_annotation(self) -> str:
-        if self.underlying_indirection_kind.is_reference():
-            return "ptr"
-
-        return self.underlying_type.ir_type
+        pass
 
     def dereference_double_indirection(
         self, reg_gen: Iterator[int], ir: list[str]
@@ -259,15 +250,17 @@ class TypedExpression(Generatable):
         store_at = next(reg_gen)
         ir.append(
             f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
-            f"align {self.get_equivalent_pure_type().alignment}"
+            f"align {self.result_type_as_if_borrowed.alignment}"
         )
         return store_at
 
+    @abstractmethod
     def format_for_output_to_user(self) -> str:
-        return self.underlying_type.format_for_output_to_user()
+        pass
 
+    @abstractmethod
     def try_convert_to_type(self, type: Type) -> tuple[int, list["TypedExpression"]]:
-        return (0, [])
+        pass
 
     @property
     @abstractmethod
@@ -283,6 +276,47 @@ class TypedExpression(Generatable):
         pass
 
 
+class StaticTypedExpression(TypedExpression):
+    def __init__(
+        self,
+        expr_type: Type,
+        underlying_indirection_kind: Type.Kind,
+        was_reference_type_at_any_point: bool = False,
+    ) -> None:
+        # It is the caller's responsibility to escape double indirections
+        if expr_type.storage_kind.is_reference():
+            assert not underlying_indirection_kind.is_reference()
+
+        self.underlying_type = expr_type
+
+        self.was_reference_type_at_any_point = was_reference_type_at_any_point
+        super().__init__(underlying_indirection_kind)
+
+    @property
+    def result_type(self) -> Type:
+        return self.underlying_type
+
+    @property
+    def has_address(self) -> bool:
+        return (
+            self.underlying_type.storage_kind.is_reference()
+            or self.underlying_indirection_kind.is_reference()
+        )
+
+    def format_for_output_to_user(self) -> str:
+        return self.underlying_type.format_for_output_to_user()
+
+    def try_convert_to_type(self, type: Type) -> tuple[int, list[TypedExpression]]:
+        return (0, [])
+
+    @property
+    def ir_type_annotation(self) -> str:
+        if self.underlying_indirection_kind.is_reference():
+            return "ptr"
+
+        return self.underlying_type.ir_type
+
+
 SpecializationItem = Type | int
 
 
@@ -296,6 +330,11 @@ class GenericArgument:
 class GenericMapping:
     mapping: dict[GenericArgument, SpecializationItem]
     pack: list[Type]
+
+    def __add__(self, other: Any) -> "GenericMapping":
+        assert isinstance(other, GenericMapping)
+        assert len(self.pack) == 0 or len(other.pack) == 0
+        return GenericMapping({**self.mapping, **other.mapping}, self.pack + other.pack)
 
 
 def do_specializations_match(

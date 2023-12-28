@@ -1,21 +1,24 @@
-// I don't particually like this, I think I'll change it to something smarter later
+@require_once "std/arithmetic.c3"
 
-typedef A : {
-    a : int
+typedef A : {}
+
+function foo : (a : A&) -> int = {
+    return 0;
 }
 
+function bar : (a : A&) -> int = {
+    return 1;
+}
 
-function run : (a : A&) -> int = {
-    return a.a;
+function bar : (a : A mut&) -> int = {
+    return 0;
 }
 
 function main : () -> int = {
-    mut a : A = {1};
-    return a:run();
+    mut a : A = {};
+    // Can match with A&, but should prefer A mut&.
+    return a:foo() + a:bar();
 }
 
-/// @COMPILE; EXPECT ERR
-/// File '*.c3', line 14, in 'function main: () -> int'
-/// Error: overload resolution for function call 'run(A mut&)' failed
-/// Available overloads:
-/// - function run : (A&) -> int
+/// @COMPILE
+/// @RUN

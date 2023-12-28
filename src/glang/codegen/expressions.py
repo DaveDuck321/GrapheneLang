@@ -2,6 +2,7 @@ from abc import abstractmethod
 from typing import Iterator, Optional
 
 from .builtin_types import (
+    AnonymousType,
     BoolType,
     FunctionSignature,
     HeapArrayDefinition,
@@ -11,7 +12,13 @@ from .builtin_types import (
     StructDefinition,
     format_array_dims_for_ir,
 )
-from .interfaces import Generatable, Type, TypedExpression, Variable
+from .interfaces import (
+    Generatable,
+    StaticTypedExpression,
+    Type,
+    TypedExpression,
+    Variable,
+)
 from .type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
@@ -23,7 +30,6 @@ from .user_facing_errors import (
     CannotAssignToInitializerList,
     DoubleBorrowError,
     InvalidInitializerListConversion,
-    InvalidInitializerListDeduction,
     InvalidInitializerListLength,
     MutableBorrowOfNonMutable,
     OperandError,
@@ -31,7 +37,7 @@ from .user_facing_errors import (
 )
 
 
-class ConstantExpression(TypedExpression):
+class ConstantExpression(StaticTypedExpression):
     def __init__(self, cst_type: Type, value: str) -> None:
         super().__init__(cst_type, Type.Kind.VALUE)
 
@@ -53,7 +59,7 @@ class ConstantExpression(TypedExpression):
         raise OperandError(f"cannot modify the constant {self.value}")
 
 
-class VariableReference(TypedExpression):
+class VariableReference(StaticTypedExpression):
     def __init__(self, variable: Variable) -> None:
         # Calculate the constness
         # 1) If the variable refers to a reference, the storage MUST be const,
@@ -104,7 +110,7 @@ class VariableReference(TypedExpression):
         return ir
 
 
-class FunctionParameter(TypedExpression):
+class FunctionParameter(StaticTypedExpression):
     def __init__(self, expr_type: Type) -> None:
         super().__init__(expr_type, Type.Kind.VALUE)
 
@@ -128,7 +134,7 @@ class FunctionParameter(TypedExpression):
         assert False
 
 
-class FunctionCallExpression(TypedExpression):
+class FunctionCallExpression(StaticTypedExpression):
     def __init__(
         self, signature: FunctionSignature, args: list[TypedExpression]
     ) -> None:
@@ -189,29 +195,35 @@ class FunctionCallExpression(TypedExpression):
         pass
 
 
-class BorrowExpression(TypedExpression):
-    def __init__(self, expr: TypedExpression, is_explicitly_mutable: bool) -> None:
+class BorrowExpression(StaticTypedExpression):
+    def __init__(self, expr: TypedExpression, borrow_kind: Type.Kind) -> None:
         self._expr = expr
 
-        if expr.underlying_type.storage_kind.is_reference():
-            raise DoubleBorrowError(expr.underlying_type.format_for_output_to_user())
+        rhs_type = expr.result_type
+        if rhs_type.storage_kind.is_reference():
+            raise DoubleBorrowError(rhs_type.format_for_output_to_user())
 
         if not expr.underlying_indirection_kind.is_reference():
-            raise BorrowWithNoAddressError(
-                expr.underlying_type.format_for_output_to_user()
+            raise BorrowWithNoAddressError(rhs_type.format_for_output_to_user())
+
+        # NOTE we are kinda abusing Type.Kind here.
+        assert borrow_kind.is_reference()
+
+        if (
+            borrow_kind == Type.Kind.MUTABLE_REF
+            and not expr.underlying_indirection_kind.is_mutable_reference()
+        ):
+            # TODO: is this error message sufficient?
+            raise MutableBorrowOfNonMutable(
+                expr.result_type_as_if_borrowed.format_for_output_to_user()
             )
 
-        if expr.underlying_indirection_kind == Type.Kind.CONST_REF:
-            # TODO: should a mutable borrow of a constant value give a constant borrow?
-            if is_explicitly_mutable:
-                # TODO: is this error message sufficient?
-                raise MutableBorrowOfNonMutable(
-                    expr.get_equivalent_pure_type().format_for_output_to_user()
-                )
+        self._is_mut = (
+            borrow_kind.is_mutable_reference()
+            and expr.underlying_indirection_kind.is_mutable_reference()
+        )
 
-        self._is_mut = is_explicitly_mutable
-
-        storage_type = Type.Kind.MUTABLE_REF if self._is_mut else Type.Kind.CONST_REF
+        storage_type = borrow_kind if self._is_mut else Type.Kind.CONST_REF
 
         # TODO: this is a bit more permissive that I'd like, but we (need)? to support
         #       indirect initialization by first assigning to a reference
@@ -219,7 +231,7 @@ class BorrowExpression(TypedExpression):
             expr.assert_can_write_to()
 
         super().__init__(
-            expr.underlying_type.convert_to_storage_type(storage_type), Type.Kind.VALUE
+            rhs_type.convert_to_storage_type(storage_type), Type.Kind.VALUE
         )
 
     def __repr__(self) -> str:
@@ -238,12 +250,12 @@ class BorrowExpression(TypedExpression):
         self._expr.assert_can_write_to()
 
 
-class StructMemberAccess(TypedExpression):
+class StructMemberAccess(StaticTypedExpression):
     def __init__(self, lhs: TypedExpression, member_name: str) -> None:
         self._member_name = member_name
         self._lhs = lhs
 
-        self._struct_type = lhs.underlying_type.convert_to_value_type()
+        self._struct_type = lhs.result_type.convert_to_value_type()
         underlying_definition = self._struct_type.definition
         if not isinstance(underlying_definition, StructDefinition):
             raise TypeCheckerError(
@@ -264,7 +276,7 @@ class StructMemberAccess(TypedExpression):
         if self._member_type.storage_kind.is_reference():
             storage_kind = self._member_type.storage_kind
         else:
-            storage_kind = lhs.get_equivalent_pure_type().storage_kind
+            storage_kind = lhs.result_type_as_if_borrowed.storage_kind
 
         super().__init__(self._member_type.convert_to_value_type(), storage_kind)
 
@@ -313,7 +325,7 @@ class StructMemberAccess(TypedExpression):
 
     def __repr__(self) -> str:
         return (
-            f"StructMemberAccess({self.underlying_type.format_for_output_to_user()}"
+            f"StructMemberAccess({self._struct_type.format_for_output_to_user()}"
             f".{self._member_name}: {self.underlying_type})"
         )
 
@@ -330,14 +342,14 @@ class StructMemberAccess(TypedExpression):
         # TODO: check if the reference is const
 
 
-class ArrayIndexAccess(TypedExpression):
+class ArrayIndexAccess(StaticTypedExpression):
     def __init__(
         self, array_ptr: TypedExpression, indices: list[TypedExpression]
     ) -> None:
         # NOTE: needs address since getelementptr must be used for runtime indexing
         assert array_ptr.has_address
 
-        self._type_of_array: Type = array_ptr.underlying_type.convert_to_value_type()
+        self._type_of_array: Type = array_ptr.result_type.convert_to_value_type()
         self._array_ptr = array_ptr
 
         array_definition = self._type_of_array.definition
@@ -346,7 +358,7 @@ class ArrayIndexAccess(TypedExpression):
         ):
             raise TypeCheckerError(
                 "array index access",
-                array_ptr.underlying_type.format_for_output_to_user(),
+                array_ptr.format_for_output_to_user(),
                 "T[...]",
             )
 
@@ -375,9 +387,9 @@ class ArrayIndexAccess(TypedExpression):
             self._indices.append(index_expr)
             self._conversion_exprs.extend(conversions)
 
-        pure_type = array_ptr.get_equivalent_pure_type()
+        result_type = array_ptr.result_type_as_if_borrowed
         super().__init__(
-            self._element_type.convert_to_value_type(), pure_type.storage_kind
+            self._element_type.convert_to_value_type(), result_type.storage_kind
         )
 
     def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
@@ -434,7 +446,7 @@ class ArrayIndexAccess(TypedExpression):
         self._array_ptr.assert_can_write_to()
 
 
-class ArrayInitializer(TypedExpression):
+class ArrayInitializer(StaticTypedExpression):
     def __init__(self, array_type: Type, element_exprs: list[TypedExpression]) -> None:
         assert array_type.storage_kind == Type.Kind.VALUE
         assert isinstance(array_type.definition, StackArrayDefinition)
@@ -470,7 +482,7 @@ class ArrayInitializer(TypedExpression):
         for index, value in enumerate(self._elements):
             current_ref = f"%{next(reg_gen)}"
             ir.append(
-                f"{current_ref} = insertvalue {self.underlying_type.ir_type} {previous_ref}, "
+                f"{current_ref} = insertvalue {self.ir_type_annotation} {previous_ref}, "
                 f"{value.ir_ref_with_type_annotation}, {index}"
             )
 
@@ -494,7 +506,7 @@ class ArrayInitializer(TypedExpression):
         raise OperandError("cannot modify temporary array")
 
 
-class StructInitializer(TypedExpression):
+class StructInitializer(StaticTypedExpression):
     def __init__(self, struct_type: Type, member_exprs: list[TypedExpression]) -> None:
         assert struct_type.storage_kind == Type.Kind.VALUE
         assert isinstance(struct_type.definition, StructDefinition)
@@ -529,7 +541,7 @@ class StructInitializer(TypedExpression):
         for index, value in enumerate(self._members):
             current_ref = f"%{next(reg_gen)}"
             ir.append(
-                f"{current_ref} = insertvalue {self.underlying_type.ir_type} {previous_ref}, "
+                f"{current_ref} = insertvalue {self.ir_type_annotation} {previous_ref}, "
                 f"{value.ir_ref_with_type_annotation}, {index}"
             )
 
@@ -554,16 +566,13 @@ class StructInitializer(TypedExpression):
 
 
 class InitializerList(TypedExpression):
-    @abstractmethod
-    def format_for_output_to_user(self) -> str:
-        pass
-
-    def get_equivalent_pure_type(self) -> Type:
-        assert False
+    @property
+    def has_address(self) -> bool:
+        return False
 
     @property
-    def underlying_type(self) -> Type:
-        raise InvalidInitializerListDeduction(self.format_for_output_to_user())
+    def ir_type_annotation(self) -> str:
+        assert False
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -592,14 +601,20 @@ class InitializerList(TypedExpression):
 
 class NamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression], names: list[str]) -> None:
-        super().__init__(None, Type.Kind.VALUE)
-
+        super().__init__(Type.Kind.VALUE)
         self._members = dict(zip(names, members, strict=True))
+
+    @property
+    def result_type(self) -> Type:
+        struct_items = [
+            (name, expr.result_type) for name, expr in self._members.items()
+        ]
+        return AnonymousType(StructDefinition(struct_items))
 
     def format_for_output_to_user(self) -> str:
         members = [
-            f"{name}: {type_name.underlying_type.format_for_output_to_user()}"
-            for name, type_name in self._members.items()
+            f"{name}: {expr.format_for_output_to_user()}"
+            for name, expr in self._members.items()
         ]
         return "{" + ", ".join(members) + "}"
 
@@ -628,15 +643,19 @@ class NamedInitializerList(InitializerList):
 
 class UnnamedInitializerList(InitializerList):
     def __init__(self, members: list[TypedExpression]) -> None:
-        super().__init__(None, Type.Kind.VALUE)
+        super().__init__(Type.Kind.VALUE)
 
         self._members = members
 
-    def format_for_output_to_user(self) -> str:
-        type_names = [
-            member.underlying_type.format_for_output_to_user()
-            for member in self._members
+    @property
+    def result_type(self) -> Type:
+        struct_items = [
+            (str(index), expr.result_type) for index, expr in enumerate(self._members)
         ]
+        return AnonymousType(StructDefinition(struct_items))
+
+    def format_for_output_to_user(self) -> str:
+        type_names = [member.format_for_output_to_user() for member in self._members]
         return "{" + ", ".join(type_names) + "}"
 
     def __repr__(self) -> str:
@@ -676,7 +695,7 @@ class UnnamedInitializerList(InitializerList):
         return super().try_convert_to_type(other)
 
 
-class LogicalOperator(TypedExpression):
+class LogicalOperator(StaticTypedExpression):
     def __init__(
         self,
         operator: str,
