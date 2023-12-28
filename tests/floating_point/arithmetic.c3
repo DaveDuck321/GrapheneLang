@@ -1,15 +1,6 @@
 @require_once "std/arithmetic.c3"
 @require_once "std/math.c3"
 
-// TODO: bootstrap properly, move this into the standard library
-function [T] abs : (value : T) -> TypeIf<T, IsFloating<T>> = {
-    if value < 0.0 {
-        return -value;
-    } else {
-        return value;
-    }
-}
-
 function fp_are_equal : (a : f32, b : f32) -> bool = {
     return abs(a - b) < 1e-10;
 }
