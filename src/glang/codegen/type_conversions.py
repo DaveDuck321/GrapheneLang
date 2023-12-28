@@ -194,9 +194,9 @@ def implicit_conversion_impl(
         isinstance(last_def, IntegerDefinition)
         and isinstance(dest_def, IntegerDefinition)
         and last_def.is_signed == dest_def.is_signed
-        and last_def.bits < dest_def.bits
+        and last_def.size < dest_def.size
     ):
-        promotion_cost += dest_def.bits // last_def.bits
+        promotion_cost += dest_def.size // last_def.size
         expr_list.append(PromoteNumeric(last_expr(), dest_type))
 
     # Floating point promotion

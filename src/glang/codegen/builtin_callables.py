@@ -15,6 +15,8 @@ from .interfaces import SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
+NUMERIC_TYPES = (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
+
 
 class BuiltinCallable(StaticTypedExpression):
     @abstractmethod
@@ -115,12 +117,8 @@ class BasicNumericExpression(BuiltinCallable):
         assert len(specialization) == 0
         lhs_definition = lhs.result_type.definition
         rhs_definition = rhs.result_type.definition
-        assert isinstance(
-            lhs_definition, (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
-        )
-        assert isinstance(
-            rhs_definition, (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
-        )
+        assert isinstance(lhs_definition, NUMERIC_TYPES)
+        assert isinstance(rhs_definition, NUMERIC_TYPES)
         assert lhs.result_type == rhs.result_type
 
         StaticTypedExpression.__init__(
@@ -258,21 +256,21 @@ class CompareExpression(BasicNumericExpression):
 
 
 class IsEqualExpression(CompareExpression):
-    FLOATING_POINT_IR = "fcmp oeq"  # Ordered and equal (can we relax this?)
+    FLOATING_POINT_IR = "fcmp ueq"  # Ordered and equal (can we relax this?)
     SIGNED_IR = "icmp eq"
     UNSIGNED_IR = "icmp eq"
     USER_FACING_NAME = "__builtin_is_equal"
 
 
 class IsGreaterThanExpression(CompareExpression):
-    FLOATING_POINT_IR = "fcmp ogt"
+    FLOATING_POINT_IR = "fcmp ugt"
     SIGNED_IR = "icmp sgt"
     UNSIGNED_IR = "icmp ugt"
     USER_FACING_NAME = "__builtin_is_greater_than"
 
 
 class IsLessThanExpression(CompareExpression):
-    FLOATING_POINT_IR = "fcmp olt"
+    FLOATING_POINT_IR = "fcmp ult"
     SIGNED_IR = "icmp slt"
     UNSIGNED_IR = "icmp ult"
     USER_FACING_NAME = "__builtin_is_less_than"

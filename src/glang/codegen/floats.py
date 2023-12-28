@@ -35,8 +35,7 @@ def float_literal_to_exact_hex(input_float_str: str, float_size_in_bits: int) ->
     # Now trim the sign (if any)
     # IEEE floats have symmetric precision so both cases are identical
     is_negative = float_str[0] == "-"
-    if float_str[0] == "-" or float_str[0] == "+":
-        float_str = float_str[1:]
+    float_str = float_str.lstrip("+-")
 
     mantissa_str_10, exponent_str_10 = float_str.split("e")
 
