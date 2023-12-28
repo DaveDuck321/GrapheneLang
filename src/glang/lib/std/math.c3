@@ -8,14 +8,6 @@ function [T] abs : (value : T) -> TypeIf<T, IsIntegral<T>> = {
     }
 }
 
-function [T] abs : (value : T) -> TypeIf<T, IsFloating<T>> = {
-    if value < 0.0 {
-        return -value;
-    } else {
-        return value;
-    }
-}
-
 function [T] max : (left : T, right : T) -> T = {
     if left < right {
         return right;
