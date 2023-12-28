@@ -54,7 +54,11 @@ def float_literal_to_exact_hex(input_float_str: str, float_size_in_bits: int) ->
     if mantissa_10 == 0:
         # Note: I'm discarding '-0.0' here... I'm not sure if its worth propagating
         # max(...) is due to LLVM weirdness
-        return "0x" + "00" * (8 * max(float_size_in_bits, 64))
+        return "0x" + "00" * (max(float_size_in_bits, 64) // 8)
+
+    exponent_natural_bits = EXPONENT_BIT_TABLE[float_size_in_bits]
+    fraction_natural_bits = FRACTION_BIT_TABLE[float_size_in_bits]
+    assert 1 + exponent_natural_bits + fraction_natural_bits == float_size_in_bits
 
     # I should probably look at an official algorithm here...
     # Its a fun problem tho, I'll just derive something
@@ -72,10 +76,16 @@ def float_literal_to_exact_hex(input_float_str: str, float_size_in_bits: int) ->
             mantissa_2 *= 2
             exponent_2 -= 1
 
+    # Round away from zero if needed
+    shifted_number = mantissa_2 * 2**fraction_natural_bits
+    should_round = (shifted_number - int(shifted_number)) > 0.5
+    if should_round:
+        mantissa_2 += Decimal(2) ** -fraction_natural_bits
+        if mantissa_2 >= 2:
+            mantissa_2 /= 2
+            exponent_2 += 1
+
     # Is this number in the range we can represent?
-    exponent_natural_bits = EXPONENT_BIT_TABLE[float_size_in_bits]
-    fraction_natural_bits = FRACTION_BIT_TABLE[float_size_in_bits]
-    assert 1 + exponent_natural_bits + fraction_natural_bits == float_size_in_bits
 
     # The exponent cannot be all zeros (subnormal) or all ones (infinity)
     #   We support subnormal floating point numbers but NOT as literals
@@ -88,13 +98,13 @@ def float_literal_to_exact_hex(input_float_str: str, float_size_in_bits: int) ->
         )
 
     if exponent_2 < min_exponent:
-        # TODO: this is kind of a lie. We could always give a subnormal value
+        # This is a *small* lie: we could always give a subnormal value
         raise InvalidFloatLiteralPrecision(f"f{float_size_in_bits}", input_float_str)
 
     # Convert the exponent into a binary list (ik, slow right?)
     # Performance of the normalization step is likely the bottleneck regardless
 
-    # NOTE: LLVM requires 16 and 32 bit floats to be represented using the 64 format??
+    # NOTE: LLVM requires 16 and 32 bit floats to be represented using the 64 format!!
     exponent_llvm_bits = EXPONENT_BIT_TABLE[max(float_size_in_bits, 64)]
     fraction_llvm_bits = FRACTION_BIT_TABLE[max(float_size_in_bits, 64)]
 
