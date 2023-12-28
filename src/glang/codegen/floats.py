@@ -93,8 +93,16 @@ def float_literal_to_exact_hex(input_float_str: str, float_size_in_bits: int) ->
     min_exponent = -(max_exponent - 1)
 
     if exponent_2 > max_exponent:
+        least_significant_bit = max_exponent - fraction_natural_bits
+        min_unrepresentable = 2 ** (max_exponent + 1)
+        max_representable = min_unrepresentable - 2**least_significant_bit
+        max_representable_with_rounding = (min_unrepresentable + max_representable) // 2
+
         raise InvalidFloatLiteralTooLarge(
-            f"f{float_size_in_bits}", input_float_str, 2 * 2**max_exponent
+            f"f{float_size_in_bits}",
+            input_float_str,
+            max_representable_with_rounding,
+            min_unrepresentable,
         )
 
     if exponent_2 < min_exponent:
