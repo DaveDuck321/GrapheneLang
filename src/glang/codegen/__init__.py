@@ -1,6 +1,7 @@
 from .builtin_types import (
     BoolType,
     FunctionSignature,
+    IEEEFloat,
     IntType,
     StructDefinition,
     UIntType,
