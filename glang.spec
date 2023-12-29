@@ -1,5 +1,5 @@
 Name:           glang
-Version:        0.2.1
+Version:        0.3.0
 Release:        %autorelease
 Summary:        A Graphene front-end for LLVM
 
@@ -9,6 +9,7 @@ Source0:        %{url}/archive/refs/tags/v%{version}.tar.gz
 Source1:        %{url}/archive/refs/tags/bootstrap/1.tar.gz
 Source2:        %{url}/archive/refs/tags/bootstrap/2.tar.gz
 Source3:        %{url}/archive/refs/tags/bootstrap/4.tar.gz
+Source4:        %{url}/archive/refs/tags/bootstrap/5.tar.gz
 
 BuildRequires:  python3-devel
 BuildRequires:  clang
@@ -32,6 +33,7 @@ A Graphene front-end for LLVM (TODO).
 %setup -D -T -n %{source_dir} -a 1
 %setup -D -T -n %{source_dir} -a 2
 %setup -D -T -n %{source_dir} -a 3
+%setup -D -T -n %{source_dir} -a 4
 
 # Go back to our build directory.
 cd %{_builddir}/%{source_dir}
