@@ -5,6 +5,8 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Callable, Iterator, Optional
 
+from glang.codegen.debug import Metadata
+
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
 from .debug import (
     DIBasicType,
@@ -17,6 +19,7 @@ from .debug import (
     Tag,
     TypeKind,
 )
+from .floats import float_literal_to_exact_hex
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
     ArrayDimensionError,
@@ -364,6 +367,27 @@ class SizeType(GenericIntType):
 class IPtrType(GenericIntType):
     def __init__(self) -> None:
         super().__init__("iptr", get_ptr_type_info().size.in_bits, True)
+
+
+class IEEEFloatDefinition(PrimitiveDefinition):
+    # NOTE: we use IEEE rather than the target specific SIMD types
+    def __init__(self, name: str, size_in_bits: int) -> None:
+        ir_type = {16: "half", 32: "float", 64: "double", 128: "fp128"}[size_in_bits]
+        super().__init__(size_in_bits // 8, ir_type, name)
+
+    def graphene_literal_to_ir_constant(self, value_str: str) -> str:
+        return float_literal_to_exact_hex(value_str, 8 * self.size)
+
+    def are_equivalent(self, other: TypeDefinition) -> bool:
+        if not isinstance(other, IEEEFloatDefinition):
+            return False
+        return self.size == other.size
+
+
+class IEEEFloat(PrimitiveType):
+    def __init__(self, size_in_bits: int) -> None:
+        name = f"f{size_in_bits}"
+        super().__init__(name, IEEEFloatDefinition(name, size_in_bits))
 
 
 class BoolDefinition(PrimitiveDefinition):
@@ -811,6 +835,10 @@ def get_builtin_types() -> list[PrimitiveType]:
         IPtrType(),
         SizeType(),
         VoidType(),
+        IEEEFloat(16),
+        IEEEFloat(32),
+        IEEEFloat(64),
+        IEEEFloat(128),
     ]
 
 

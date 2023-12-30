@@ -48,6 +48,14 @@ typedef IsIntegral<i32> : TrueType
 typedef IsIntegral<i64> : TrueType
 typedef IsIntegral<i128> : TrueType
 
+typedef [T] IsFloating : FalseType
+typedef IsFloating<f16> : TrueType
+typedef IsFloating<f32> : TrueType
+typedef IsFloating<f64> : TrueType
+typedef IsFloating<f128> : TrueType
+
+typedef [T] IsArithmetic : Either<IsIntegral<T>, IsFloating<T>>
+
 typedef [T] IsLogical : FalseType
 typedef IsLogical<bool> : TrueType
 typedef IsLogical<u8> : TrueType
