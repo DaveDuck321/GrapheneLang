@@ -56,7 +56,6 @@ class UnaryExpression(BuiltinCallable):
 
     def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#add-instruction (and below)
-        # https://llvm.org/docs/LangRef.html#add-instruction (and below)
         conv, extra_exprs = do_implicit_conversion(self._arg, self._arg_type)
 
         ir_output = IROutput()
