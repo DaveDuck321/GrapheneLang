@@ -1,7 +1,7 @@
-import fnmatch
 import subprocess
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
+from fnmatch import fnmatchcase
 from importlib import resources
 from multiprocessing import cpu_count
 from os import getenv
@@ -107,7 +107,7 @@ def run_command(
         # - ? to match any single character
         # - [seq] to match any character in seq
         # - [!seq] to match any character not in seq
-        return all(map(fnmatch.fnmatchcase, actual_trimmed, expected_trimmed))
+        return all(map(fnmatchcase, actual_trimmed, expected_trimmed))
 
     if expected_output.status != status:
         raise TestCommandFailure("status", status, stdout, stderr, stage)
@@ -147,7 +147,7 @@ def run_test(file_path: Path) -> bool:
 
     # @GREP_IR
     for needle in config.grep_ir_strs:
-        if needle not in ir_output:
+        if not fnmatchcase(ir_output, f"*{needle}*"):
             raise IRGrepFailure(needle)
 
     # @RUN

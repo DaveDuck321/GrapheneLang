@@ -1,4 +1,4 @@
-from typing import Iterator, Optional
+from typing import Optional
 
 from .builtin_types import (
     HeapArrayDefinition,
@@ -6,26 +6,37 @@ from .builtin_types import (
     IntegerDefinition,
     StackArrayDefinition,
 )
-from .interfaces import StaticTypedExpression, Type, TypedExpression
+from .interfaces import (
+    IRContext,
+    IROutput,
+    StaticTypedExpression,
+    Type,
+    TypedExpression,
+)
 from .user_facing_errors import OperandError, TypeCheckerError
 
 
 class RemoveIndirection(StaticTypedExpression):
     def __init__(self, ref: TypedExpression) -> None:
-        super().__init__(ref.result_type, Type.Kind.VALUE)
+        super().__init__(ref.result_type, Type.Kind.VALUE, ref.meta)
         self.ref = ref
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#load-instruction
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
         return_type_ir = self.ref.result_type.ir_type
 
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+
         # <result> = load [volatile] <ty>, ptr <pointer>[, align <alignment>]...
-        return [
+        ir.lines.append(
             f"%{self.result_reg} = load {return_type_ir}, "
             f"{self.ref.ir_ref_with_type_annotation}, "
-            f"align {self.result_type_as_if_borrowed.alignment}"
-        ]
+            f"align {self.result_type_as_if_borrowed.alignment}, {dbg}"
+        )
+
+        return ir
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -43,7 +54,7 @@ class RemoveIndirection(StaticTypedExpression):
 
 class PromoteNumeric(StaticTypedExpression):
     def __init__(self, src: TypedExpression, dest_type: Type) -> None:
-        super().__init__(dest_type, Type.Kind.VALUE)
+        super().__init__(dest_type, Type.Kind.VALUE, src.meta)
 
         src_definition = src.result_type.definition
 
@@ -62,18 +73,23 @@ class PromoteNumeric(StaticTypedExpression):
 
         self.src = src
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#sext-to-instruction
         # https://llvm.org/docs/LangRef.html#zext-to-instruction
         # https://llvm.org/docs/LangRef.html#fpext-to-instruction
 
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = {s,z,fp}ext <ty> <value> to <ty2> ; yields ty2
-        return [
+        ir.lines.append(
             f"%{self.result_reg} = {self.instruction} "
-            f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}"
-        ]
+            f"{self.src.ir_ref_with_type_annotation} to {self.underlying_type.ir_type}, "
+            f"{dbg}"
+        )
+
+        return ir
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -95,12 +111,9 @@ class Reinterpret(StaticTypedExpression):
         assert src.has_address and not src.underlying_indirection_kind.is_reference()
         assert dest_type.storage_kind.is_reference()
 
-        super().__init__(dest_type, Type.Kind.VALUE)
+        super().__init__(dest_type, Type.Kind.VALUE, src.meta)
 
         self._src = src
-
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        return []
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -273,7 +286,7 @@ def get_implicit_conversion_cost(
 ) -> Optional[int]:
     class Wrapper(StaticTypedExpression):
         def __init__(self, expr_type: Type) -> None:
-            super().__init__(expr_type, Type.Kind.VALUE)
+            super().__init__(expr_type, Type.Kind.VALUE, None)
 
         @property
         def ir_ref_without_type_annotation(self) -> str:

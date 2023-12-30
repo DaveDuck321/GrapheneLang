@@ -3,9 +3,20 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
+from .debug import (
+    DIBasicType,
+    DICompositeType,
+    DIDerivedType,
+    DISubrange,
+    DIType,
+    Metadata,
+    MetadataList,
+    Tag,
+    TypeKind,
+)
 from .floats import float_literal_to_exact_hex
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
 from .user_facing_errors import (
@@ -53,6 +64,9 @@ class PlaceholderDefinition(TypeDefinition):
     def alignment(self) -> int:
         assert False
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        assert False
+
 
 class NamedType(Type):
     def __init__(
@@ -65,6 +79,8 @@ class NamedType(Type):
         super().__init__(definition)
 
         self.name = name
+        # TODO pass template parameter names; these are required for
+        # DITemplateParameter.
         self.specialization = specialization
         self.alias: Optional[Type] = alias
 
@@ -79,11 +95,10 @@ class NamedType(Type):
         self.definition = alias.definition
 
     def get_name(self) -> str:
-        specialization = format_specialization(self.specialization)
-        return f"{self.name}{specialization}"
+        return f"{self.name}{format_specialization(self.specialization)}"
 
     def format_for_output_to_user(self, full=False) -> str:
-        name_fmt = f"{self.name}{format_specialization(self.specialization)}"
+        name_fmt = self.get_name()
         if not full:
             return name_fmt
 
@@ -131,6 +146,15 @@ class NamedType(Type):
             return self.alias.ir_type
 
         return f"%type.{self.ir_mangle}"
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        metadata = super().to_di_type(metadata_gen)
+
+        # The definition doesn't know its name.
+        assert isinstance(metadata[-1], DIType)
+        metadata[-1].name = self.get_name()
+
+        return metadata
 
 
 class AnonymousType(Type):
@@ -261,6 +285,9 @@ class VoidDefinition(PrimitiveDefinition):
     def is_void(self) -> bool:
         return True
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        assert False
+
 
 class VoidType(PrimitiveType):
     def __init__(self) -> None:
@@ -293,6 +320,17 @@ class IntegerDefinition(PrimitiveDefinition):
         if not isinstance(other, IntegerDefinition):
             return False
         return self.is_signed == other.is_signed and self.bits == other.bits
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return [
+            DIBasicType(
+                next(metadata_gen),
+                self._name,
+                self.bits,
+                Tag.base_type,
+                TypeKind.signed if self.is_signed else TypeKind.unsigned,
+            )
+        ]
 
 
 class GenericIntType(PrimitiveType):
@@ -334,6 +372,7 @@ class IEEEFloatDefinition(PrimitiveDefinition):
     def __init__(self, name: str, size_in_bits: int) -> None:
         ir_type = {16: "half", 32: "float", 64: "double", 128: "fp128"}[size_in_bits]
         super().__init__(size_in_bits // 8, ir_type, name)
+        self.bits = size_in_bits
 
     def graphene_literal_to_ir_constant(self, value_str: str) -> str:
         return float_literal_to_exact_hex(value_str, 8 * self.size)
@@ -342,6 +381,17 @@ class IEEEFloatDefinition(PrimitiveDefinition):
         if not isinstance(other, IEEEFloatDefinition):
             return False
         return self.size == other.size
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return [
+            DIBasicType(
+                next(metadata_gen),
+                self._name,
+                self.bits,
+                Tag.base_type,
+                TypeKind.float,
+            )
+        ]
 
 
 class IEEEFloat(PrimitiveType):
@@ -361,6 +411,17 @@ class BoolDefinition(PrimitiveDefinition):
         # We happen to be using the same boolean constants as LLVM IR.
         assert value in ("true", "false")
         return value
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return [
+            DIBasicType(
+                next(metadata_gen),
+                self._name,
+                self._size * 8,
+                Tag.base_type,
+                TypeKind.boolean,
+            )
+        ]
 
 
 class BoolType(PrimitiveType):
@@ -432,6 +493,48 @@ class StructDefinition(ValueTypeDefinition):
 
         raise FailedLookupError("struct member", "{" + target_name + " : ... }")
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        # TODO template parameters (see DWARF5 2.23).
+        # HACK to get recursive types to work.
+        if cached := getattr(self, "_di_type", None):
+            assert isinstance(cached, DICompositeType)
+            return [cached]
+
+        self._di_type = DICompositeType(
+            next(metadata_gen),
+            None,
+            8 * self.size,
+            Tag.structure_type,
+            None,
+            None,
+        )
+
+        other_metadata: list[Metadata] = []
+        di_derived_types: list[DIDerivedType] = []
+        curr_offset = 0
+        for m_name, m_type in self.members:
+            base_type_metadata = m_type.to_di_type(metadata_gen)
+            other_metadata.extend(base_type_metadata)
+            assert isinstance(base_type_metadata[-1], DIType)
+
+            di_derived_types.append(
+                DIDerivedType(
+                    next(metadata_gen),
+                    m_name,
+                    8 * m_type.size,
+                    Tag.member,
+                    base_type_metadata[-1],
+                    8 * curr_offset,
+                )
+            )
+
+            curr_offset += m_type.size
+
+        metadata_list = MetadataList(next(metadata_gen), di_derived_types)
+        self._di_type.elements = metadata_list
+
+        return [*other_metadata, *di_derived_types, metadata_list, self._di_type]
+
 
 class StackArrayDefinition(ValueTypeDefinition):
     def __init__(self, member: Type, dimensions: list[int]) -> None:
@@ -480,6 +583,27 @@ class StackArrayDefinition(ValueTypeDefinition):
     def alignment(self) -> int:
         return get_abi().compute_stack_array_alignment(self.size, self.member.alignment)
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        base_type_metadata = self.member.to_di_type(metadata_gen)
+        assert isinstance(base_type_metadata[-1], DIType)
+
+        di_subranges = [DISubrange(next(metadata_gen), d) for d in self.dimensions]
+        metadata_list = MetadataList(next(metadata_gen), di_subranges)
+
+        return [
+            *base_type_metadata,
+            *di_subranges,
+            metadata_list,
+            DICompositeType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.array_type,
+                base_type_metadata[-1],
+                metadata_list,
+            ),
+        ]
+
 
 class ReferenceDefinition(PtrTypeDefinition):
     def __init__(self, value_type: Type, storage_kind: Type.Kind) -> None:
@@ -518,6 +642,22 @@ class ReferenceDefinition(PtrTypeDefinition):
     def ir_mangle(self) -> str:
         const = "" if self.is_mut else "C"
         return f"__{const}R_{self.value_type.ir_mangle}"
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        base_type_metadata = self.value_type.to_di_type(metadata_gen)
+        assert isinstance(base_type_metadata[-1], DIType)
+
+        return [
+            *base_type_metadata,
+            DIDerivedType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.reference_type,
+                base_type_metadata[-1],
+                None,
+            ),
+        ]
 
 
 class HeapArrayDefinition(PtrTypeDefinition):
@@ -579,6 +719,22 @@ class HeapArrayDefinition(PtrTypeDefinition):
         if self.is_illegal_value_type:
             return Type.Kind.VALUE
         return super().storage_kind
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        base_type_metadata = self.member.to_di_type(metadata_gen)
+        assert isinstance(base_type_metadata[-1], DIType)
+
+        return [
+            *base_type_metadata,
+            DIDerivedType(
+                next(metadata_gen),
+                None,
+                8 * self.size,
+                Tag.pointer_type,
+                base_type_metadata[-1],
+                None,
+            ),
+        ]
 
 
 class CharArrayDefinition(StackArrayDefinition):

@@ -212,6 +212,7 @@ class FunctionSignatureParser(lp.Interpreter):
         super().__init__()
 
         self._current_file: Optional[str] = None
+        self._current_di_file: Optional[cg.DIFile] = None
         self._include_hierarchy: Optional[tuple[str, ...]] = None
 
         self._program = program
@@ -222,8 +223,10 @@ class FunctionSignatureParser(lp.Interpreter):
         file_name: str,
         include_hierarchy: list[str],
         top_level_features: list[lp.TopLevelFeature],
+        di_file: cg.DIFile,
     ) -> None:
         self._current_file = file_name
+        self._current_di_file = di_file
         self._include_hierarchy = tuple(include_hierarchy)
         for feature in top_level_features:
             if isinstance(feature, lp.FunctionDefinition):
@@ -253,6 +256,7 @@ class FunctionSignatureParser(lp.Interpreter):
             yield declaration, signature, body
 
     def GenericFunctionDefinition(self, node: lp.GenericFunctionDefinition) -> None:
+        assert self._current_di_file is not None
         assert self._current_file is not None
         assert self._include_hierarchy is not None
 
@@ -319,11 +323,14 @@ class FunctionSignatureParser(lp.Interpreter):
             variadic_type_pack_name,
             unresolved_return,
             location,
+            node.meta,
+            self._current_di_file,
         )
         self._function_mapping[fn_declaration.uuid] = node
         self._program.symbol_table.add_function(fn_declaration)
 
     def ForeignFunction(self, node: lp.ForeignFunction) -> None:
+        assert self._current_di_file is not None
         assert self._current_file is not None
         assert self._include_hierarchy is not None
 
@@ -341,6 +348,8 @@ class FunctionSignatureParser(lp.Interpreter):
             SourceLocation(
                 node.meta.start.line, self._current_file, self._include_hierarchy
             ),
+            node.meta,
+            self._current_di_file,
         )
         self._program.symbol_table.add_function(fn_declaration)
 
@@ -448,7 +457,7 @@ class ExpressionParser(lp.Interpreter):
         return self.parse(expr, FlattenedExpression)
 
     def HexConstant(self, node: lp.HexConstant) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.UIntType(), node.value)
+        const_expr = cg.ConstantExpression(cg.UIntType(), node.value, node.meta)
         return FlattenedExpression([const_expr])
 
     def GenericIdentifierConstant(
@@ -460,31 +469,33 @@ class ExpressionParser(lp.Interpreter):
 
         mapped_value = self._generic_mapping.mapping[argument]
         assert isinstance(mapped_value, int)  # TODO: user facing error
-        const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value))
+        const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value), node.meta)
         return FlattenedExpression([const_expr])
 
     def FloatConstant(self, node: lp.FloatConstant) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.IEEEFloat(32), node.value)
+        const_expr = cg.ConstantExpression(cg.IEEEFloat(32), node.value, node.meta)
         return FlattenedExpression([const_expr])
 
     def IntConstant(self, node: lp.IntConstant) -> FlattenedExpression:
         # TODO: the parser has already decoded this, why are we undoing it?
-        const_expr = cg.ConstantExpression(cg.IntType(), str(node.value))
+        const_expr = cg.ConstantExpression(cg.IntType(), str(node.value), node.meta)
         return FlattenedExpression([const_expr])
 
     def BoolConstant(self, node: lp.BoolConstant) -> FlattenedExpression:
         # TODO: the parser has already decoded this, why are we undoing it?
         value = "true" if node.value else "false"
-        const_expr = cg.ConstantExpression(cg.BoolType(), value)
+        const_expr = cg.ConstantExpression(cg.BoolType(), value, node.meta)
         return FlattenedExpression([const_expr])
 
     def StringConstant(self, node: lp.StringConstant) -> FlattenedExpression:
-        str_static_storage = self._program.add_static_string(node.value)
-        expr = FlattenedExpression([cg.VariableReference(str_static_storage)])
+        str_static_storage = self._program.add_static_string(node.value, node.meta)
+        expr = FlattenedExpression(
+            [cg.VariableReference(str_static_storage, node.meta)]
+        )
 
         # Implicitly take reference to string literal
         return expr.add_parent(
-            cg.BorrowExpression(expr.expression(), cg.Type.Kind.CONST_REF)
+            cg.BorrowExpression(expr.expression(), cg.Type.Kind.CONST_REF, node.meta)
         )
 
     def OperatorUse(self, node: lp.OperatorUse) -> FlattenedExpression:
@@ -499,6 +510,7 @@ class ExpressionParser(lp.Interpreter):
             node.name,
             [],  # Don't specialize operators
             [lhs.expression(), rhs.expression()],
+            node.meta,
         )
         return flattened_expr.add_parent(call_expr)
 
@@ -510,6 +522,7 @@ class ExpressionParser(lp.Interpreter):
             node.name,
             [],  # Don't specialize operators
             [rhs.expression()],
+            node.meta,
         )
         return flattened_expr.add_parent(call_expr)
 
@@ -526,6 +539,7 @@ class ExpressionParser(lp.Interpreter):
                 lhs.expression(),
                 rhs.subexpressions[:-1],
                 rhs.expression(),
+                node.meta,
             )
         )
 
@@ -534,6 +548,7 @@ class ExpressionParser(lp.Interpreter):
         fn_name: str,
         fn_specialization: Iterable[lp.CompileTimeConstant | lp.Type],
         fn_args: Iterable[FlattenedExpression],
+        meta: lp.Meta,
     ) -> FlattenedExpression:
         fn_call_args = []
         flattened_expr = FlattenedExpression([])
@@ -551,7 +566,7 @@ class ExpressionParser(lp.Interpreter):
         ]
 
         call_expr = self._program.lookup_call_expression(
-            fn_name, specialization, fn_call_args
+            fn_name, specialization, fn_call_args, meta
         )
         return flattened_expr.add_parent(call_expr)
 
@@ -579,7 +594,7 @@ class ExpressionParser(lp.Interpreter):
         if pack_name:
             variadic_vars = self._scope.search_for_generic_pack(pack_name)
             unresolved_args.extend(
-                FlattenedExpression([cg.VariableReference(var)])
+                FlattenedExpression([cg.VariableReference(var, node.meta)])
                 for var in variadic_vars
             )
 
@@ -595,13 +610,15 @@ class ExpressionParser(lp.Interpreter):
                 case cg.Type.Kind.CONST_REF:
                     this_arg.add_parent(
                         cg.BorrowExpression(
-                            this_arg.expression(), cg.Type.Kind.CONST_REF
+                            this_arg.expression(), cg.Type.Kind.CONST_REF, node.meta
                         )
                     )
                 case cg.Type.Kind.MUTABLE_REF:
                     this_arg.add_parent(
                         cg.BorrowExpression(
-                            this_arg.expression(), cg.Type.Kind.MUTABLE_OR_CONST_REF
+                            this_arg.expression(),
+                            cg.Type.Kind.MUTABLE_OR_CONST_REF,
+                            node.meta,
                         )
                     )
                 case cg.Type.Kind.VALUE:
@@ -619,7 +636,7 @@ class ExpressionParser(lp.Interpreter):
             unresolved_args.insert(0, this_arg)
 
         return self._function_call_inner(
-            node.name, node.specialization, unresolved_args
+            node.name, node.specialization, unresolved_args, node.meta
         )
 
     def FunctionCall(self, node: lp.FunctionCall) -> FlattenedExpression:
@@ -633,24 +650,30 @@ class ExpressionParser(lp.Interpreter):
         if var is None:
             raise FailedLookupError("variable", node.name)
 
-        return FlattenedExpression([cg.VariableReference(var)])
+        return FlattenedExpression([cg.VariableReference(var, node.meta)])
 
     def _ensure_pointer_is_available(
-        self, expr: FlattenedExpression
+        self, expr: FlattenedExpression, meta: lp.Meta
     ) -> FlattenedExpression:
         # Copy expression to stack if it is not a pointer
         if expr.expression().has_address:
             return expr
 
-        temp_var = cg.StackVariable("", expr.type(), True, True)  # FIXME
+        temp_var = cg.StackVariable(
+            "", expr.type(), True, True, meta, self._function._di_file
+        )  # FIXME
         self._scope.add_variable(temp_var)
 
-        expr.subexpressions.append(cg.VariableInitialize(temp_var, expr.expression()))
-        return expr.add_parent(cg.VariableReference(temp_var))
+        expr.subexpressions.append(
+            cg.VariableInitialize(temp_var, expr.expression(), meta)
+        )
+        return expr.add_parent(cg.VariableReference(temp_var, meta))
 
     def ArrayIndexAccess(self, node: lp.ArrayIndexAccess) -> FlattenedExpression:
         index_exprs = [self.parse_expr(item) for item in node.indexes]
-        lhs = self._ensure_pointer_is_available(self.parse_expr(node.expression))
+        lhs = self._ensure_pointer_is_available(
+            self.parse_expr(node.expression), node.meta
+        )
         lhs_expr = lhs.expression()
 
         cg_indices: list[cg.TypedExpression] = []
@@ -658,11 +681,11 @@ class ExpressionParser(lp.Interpreter):
             cg_indices.append(index_expr.expression())
             lhs.subexpressions.extend(index_expr.subexpressions)
 
-        return lhs.add_parent(cg.ArrayIndexAccess(lhs_expr, cg_indices))
+        return lhs.add_parent(cg.ArrayIndexAccess(lhs_expr, cg_indices, node.meta))
 
     def StructIndexAccess(self, node: lp.StructIndexAccess) -> FlattenedExpression:
         lhs = self.parse_expr(node.expression)
-        struct_access = cg.StructMemberAccess(lhs.expression(), node.member)
+        struct_access = cg.StructMemberAccess(lhs.expression(), node.member, node.meta)
         return lhs.add_parent(struct_access)
 
     def Borrow(self, node: lp.Borrow) -> FlattenedExpression:
@@ -671,6 +694,7 @@ class ExpressionParser(lp.Interpreter):
             cg.BorrowExpression(
                 lhs.expression(),
                 cg.Type.Kind.MUTABLE_REF if node.is_mut else cg.Type.Kind.CONST_REF,
+                node.meta,
             )
         )
 
@@ -684,7 +708,9 @@ class ExpressionParser(lp.Interpreter):
             combined_flattened.subexpressions.extend(arg_expr.subexpressions)
             arg_exprs.append(arg_expr.expression())
 
-        return combined_flattened.add_parent(cg.UnnamedInitializerList(arg_exprs))
+        return combined_flattened.add_parent(
+            cg.UnnamedInitializerList(arg_exprs, node.meta)
+        )
 
     def NamedInitializerList(
         self, node: lp.NamedInitializerList
@@ -699,7 +725,7 @@ class ExpressionParser(lp.Interpreter):
             member_exprs.append(expr.expression())
 
         return combined_flattened.add_parent(
-            cg.NamedInitializerList(member_exprs, names)
+            cg.NamedInitializerList(member_exprs, names, node.meta)
         )
 
 
@@ -723,7 +749,7 @@ def generate_return_statement(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     if node.expression is None:
-        scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
+        scope.add_generatable(cg.ReturnStatement(cg.VoidType(), node.meta))
         return
 
     parser = ExpressionParser(program, function, scope, generic_mapping)
@@ -731,7 +757,9 @@ def generate_return_statement(
     scope.add_generatable(flattened_expr.subexpressions)
 
     expr = cg.ReturnStatement(
-        function.get_signature().return_type, flattened_expr.expression()
+        function.get_signature().return_type,
+        node.meta,
+        returned_expr=flattened_expr.expression(),
     )
     scope.add_generatable(expr)
 
@@ -755,14 +783,21 @@ def generate_variable_declaration(
             "variable", node.variable, var_type.format_for_output_to_user()
         )
 
-    var = cg.StackVariable(node.variable, var_type, node.is_mut, rhs is not None)
+    var = cg.StackVariable(
+        node.variable,
+        var_type,
+        node.is_mut,
+        rhs is not None,
+        node.meta,
+        function._di_file,
+    )
     scope.add_variable(var)
 
     if rhs is None:
         return
 
     scope.add_generatable(rhs.subexpressions)
-    scope.add_generatable(cg.VariableInitialize(var, rhs.expression()))
+    scope.add_generatable(cg.VariableInitialize(var, rhs.expression(), node.meta))
 
 
 def generate_if_statement(
@@ -777,16 +812,18 @@ def generate_if_statement(
 
     scope.add_generatable(condition_expr.subexpressions)
 
-    if_scope = cg.Scope(function.get_next_scope_id(), scope)
+    if_scope = cg.Scope(function.get_next_scope_id(), node.meta, scope)
     generate_body(program, function, if_scope, node.if_scope, generic_mapping)
 
     # Note: this looks like a redundant scope when the else branch is empty but I've
     #       chosen to explicitly codegen it here so we can generate destructors in
     #       the else branch (eg. if it was moved in the if)
-    else_scope = cg.Scope(function.get_next_scope_id(), scope)
+    else_scope = cg.Scope(function.get_next_scope_id(), node.else_scope.meta, scope)
     generate_body(program, function, else_scope, node.else_scope, generic_mapping)
 
-    if_statement = cg.IfElseStatement(condition_expr.expression(), if_scope, else_scope)
+    if_statement = cg.IfElseStatement(
+        condition_expr.expression(), if_scope, else_scope, node.meta
+    )
     scope.add_generatable(if_statement)
 
 
@@ -802,7 +839,7 @@ def generate_while_statement(
 
     while_scope_id = function.get_next_scope_id()
 
-    inner_scope = cg.Scope(function.get_next_scope_id(), scope)
+    inner_scope = cg.Scope(function.get_next_scope_id(), node.scope.meta, scope)
     generate_body(program, function, inner_scope, node.scope, generic_mapping)
 
     scope.add_generatable(
@@ -811,6 +848,7 @@ def generate_while_statement(
             condition_expr.expression(),
             condition_expr.subexpressions,
             inner_scope,
+            node.meta,
         )
     )
 
@@ -823,7 +861,7 @@ def generate_for_statement(
     generic_mapping: cg.GenericMapping,
 ) -> None:
     # Outer scope
-    outer_scope = cg.Scope(function.get_next_scope_id(), scope)
+    outer_scope = cg.Scope(function.get_next_scope_id(), node.meta, outer_scope=scope)
 
     #    Produce the iterator
     parser = ExpressionParser(program, function, scope, generic_mapping)
@@ -832,41 +870,55 @@ def generate_for_statement(
     #    Save the iterator onto the stack (for referencing)
     store_in_mutable = not iter_expr.type().storage_kind.is_reference()
     iter_variable = cg.StackVariable(
-        f"__for_iter_{outer_scope.id}", iter_expr.type(), store_in_mutable, True
+        f"__for_iter_{outer_scope.id}",
+        iter_expr.type(),
+        store_in_mutable,
+        True,
+        node.meta,
+        function._di_file,
     )
     outer_scope.add_variable(iter_variable)
     outer_scope.add_generatable(iter_expr.subexpressions)
     outer_scope.add_generatable(
-        cg.VariableInitialize(iter_variable, iter_expr.expression())
+        cg.VariableInitialize(iter_variable, iter_expr.expression(), node.meta)
     )
-    var_ref = cg.VariableReference(iter_variable)
-    borrowed_iter_expr = cg.BorrowExpression(var_ref, cg.Type.Kind.MUTABLE_REF)
+    var_ref = cg.VariableReference(iter_variable, node.meta)
+    borrowed_iter_expr = cg.BorrowExpression(
+        var_ref, cg.Type.Kind.MUTABLE_REF, node.meta
+    )
     outer_scope.add_generatable([var_ref, borrowed_iter_expr])
 
     # Inner scope
-    inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
+    inner_scope = cg.Scope(function.get_next_scope_id(), node.scope.meta, outer_scope)
 
     has_next_expr = program.lookup_call_expression(
-        "__builtin_has_next", [], [borrowed_iter_expr]
+        "__builtin_has_next", [], [borrowed_iter_expr], node.scope.meta
     )
     get_next_expr = program.lookup_call_expression(
-        "__builtin_get_next", [], [borrowed_iter_expr]
+        "__builtin_get_next", [], [borrowed_iter_expr], node.scope.meta
     )
     inner_scope.add_generatable(get_next_expr)
 
     iter_result_variable = cg.StackVariable(
-        node.variable, get_next_expr.result_type, False, True
+        node.variable,
+        get_next_expr.result_type,
+        False,
+        True,
+        node.meta,
+        function._di_file,
     )
     inner_scope.add_variable(iter_result_variable)
     inner_scope.add_generatable(
-        cg.VariableInitialize(iter_result_variable, get_next_expr)
+        cg.VariableInitialize(iter_result_variable, get_next_expr, node.scope.meta)
     )
 
     # For loop is just syntax sugar for a while loop
     generate_body(program, function, inner_scope, node.scope, generic_mapping)
 
     outer_scope.add_generatable(
-        cg.WhileStatement(inner_scope.id, has_next_expr, [has_next_expr], inner_scope)
+        cg.WhileStatement(
+            inner_scope.id, has_next_expr, [has_next_expr], inner_scope, node.meta
+        )
     )
     scope.add_generatable(outer_scope)
 
@@ -886,13 +938,17 @@ def generate_assignment(
     scope.add_generatable(rhs.subexpressions)
 
     if node.operator == "=":
-        scope.add_generatable(cg.Assignment(lhs.expression(), rhs.expression()))
+        scope.add_generatable(
+            cg.Assignment(lhs.expression(), rhs.expression(), node.meta)
+        )
     else:
-        borrowed_lhs = cg.BorrowExpression(lhs.expression(), cg.Type.Kind.MUTABLE_REF)
+        borrowed_lhs = cg.BorrowExpression(
+            lhs.expression(), cg.Type.Kind.MUTABLE_REF, node.meta
+        )
         scope.add_generatable(borrowed_lhs)
         scope.add_generatable(
             program.lookup_call_expression(
-                node.operator, [], [borrowed_lhs, rhs.expression()]
+                node.operator, [], [borrowed_lhs, rhs.expression()], node.meta
             )
         )
 
@@ -904,7 +960,7 @@ def generate_scope_body(
     node: lp.Scope,
     generic_mapping: cg.GenericMapping,
 ) -> None:
-    inner_scope = cg.Scope(function.get_next_scope_id(), outer_scope)
+    inner_scope = cg.Scope(function.get_next_scope_id(), node.meta, outer_scope)
     generate_body(program, function, inner_scope, node, generic_mapping)
     outer_scope.add_generatable(inner_scope)
 
@@ -953,7 +1009,14 @@ def generate_function(
     body: Optional[lp.GenericFunctionDefinition],
 ) -> None:
     try:
-        fn = cg.Function(declaration.arg_names, signature, declaration.pack_type_name)
+        fn = cg.Function(
+            declaration.arg_names,
+            signature,
+            declaration.pack_type_name,
+            declaration.di_file,
+            program.di_compile_unit,
+            declaration.meta,
+        )
     except GrapheneError as e:
         assert isinstance(declaration.loc, SourceLocation)
         raise ErrorWithLineInfo(e.message, declaration.loc.line, "function declaration")
@@ -968,7 +1031,10 @@ def generate_function(
     # void, then we can add it ourselves, otherwise the user needs to fix it.
     if not fn.top_level_scope.is_return_guaranteed():
         if fn.get_signature().return_type.definition.is_void:
-            fn.top_level_scope.add_generatable(cg.ReturnStatement(cg.VoidType()))
+            # FIXME the meta here should come from the last } of the function.
+            fn.top_level_scope.add_generatable(
+                cg.ReturnStatement(cg.VoidType(), declaration.meta)
+            )
         else:
             raise MissingFunctionReturn(
                 fn.get_signature().user_facing_name,
@@ -985,8 +1051,11 @@ def append_file_to_program(
     include_path: list[Path],
     included_from: list[ResolvedPath],
     already_processed: set[ResolvedPath],
+    di_file: Optional[cg.DIFile] = None,
 ) -> None:
     already_processed.add(file_path)
+    if di_file is None:
+        di_file = program.add_secondary_file(Path(file_path))
 
     try:
         top_level_features = lp.run_lexer_parser(Path(file_path))
@@ -1004,7 +1073,7 @@ def append_file_to_program(
         ).parse_file(top_level_features)
 
         function_parser.parse_file(
-            str(file_path), list(map(str, included_from)), top_level_features
+            str(file_path), list(map(str, included_from)), top_level_features, di_file
         )
         program.symbol_table.resolve_all_non_generics()
     except ErrorWithLineInfo as exc:
@@ -1018,7 +1087,7 @@ def append_file_to_program(
 def generate_ir_from_source(
     file_path: Path, include_path: list[Path], debug_compiler: bool = False
 ) -> str:
-    program = cg.Program()
+    program = cg.Program(file_path)
     try:
         # Initial pass resolves all builtin types
         program.symbol_table.resolve_all_non_generics()
@@ -1031,6 +1100,7 @@ def generate_ir_from_source(
             include_path,
             [],
             set(),
+            program.di_files[0],
         )
 
         for declaration, signature, body in fn_parser.get_functions_to_codegen():
@@ -1061,4 +1131,4 @@ def generate_ir_from_source(
 
         sys.exit(1)
 
-    return "\n".join(program.generate_ir())
+    return program.generate_ir()

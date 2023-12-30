@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Iterator, Optional
 
+from ..codegen.debug import DIFile, DILocation, DIScope, DIType, Metadata
+from ..parser.lexer_parser import Meta
 from .user_facing_errors import MutableVariableContainsAReference
 
 
@@ -54,6 +56,10 @@ class TypeDefinition(ABC):
     @property
     def storage_kind(self) -> "Type.Kind":
         return Type.Kind.VALUE
+
+    @abstractmethod
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        pass
 
     def __repr__(self) -> str:
         return f"TypeDefinition({self.format_for_output_to_user()})"
@@ -125,17 +131,47 @@ class Type(ABC):
     def ir_type(self) -> str:
         pass
 
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return self.definition.to_di_type(metadata_gen)
+
     def __repr__(self) -> str:
         return f"Type({self.format_for_output_to_user(True)})"
 
 
+@dataclass
+class IROutput:
+    lines: list[str] = field(default_factory=list)
+    metadata: set[Metadata] = field(default_factory=set)
+
+    def extend(self, other: "IROutput") -> None:
+        self.lines.extend(other.lines)
+        self.metadata.update(other.metadata)
+
+
+@dataclass
+class IRContext:
+    reg_gen: Iterator[int]
+    metadata_gen: Iterator[int]
+    scope: DIScope
+
+    def next_reg(self) -> int:
+        return next(self.reg_gen)
+
+    def next_meta(self) -> int:
+        return next(self.metadata_gen)
+
+
 class Variable(ABC):
-    def __init__(self, name: str, var_type: Type, is_mutable: bool) -> None:
+    def __init__(
+        self, name: str, var_type: Type, is_mutable: bool, meta: Meta, di_file: DIFile
+    ) -> None:
         super().__init__()
 
         self._name = name
         self.type = var_type
         self.is_mutable = is_mutable
+        self._meta = meta
+        self._di_file = di_file
 
         # We cannot store references in mutable variables. Since there is no
         #  syntax to reassign the reference
@@ -161,7 +197,7 @@ class Variable(ABC):
         pass
 
     @abstractmethod
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         pass
 
     def __repr__(self) -> str:
@@ -177,8 +213,13 @@ class Variable(ABC):
 
 
 class Generatable(ABC):
-    def generate_ir(self, _: Iterator[int]) -> list[str]:
-        return []
+    def __init__(self, meta: Optional[Meta]) -> None:
+        super().__init__()
+
+        self.meta = meta
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        return IROutput()
 
     @abstractmethod
     def is_return_guaranteed(self) -> bool:
@@ -189,23 +230,33 @@ class Generatable(ABC):
         pass
 
     @staticmethod
-    def expand_ir(
-        generatables: Iterable["Generatable"], reg_gen: Iterator[int]
-    ) -> list[str]:
-        ir_lines: list[str] = []
+    def expand_ir(generatables: Iterable["Generatable"], ctx: IRContext) -> IROutput:
+        ir_output = IROutput()
 
         for generatable in generatables:
-            ir_lines.extend(generatable.generate_ir(reg_gen))
+            ir_output.extend(generatable.generate_ir(ctx))
 
-        return ir_lines
+        return ir_output
+
+    def add_di_location(self, ctx: IRContext, ir: IROutput) -> str:
+        assert self.meta is not None
+
+        di_location = DILocation(
+            ctx.next_meta(),
+            self.meta.start.line,
+            self.meta.start.column,
+            ctx.scope,
+        )
+        ir.metadata.add(di_location)
+
+        return f"!dbg !{di_location.id}"
 
 
 class TypedExpression(Generatable):
     def __init__(
-        self,
-        underlying_indirection_kind: Type.Kind,
+        self, underlying_indirection_kind: Type.Kind, meta: Optional[Meta]
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
         self.underlying_indirection_kind = underlying_indirection_kind
         self.result_reg: Optional[int] = None
 
@@ -241,16 +292,16 @@ class TypedExpression(Generatable):
     def ir_type_annotation(self) -> str:
         pass
 
-    def dereference_double_indirection(
-        self, reg_gen: Iterator[int], ir: list[str]
-    ) -> int:
+    def dereference_double_indirection(self, ctx: IRContext, ir: IROutput) -> int:
         # Converts a double indirection eg. address of reference into a reference
         assert self.has_address
 
-        store_at = next(reg_gen)
-        ir.append(
+        dbg = self.add_di_location(ctx, ir)
+
+        store_at = ctx.next_reg()
+        ir.lines.append(
             f"%{store_at} = load ptr, {self.ir_ref_with_type_annotation}, "
-            f"align {self.result_type_as_if_borrowed.alignment}"
+            f"align {self.result_type_as_if_borrowed.alignment}, {dbg}"
         )
         return store_at
 
@@ -281,6 +332,7 @@ class StaticTypedExpression(TypedExpression):
         self,
         expr_type: Type,
         underlying_indirection_kind: Type.Kind,
+        meta: Optional[Meta],
         was_reference_type_at_any_point: bool = False,
     ) -> None:
         # It is the caller's responsibility to escape double indirections
@@ -290,7 +342,7 @@ class StaticTypedExpression(TypedExpression):
         self.underlying_type = expr_type
 
         self.was_reference_type_at_any_point = was_reference_type_at_any_point
-        super().__init__(underlying_indirection_kind)
+        super().__init__(underlying_indirection_kind, meta)
 
     @property
     def result_type(self) -> Type:

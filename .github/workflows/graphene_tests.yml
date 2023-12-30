@@ -17,6 +17,7 @@ jobs:
     env:
       GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
       GRAPHENE_LLI_CMD: lli-${{ matrix.llvm-version }}
+      PYTHON_CMD: python3.11
 
     steps:
     - name: Checkout
@@ -26,12 +27,11 @@ jobs:
     - name: Install Python 3.11
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3.11 python3.11-venv
-        python3.11 -m venv venv/bin/activate
+        sudo apt-get install -y $PYTHON_CMD
     - name: Install hatch
       run: |
-        python -m pip install --upgrade pip
-        python -m pip install hatch
+        $PYTHON_CMD -m pip install --upgrade pip
+        $PYTHON_CMD -m pip install hatch
     - name: Install clang and lli
       run: |
         wget https://apt.llvm.org/llvm.sh

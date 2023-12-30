@@ -1,7 +1,16 @@
 from typing import Iterable, Iterator, Optional
 
+from ..parser.lexer_parser import Meta
 from .builtin_types import BoolType, CharArrayDefinition, VoidType
-from .interfaces import Generatable, Type, TypedExpression, Variable
+from .debug import DIFile, DILocalVariable, DILocation, DIType
+from .interfaces import (
+    Generatable,
+    IRContext,
+    IROutput,
+    Type,
+    TypedExpression,
+    Variable,
+)
 from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
 from .user_facing_errors import (
     AssignmentToBorrowedReference,
@@ -15,9 +24,15 @@ from .user_facing_errors import (
 
 class StackVariable(Variable):
     def __init__(
-        self, name: str, var_type: Type, is_mutable: bool, initialized: bool
+        self,
+        name: str,
+        var_type: Type,
+        is_mutable: bool,
+        initialized: bool,
+        meta: Meta,
+        di_file: DIFile,
     ) -> None:
-        super().__init__(name, var_type, is_mutable)
+        super().__init__(name, var_type, is_mutable, meta, di_file)
 
         self.initialized = initialized
 
@@ -32,15 +47,43 @@ class StackVariable(Variable):
         # alloca returns a pointer.
         return f"ptr {self.ir_ref_without_type_annotation}"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         assert self.ir_reg is None
-        self.ir_reg = next(reg_gen)
+        self.ir_reg = ctx.next_reg()
+        ir = IROutput()
 
         # <result> = alloca [inalloca] <type> [, <ty> <NumElements>]
         #            [, align <alignment>] [, addrspace(<num>)]
-        return [
+        ir.lines.append(
             f"%{self.ir_reg} = alloca {self.type.ir_type}, align {self.type.alignment}"
-        ]
+        )
+
+        metadata = self.type.to_di_type(ctx.metadata_gen)
+        ir.metadata.update(metadata)
+        assert isinstance(metadata[-1], DIType)
+
+        di_local_variable = DILocalVariable(
+            ctx.next_meta(),
+            self._name,
+            None,  # FIXME specify arg for function arguments.
+            ctx.scope,
+            self._di_file,
+            self._meta.start.line,
+            metadata[-1],
+        )
+        ir.metadata.add(di_local_variable)
+
+        di_location = DILocation(
+            ctx.next_meta(), self._meta.start.line, self._meta.start.column, ctx.scope
+        )
+        ir.metadata.add(di_location)
+
+        ir.lines.append(
+            f"call void @llvm.dbg.declare(metadata {self.ir_ref}, metadata !{di_local_variable.id},"
+            f" metadata !DIExpression()), !dbg !{di_location.id}"
+        )
+
+        return ir
 
     def assert_can_read_from(self) -> None:
         # Can ready any initialized variable.
@@ -57,11 +100,17 @@ class StackVariable(Variable):
 
 class StaticVariable(Variable):
     def __init__(
-        self, name: str, var_type: Type, is_mutable: bool, graphene_literal: str
+        self,
+        name: str,
+        var_type: Type,
+        is_mutable: bool,
+        graphene_literal: str,
+        meta: Meta,
+        di_file: DIFile,
     ) -> None:
         assert var_type.storage_kind == Type.Kind.VALUE
         self._graphene_literal = graphene_literal
-        super().__init__(name, var_type, is_mutable)
+        super().__init__(name, var_type, is_mutable, meta, di_file)
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -74,7 +123,7 @@ class StaticVariable(Variable):
     def ir_ref(self) -> str:
         return f"{self.type.ir_type} {self.ir_ref_without_type_annotation}"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         additional_prefix = "global" if self.is_mutable else "unnamed_addr constant"
 
         literal = self.type.definition.graphene_literal_to_ir_constant(
@@ -90,11 +139,13 @@ class StaticVariable(Variable):
         #            [, no_sanitize_address] [, no_sanitize_hwaddress]
         #            [, sanitize_address_dyninit] [, sanitize_memtag]
         #            (, !name !N)*
-        self.ir_reg = next(reg_gen)
-        return [
-            f"{self.ir_ref_without_type_annotation} = private {additional_prefix} "
-            f"{self.type.ir_type} {literal}"
-        ]
+        self.ir_reg = ctx.next_reg()
+        return IROutput(
+            [
+                f"{self.ir_ref_without_type_annotation} = private {additional_prefix} "
+                f"{self.type.ir_type} {literal}"
+            ]
+        )
 
     def assert_can_read_from(self) -> None:
         pass
@@ -104,8 +155,10 @@ class StaticVariable(Variable):
 
 
 class Scope(Generatable):
-    def __init__(self, scope_id: int, outer_scope: Optional["Scope"] = None) -> None:
-        super().__init__()
+    def __init__(
+        self, scope_id: int, meta: Meta, outer_scope: Optional["Scope"] = None
+    ) -> None:
+        super().__init__(meta)
 
         assert scope_id >= 0
         self.id = scope_id
@@ -173,17 +226,17 @@ class Scope(Generatable):
     def end_label(self) -> str:
         return f"scope_{self.id}_end"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        contained_ir = []
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        contained_ir = IROutput()
 
         # Variables are allocated at the function scope (not in inner-scopes)
         #   This prevents a large loop causing a stack overflow
         if self._outer_scope is None:
             for variable in self._allocations:
-                contained_ir.extend(variable.generate_ir(reg_gen))
+                contained_ir.extend(variable.generate_ir(ctx))
 
         for line in self._lines:
-            contained_ir.extend(line.generate_ir(reg_gen))
+            contained_ir.extend(line.generate_ir(ctx))
             if line.is_return_guaranteed():
                 # Avoid generating dead instructions
                 # TODO: warn about unreachable code
@@ -211,8 +264,9 @@ class IfElseStatement(Generatable):
         condition: TypedExpression,
         if_scope: Scope,
         else_scope: Scope,
+        meta: Meta,
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
 
         condition.assert_can_read_from()
         assert_is_implicitly_convertible(condition, BoolType(), "if condition")
@@ -221,41 +275,44 @@ class IfElseStatement(Generatable):
         self.if_scope = if_scope
         self.else_scope = else_scope
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#br-instruction
         need_label_after_statement = False
 
         conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
 
-        ir = self.expand_ir(extra_exprs, reg_gen)
+        ir = self.expand_ir(extra_exprs, ctx)
+
+        dbg = self.add_di_location(ctx, ir)
 
         # br i1 <cond>, label <iftrue>, label <iffalse>
-        ir.append(
+        ir.lines.append(
             f"br {conv_condition.ir_ref_with_type_annotation}, "
-            f"label %{self.if_scope.start_label}, label %{self.else_scope.start_label}"
+            f"label %{self.if_scope.start_label}, label %{self.else_scope.start_label}, "
+            f"{dbg}"
         )
 
         # If body
-        ir.append(f"{self.if_scope.start_label}:")
-        ir.extend(self.if_scope.generate_ir(reg_gen))
+        ir.lines.append(f"{self.if_scope.start_label}:")
+        ir.extend(self.if_scope.generate_ir(ctx))
 
         if not self.if_scope.is_return_guaranteed():
             # Jump to the end of the if/else statement.
-            ir.append(f"br label %{self.else_scope.end_label}")
+            ir.lines.append(f"br label %{self.else_scope.end_label}, {dbg}")
             need_label_after_statement = True
 
         # Else body
-        ir.append(f"{self.else_scope.start_label}:")
-        ir.extend(self.else_scope.generate_ir(reg_gen))
+        ir.lines.append(f"{self.else_scope.start_label}:")
+        ir.extend(self.else_scope.generate_ir(ctx))
 
         if not self.else_scope.is_return_guaranteed():
             # Jump to the end of the if/else statement.
-            ir.append(f"br label %{self.else_scope.end_label}")
+            ir.lines.append(f"br label %{self.else_scope.end_label}, {dbg}")
             need_label_after_statement = True
 
         if need_label_after_statement:
             # LLVM will complain if this is empty.
-            ir.append(f"{self.else_scope.end_label}:")
+            ir.lines.append(f"{self.else_scope.end_label}:")
 
         return ir
 
@@ -276,8 +333,9 @@ class WhileStatement(Generatable):
         condition: TypedExpression,
         condition_generatable: list[Generatable],
         inner_scope: Scope,
+        meta: Meta,
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
 
         condition.assert_can_read_from()
         assert_is_implicitly_convertible(condition, BoolType(), "while condition")
@@ -289,28 +347,39 @@ class WhileStatement(Generatable):
         self.condition_generatable = condition_generatable
         self.inner_scope = inner_scope
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#br-instruction
 
         conv_condition, extra_exprs = do_implicit_conversion(self.condition, BoolType())
 
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+
         # br i1 <cond>, label <iftrue>, label <iffalse>
-        return [
-            f"br label %{self.start_label}",
-            f"{self.start_label}:",
-            # Evaluate condition
-            *self.expand_ir(self.condition_generatable, reg_gen),
-            *self.expand_ir(extra_exprs, reg_gen),
-            (
-                f"br {conv_condition.ir_ref_with_type_annotation}, label "
-                f"%{self.inner_scope.start_label}, label %{self.end_label}"
-            ),
-            # Loop body
-            f"{self.inner_scope.start_label}:",
-            *self.inner_scope.generate_ir(reg_gen),
-            f"br label %{self.start_label}",  # Loop
-            f"{self.end_label}:",
-        ]
+        ir.lines.extend(
+            [
+                f"br label %{self.start_label}, {dbg}",
+                f"{self.start_label}:",
+            ]
+        )
+        # Evaluate condition
+        ir.extend(self.expand_ir(self.condition_generatable, ctx))
+        ir.extend(self.expand_ir(extra_exprs, ctx))
+        ir.lines.append(
+            f"br {conv_condition.ir_ref_with_type_annotation}, label "
+            f"%{self.inner_scope.start_label}, label %{self.end_label}, {dbg}"
+        )
+        # Loop body
+        ir.lines.append(f"{self.inner_scope.start_label}:")
+        ir.extend(self.inner_scope.generate_ir(ctx))
+        ir.lines.extend(
+            [
+                f"br label %{self.start_label}, {dbg}",  # Loop
+                f"{self.end_label}:",
+            ]
+        )
+
+        return ir
 
     def is_return_guaranteed(self) -> bool:
         return False
@@ -321,9 +390,12 @@ class WhileStatement(Generatable):
 
 class ReturnStatement(Generatable):
     def __init__(
-        self, return_type: Type, returned_expr: Optional[TypedExpression] = None
+        self,
+        return_type: Type,
+        meta: Meta,
+        returned_expr: Optional[TypedExpression] = None,
     ) -> None:
-        super().__init__()
+        super().__init__(meta)
 
         if returned_expr is not None:
             returned_expr.assert_can_read_from()
@@ -334,26 +406,30 @@ class ReturnStatement(Generatable):
         self.return_type = return_type
         self.returned_expr = returned_expr
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#i-ret
+
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
 
         # We have to use return_type instead of returned_expr.underlying_type,
         # as returned_expr might be an initializer list, which throws when its
         # type is accesssed.
         if self.returned_expr is None or self.return_type == VoidType():
             # ret void; Return from void function
-            return ["ret void"]
+            ir.lines.append(f"ret void, {dbg}")
+            return ir
 
         conv_returned_expr, extra_exprs = do_implicit_conversion(
             self.returned_expr, self.return_type
         )
 
-        ir_lines = self.expand_ir(extra_exprs, reg_gen)
+        ir.extend(self.expand_ir(extra_exprs, ctx))
 
         # ret <type> <value>; Return a value from a non-void function
-        ir_lines.append(f"ret {conv_returned_expr.ir_ref_with_type_annotation}")
+        ir.lines.append(f"ret {conv_returned_expr.ir_ref_with_type_annotation}, {dbg}")
 
-        return ir_lines
+        return ir
 
     def is_return_guaranteed(self) -> bool:
         return True
@@ -363,8 +439,10 @@ class ReturnStatement(Generatable):
 
 
 class VariableInitialize(Generatable):
-    def __init__(self, variable: StackVariable, value: TypedExpression) -> None:
-        super().__init__()
+    def __init__(
+        self, variable: StackVariable, value: TypedExpression, meta: Meta
+    ) -> None:
+        super().__init__(meta)
 
         value.assert_can_read_from()
         assert_is_implicitly_convertible(value, variable.type, "variable assignment")
@@ -372,20 +450,22 @@ class VariableInitialize(Generatable):
         self.variable = variable
         self.value = value
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#store-instruction
 
         conv_value, extra_exprs = do_implicit_conversion(self.value, self.variable.type)
 
-        ir_lines = self.expand_ir(extra_exprs, reg_gen)
+        ir = self.expand_ir(extra_exprs, ctx)
+
+        dbg = self.add_di_location(ctx, ir)
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
-        ir_lines += [
+        ir.lines.append(
             f"store {conv_value.ir_ref_with_type_annotation}, {self.variable.ir_ref}, "
-            f"align {conv_value.result_type_as_if_borrowed.alignment}"
-        ]
+            f"align {conv_value.result_type_as_if_borrowed.alignment}, {dbg}"
+        )
 
-        return ir_lines
+        return ir
 
     def is_return_guaranteed(self) -> bool:
         return False
@@ -398,8 +478,8 @@ class VariableInitialize(Generatable):
 
 
 class Assignment(Generatable):
-    def __init__(self, dst: TypedExpression, src: TypedExpression) -> None:
-        super().__init__()
+    def __init__(self, dst: TypedExpression, src: TypedExpression, meta: Meta) -> None:
+        super().__init__(meta)
 
         if dst.result_type.storage_kind.is_reference():
             raise AssignmentToBorrowedReference(dst.format_for_output_to_user())
@@ -423,22 +503,24 @@ class Assignment(Generatable):
         self._target_type = dst.result_type
         assert_is_implicitly_convertible(self._src, self._target_type, "assignment")
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#store-instruction
         converted_src, src_conversions = do_implicit_conversion(
             self._src, self._target_type, "assignment"
         )
 
-        conversion_ir: list[str] = []
-        conversion_ir.extend(self.expand_ir(src_conversions, reg_gen))
+        ir = self.expand_ir(src_conversions, ctx)
+
+        dbg = self.add_di_location(ctx, ir)
 
         # store [volatile] <ty> <value>, ptr <pointer>[, align <alignment>]...
-        return [
-            *conversion_ir,
+        ir.lines.append(
             f"store {converted_src.ir_ref_with_type_annotation}, "
             f"{self._dst.ir_ref_with_type_annotation}, "
-            f"align {self._dst.result_type_as_if_borrowed.alignment}",
-        ]
+            f"align {self._dst.result_type_as_if_borrowed.alignment}, {dbg}"
+        )
+
+        return ir
 
     def is_return_guaranteed(self) -> bool:
         return False

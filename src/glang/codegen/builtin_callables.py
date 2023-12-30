@@ -1,6 +1,6 @@
 from abc import abstractmethod
-from typing import Iterator
 
+from ..parser.lexer_parser import Meta
 from .builtin_types import (
     BoolDefinition,
     BoolType,
@@ -11,7 +11,7 @@ from .builtin_types import (
     SizeType,
 )
 from .expressions import ConstantExpression, StaticTypedExpression
-from .interfaces import SpecializationItem, Type, TypedExpression
+from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
 from .type_conversions import do_implicit_conversion
 from .user_facing_errors import OperandError
 
@@ -21,7 +21,10 @@ NUMERIC_TYPES = (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
 class BuiltinCallable(StaticTypedExpression):
     @abstractmethod
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         pass
 
@@ -32,7 +35,10 @@ class UnaryExpression(BuiltinCallable):
     EXPECTED_TYPES = tuple()
 
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         (self._arg,) = arguments
 
@@ -43,19 +49,19 @@ class UnaryExpression(BuiltinCallable):
         assert isinstance(definition, self.EXPECTED_TYPES)
 
         self._arg_type = self._arg.result_type.convert_to_value_type()
-        StaticTypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._arg})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#add-instruction (and below)
         conv, extra_exprs = do_implicit_conversion(self._arg, self._arg_type)
 
-        ir_lines: list[str] = []
-        ir_lines.extend(self.expand_ir(extra_exprs, reg_gen))
+        ir_output = IROutput()
+        ir_output.extend(self.expand_ir(extra_exprs, ctx))
 
-        self.result_reg = next(reg_gen)
+        self.result_reg = next(ctx.reg_gen)
 
         op = self.IR_FORMAT_STR.format_map(
             {
@@ -64,8 +70,10 @@ class UnaryExpression(BuiltinCallable):
             }
         )
 
-        ir_lines.append(f"%{self.result_reg} = {op}")
-        return ir_lines
+        dbg = self.add_di_location(ctx, ir_output)
+
+        ir_output.lines.append(f"%{self.result_reg} = {op}, {dbg}")
+        return ir_output
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -108,7 +116,10 @@ class BasicNumericExpression(BuiltinCallable):
         pass
 
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         lhs, rhs = arguments
         # This is not a user-facing function, we don't need sensible error messages
@@ -122,7 +133,7 @@ class BasicNumericExpression(BuiltinCallable):
         assert lhs.result_type == rhs.result_type
 
         StaticTypedExpression.__init__(
-            self, self.get_result_type(arguments), Type.Kind.VALUE
+            self, self.get_result_type(arguments), Type.Kind.VALUE, meta
         )
 
         self._arg_type = lhs.result_type.convert_to_value_type()
@@ -132,16 +143,16 @@ class BasicNumericExpression(BuiltinCallable):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._lhs}, {self._rhs})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#add-instruction (and below)
         conv_lhs, extra_exprs_lhs = do_implicit_conversion(self._lhs, self._arg_type)
         conv_rhs, extra_exprs_rhs = do_implicit_conversion(self._rhs, self._arg_type)
 
-        ir_lines: list[str] = []
-        ir_lines.extend(self.expand_ir(extra_exprs_lhs, reg_gen))
-        ir_lines.extend(self.expand_ir(extra_exprs_rhs, reg_gen))
+        ir_output = IROutput()
+        ir_output.extend(self.expand_ir(extra_exprs_lhs, ctx))
+        ir_output.extend(self.expand_ir(extra_exprs_rhs, ctx))
 
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
 
         if isinstance(self._arg_type.definition, IEEEFloatDefinition):
             ir = self.FLOATING_POINT_IR
@@ -156,14 +167,16 @@ class BasicNumericExpression(BuiltinCallable):
             ir = self.UNSIGNED_IR
 
         assert ir is not None
+        dbg = self.add_di_location(ctx, ir_output)
 
         # eg. for addition
         # <result> = add [nuw] [nsw] <ty> <op1>, <op2>  ; yields ty:result
-        ir_lines.append(
+        ir_output.lines.append(
             f"%{self.result_reg} = {ir} {conv_lhs.ir_ref_with_type_annotation}, "
-            f"{conv_rhs.ir_ref_without_type_annotation}"
+            f"{conv_rhs.ir_ref_without_type_annotation}, {dbg}"
         )
-        return ir_lines
+
+        return ir_output
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -281,6 +294,7 @@ class AlignOfExpression(BuiltinCallable):
         self,
         specialization: list[SpecializationItem],
         arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
@@ -288,18 +302,18 @@ class AlignOfExpression(BuiltinCallable):
         assert isinstance(self._argument_type, Type)
 
         self._result = ConstantExpression(
-            SizeType(), str(self._argument_type.alignment)
+            SizeType(), str(self._argument_type.alignment), meta
         )
 
         StaticTypedExpression.__init__(
-            self, self._result.underlying_type, Type.Kind.VALUE
+            self, self._result.underlying_type, Type.Kind.VALUE, meta
         )
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        return self._result.generate_ir(reg_gen)
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        return self._result.generate_ir(ctx)
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -317,23 +331,26 @@ class SizeOfExpression(BuiltinCallable):
         self,
         specialization: list[SpecializationItem],
         arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(arguments) == 0
         assert len(specialization) == 1
         (self._argument_type,) = specialization
         assert isinstance(self._argument_type, Type)
 
-        self._result = ConstantExpression(SizeType(), str(self._argument_type.size))
+        self._result = ConstantExpression(
+            SizeType(), str(self._argument_type.size), meta
+        )
 
         StaticTypedExpression.__init__(
-            self, self._result.underlying_type, Type.Kind.VALUE
+            self, self._result.underlying_type, Type.Kind.VALUE, meta
         )
 
     def __repr__(self) -> str:
         return f"SizeOf({self._argument_type})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
-        return self._result.generate_ir(reg_gen)
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        return self._result.generate_ir(ctx)
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -351,6 +368,7 @@ class NarrowExpression(BuiltinCallable):
         self,
         specialization: list[SpecializationItem],
         arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         (self._argument,) = arguments
         (return_type,) = specialization
@@ -366,23 +384,27 @@ class NarrowExpression(BuiltinCallable):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        StaticTypedExpression.__init__(self, return_type, Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, return_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"Narrow({self._argument} to {self.underlying_type})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         conv_arg, extra_exprs_arg = do_implicit_conversion(
             self._argument, self._arg_value_type
         )
-        ir_lines: list[str] = self.expand_ir(extra_exprs_arg, reg_gen)
+        ir_output = self.expand_ir(extra_exprs_arg, ctx)
 
-        self.result_reg = next(reg_gen)
-        return [
-            *ir_lines,
+        dbg = self.add_di_location(ctx, ir_output)
+
+        self.result_reg = ctx.next_reg()
+
+        ir_output.lines.append(
             f"%{self.result_reg} = trunc {conv_arg.ir_ref_with_type_annotation}"
-            f" to {self.underlying_type.ir_type}",
-        ]
+            f" to {self.underlying_type.ir_type}, {dbg}"
+        )
+
+        return ir_output
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -397,7 +419,10 @@ class NarrowExpression(BuiltinCallable):
 
 class PtrToIntExpression(BuiltinCallable):
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(specialization) == 0
         assert len(arguments) == 1
@@ -407,21 +432,26 @@ class PtrToIntExpression(BuiltinCallable):
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        StaticTypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE)
+        StaticTypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # Implicit conversions do not apply.
+        ir_output = IROutput()
 
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
+
+        dbg = self.add_di_location(ctx, ir_output)
 
         # <result> = ptrtoint <ty> <value> to <ty2>
-        return [
+        ir_output.lines.append(
             f"%{self.result_reg} = ptrtoint {self._src_expr.ir_ref_with_type_annotation}"
-            f" to {self.underlying_type.ir_type}"
-        ]
+            f" to {self.underlying_type.ir_type}, {dbg}"
+        )
+
+        return ir_output
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -436,7 +466,10 @@ class PtrToIntExpression(BuiltinCallable):
 
 class IntToPtrExpression(BuiltinCallable):
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(specialization) == 1
         assert len(arguments) == 1
@@ -449,27 +482,34 @@ class IntToPtrExpression(BuiltinCallable):
         assert isinstance(self._src_expr.result_type, GenericIntType)
 
         StaticTypedExpression.__init__(
-            self, self._ptr_type.convert_to_value_type(), self._ptr_type.storage_kind
+            self,
+            self._ptr_type.convert_to_value_type(),
+            self._ptr_type.storage_kind,
+            meta,
         )
 
     def __repr__(self) -> str:
         return f"IntToPtr({self._src_expr} to {self.underlying_type})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # Remove any indirect references
         conv_src_expr, extra_exprs = do_implicit_conversion(
             self._src_expr, self._src_expr.result_type
         )
 
-        ir = self.expand_ir(extra_exprs, reg_gen)
+        ir = self.expand_ir(extra_exprs, ctx)
 
-        self.result_reg = next(reg_gen)
+        self.result_reg = ctx.next_reg()
+
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = inttoptr <ty> <value> to <ty2>
-        return ir + [
+        ir.lines.append(
             f"%{self.result_reg} = inttoptr {conv_src_expr.ir_ref_with_type_annotation}"
-            f" to {self.ir_type_annotation}",
-        ]
+            f" to {self.ir_type_annotation}, {dbg}"
+        )
+
+        return ir
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -484,7 +524,10 @@ class IntToPtrExpression(BuiltinCallable):
 
 class BitcastExpression(BuiltinCallable):
     def __init__(
-        self, specialization: list[SpecializationItem], arguments: list[TypedExpression]
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
     ) -> None:
         assert len(specialization) == 1
         assert len(arguments) == 1
@@ -514,31 +557,36 @@ class BitcastExpression(BuiltinCallable):
             self,
             self._target_type.convert_to_value_type(),
             self._target_type.storage_kind,
+            meta,
         )
 
     def __repr__(self) -> str:
         return f"Bitcast({self._src_expr} to {self.underlying_type})"
 
-    def generate_ir(self, reg_gen: Iterator[int]) -> list[str]:
+    def generate_ir(self, ctx: IRContext) -> IROutput:
         # Remove any indirect references
         conv_src_expr, extra_exprs = do_implicit_conversion(
             self._src_expr, self._src_expr.result_type
         )
 
-        ir = self.expand_ir(extra_exprs, reg_gen)
+        ir = self.expand_ir(extra_exprs, ctx)
 
         if self.ir_type_annotation == conv_src_expr.ir_type_annotation:
             # Type is already correct, nothing to do
             self.result_ref = conv_src_expr.ir_ref_without_type_annotation
             return ir
 
-        self.result_ref = f"%{next(reg_gen)}"
+        self.result_ref = f"%{ctx.next_reg()}"
+
+        dbg = self.add_di_location(ctx, ir)
 
         # <result> = bitcast <ty> <value> to <ty2>
-        return ir + [
+        ir.lines.append(
             f"{self.result_ref} = bitcast {conv_src_expr.ir_ref_with_type_annotation}"
-            f" to {self.ir_type_annotation}",
-        ]
+            f" to {self.ir_type_annotation}, {dbg}",
+        )
+
+        return ir
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
