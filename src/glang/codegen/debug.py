@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from hashlib import file_digest
 from inspect import getmembers
 from pathlib import Path
@@ -106,6 +106,20 @@ class ChecksumKind(StrEnum):
     SHA256 = "CSK_SHA256"
 
 
+class ModuleFlagsBehavior(IntEnum):
+    # Determines how conflicting metadata flags are handled by LLVM when two or
+    # more modules are merged together.
+    # https://llvm.org/docs/LangRef.html#module-flags-metadata
+    Error = 1
+    Warning = 2
+    Require = 3
+    Override = 4
+    Append = 5
+    AppendUnique = 6
+    Max = 7
+    Min = 8
+
+
 @dataclass(repr=False, eq=False)
 class Metadata:
     id: int
@@ -140,8 +154,8 @@ class Metadata:
 
 
 @dataclass(repr=False, eq=False)
-class MetadataFlag(Metadata):
-    behaviour: int
+class ModuleFlags(Metadata):
+    behaviour: ModuleFlagsBehavior
     metadata: str
     value: int
 

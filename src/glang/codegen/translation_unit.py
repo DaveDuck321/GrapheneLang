@@ -18,7 +18,8 @@ from .debug import (
     DIFile,
     DISubprogram,
     DISubroutineType,
-    MetadataFlag,
+    ModuleFlags,
+    ModuleFlagsBehavior,
     Tag,
 )
 from .expressions import FunctionCallExpression, FunctionParameter
@@ -261,14 +262,11 @@ class Program:
         for func in self._fn_bodies:
             output.extend(func.generate_ir(self._metadata_gen))
 
-        # behaviour = 1 (Error)
-        # Emits an error if two values disagree, otherwise the resulting value
-        # is that of the operands.
-        dwarf_version_metadata = MetadataFlag(
-            next(self._metadata_gen), 1, "Dwarf Version", 4
+        dwarf_version_metadata = ModuleFlags(
+            next(self._metadata_gen), ModuleFlagsBehavior.Error, "Dwarf Version", 4
         )
-        debug_info_version_metadata = MetadataFlag(
-            next(self._metadata_gen), 1, "Debug Info Version", 3
+        debug_info_version_metadata = ModuleFlags(
+            next(self._metadata_gen), ModuleFlagsBehavior.Error, "Debug Info Version", 3
         )
 
         output.metadata.update((dwarf_version_metadata, debug_info_version_metadata))
