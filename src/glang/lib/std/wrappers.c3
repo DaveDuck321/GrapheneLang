@@ -81,7 +81,7 @@ function [T] make<Optional<T&>> : () -> Optional<T&> = {
     return { 0 };
 }
 
-function [T] make<T&> : (value : T&) -> Optional<T&> = {
+function [T] make<Optional<T&>> : (value : T&) -> Optional<T&> = {
     return { ref_to_addr(&value) };
 }
 
@@ -118,7 +118,7 @@ function [T] make<Optional<T mut&>> : () -> Optional<T mut&> = {
     return { 0 };
 }
 
-function [T] make<T mut&> : (value : T mut&) -> Optional<T mut&> = {
+function [T] make<Optional<T mut&>> : (value : T mut&) -> Optional<T mut&> = {
     return { ref_to_addr(&value) };
 }
 
