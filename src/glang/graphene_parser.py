@@ -473,7 +473,7 @@ class ExpressionParser(lp.Interpreter):
         return FlattenedExpression([const_expr])
 
     def FloatConstant(self, node: lp.FloatConstant) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.IEEEFloat(32), node.value)
+        const_expr = cg.ConstantExpression(cg.IEEEFloat(32), node.value, node.meta)
         return FlattenedExpression([const_expr])
 
     def IntConstant(self, node: lp.IntConstant) -> FlattenedExpression:

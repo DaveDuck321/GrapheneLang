@@ -374,6 +374,7 @@ class IEEEFloatDefinition(PrimitiveDefinition):
     def __init__(self, name: str, size_in_bits: int) -> None:
         ir_type = {16: "half", 32: "float", 64: "double", 128: "fp128"}[size_in_bits]
         super().__init__(size_in_bits // 8, ir_type, name)
+        self.bits = size_in_bits
 
     def graphene_literal_to_ir_constant(self, value_str: str) -> str:
         return float_literal_to_exact_hex(value_str, 8 * self.size)
@@ -382,6 +383,17 @@ class IEEEFloatDefinition(PrimitiveDefinition):
         if not isinstance(other, IEEEFloatDefinition):
             return False
         return self.size == other.size
+
+    def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
+        return [
+            DIBasicType(
+                next(metadata_gen),
+                self._name,
+                self.bits,
+                Tag.base_type,
+                TypeKind.float,
+            )
+        ]
 
 
 class IEEEFloat(PrimitiveType):
