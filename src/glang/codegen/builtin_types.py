@@ -145,7 +145,7 @@ class NamedType(Type):
             assert self.alias is not None
             return self.alias.ir_type
 
-        return f"%type.{self.ir_mangle}"
+        return f"%type._Z{self.ir_mangle}"
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
         metadata = super().to_di_type(metadata_gen)

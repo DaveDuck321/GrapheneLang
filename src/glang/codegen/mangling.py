@@ -87,7 +87,8 @@ def mangle_template_args(args: Iterable[SpecializationItem]) -> str:
 
 def mangle_operator_name(name: str) -> str:
     # **, @
-    # <operator-name> ::= pl  # +
+    # <operator-name> ::= co  # ~
+    #                 ::= pl  # +
     #                 ::= mi  # -
     #                 ::= ml  # *
     #                 ::= dv  # /
@@ -118,6 +119,8 @@ def mangle_operator_name(name: str) -> str:
     #                 ::= ix  # []
     #                 ::= v <digit> <source-name>	# vendor extended operator
     match name:
+        case "~":
+            return "co"
         case "+":
             return "pl"
         case "-":
