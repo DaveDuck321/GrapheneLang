@@ -25,7 +25,6 @@ It's always a good idea to build and test the RPM before releasing.
 
 If the RPM builds succesfully, then
 - Bump the version in [glang.spec](/glang.spec)
-- Commit locally on the `main` branch
-- Run `git tag v0.x.y` to tag your commit
-- Push `main` *and* the new tag
+- Commit on `main` and push
+- Create a new release on GitHub, making sure to tag it with `v0.x.y`
 - Fedora Copr will pick up the build automatically; you can check its progress [here](https://copr.fedorainfracloud.org/coprs/antros/graphene/builds/)
