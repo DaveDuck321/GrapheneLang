@@ -95,6 +95,7 @@ class Function:
         )
         self.top_level_scope.add_variable(fn_param_var)
 
+        # FIXME pass the true meta.
         fn_param_var_assignment = VariableInitialize(fn_param_var, fn_param, self._meta)
         self.top_level_scope.add_generatable(fn_param_var_assignment)
 
