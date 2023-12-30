@@ -19,6 +19,13 @@ from .debug import (
 )
 from .floats import float_literal_to_exact_hex
 from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
+from .mangling import (
+    mangle_float,
+    mangle_int,
+    mangle_operator_name,
+    mangle_source_name,
+    mangle_template_args,
+)
 from .user_facing_errors import (
     ArrayDimensionError,
     FailedLookupError,
@@ -122,22 +129,15 @@ class NamedType(Type):
             assert self.alias is not None
             return self.alias.ir_mangle
 
-        prefix = "__T_"
-        if len(self.specialization) == 0:
-            return prefix + self.name
+        # Perhaps built-in types shouldn't be a NamedType.
+        if isinstance(self.definition, PrimitiveDefinition):
+            return self.definition.ir_mangle
 
-        specializations = []
-        for argument in self.specialization:
-            if isinstance(argument, int):
-                # TODO: negative numbers
-                specializations.append(str(argument))
-            elif isinstance(argument, Type):
-                specializations.append(argument.ir_mangle)
-            else:
-                assert False
+        source_name = mangle_source_name(self.name)
+        if not self.specialization:
+            return source_name
 
-        specialization_format = "".join(specializations)
-        return f"{prefix}{self.name}__S{specialization_format}"
+        return source_name + mangle_template_args(self.specialization)
 
     @property
     def ir_type(self) -> str:
@@ -242,10 +242,6 @@ class PrimitiveDefinition(ValueTypeDefinition):
         return self._ir
 
     @property
-    def ir_mangle(self) -> str:
-        return self._ir
-
-    @property
     def size(self) -> int:
         return self._size
 
@@ -287,6 +283,11 @@ class VoidDefinition(PrimitiveDefinition):
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
         assert False
+
+    @property
+    def ir_mangle(self) -> str:
+        # <builtin-type> ::= v  # void
+        return "v"
 
 
 class VoidType(PrimitiveType):
@@ -331,6 +332,10 @@ class IntegerDefinition(PrimitiveDefinition):
                 TypeKind.signed if self.is_signed else TypeKind.unsigned,
             )
         ]
+
+    @property
+    def ir_mangle(self) -> str:
+        return mangle_int(self.bits, self.is_signed)
 
 
 class GenericIntType(PrimitiveType):
@@ -393,6 +398,10 @@ class IEEEFloatDefinition(PrimitiveDefinition):
             )
         ]
 
+    @property
+    def ir_mangle(self) -> str:
+        return mangle_float(self.bits)
+
 
 class IEEEFloat(PrimitiveType):
     def __init__(self, size_in_bits: int) -> None:
@@ -422,6 +431,11 @@ class BoolDefinition(PrimitiveDefinition):
                 TypeKind.boolean,
             )
         ]
+
+    @property
+    def ir_mangle(self) -> str:
+        # <builtin-type> ::= b  # bool
+        return "b"
 
 
 class BoolType(PrimitiveType):
@@ -472,8 +486,15 @@ class StructDefinition(ValueTypeDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        member_mangle = "".join(member.ir_mangle for _, member in self.members)
-        return f"__S{member_mangle}"
+        member_types = (m_type for _, m_type in self.members)
+        # <builtin-type> ::= u <source-name> [<template-args>]  # vendor extended type
+        # FIXME binutils rejects the above :(.
+        # `u <source-name>` works and so does `<source-name> <template-args>`,
+        # so fall back to the latter until we can fix it (seems like a quick
+        # fix in gcc/libiberty/cp-demangle.c).
+        return (
+            f"{mangle_source_name('AnonymousType')}{mangle_template_args(member_types)}"
+        )
 
     @property
     def size(self) -> int:
@@ -572,8 +593,9 @@ class StackArrayDefinition(ValueTypeDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        dimensions = "_".join(map(str, self.dimensions))
-        return f"__A_{self.member.ir_mangle}__{dimensions}"
+        #  <array-type> ::= A [<array bound number>] _ <element type>
+        dimensions = str.join("", map(lambda d: f"A{d}_", self.dimensions))
+        return dimensions + self.member.ir_mangle
 
     @property
     def size(self) -> int:
@@ -640,8 +662,11 @@ class ReferenceDefinition(PtrTypeDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        const = "" if self.is_mut else "C"
-        return f"__{const}R_{self.value_type.ir_mangle}"
+        # <qualified-type>     ::= <qualifiers> <type>
+        # <ref-qualifier>      ::= R                    # & ref-qualifier
+        # <CV-qualifiers>      ::= [r] [V] [K]          # restrict (C99), volatile, const
+        const = "" if self.is_mut else "K"
+        return "R" + const + self.value_type.ir_mangle
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
         base_type_metadata = self.value_type.to_di_type(metadata_gen)
@@ -710,9 +735,10 @@ class HeapArrayDefinition(PtrTypeDefinition):
     @property
     def ir_mangle(self) -> str:
         assert not self.is_illegal_value_type
-        dimensions = "_".join(map(str, self.known_dimensions))
-        const = "" if self.is_mut else "C"
-        return f"__UA{const}_{self.member.ir_mangle}__{dimensions}__"
+        #  <array-type> ::= A [<array bound number>] _ <element type>
+        known_dimensions = str.join("", map(lambda d: f"A{d}_", self.known_dimensions))
+        const = "" if self.is_mut else "K"
+        return const + "PA_" + known_dimensions + self.member.ir_mangle
 
     @property
     def storage_kind(self) -> Type.Kind:
@@ -769,30 +795,72 @@ class FunctionSignature:
         if self.is_main or self.is_foreign:
             return self.name
 
-        arguments_mangle = "".join(arg.ir_mangle for arg in self.arguments)
+        # <mangled-name> ::= _Z <encoding>
+        # <encoding> ::= <function name> <bare-function-type>
 
-        specialization_mangle = ""
-        if len(self.specialization) != 0:
-            specialization_mangle = (
-                "__SPECIAL_"
-                + "".join(
-                    specialization_item.ir_mangle
-                    if isinstance(specialization_item, Type)
-                    else str(specialization_item)
-                    for specialization_item in self.specialization
-                )
-                + "_SPECIAL__"
-            )
+        # <name> ::= <unscoped-name>
+        #        ::= <unscoped-template-name> <template-args>
+        # <unscoped-template-name> ::= <unscoped-name>
+        # <unscoped-name> ::= <unqualified-name>
+        # <unqualified-name> ::= <operator-name> [<abi-tags>]
+        #                    ::= <source-name>
 
-        # Name mangle operators into digits
-        legal_name_mangle = []
-        for char in self.name:
-            if char.isalnum() or char == "_":
-                legal_name_mangle.append(char)
-            else:
-                legal_name_mangle.append(f"__O{ord(char)}")
+        # The above reduces to:
+        # <name> ::= (<operator-name> | <source-name>) [<template-args>]
 
-        return f"{''.join(legal_name_mangle)}{specialization_mangle}{arguments_mangle}"
+        mangled_name = (
+            mangle_source_name(self.name)
+            if self.name.replace("_", "").isalnum()
+            else mangle_operator_name(self.name)
+        )
+
+        if any(map(lambda c: c.isspace(), mangled_name)):
+            raise Exception(f"bad mangle : `{mangled_name}` from `{self.name}`")
+
+        # TODO make mangle_template_args() return the empty string.
+        mangled_template_args = (
+            mangle_template_args(self.specialization) if self.specialization else ""
+        )
+
+        # <bare-function-type> ::= <signature type>+
+        # Types are possible return type, then parameter types.
+
+        # Whether the mangling of a function type includes the return type
+        # depends on the context and the nature of the function. The rules for
+        # deciding whether the return type is included are:
+
+        # (1) Template functions (names or types) have return types encoded,
+        # with the exceptions listed below.
+
+        # (2) Function types not appearing as part of a function name mangling,
+        # e.g. parameters, pointer types, etc., have return type encoded, with
+        # the exceptions listed below.
+
+        # (3) Non-template function names do not have return types encoded.
+
+        # The exceptions mentioned in (1) and (2) above, for which the return
+        # type is never included, are
+        # - Constructors.
+        # - Destructors.
+        # - Conversion operator functions, e.g. operator int.
+
+        mangled_return_type = self.return_type.ir_mangle if self.specialization else ""
+        mangled_argument_types = "".join(arg.ir_mangle for arg in self.arguments)
+        if not mangled_argument_types:
+            # Empty parameter lists, whether declared as () or conventionally as
+            # (void), are encoded with a void parameter specifier (v). Therefore
+            # function types always encode at least one parameter type, and
+            # function manglings can always be distinguished from data manglings
+            # by the presence of the type.
+            mangled_argument_types = "v"
+
+        return (
+            "_Z"
+            + mangled_name
+            + mangled_template_args
+            + mangled_return_type
+            + mangled_argument_types
+        )
 
     def _repr_impl(self, key: Callable[[SpecializationItem], str]) -> str:
         prefix = "foreign" if self.is_foreign else "function"
