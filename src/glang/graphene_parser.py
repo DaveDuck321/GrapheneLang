@@ -519,7 +519,10 @@ class ExpressionParser(lp.Interpreter):
 
         flattened_expr = FlattenedExpression(rhs.subexpressions)
         call_expr = self._program.lookup_call_expression(
-            node.name, [], [rhs.expression()], node.meta  # Don't specialize operators
+            node.name,
+            [],  # Don't specialize operators
+            [rhs.expression()],
+            node.meta,
         )
         return flattened_expr.add_parent(call_expr)
 
