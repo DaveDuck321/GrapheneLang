@@ -814,10 +814,6 @@ class FunctionSignature:
             else mangle_operator_name(self.name)
         )
 
-        if any(map(lambda c: c.isspace(), mangled_name)):
-            raise Exception(f"bad mangle : `{mangled_name}` from `{self.name}`")
-
-        # TODO make mangle_template_args() return the empty string.
         mangled_template_args = (
             mangle_template_args(self.specialization) if self.specialization else ""
         )

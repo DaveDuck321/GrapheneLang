@@ -86,7 +86,6 @@ def mangle_template_args(args: Iterable[SpecializationItem]) -> str:
 
 
 def mangle_operator_name(name: str) -> str:
-    # **, @
     # <operator-name> ::= co  # ~
     #                 ::= pl  # +
     #                 ::= mi  # -
