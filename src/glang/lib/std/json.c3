@@ -271,9 +271,9 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         if !in_escape_seq and cursor:eat(char("\"")) {
             mut node : JSON_Node = make<JSON_Node>(/* string */ 3, &mut cursor.allocator);
 
-            // TODO: https://github.com/DaveDuck321/GrapheneLang/issues/124
-            let value: StringView = {(&string):view()};
-            node.value = make<Optional<StringView>>(value);
+            node.value = make<Optional<StringView>>(
+                make<StringView>(string:view())
+            );
 
             return make<Optional<JSON_Node>>(node);
         }
