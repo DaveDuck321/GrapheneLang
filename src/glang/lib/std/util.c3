@@ -45,6 +45,12 @@ function [T, AddrT] addr_to_mut_heap_array : (address : AddrT)
     return &mut __builtin_int_to_ptr<T[mut&]>(address);
 }
 
+function [TRef, BRef] reinterpret_addr : (base : BRef)
+    -> TypeIf<TRef, Both<IsRef<TRef>, IsRef<BRef>>> =
+{
+    return &__builtin_int_to_ptr<TRef>(__builtin_ptr_to_int(&base));
+}
+
 function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); }
 function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); }
 function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); }

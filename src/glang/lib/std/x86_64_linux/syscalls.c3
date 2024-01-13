@@ -26,6 +26,11 @@ function sys_open : (filename: u8[&], flags: u32, mode: u32) -> int = {
     return Narrow<int>(result);
 }
 
+function sys_fstat : (fd: int, buffer : u8[&]) -> int = {
+    let buf_addr : iptr = __builtin_ptr_to_int(buffer);
+    return Narrow<int>(_syscall_2(fd, buf_addr, /* fstat */ 5));
+}
+
 function sys_close : (fd : int) -> int = {
     return Narrow<int>(_syscall_1(fd, /* close */ 3));
 }
