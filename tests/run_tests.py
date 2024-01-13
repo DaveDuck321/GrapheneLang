@@ -258,9 +258,11 @@ def main() -> None:
     build_jit_dependencies()
 
     if args.test is not None:
-        test_path = PARENT_DIR / args.test
-
-        run_test_print_result(test_path)
+        test_path = args.test if args.test.is_file() else PARENT_DIR / args.test
+        try:
+            run_test_print_result(test_path.resolve(strict=True))
+        except FileNotFoundError:
+            print(f"No such file: '{test_path}'")
     else:
         all_test_files = [
             test_file
