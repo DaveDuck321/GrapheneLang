@@ -23,9 +23,7 @@ typedef JSON_Node : {
     children : Vector<JSON_Node>,
 }
 
-// TODO something like new<JSON_Node> would be nice, but we don't support
-// function specializations.
-function new_json_node : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
+function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
     return {
         node_type,
         make<Optional<StringView>>(),
@@ -114,7 +112,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         return make<Optional<JSON_Node>>();
     }
 
-    mut node : JSON_Node = new_json_node(/* object */ 6, &mut cursor.allocator);
+    mut node : JSON_Node = make<JSON_Node>(/* object */ 6, &mut cursor.allocator);
 
     cursor:eat_whitespace();
 
@@ -172,7 +170,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         return make<Optional<JSON_Node>>();
     }
 
-    mut node : JSON_Node = new_json_node(/* array */ 5, &mut cursor.allocator);
+    mut node : JSON_Node = make<JSON_Node>(/* array */ 5, &mut cursor.allocator);
 
     cursor:eat_whitespace();
 
@@ -226,15 +224,15 @@ function parse_value : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     }
 
     if cursor:eat(sv("null")) {
-        return make<Optional<JSON_Node>>(new_json_node(/* null */ 0, &mut cursor.allocator));
+        return make<Optional<JSON_Node>>(make<JSON_Node>(/* null */ 0, &mut cursor.allocator));
     }
 
     if cursor:eat(sv("true")) {
-        return make<Optional<JSON_Node>>(new_json_node(/* true */ 1, &mut cursor.allocator));
+        return make<Optional<JSON_Node>>(make<JSON_Node>(/* true */ 1, &mut cursor.allocator));
     }
 
     if cursor:eat(sv("false")) {
-        return make<Optional<JSON_Node>>(new_json_node(/* false */ 2, &mut cursor.allocator));
+        return make<Optional<JSON_Node>>(make<JSON_Node>(/* false */ 2, &mut cursor.allocator));
     }
 
     // Numbers don't have a prefix character, so just try and parse them.
@@ -271,7 +269,7 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
     while cursor:has_next() {
         if !in_escape_seq and cursor:eat(char("\"")) {
-            mut node : JSON_Node = new_json_node(/* string */ 3, &mut cursor.allocator);
+            mut node : JSON_Node = make<JSON_Node>(/* string */ 3, &mut cursor.allocator);
 
             // TODO: https://github.com/DaveDuck321/GrapheneLang/issues/124
             let value: StringView = {(&string):view()};
@@ -357,7 +355,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         return make<Optional<JSON_Node>>();
     }
 
-    mut node : JSON_Node = new_json_node(/* string */ 4, &mut cursor.allocator);
+    mut node : JSON_Node = make<JSON_Node>(/* string */ 4, &mut cursor.allocator);
     node.value = make<Optional<StringView>>((&cursor):slice_between(start_pos, end_pos));
 
     return make<Optional<JSON_Node>>(node);
