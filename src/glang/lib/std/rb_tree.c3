@@ -252,7 +252,7 @@ function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
 }
 
 function [K, Comparable] search_impl : (
-    self : RB_Tree<K> mut&, key : Comparable
+    self : RB_Tree<K>&, key : Comparable
 ) -> Optional<RB_Node<K> mut&> = {
     mut u : Optional<RB_Node<K> mut&> = self.root;
 
@@ -264,7 +264,7 @@ function [K, Comparable] search_impl : (
 }
 
 function [K, Comparable] search : (
-    self : RB_Tree<K> mut&, key : Comparable
+    self : RB_Tree<K>&, key : Comparable
 ) -> Optional<K> = {
     mut result : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
@@ -472,7 +472,7 @@ function [K] delete_impl : (self : RB_Tree<K> mut&, u : RB_Node<K> mut&) -> void
     }
 }
 
-function [K] delete : (self : RB_Tree<K> mut&, key : K) -> bool = {
+function [K, Comparable] delete : (self : RB_Tree<K> mut&, key : Comparable) -> bool = {
     mut node : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
     // Do nothing if the key is not in the tree.
