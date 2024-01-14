@@ -89,7 +89,7 @@ function [T] capacity : (self : Vector<T> mut&) -> isize = {
 }
 
 function [T] data : (self : Vector<T> mut&) -> Span<T> = {
-    return (&self.memory):slice_to(self.length);
+    return self.memory:slice_to(self.length);
 }
 
 function [T] data : (self : Vector<T>&) -> Span<T> = {
@@ -109,17 +109,8 @@ function [T] view : (self : Vector<T>&) -> View<T> = {
     return data:to_view();
 }
 
-function [T] get_iter : (vec : Vector<T> mut&) -> ContiguousContainerIter<Vector<T>&, T mut&> = {
-    return (&vec):get_iter();
-}
-
 function [T] get_iter : (vec : Vector<T>&) -> ContiguousContainerIter<Vector<T>&, T mut&> = {
     return { .container = &vec, .current_index = 0 };
-}
-
-// TODO: remove this... maybe use const value semantics?
-function [T] get_citer : (vec : Vector<T> mut&) -> ContiguousContainerIter<Vector<T>&, T&> = {
-    return (&vec):get_iter();
 }
 
 function [T] get_citer : (vec : Vector<T>&) -> ContiguousContainerIter<Vector<T>&, T&> = {
