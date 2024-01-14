@@ -1,10 +1,11 @@
 @require_once "std/arithmetic.c3"
+@require_once "std/iterators.c3"
 @require_once "std/logical.c3"
-@require_once "std/string.c3"
+@require_once "std/map.c3"
 @require_once "std/memory.c3"
+@require_once "std/string.c3"
 @require_once "std/vector.c3"
 @require_once "std/wrappers.c3"
-@require_once "std/iterators.c3"
 
 typedef StringViewIter : ContiguousContainerIter<View<u8>&, u8&>
 typedef VectorIter<JSON_Node> : ContiguousContainerIter<Vector<JSON_Node>&, JSON_Node mut&>
@@ -21,6 +22,7 @@ typedef JSON_Node : {
                     // 5: array, 6: object
     value    : Optional<StringView>,
     children : Vector<JSON_Node>,
+    map      : Map<JSON_Node, JSON_Node>,
 }
 
 function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
@@ -28,7 +30,16 @@ function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON
         node_type,
         make<Optional<StringView>>(),
         make<Vector<JSON_Node>>(&mut allocator),
+        make<Map<JSON_Node, JSON_Node>>(),
     };
+}
+
+@operator < : (left : JSON_Node&, right : JSON_Node&) -> bool = {
+    return ref_to_addr(&left) < ref_to_addr(&right);
+}
+
+@operator == : (left : JSON_Node&, right : JSON_Node&) -> bool = {
+    return ref_to_addr(&left) == ref_to_addr(&right);
 }
 
 function has_next : (cursor : Cursor mut&) -> bool = {
@@ -50,7 +61,6 @@ function next : (cursor : Cursor mut&) -> Optional<u8> = {
     return make<Optional<u8>>();
 }
 
-function position : (cursor : Cursor mut&) -> isize = { return (&cursor):position();}
 function position : (cursor : Cursor&) -> isize = {
     // Looking into the iterator like this is sorta cursed
     return cursor.iter.current_index;
@@ -131,8 +141,6 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             return make<Optional<JSON_Node>>();
         }
 
-        node.children:push_back(string_node:data());
-
         cursor:eat_whitespace();
 
         if !cursor:eat(char(":")) {
@@ -147,7 +155,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             return make<Optional<JSON_Node>>();
         }
 
-        node.children:push_back(value_node:data());
+        node.map:insert(string_node:data(), value_node:data());
 
         if cursor:eat(char("}")) {
             // We're done.
@@ -448,22 +456,15 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsS
         // FIXME we should be using a buffer here.
         io:write(sv("{"));
 
-        mut iter : VectorIter<JSON_Node> = node.children:get_iter();
-        mut flag : bool = true;
+        mut iter : MapIter<JSON_Node, JSON_Node> = node.map:get_citer();
 
         // XXX we have to borrow the iterator, otherwise it is not updated
         // in place by the implicit call to get_next().
         for element in &mut iter {
-            io:write(element);
-
-            if flag {
-                io:write(sv(": "));
-            } else {
-                if iter:has_next() {
-                    io:write(sv(", "));
-                }
+            io:writef(sv("%: %"), element.key, element.value);
+            if iter:has_next() {
+                io:write(sv(", "));
             }
-            flag ^= true;
         }
 
         return io:write(sv("}"));
