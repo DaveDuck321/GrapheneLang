@@ -2,6 +2,7 @@
 @require_once "../sys/mman.c3"
 @require_once "../sys/uio.c3"
 @require_once "../sys/types.c3"
+@require_once "sys/kstat.c3"
 
 foreign _syscall_0 : (syscall_number: i64) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64
@@ -26,8 +27,8 @@ function sys_open : (filename: u8[&], flags: u32, mode: u32) -> int = {
     return Narrow<int>(result);
 }
 
-function sys_fstat : (fd: int, buffer : u8[&]) -> int = {
-    let buf_addr : iptr = __builtin_ptr_to_int(buffer);
+function sys_fstat : (fd: int, out : stat_t mut&) -> int = {
+    let buf_addr : iptr = __builtin_ptr_to_int(&mut out);
     return Narrow<int>(_syscall_2(fd, buf_addr, /* fstat */ 5));
 }
 

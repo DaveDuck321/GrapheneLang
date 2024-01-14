@@ -2,6 +2,7 @@
 @require_once "../sys/uio.c3"
 @require_once "../sys/types.c3"
 @require_once "../fcntl.c3"
+@require_once "sys/kstat.c3"
 
 foreign _syscall_0 : (syscall_number: i32) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i32) -> i64
@@ -37,9 +38,9 @@ function sys_close : (fd : int) -> int = {
     return Narrow<int>(_syscall_1(fd, /* close */ 57));
 }
 
-function sys_fstat : (fd: int, buffer : u8[&]) -> int = {
-    let buf_addr : iptr = __builtin_ptr_to_int(buffer);
-    return Narrow<int>(_syscall_2(fd, buf_addr, /* fstat */ 5));
+function sys_fstat : (fd: int, out : stat_t mut&) -> int = {
+    let buf_addr : iptr = __builtin_ptr_to_int(&mut out);
+    return Narrow<int>(_syscall_2(fd, buf_addr, /* fstat */ 80));
 }
 
 function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
