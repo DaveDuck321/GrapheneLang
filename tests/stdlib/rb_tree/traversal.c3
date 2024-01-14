@@ -1,5 +1,6 @@
 @require_once "std/rb_tree.c3"
 @require_once "std/iterators.c3"
+@require_once "std/format.c3"
 
 function main : () -> int = {
     mut tree : RB_Tree<int> = make<RB_Tree<int>>();
@@ -55,8 +56,33 @@ function main : () -> int = {
         return 10;
     }
 
+    for i in tree:get_citer() {
+        print(i);
+    }
+
     return 0;
 }
 
 /// @COMPILE
-/// @RUN
+/// @RUN; EXPECT OUT
+/// -10
+/// -9
+/// -8
+/// -7
+/// -6
+/// -5
+/// -4
+/// -3
+/// -2
+/// -1
+/// 0
+/// 1
+/// 2
+/// 3
+/// 4
+/// 5
+/// 6
+/// 7
+/// 8
+/// 9
+/// 10

@@ -38,6 +38,10 @@ typedef [K] RB_Tree : {
     allocator : Allocator,  // FIXME use global allocator.
 }
 
+typedef [K] RB_Iter: {
+    node : Optional<RB_Node<K> mut&>
+}
+
 @operator [K] == : (left : RB_Node<K>&, right : RB_Node<K>&) -> bool = {
     return ref_to_addr(&left) == ref_to_addr(&right);
 }
@@ -520,4 +524,24 @@ function [K] successor : (node : RB_Node<K> mut&) -> Optional<RB_Node<K> mut&> =
     }
 
     return parent;
+}
+
+function [K] get_citer : (tree : RB_Tree<K> mut&) -> RB_Iter<K> = {
+    if tree.root:has_value() {
+        return { make<Optional<RB_Node<K> mut&>>(&mut tree.root:data():minimum()) };
+    }
+    else {
+        return { make<Optional<RB_Node<K> mut&>>() };
+    }
+}
+
+@implicit [K] has_next : (self : RB_Iter<K> mut&) -> bool = {
+    return self.node:has_value();
+}
+
+@implicit [K] get_next : (self : RB_Iter<K> mut&) -> K& = {
+    runtime_assert(self.node:has_value());
+    let node : RB_Node<K> mut& = &mut self.node:data();
+    self.node = node:successor();
+    return &node.key;
 }
