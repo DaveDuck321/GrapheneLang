@@ -28,6 +28,10 @@ function main : () -> int = {
     print(map:at(1));
     print(map:at(0));
 
+    for i in map:get_citer() {
+        printf(sv("% = %"), i.key, i.value);
+    }
+
     runtime_assert(map:erase(0));
     runtime_assert(!map:erase(4));
 
@@ -58,6 +62,10 @@ function main : () -> int = {
 /// 2
 /// 1
 /// 0
+/// 0 = 0
+/// 1 = 1
+/// 2 = 2
+/// 3 = 3
 /// <empty>
 /// <empty>
 /// <empty>

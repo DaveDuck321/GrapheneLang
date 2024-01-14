@@ -94,3 +94,7 @@ function [K, V, C] contains : (self : Map<K, V>&, key : C) -> bool = {
     let result : Optional<V> = self:at(key);
     return result:has_value();
 }
+
+function [K, V] get_citer : (map : Map<K, V> mut&) -> RB_Iter<MapNode<K, V>> = {
+    return map.tree:get_citer();
+}
