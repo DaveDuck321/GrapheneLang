@@ -114,7 +114,7 @@ function [K] which_child_am_i : (
 }
 
 function [K] which_child_am_i : (node : RB_Node<K> mut&) -> bool = {
-    return which_child_am_i(make(&mut node), &mut node.parent:data());
+    return which_child_am_i(make<Optional<RB_Node<K> mut&>>(&mut node), &mut node.parent:data());
 }
 
 function [K] is_red : (node_opt : Optional<RB_Node<K> mut&>&) -> bool = {
@@ -235,7 +235,7 @@ function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
     while u_ptr:data():has_value() {
         let u : RB_Node<K> mut& = &mut u_ptr:data():data();
 
-        if key == u.key {
+        if &key == &u.key {
             // Key already exists. Overwrite it with the new key (if the tree is
             // used to implement a map, then the associated value could be
             // different) and return early, as the red-black tree is already
@@ -247,7 +247,7 @@ function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
         // Keep track of the parent node.
         p_opt:store(&mut u_ptr:data():data());
 
-        u_ptr = {&mut u:get_child(left_if(key < u.key))};
+        u_ptr = {&mut u:get_child(left_if(&key < &u.key))};
     }
 
     u_ptr:data():store(&mut self:new<RB_Node<K>>(key, p_opt));
@@ -260,8 +260,8 @@ function [K, Comparable] search_impl : (
 ) -> Optional<RB_Node<K> mut&> = {
     mut u : Optional<RB_Node<K> mut&> = self.root;
 
-    while u:has_value() and key != u:data().key {
-        u = u:data():get_child(left_if(key < u:data().key));
+    while u:has_value() and &key != &u:data().key {
+        u = u:data():get_child(left_if(&key < &u:data().key));
     }
 
     return u;

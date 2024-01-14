@@ -9,27 +9,29 @@ typedef [K, V] MapNode : {
     value : V
 }
 
+typedef [K, V] MapIter : RB_Iter<MapNode<K, V>>
+
 // FIXME <=> is untested and broken :(
 typedef [K, V] HasSpaceship<MapNode<K, V>> : HasSpaceship<K>
 
-@operator [K1, K2, V] == : (left : MapNode<K1, V>, right : MapNode<K2, V>) -> bool = {
-    return left.key == right.key;
+@operator [K1, K2, V] == : (left : MapNode<K1, V>&, right : MapNode<K2, V>&) -> bool = {
+    return &left.key == &right.key;
 }
 
-@operator [K1, K2, V] != : (left : MapNode<K1, V>, right : MapNode<K2, V>) -> bool = {
-    return left.key != right.key;
+@operator [K1, K2, V] != : (left : MapNode<K1, V>&, right : MapNode<K2, V>&) -> bool = {
+    return &left.key != &right.key;
 }
 
-@operator [K1, K2, V] < : (left : MapNode<K1, V>, right : MapNode<K2, V>) -> bool = {
-    return left.key < right.key;
+@operator [K1, K2, V] < : (left : MapNode<K1, V>&, right : MapNode<K2, V>&) -> bool = {
+    return &left.key < &right.key;
 }
 
-@operator [K, V] != : (left : K, right : MapNode<K, V>) -> bool = {
-    return left != right.key;
+@operator [K, V] != : (left : K&, right : MapNode<K, V>&) -> bool = {
+    return &left != &right.key;
 }
 
-@operator [K, V] < : (left : K, right : MapNode<K, V>) -> bool = {
-    return left < right.key;
+@operator [K, V] < : (left : K&, right : MapNode<K, V>&) -> bool = {
+    return &left < &right.key;
 }
 
 typedef [K, V] Map : {
@@ -95,6 +97,6 @@ function [K, V, C] contains : (self : Map<K, V>&, key : C) -> bool = {
     return result:has_value();
 }
 
-function [K, V] get_citer : (map : Map<K, V> mut&) -> RB_Iter<MapNode<K, V>> = {
+function [K, V] get_citer : (map : Map<K, V> mut&) -> MapIter<K, V> = {
     return map.tree:get_citer();
 }
