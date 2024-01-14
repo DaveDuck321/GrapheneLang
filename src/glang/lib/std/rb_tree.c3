@@ -303,6 +303,14 @@ function [K] minmax : (node : RB_Node<K> mut&, direction : bool) -> RB_Node<K> m
     return &mut u:data();
 }
 
+function [K] minimum : (node : RB_Node<K> mut&) -> RB_Node<K> mut& = {
+    return &mut node:minmax(LEFT());
+}
+
+function [K] maximum : (node : RB_Node<K> mut&) -> RB_Node<K> mut& = {
+    return &mut node:minmax(RIGHT());
+}
+
 function [K] minmax : (tree : RB_Tree<K> mut&, direction : bool) -> Optional<K> = {
     if tree.root:has_value() {
         return make(tree.root:data():minmax(direction).key);
@@ -482,4 +490,34 @@ function [K, Comparable] delete : (self : RB_Tree<K> mut&, key : Comparable) -> 
     }
 
     return false;
+}
+
+function [K] predecessor : (node : RB_Node<K> mut&) -> Optional<RB_Node<K> mut&> = {
+    if node.left:has_value() {
+        return make<Optional<RB_Node<K> mut&>>(&mut node.left:data():maximum());
+    }
+
+    mut current : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>(&mut node);
+    mut parent  : Optional<RB_Node<K> mut&> = node.parent;
+    while parent:has_value() and parent:data().right != current {
+        current = parent;
+        parent = parent:data().parent;
+    }
+
+    return parent;
+}
+
+function [K] successor : (node : RB_Node<K> mut&) -> Optional<RB_Node<K> mut&> = {
+    if node.right:has_value() {
+        return make<Optional<RB_Node<K> mut&>>(&mut node.right:data():minimum());
+    }
+
+    mut current : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>(&mut node);
+    mut parent  : Optional<RB_Node<K> mut&> = node.parent;
+    while parent:has_value() and parent:data().left != current {
+        current = parent;
+        parent = parent:data().parent;
+    }
+
+    return parent;
 }
