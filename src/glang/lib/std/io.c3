@@ -26,7 +26,7 @@ function read : ( file : File&, buffer: Span<u8> ) -> View<u8> = {
 function close : ( file : File& ) -> void = {
     if file.fd >= 3 {
         // Don't close std{in,out,err}
-        runtime_assert(sys_close(file.fd) >= 0);
+        runtime_assert(sys_close(file.fd) == 0);
     }
 }
 
@@ -74,13 +74,13 @@ function flush : (io : BufferedFile mut&) -> void = {
     let data_to_write : View<u8> = {&io.buffer, io.buffer_pointer};
     let string_to_write : StringView = {data_to_write};
     // UFCS where `write` takes a `T&` and we have a `T mut&`
-    (&io.underlying):write(data_to_write);
+    io.underlying:write(data_to_write);
     io.buffer_pointer = 0;
 }
 
 function close : (io : BufferedFile mut&) -> void = {
     io:flush();
-    (&io.underlying):close();
+    io.underlying:close();
 }
 
 function request_buffer : (io : BufferedFile mut&, length : isize) -> Span<u8> = {
@@ -102,6 +102,12 @@ function consume_length : (io : BufferedFile mut&, length : isize) -> void = {
     io.buffer_pointer += length;
 }
 
+function EOF : () -> int = {
+    // EOF - end-of-file return value
+    // An integer constant expression with type int and a negative value.
+    return -1;
+}
+
 function puts : (str : StringView) -> int = {
     // puts - put a string on standard output
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/puts.html
@@ -121,7 +127,7 @@ function puts : (str : StringView) -> int = {
     // Otherwise, it shall return EOF,
     // TODO: shall set an error indicator for the stream,
     // TODO: and errno shall be set to indicate the error.
-    return -1;
+    return EOF();
 }
 
 function[@Len] puts : (str: u8[@Len]&) -> int = {

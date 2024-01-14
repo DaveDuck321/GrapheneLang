@@ -1404,13 +1404,14 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
         return 1;
     }
 
-    let file_contents : Optional<MappedFile> = file:data():read();
+    let maybe_map : Optional<MappedFile> = file:data():read();
     file:data():close();  // fd no longer needed
-    if !file_contents:has_value() {
+    if !maybe_map:has_value() {
         printf(sv("Error: could not map file '%'"), make<StringView>(file_to_parse));
         return 1;
     }
-    let program_text : StringView = { file_contents:data().buffer };
+    let file_mapping : MappedFile& = &maybe_map:data();
+    let program_text : StringView = { file_mapping.buffer };
 
     // 2) Start parsing!!
     mut allocator : Allocator = initialize_allocator();
@@ -1434,5 +1435,9 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
         json_output:write_json_value(&program);
         json_output:close();
     }
+
+    // 4) Cleanup
+    file_mapping:unmap();
+
     return 0;
 }
