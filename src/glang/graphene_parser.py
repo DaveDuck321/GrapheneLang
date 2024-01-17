@@ -748,8 +748,10 @@ def generate_return_statement(
     node: lp.Return,
     generic_mapping: cg.GenericMapping,
 ) -> None:
+    return_type = function.get_signature().return_type
+
     if node.expression is None:
-        scope.add_generatable(cg.ReturnStatement(cg.VoidType(), node.meta))
+        scope.add_generatable(cg.ReturnStatement(return_type, node.meta))
         return
 
     parser = ExpressionParser(program, function, scope, generic_mapping)
@@ -757,9 +759,7 @@ def generate_return_statement(
     scope.add_generatable(flattened_expr.subexpressions)
 
     expr = cg.ReturnStatement(
-        function.get_signature().return_type,
-        node.meta,
-        returned_expr=flattened_expr.expression(),
+        return_type, node.meta, returned_expr=flattened_expr.expression()
     )
     scope.add_generatable(expr)
 
