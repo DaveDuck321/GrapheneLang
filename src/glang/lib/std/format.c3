@@ -3,35 +3,33 @@
 @require_once "type_traits.c3"
 @require_once "util.c3"
 
-function [IO] write : (io : IO mut&, char : UTF32Codepoint) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
-    return io:write_char(char.codepoint);
+function [IO] write : (io : IO mut&, char : UTF32Codepoint) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    io:write_char(char.codepoint);
 }
 
-function [IO, @Len] write : (io : IO mut&, string : u8[@Len]&) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
-    return io:write(sv(&string));
+function [IO, @Len] write : (io : IO mut&, string : u8[@Len]&) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    io:write(sv(&string));
 }
 
-function [IO] write : (io : IO mut&, string : StringView) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, string : StringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     let buffer : Span<u8> = io:request_buffer(string:length());
 
-    // TODO: remave this assumption
+    // TODO: remove this assumption
     // TODO: maybe stream large strings directly
     runtime_assert(buffer.length == string:length());
     for index in range(string:length()) {
         buffer.data[index] = string.buffer.data[index];
     }
     io:consume_length(buffer.length);
-    return make<StringView>(buffer:to_view());
 }
 
-function [IO] write : (io : IO mut&, number : isize) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, number : isize) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     let buffer : Span<u8> = io:request_buffer(21); // len(INT_64_MIN) == 21
     if number == 0 {
         buffer.data[0] = "0"[0];
         io:consume_length(1);
 
-        // BUG: WE CAN RETURN VOID??
-        return {make<View<u8>>(&buffer.data, 1)};
+        return;
     }
 
     let is_negative : bool = number < 0;
@@ -54,16 +52,15 @@ function [IO] write : (io : IO mut&, number : isize) -> TypeIf<StringView, IsStr
     let result : Span<u8> = make<Span<u8>>(&mut buffer.data, length);
     result:reverse();
     io:consume_length(length);
-    return {result:to_view()};
 }
 
-function [IO] write : (io : IO mut&, number : u32) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, number : u32) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     // TODO: support u64
     let buffer : Span<u8> = io:request_buffer(8); // 4 bytes
 
     if number == 0x00 {
         buffer.data[0] = "0"[0];
-        return {make<View<u8>>(&buffer.data, 1)};
+        return;
     }
 
     let lookup_table : u8[16] = {
@@ -82,22 +79,20 @@ function [IO] write : (io : IO mut&, number : u32) -> TypeIf<StringView, IsStrea
     let result : Span<u8> = buffer:slice_to(length);
     result:reverse();
     io:consume_length(length);
-    return {result:to_view()};
 }
 
-function [IO] write : (io : IO mut&, value : bool) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, value : bool) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     if value {
-        return io:write(sv("true"));
+        io:write(sv("true"));
     } else {
-        return io:write(sv("false"));
+        io:write(sv("false"));
     }
 }
 
-function [IO] write_char : (io : IO mut&, char : u8) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write_char : (io : IO mut&, char : u8) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     let buffer : Span<u8> = io:request_buffer(1);
     buffer.data[0] = char;
     io:consume_length(1);
-    return make<StringView>(buffer:to_view());
 }
 
 function [Args...] print : (args : Args...) -> void = {
