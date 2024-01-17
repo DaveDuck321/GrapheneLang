@@ -386,7 +386,7 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
     return make<Optional<JSON_Node>>();
 }
 
-function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     // null
     if node.type == 0 {
         return io:write(sv("null"));
@@ -416,7 +416,7 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsS
             }
 
             io:consume_length(buffer.length);
-            return {buffer:to_view()};
+            return;
         }
     }
 
@@ -470,5 +470,5 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsS
         return io:write(sv("}"));
     }
 
-    return io:write(sv("<invalid node>"));
+    io:write(sv("<invalid node>"));
 }
