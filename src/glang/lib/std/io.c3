@@ -28,7 +28,6 @@ function close : (file : UnbufferedFile&) -> void = {
 }
 
 function open : (file_path: CString, mode: u32) -> UnbufferedFile = {
-    // BUG: try removing the '&' here... the error message is nonsense
     let fd : int = sys_open(&file_path.data, mode, 0x00);
     runtime_assert(fd > 0);
     return {fd};
@@ -52,14 +51,13 @@ function get_stdout_io : () -> BufferedFile = {
 function flush : (io : BufferedFile mut&) -> void = {
     let data_to_write : View<u8> = {&io.buffer, io.buffer_pointer};
     let string_to_write : StringView = {data_to_write};
-    // UFCS where `write` takes a `T&` and we have a `T mut&`
-    (&io.underlying_file):write(data_to_write);
+    io.underlying_file:write(data_to_write);
     io.buffer_pointer = 0;
 }
 
 function close : (io : BufferedFile mut&) -> void = {
     io:flush();
-    (&io.underlying_file):close();
+    io.underlying_file:close();
 }
 
 function request_buffer : (io : BufferedFile mut&, length : isize) -> Span<u8> = {

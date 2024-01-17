@@ -364,7 +364,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     }
 
     mut node : JSON_Node = make<JSON_Node>(/* string */ 4, &mut cursor.allocator);
-    node.value = make<Optional<StringView>>((&cursor):slice_between(start_pos, end_pos));
+    node.value = make<Optional<StringView>>(cursor:slice_between(start_pos, end_pos));
 
     return make<Optional<JSON_Node>>(node);
 }

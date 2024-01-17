@@ -372,8 +372,8 @@ function [T] write_json_value : (stream : JSON_Stream mut&, values : Vector<T>&)
 }
 
 function write_json_value : (stream : JSON_Stream mut&, meta : Meta&) -> void = {
-    let start_position : FilePosition = (&stream.line_number_lookup):lookup_position(meta.start_offset);
-    let end_position : FilePosition = (&stream.line_number_lookup):lookup_position(meta.end_offset);
+    let start_position : FilePosition = stream.line_number_lookup:lookup_position(meta.start_offset);
+    let end_position : FilePosition = stream.line_number_lookup:lookup_position(meta.end_offset);
 
     mut object : JSON_Object = stream:new_object();
     object
