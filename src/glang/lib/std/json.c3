@@ -22,7 +22,7 @@ typedef JSON_Node : {
                     // 5: array, 6: object
     value    : Optional<StringView>,
     children : Vector<JSON_Node>,
-    map      : Map<JSON_Node, JSON_Node>,
+    map      : Map<StringView, JSON_Node>,
 }
 
 function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
@@ -30,16 +30,8 @@ function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON
         node_type,
         make<Optional<StringView>>(),
         make<Vector<JSON_Node>>(&mut allocator),
-        make<Map<JSON_Node, JSON_Node>>(),
+        make<Map<StringView, JSON_Node>>(),
     };
-}
-
-@operator < : (left : JSON_Node&, right : JSON_Node&) -> bool = {
-    return ref_to_addr(&left) < ref_to_addr(&right);
-}
-
-@operator == : (left : JSON_Node&, right : JSON_Node&) -> bool = {
-    return ref_to_addr(&left) == ref_to_addr(&right);
 }
 
 function has_next : (cursor : Cursor mut&) -> bool = {
@@ -141,6 +133,9 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             return make<Optional<JSON_Node>>();
         }
 
+        runtime_assert(string_node:data().value:has_value());
+        let string_view : StringView = string_node:data().value:data();
+
         cursor:eat_whitespace();
 
         if !cursor:eat(char(":")) {
@@ -155,7 +150,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             return make<Optional<JSON_Node>>();
         }
 
-        node.map:insert(string_node:data(), value_node:data());
+        node.map:insert(string_view, value_node:data());
 
         if cursor:eat(char("}")) {
             // We're done.
