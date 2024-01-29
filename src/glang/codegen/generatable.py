@@ -1,4 +1,4 @@
-from typing import Iterable, Iterator, Optional
+from typing import Iterable, Optional
 
 from ..parser.lexer_parser import Meta
 from .builtin_types import BoolType, CharArrayDefinition, VoidType
@@ -19,6 +19,7 @@ from .user_facing_errors import (
     FailedLookupError,
     OperandError,
     RedefinitionError,
+    TypeCheckerError,
 )
 
 
@@ -401,6 +402,13 @@ class ReturnStatement(Generatable):
             returned_expr.assert_can_read_from()
             assert_is_implicitly_convertible(
                 returned_expr, return_type, "return statement"
+            )
+        elif return_type != VoidType():
+            raise TypeCheckerError(
+                "return statement",
+                return_type.format_for_output_to_user(),
+                VoidType().format_for_output_to_user(),
+                maybe_missing_borrow=False,
             )
 
         self.return_type = return_type

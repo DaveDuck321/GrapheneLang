@@ -52,7 +52,6 @@ function next : (cursor : Cursor mut&) -> Optional<u8> = {
     return make<Optional<u8>>();
 }
 
-function position : (cursor : Cursor mut&) -> isize = { return (&cursor):position();}
 function position : (cursor : Cursor&) -> isize = {
     // Looking into the iterator like this is sorta cursed
     return cursor.iter.current_index;
@@ -274,7 +273,7 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             mut node : JSON_Node = new_json_node(/* string */ 3, &mut cursor.allocator);
 
             // TODO: https://github.com/DaveDuck321/GrapheneLang/issues/124
-            let value: StringView = {(&string):view()};
+            let value: StringView = {string:view()};
             node.value = make<Optional<StringView>>(value);
 
             return make<Optional<JSON_Node>>(node);
@@ -358,7 +357,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     }
 
     mut node : JSON_Node = new_json_node(/* string */ 4, &mut cursor.allocator);
-    node.value = make<Optional<StringView>>((&cursor):slice_between(start_pos, end_pos));
+    node.value = make<Optional<StringView>>(cursor:slice_between(start_pos, end_pos));
 
     return make<Optional<JSON_Node>>(node);
 }
@@ -387,7 +386,7 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
     return make<Optional<JSON_Node>>();
 }
 
-function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     // null
     if node.type == 0 {
         return io:write(sv("null"));
@@ -417,7 +416,7 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsS
             }
 
             io:consume_length(buffer.length);
-            return {buffer:to_view()};
+            return;
         }
     }
 
@@ -471,5 +470,5 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<StringView, IsS
         return io:write(sv("}"));
     }
 
-    return io:write(sv("<invalid node>"));
+    io:write(sv("<invalid node>"));
 }

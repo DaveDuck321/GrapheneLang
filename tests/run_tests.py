@@ -1,5 +1,4 @@
 import subprocess
-from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
 from fnmatch import fnmatchcase
 from importlib import resources
@@ -10,6 +9,7 @@ from sys import exit as sys_exit
 from threading import Lock
 from typing import Optional
 
+from tap import Tap
 from test_config_parser import ExpectedOutput, parse_file
 
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
@@ -244,12 +244,13 @@ def build_jit_dependencies() -> None:
     assert RUNTIME_OBJ_PATH.is_file()
 
 
-def main() -> None:
-    parser = ArgumentParser("run_tests.py")
-    parser.add_argument("--test", required=False)
-    parser.add_argument("--workers", required=False, type=int, default=cpu_count())
+class Arguments(Tap):
+    test: Optional[Path] = None
+    workers: int = cpu_count()
 
-    args = parser.parse_args()
+
+def main() -> None:
+    args = Arguments().parse_args()
 
     assert TESTS_DIR.is_dir()
     OUT_DIR.mkdir(exist_ok=True)
@@ -257,9 +258,11 @@ def main() -> None:
     build_jit_dependencies()
 
     if args.test is not None:
-        test_path = PARENT_DIR / args.test
-
-        run_test_print_result(test_path)
+        test_path = args.test if args.test.is_file() else PARENT_DIR / args.test
+        try:
+            run_test_print_result(test_path.resolve(strict=True))
+        except FileNotFoundError:
+            print(f"No such file: '{test_path}'")
     else:
         all_test_files = [
             test_file
