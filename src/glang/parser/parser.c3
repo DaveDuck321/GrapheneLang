@@ -1396,27 +1396,25 @@ function parse_next_top_level_feature : (cursor : Cursor mut&) -> TopLevelFeatur
 }
 
 function main : (argc: int, argv: u8[&][&]) -> int = {
-    let file_to_parse : CString = {&argv[1]};
-    let file : UnbufferedFile = open(file_to_parse, O_RDONLY());
-
-
-    mut allocator : Allocator = initialize_allocator();
-    mut file_contents : Vector<u8> = make<Vector<u8>>(&mut allocator);
-
     // 1) Read the entire file
-    {
-        mut read_buffer : u8[1024];
-
-        // TODO: `do while` to avoid temp value? Or `break` to make this prettier
-        mut read_data : View<u8> = make<View<u8>>("uninitialized");
-        while read_data:length() != 0 {
-            read_data = file:read(make<Span<u8>>(&mut read_buffer));
-            file_contents:extend_back(read_data:get_iter());
-        }
+    let file_to_parse : CString = {&argv[1]};
+    let file : Optional<File> = open(file_to_parse, O_RDONLY());
+    if !file:has_value() {
+        printf(sv("Error: could not open file '%'"), make<StringView>(file_to_parse));
+        return 1;
     }
-    let program_text : StringView = { file_contents:view() };
+
+    let maybe_map : Optional<MappedFile> = file:data():read();
+    file:data():close();  // fd no longer needed
+    if !maybe_map:has_value() {
+        printf(sv("Error: could not map file '%'"), make<StringView>(file_to_parse));
+        return 1;
+    }
+    let file_mapping : MappedFile& = &maybe_map:data();
+    let program_text : StringView = { file_mapping.buffer };
 
     // 2) Start parsing!!
+    mut allocator : Allocator = initialize_allocator();
     mut program : Vector<TopLevelFeature> = make<Vector<TopLevelFeature>>(&mut allocator);
     {
         mut cursor : Cursor = {program_text, 0, &mut allocator};
@@ -1439,6 +1437,7 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
     }
 
     // 4) Cleanup
-    file_contents:deallocate();
+    file_mapping:unmap();
+
     return 0;
 }

@@ -1,0 +1,23 @@
+// https://elixir.bootlin.com/linux/latest/source/include/uapi/asm-generic/stat.h
+typedef stat_t : {
+    st_dev : isize,
+    st_ino : isize,
+    st_mode : u32,
+    st_nlink : u32,
+    st_uid : u32,
+    st_gid : u32,
+    st_rdev : isize,
+    __pad1 : isize,
+    st_size : isize,
+    st_blksize : int,
+    __pad2 : int,
+    st_blocks : isize,
+    st_atime : isize,
+    st_atime_nsec : isize,
+    st_mtime : isize,
+    st_mtime_nsec : isize,
+    st_ctime : isize,
+    st_ctime_nsec : isize,
+    __unused4 : u32,
+    __unused5 : u32,
+}
