@@ -498,14 +498,11 @@ class StructDefinition(ValueTypeDefinition):
 
     @property
     def size(self) -> int:
-        member_sizes = [member.size for _, member in self.members]
-        member_aligns = [member.alignment for _, member in self.members]
-        return get_abi().compute_struct_size(member_sizes, member_aligns)
+        return get_abi().compute_struct_size(self._member_sizes, self._member_aligns)
 
     @property
     def alignment(self) -> int:
-        member_aligns = [member.alignment for _, member in self.members]
-        return get_abi().compute_struct_alignment(member_aligns)
+        return get_abi().compute_struct_alignment(self._member_aligns)
 
     def get_member_by_name(self, target_name: str) -> tuple[int, Type]:
         for index, (member_name, member_type) in enumerate(self.members):
@@ -513,6 +510,14 @@ class StructDefinition(ValueTypeDefinition):
                 return index, member_type
 
         raise FailedLookupError("struct member", "{" + target_name + " : ... }")
+
+    @property
+    def _member_sizes(self) -> list[int]:
+        return [member.size for _, member in self.members]
+
+    @property
+    def _member_aligns(self) -> list[int]:
+        return [member.alignment for _, member in self.members]
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
         # TODO template parameters (see DWARF5 2.23).
@@ -532,8 +537,13 @@ class StructDefinition(ValueTypeDefinition):
 
         other_metadata: list[Metadata] = []
         di_derived_types: list[DIDerivedType] = []
-        curr_offset = 0
-        for m_name, m_type in self.members:
+        for (m_name, m_type), m_offset in zip(
+            self.members,
+            get_abi().compute_struct_member_offsets(
+                self._member_sizes, self._member_aligns
+            ),
+            strict=True,
+        ):
             base_type_metadata = m_type.to_di_type(metadata_gen)
             other_metadata.extend(base_type_metadata)
             assert isinstance(base_type_metadata[-1], DIType)
@@ -545,11 +555,9 @@ class StructDefinition(ValueTypeDefinition):
                     8 * m_type.size,
                     Tag.member,
                     base_type_metadata[-1],
-                    8 * curr_offset,
+                    8 * m_offset,
                 )
             )
-
-            curr_offset += m_type.size
 
         metadata_list = MetadataList(next(metadata_gen), di_derived_types)
         self._di_type.elements = metadata_list

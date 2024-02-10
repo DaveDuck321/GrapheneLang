@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
 from sys import stderr
-from typing import Optional
+from typing import Iterator, Optional
 
 import yaml
 
@@ -49,6 +49,35 @@ class ABI(Enum):
     ARM_EABI = 1
     AAPCS64 = 2
 
+    @staticmethod
+    def compute_padding(curr_size: int, align_to: int) -> int:
+        # First, compute the number of bytes needed to pad the struct to
+        # the next `align_to` boundary:
+        # padding = align_to - (curr_size % align_to)
+        #
+        # Then, take the modulus again so that we don't add unnecessary
+        # padding if the next member is already aligned:
+        # return padding % align_to
+        #
+        # Using the properties of remainders, the above procedure simplifies
+        # to:
+        return -curr_size % align_to
+
+    def compute_struct_member_offsets(
+        self, member_sizes: list[int], member_aligns: list[int]
+    ) -> Iterator[int]:
+        # Each member is assigned to the lowest available offset with the
+        # appropriate alignment.
+        struct_size = 0
+        for member_size, member_align in zip(member_sizes, member_aligns, strict=True):
+            # Add padding to ensure each member is aligned.
+            struct_size += self.compute_padding(struct_size, member_align)
+
+            yield struct_size
+
+            # Append member to the struct.
+            struct_size += member_size
+
     def compute_struct_size(
         self, member_sizes: list[int], member_aligns: list[int]
     ) -> int:
@@ -57,34 +86,20 @@ class ABI(Enum):
         if self not in (self.SYSTEMV_AMD64, self.AAPCS64):
             raise NotImplementedError
 
+        assert len(member_sizes) == len(member_aligns)
+
         # Return the size of the struct as set by the System V AMD64 ABI.
         # [docs/abi.pdf, Section 3.1.2]
+        struct_size = max(
+            self.compute_struct_member_offsets(member_sizes, member_aligns), default=0
+        )
 
-        def compute_padding(curr_size: int, align_to: int) -> int:
-            # First, compute the number of bytes needed to pad the struct to
-            # the next `align_to` boundary:
-            # padding = align_to - (curr_size % align_to)
-            #
-            # Then, take the modulus again so that we don't add unnecessary
-            # padding if the next member is already aligned:
-            # return padding % align_to
-            #
-            # Using the properties of remainders, the above procedure simplifies
-            # to:
-            return -curr_size % align_to
-
-        # Each member is assigned to the lowest available offset with the
-        # appropriate alignment.
-        struct_size = 0
-        for member_size, member_align in zip(member_sizes, member_aligns, strict=True):
-            # Add padding to ensure each member is aligned
-            struct_size += compute_padding(struct_size, member_align)
-
-            # Append member to the struct
-            struct_size += member_size
+        # We got the offset of the last member.
+        if member_sizes:
+            struct_size += member_sizes[-1]
 
         # The size of any object is always a multiple of the object‘s alignment.
-        struct_size += compute_padding(
+        struct_size += self.compute_padding(
             struct_size, self.compute_struct_alignment(member_aligns)
         )
 

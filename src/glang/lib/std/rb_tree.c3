@@ -38,6 +38,10 @@ typedef [K] RB_Tree : {
     allocator : Allocator,  // FIXME use global allocator.
 }
 
+typedef [K] RB_Iter: {
+    node : Optional<RB_Node<K> mut&>
+}
+
 @operator [K] == : (left : RB_Node<K>&, right : RB_Node<K>&) -> bool = {
     return ref_to_addr(&left) == ref_to_addr(&right);
 }
@@ -110,7 +114,7 @@ function [K] which_child_am_i : (
 }
 
 function [K] which_child_am_i : (node : RB_Node<K> mut&) -> bool = {
-    return which_child_am_i(make(&mut node), &mut node.parent:data());
+    return which_child_am_i(make<Optional<RB_Node<K> mut&>>(&mut node), &mut node.parent:data());
 }
 
 function [K] is_red : (node_opt : Optional<RB_Node<K> mut&>&) -> bool = {
@@ -231,7 +235,7 @@ function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
     while u_ptr:data():has_value() {
         let u : RB_Node<K> mut& = &mut u_ptr:data():data();
 
-        if key == u.key {
+        if &key == &u.key {
             // Key already exists. Overwrite it with the new key (if the tree is
             // used to implement a map, then the associated value could be
             // different) and return early, as the red-black tree is already
@@ -243,7 +247,7 @@ function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
         // Keep track of the parent node.
         p_opt:store(&mut u_ptr:data():data());
 
-        u_ptr = {&mut u:get_child(left_if(key < u.key))};
+        u_ptr = {&mut u:get_child(left_if(&key < &u.key))};
     }
 
     u_ptr:data():store(&mut self:new<RB_Node<K>>(key, p_opt));
@@ -252,19 +256,19 @@ function [K] insert : (self : RB_Tree<K> mut&, key : K) -> void = {
 }
 
 function [K, Comparable] search_impl : (
-    self : RB_Tree<K> mut&, key : Comparable
+    self : RB_Tree<K>&, key : Comparable
 ) -> Optional<RB_Node<K> mut&> = {
     mut u : Optional<RB_Node<K> mut&> = self.root;
 
-    while u:has_value() and key != u:data().key {
-        u = u:data():get_child(left_if(key < u:data().key));
+    while u:has_value() and &key != &u:data().key {
+        u = u:data():get_child(left_if(&key < &u:data().key));
     }
 
     return u;
 }
 
 function [K, Comparable] search : (
-    self : RB_Tree<K> mut&, key : Comparable
+    self : RB_Tree<K>&, key : Comparable
 ) -> Optional<K> = {
     mut result : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
@@ -301,6 +305,14 @@ function [K] minmax : (node : RB_Node<K> mut&, direction : bool) -> RB_Node<K> m
     }
 
     return &mut u:data();
+}
+
+function [K] minimum : (node : RB_Node<K> mut&) -> RB_Node<K> mut& = {
+    return &mut node:minmax(LEFT());
+}
+
+function [K] maximum : (node : RB_Node<K> mut&) -> RB_Node<K> mut& = {
+    return &mut node:minmax(RIGHT());
 }
 
 function [K] minmax : (tree : RB_Tree<K> mut&, direction : bool) -> Optional<K> = {
@@ -472,7 +484,7 @@ function [K] delete_impl : (self : RB_Tree<K> mut&, u : RB_Node<K> mut&) -> void
     }
 }
 
-function [K] delete : (self : RB_Tree<K> mut&, key : K) -> bool = {
+function [K, Comparable] delete : (self : RB_Tree<K> mut&, key : Comparable) -> bool = {
     mut node : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
     // Do nothing if the key is not in the tree.
@@ -482,4 +494,54 @@ function [K] delete : (self : RB_Tree<K> mut&, key : K) -> bool = {
     }
 
     return false;
+}
+
+function [K] predecessor : (node : RB_Node<K> mut&) -> Optional<RB_Node<K> mut&> = {
+    if node.left:has_value() {
+        return make<Optional<RB_Node<K> mut&>>(&mut node.left:data():maximum());
+    }
+
+    mut current : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>(&mut node);
+    mut parent  : Optional<RB_Node<K> mut&> = node.parent;
+    while parent:has_value() and parent:data().right != current {
+        current = parent;
+        parent = parent:data().parent;
+    }
+
+    return parent;
+}
+
+function [K] successor : (node : RB_Node<K> mut&) -> Optional<RB_Node<K> mut&> = {
+    if node.right:has_value() {
+        return make<Optional<RB_Node<K> mut&>>(&mut node.right:data():minimum());
+    }
+
+    mut current : Optional<RB_Node<K> mut&> = make<Optional<RB_Node<K> mut&>>(&mut node);
+    mut parent  : Optional<RB_Node<K> mut&> = node.parent;
+    while parent:has_value() and parent:data().left != current {
+        current = parent;
+        parent = parent:data().parent;
+    }
+
+    return parent;
+}
+
+function [K] get_citer : (tree : RB_Tree<K> mut&) -> RB_Iter<K> = {
+    if tree.root:has_value() {
+        return { make<Optional<RB_Node<K> mut&>>(&mut tree.root:data():minimum()) };
+    }
+    else {
+        return { make<Optional<RB_Node<K> mut&>>() };
+    }
+}
+
+@implicit [K] has_next : (self : RB_Iter<K> mut&) -> bool = {
+    return self.node:has_value();
+}
+
+@implicit [K] get_next : (self : RB_Iter<K> mut&) -> K& = {
+    runtime_assert(self.node:has_value());
+    let node : RB_Node<K> mut& = &mut self.node:data();
+    self.node = node:successor();
+    return &node.key;
 }

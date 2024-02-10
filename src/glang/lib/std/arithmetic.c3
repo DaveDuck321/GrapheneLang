@@ -9,6 +9,7 @@ typedef [U, V] AreCompatibleArithmeticTypes :
     >
 
 typedef [U, V] CommonArithmeticType: TypeIf<U, AreCompatibleArithmeticTypes<U, V>>
+typedef [U, V] CommonArithmeticType<U&, V&>: TypeIf<U, AreCompatibleArithmeticTypes<U, V>>
 
 typedef CommonArithmeticType<i8, i16>   : i16
 typedef CommonArithmeticType<i8, i32>   : i32
@@ -29,6 +30,7 @@ typedef CommonArithmeticType<f32, f128> : f128
 typedef CommonArithmeticType<f64, f128> : f128
 
 typedef [U, V] ArithmeticCompareResult : TypeIf<bool, AreCompatibleArithmeticTypes<U, V>>
+typedef [U, V] ArithmeticCompareResult<U&, V&> : TypeIf<bool, AreCompatibleArithmeticTypes<U, V>>
 typedef [T] RegisterHasTrivialAssignments<Override<T>> : TypeIf<TrueType, IsArithmetic<T>>
 
 @operator [T] + : (value: T) -> TypeIf<T, IsArithmetic<T>> = { return value; }
