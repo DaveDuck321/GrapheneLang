@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     BoolDefinition,
     BoolType,
     GenericIntType,
@@ -10,10 +9,17 @@ from .builtin_types import (
     IPtrType,
     SizeType,
 )
-from .expressions import ConstantExpression, StaticTypedExpression
-from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
-from .type_conversions import do_implicit_conversion
-from .user_facing_errors import OperandError
+from glang.codegen.expressions import ConstantExpression, StaticTypedExpression
+from glang.codegen.interfaces import (
+    IRContext,
+    IROutput,
+    SpecializationItem,
+    Type,
+    TypedExpression,
+)
+from glang.codegen.type_conversions import do_implicit_conversion
+from glang.codegen.user_facing_errors import OperandError
+from glang.parser.lexer_parser import Meta
 
 NUMERIC_TYPES = (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
 

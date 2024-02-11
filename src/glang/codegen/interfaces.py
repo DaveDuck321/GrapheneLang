@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
-from ..codegen.debug import DIFile, DILocation, DIScope, Metadata
-from ..parser.lexer_parser import Meta
-from .user_facing_errors import MutableVariableContainsAReference
+from glang.codegen.debug import DIFile, DILocation, DIScope, Metadata
+from glang.codegen.user_facing_errors import MutableVariableContainsAReference
+from glang.parser.lexer_parser import Meta
 
 
 class TypeDefinition(ABC):

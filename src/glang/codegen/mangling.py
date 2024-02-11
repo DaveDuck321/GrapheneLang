@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 
-from .interfaces import SpecializationItem, Type
+from glang.codegen.interfaces import SpecializationItem, Type
 
 
 def mangle_int(size_in_bits: int, is_signed: bool) -> str:

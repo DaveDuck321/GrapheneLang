@@ -1,10 +1,9 @@
 from collections.abc import Iterable
 from typing import Optional
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import BoolType, CharArrayDefinition, VoidType
-from .debug import DIFile, DILocalVariable, DILocation, DIType
-from .interfaces import (
+from glang.codegen.builtin_types import BoolType, CharArrayDefinition, VoidType
+from glang.codegen.debug import DIFile, DILocalVariable, DILocation, DIType
+from glang.codegen.interfaces import (
     Generatable,
     IRContext,
     IROutput,
@@ -12,8 +11,11 @@ from .interfaces import (
     TypedExpression,
     Variable,
 )
-from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
-from .user_facing_errors import (
+from glang.codegen.type_conversions import (
+    assert_is_implicitly_convertible,
+    do_implicit_conversion,
+)
+from glang.codegen.user_facing_errors import (
     AssignmentToBorrowedReference,
     AssignmentToNonPointerError,
     CannotAssignToAConstant,
@@ -22,6 +24,7 @@ from .user_facing_errors import (
     RedefinitionError,
     TypeCheckerError,
 )
+from glang.parser.lexer_parser import Meta
 
 
 class StackVariable(Variable):

@@ -6,8 +6,7 @@ from functools import cached_property, reduce
 from operator import mul
 from typing import Optional
 
-from ..target import get_abi, get_int_type_info, get_ptr_type_info
-from .debug import (
+from glang.codegen.debug import (
     DIBasicType,
     DICompositeType,
     DIDerivedType,
@@ -18,22 +17,28 @@ from .debug import (
     Tag,
     TypeKind,
 )
-from .floats import float_literal_to_exact_hex
-from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
-from .mangling import (
+from glang.codegen.floats import float_literal_to_exact_hex
+from glang.codegen.interfaces import (
+    SpecializationItem,
+    Type,
+    TypeDefinition,
+    format_specialization,
+)
+from glang.codegen.mangling import (
     mangle_float,
     mangle_int,
     mangle_operator_name,
     mangle_source_name,
     mangle_template_args,
 )
-from .user_facing_errors import (
+from glang.codegen.user_facing_errors import (
     ArrayDimensionError,
     FailedLookupError,
     InvalidIntSize,
     VoidArrayDeclaration,
     VoidStructDeclaration,
 )
+from glang.target import get_abi, get_int_type_info, get_ptr_type_info
 
 
 class PlaceholderDefinition(TypeDefinition):

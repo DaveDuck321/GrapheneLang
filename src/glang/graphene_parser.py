@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Optional, TypeGuard
 from uuid import UUID
 
-from . import codegen as cg
-from .codegen.user_facing_errors import (
+from glang import codegen as cg
+from glang.codegen.user_facing_errors import (
     BorrowWithNoAddressError,
     CircularImportException,
     ErrorWithLineInfo,
@@ -23,7 +23,7 @@ from .codegen.user_facing_errors import (
     StructMemberRedeclaration,
     VoidVariableDeclaration,
 )
-from .parser import lexer_parser as lp
+from glang.parser import lexer_parser as lp
 
 UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
 

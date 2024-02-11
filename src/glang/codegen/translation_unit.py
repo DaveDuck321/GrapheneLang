@@ -4,17 +4,16 @@ from itertools import count
 from pathlib import Path
 from typing import Optional
 
-from .. import target
-from ..parser.lexer_parser import Meta
-from .builtin_callables import get_builtin_callables
-from .builtin_types import (
+from glang import target
+from glang.codegen.builtin_callables import get_builtin_callables
+from glang.codegen.builtin_types import (
     AnonymousType,
     CharArrayDefinition,
     FunctionSignature,
     IntType,
     get_builtin_types,
 )
-from .debug import (
+from glang.codegen.debug import (
     DICompileUnit,
     DIFile,
     DISubprogram,
@@ -23,13 +22,28 @@ from .debug import (
     ModuleFlagsBehavior,
     Tag,
 )
-from .expressions import FunctionCallExpression, FunctionParameter
-from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
-from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
-from .strings import encode_string
-from .type_conversions import get_implicit_conversion_cost
-from .type_resolution import FunctionDeclaration, SymbolTable
-from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
+from glang.codegen.expressions import FunctionCallExpression, FunctionParameter
+from glang.codegen.generatable import (
+    Scope,
+    StackVariable,
+    StaticVariable,
+    VariableInitialize,
+)
+from glang.codegen.interfaces import (
+    IRContext,
+    IROutput,
+    SpecializationItem,
+    Type,
+    TypedExpression,
+)
+from glang.codegen.strings import encode_string
+from glang.codegen.type_conversions import get_implicit_conversion_cost
+from glang.codegen.type_resolution import FunctionDeclaration, SymbolTable
+from glang.codegen.user_facing_errors import (
+    InvalidMainReturnType,
+    VoidVariableDeclaration,
+)
+from glang.parser.lexer_parser import Meta
 
 
 class Function:
