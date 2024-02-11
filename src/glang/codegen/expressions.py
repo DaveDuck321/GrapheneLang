@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from typing import Optional
 
 from glang.codegen.builtin_types import (
     AnonymousType,
@@ -86,7 +85,7 @@ class VariableReference(StaticTypedExpression):
         )
 
         self.variable = variable
-        self._ir_ref: Optional[str] = None
+        self._ir_ref: str | None = None
 
     def __repr__(self) -> str:
         return (
@@ -477,11 +476,11 @@ class ArrayInitializer(StaticTypedExpression):
         assert len(array_type.definition.dimensions) == 1
         assert len(element_exprs) == array_type.definition.dimensions[0]
 
-        self._result_ref: Optional[str] = None
+        self._result_ref: str | None = None
         self._elements: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
         self.implicit_conversion_cost = 0
-        self.result_ref: Optional[str] = None
+        self.result_ref: str | None = None
 
         target_type = array_type.definition.member
         for member_expr in element_exprs:
@@ -538,11 +537,11 @@ class StructInitializer(StaticTypedExpression):
         assert isinstance(struct_type.definition, StructDefinition)
         assert len(member_exprs) == len(struct_type.definition.members)
 
-        self._result_ref: Optional[str] = None
+        self._result_ref: str | None = None
         self._members: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
         self.implicit_conversion_cost = 0
-        self.result_ref: Optional[str] = None
+        self.result_ref: str | None = None
 
         for (_, target_type), member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
@@ -751,7 +750,7 @@ class LogicalOperator(StaticTypedExpression):
             rhs_expression, BoolType(), f"logical {operator}"
         )
 
-        self.result_reg: Optional[int] = None
+        self.result_reg: int | None = None
 
         self.operator = operator
         self.label_id = label_id

@@ -3,7 +3,7 @@ import traceback
 from collections.abc import Generator, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, TypeGuard
+from typing import Any, TypeGuard
 from uuid import UUID
 
 from glang import codegen as cg
@@ -35,7 +35,7 @@ class ResolvedPath(str):
 
 def search_include_path_for_file(
     relative_file_path: str, include_path: list[Path]
-) -> Optional[ResolvedPath]:
+) -> ResolvedPath | None:
     matching_files: set[ResolvedPath] = set()
     for path in include_path:
         file_path = path / relative_file_path
@@ -212,9 +212,9 @@ class FunctionSignatureParser(lp.Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
-        self._current_file: Optional[str] = None
-        self._current_di_file: Optional[cg.DIFile] = None
-        self._include_hierarchy: Optional[tuple[str, ...]] = None
+        self._current_file: str | None = None
+        self._current_di_file: cg.DIFile | None = None
+        self._include_hierarchy: tuple[str, ...] | None = None
 
         self._program = program
         self._function_mapping: dict[UUID, lp.GenericFunctionDefinition] = {}
@@ -242,7 +242,7 @@ class FunctionSignatureParser(lp.Interpreter):
         tuple[
             cg.FunctionDeclaration,
             cg.FunctionSignature,
-            Optional[lp.GenericFunctionDefinition],
+            lp.GenericFunctionDefinition | None,
         ],
         None,
         None,
@@ -277,8 +277,8 @@ class FunctionSignatureParser(lp.Interpreter):
         generic_definitions: list[cg.GenericArgument] = []
 
         # One for the type and one for the actual args.
-        variadic_type_pack_name: Optional[str] = None
-        variadic_args_pack_name: Optional[str] = None
+        variadic_type_pack_name: str | None = None
+        variadic_args_pack_name: str | None = None
 
         for generic in node.generic_definitions:
             if generic.is_packed:
@@ -574,7 +574,7 @@ class ExpressionParser(lp.Interpreter):
     @staticmethod
     def _extract_parameter_pack(
         args: list[lp.Expression],
-    ) -> tuple[list[lp.Expression], Optional[str]]:
+    ) -> tuple[list[lp.Expression], str | None]:
         if len(args) == 0:
             return args, None
 
@@ -1007,7 +1007,7 @@ def generate_function(
     program: cg.Program,
     declaration: cg.FunctionDeclaration,
     signature: cg.FunctionSignature,
-    body: Optional[lp.GenericFunctionDefinition],
+    body: lp.GenericFunctionDefinition | None,
 ) -> None:
     try:
         fn = cg.Function(
@@ -1052,7 +1052,7 @@ def append_file_to_program(
     include_path: list[Path],
     included_from: list[ResolvedPath],
     already_processed: set[ResolvedPath],
-    di_file: Optional[cg.DIFile] = None,
+    di_file: cg.DIFile | None = None,
 ) -> None:
     already_processed.add(file_path)
     if di_file is None:

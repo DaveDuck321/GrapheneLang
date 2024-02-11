@@ -348,7 +348,8 @@ class GenericIntType(PrimitiveType):
     def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
         is_power_of_2 = ((size_in_bits - 1) & size_in_bits) == 0
         is_divisible_into_bytes = (size_in_bits % 8) == 0
-        assert is_power_of_2 and is_divisible_into_bytes
+        assert is_power_of_2
+        assert is_divisible_into_bytes
 
         definition = IntegerDefinition(name, size_in_bits, is_signed)
         super().__init__(name, definition)
@@ -480,10 +481,7 @@ class StructDefinition(ValueTypeDefinition):
 
     @property
     def is_finite(self) -> bool:
-        for _, member_type in self.members:
-            if not member_type.is_finite:
-                return False
-        return True
+        return all(member_type.is_finite for _, member_type in self.members)
 
     @property
     def ir_type(self) -> str:
@@ -909,7 +907,8 @@ def get_builtin_types() -> list[PrimitiveType]:
         sized_int_types.append(GenericIntType(f"i{size}", size, True))
         sized_int_types.append(GenericIntType(f"u{size}", size, False))
 
-    return sized_int_types + [
+    return [
+        *sized_int_types,
         BoolType(),
         IntType(),
         IPtrType(),

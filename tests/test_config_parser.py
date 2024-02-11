@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, TypeGuard
+from typing import Any, TypeGuard
 
 from lark import Lark, Token, Tree, v_args
 from lark.visitors import Interpreter
@@ -17,17 +17,17 @@ def is_list_of_str(
 @dataclass
 class ExpectedOutput:
     status: int
-    stdout: Optional[list[str]]
-    stderr: Optional[list[str]]
+    stdout: list[str] | None
+    stderr: list[str] | None
 
 
 @dataclass
 class TestConfig:
-    for_target: Optional[str]
-    compile: Optional[ExpectedOutput]
+    for_target: str | None
+    compile: ExpectedOutput | None
     compile_args: list[str]
     grep_ir_strs: list[str]
-    run: Optional[ExpectedOutput]
+    run: ExpectedOutput | None
     run_args: list[str]
 
 
@@ -50,8 +50,8 @@ class ConfigInterpreter(Interpreter):
 
     def _cmd_impl(
         self,
-        status_tree: Optional[Tree],
-        msg_tree: Optional[Tree],
+        status_tree: Tree | None,
+        msg_tree: Tree | None,
     ) -> ExpectedOutput:
         expected_output = ExpectedOutput(0, None, None)
 
@@ -111,10 +111,11 @@ class ConfigInterpreter(Interpreter):
 
 def parse_file(path: Path) -> TestConfig:
     with path.open(encoding="utf-8") as file:
-        lines = map(
-            lambda line: line.removeprefix("///").strip(),
-            filter(lambda line: line.startswith("///"), file.readlines()),
-        )
+        lines = [
+            line.removeprefix("///").strip()
+            for line in file.readlines()
+            if line.startswith("///")
+        ]
 
     tree = lark.parse("\n".join(lines))
     interpreter = ConfigInterpreter()

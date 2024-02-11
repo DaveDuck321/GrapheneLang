@@ -38,7 +38,7 @@ class BuiltinCallable(StaticTypedExpression):
 class UnaryExpression(BuiltinCallable):
     IR_FORMAT_STR = ""
     USER_FACING_NAME = ""
-    EXPECTED_TYPES = tuple()
+    EXPECTED_TYPES = ()
 
     def __init__(
         self,

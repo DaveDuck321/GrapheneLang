@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from collections.abc import Iterable
-from typing import Optional
 
 from glang.codegen.builtin_types import BoolType, CharArrayDefinition, VoidType
 from glang.codegen.debug import DIFile, DILocalVariable, DILocation, DIType
@@ -161,17 +162,17 @@ class StaticVariable(Variable):
 
 class Scope(Generatable):
     def __init__(
-        self, scope_id: int, meta: Meta, outer_scope: Optional["Scope"] = None
+        self, scope_id: int, meta: Meta, outer_scope: Scope | None = None
     ) -> None:
         super().__init__(meta)
 
         assert scope_id >= 0
         self.id = scope_id
 
-        self._outer_scope: Optional[Scope] = outer_scope
+        self._outer_scope: Scope | None = outer_scope
         self._variables: dict[str, StackVariable] = {}
         self._lines: list[Generatable] = []
-        self._generic_pack: Optional[tuple[str, int]] = None
+        self._generic_pack: tuple[str, int] | None = None
         self._allocations: list[StackVariable] = []
 
     def _record_allocation(self, var: StackVariable) -> None:
@@ -195,7 +196,7 @@ class Scope(Generatable):
         self._record_allocation(var)
         self._variables[var.user_facing_name] = var
 
-    def search_for_variable(self, var_name: str) -> Optional[StackVariable]:
+    def search_for_variable(self, var_name: str) -> StackVariable | None:
         # Search this scope first.
         if var_name in self._variables:
             return self._variables[var_name]
@@ -398,7 +399,7 @@ class ReturnStatement(Generatable):
         self,
         return_type: Type,
         meta: Meta,
-        returned_expr: Optional[TypedExpression] = None,
+        returned_expr: TypedExpression | None = None,
     ) -> None:
         super().__init__(meta)
 

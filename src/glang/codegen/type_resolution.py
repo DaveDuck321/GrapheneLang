@@ -4,7 +4,6 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import partial
 from itertools import groupby
-from typing import Optional
 from uuid import UUID, uuid4
 
 from glang.codegen.builtin_types import (
@@ -78,7 +77,7 @@ class UnresolvedType:
     @abstractmethod
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         pass
 
 
@@ -103,9 +102,7 @@ class CompileTimeConstant:
         pass
 
     @abstractmethod
-    def pattern_match(
-        self, target: int, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    def pattern_match(self, target: int, out: GenericMapping, depth: int) -> int | None:
         pass
 
 
@@ -128,9 +125,7 @@ class NumericLiteralConstant(CompileTimeConstant):
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set()
 
-    def pattern_match(
-        self, target: int, _: GenericMapping, depth: int
-    ) -> Optional[int]:
+    def pattern_match(self, target: int, _: GenericMapping, depth: int) -> int | None:
         if target != self.value:
             return None
         return 0
@@ -166,9 +161,7 @@ class GenericValueReference(CompileTimeConstant):
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
 
-    def pattern_match(
-        self, target: int, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    def pattern_match(self, target: int, out: GenericMapping, depth: int) -> int | None:
         if self.argument in out.mapping:
             # TODO: user facing error
             if out.mapping[self.argument] != target:
@@ -197,7 +190,7 @@ class UnresolvedTypeWrapper(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if self.resolved_type != target:
             return None
         return 0
@@ -237,7 +230,7 @@ class UnresolvedNamedType(UnresolvedType):
 
     def _pattern_match_impl(
         self, target: Type, mapping_out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target, NamedType):
             return None
 
@@ -258,7 +251,7 @@ class UnresolvedNamedType(UnresolvedType):
             if isinstance(this_arg, CompileTimeConstant) != isinstance(target_arg, int):
                 return None
 
-            result: Optional[int] = None
+            result: int | None = None
             if isinstance(this_arg, CompileTimeConstant):
                 assert isinstance(target_arg, int)
                 result = this_arg.pattern_match(target_arg, mapping_out, depth + 1)
@@ -284,7 +277,7 @@ class UnresolvedNamedType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         curr = target
 
         while curr:
@@ -332,7 +325,7 @@ class UnresolvedGenericType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if self.argument in out.mapping:
             if target != out.mapping[self.argument]:
                 return None
@@ -369,7 +362,7 @@ class UnresolvedReferenceType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if target.storage_kind == Type.Kind.VALUE:
             return None
 
@@ -429,7 +422,7 @@ class UnresolvedStructType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, generics: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target.definition, StructDefinition):
             return None
 
@@ -486,7 +479,7 @@ class UnresolvedStackArrayType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target.definition, StackArrayDefinition):
             return None
 
@@ -559,7 +552,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target.definition, HeapArrayDefinition):
             return None
 
@@ -651,7 +644,7 @@ class Typedef:
         self,
         target_specialization: list[SpecializationItem],
         mapping_out: GenericMapping,
-    ) -> Optional[int]:
+    ) -> int | None:
         cost = 0
         for item, target in zip(
             self.expanded_specialization, target_specialization, strict=True
@@ -664,7 +657,7 @@ class Typedef:
                 # This costs nothing
                 continue
 
-            result: Optional[int] = None
+            result: int | None = None
             if isinstance(item, CompileTimeConstant):
                 assert isinstance(target, int)
                 result = item.pattern_match(target, mapping_out, 1)
@@ -697,7 +690,7 @@ class UnresolvedFunctionSignature:
     name: str
     expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
     arguments: tuple[UnresolvedType, ...]
-    parameter_pack_argument_name: Optional[str]
+    parameter_pack_argument_name: str | None
     return_type: UnresolvedType
 
     @staticmethod
@@ -771,7 +764,7 @@ class UnresolvedFunctionSignature:
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
         depth: int,
-    ) -> Optional[int]:
+    ) -> int | None:
         cost = 0
         for target_item, item in zip(
             target_specialization, self.expanded_specialization
@@ -782,7 +775,7 @@ class UnresolvedFunctionSignature:
             if len(item.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
 
-            result: Optional[int] = None
+            result: int | None = None
             if isinstance(item, CompileTimeConstant):
                 assert isinstance(target_item, int)
                 result = item.pattern_match(target_item, out, depth + 1)
@@ -802,7 +795,7 @@ class UnresolvedFunctionSignature:
         target_args: list[TypedExpression] | list[Type],
         out: GenericMapping,
         depth: int,
-    ) -> Optional[int]:
+    ) -> int | None:
         cost = 0
 
         # Check the argument count
@@ -843,7 +836,7 @@ class UnresolvedFunctionSignature:
 class FunctionDeclaration:
     is_foreign: bool
     arg_names: tuple[str, ...]
-    pack_type_name: Optional[str]
+    pack_type_name: str | None
     generics: tuple[GenericArgument, ...]
     signature: UnresolvedFunctionSignature
     mapping: GenericMapping
@@ -859,9 +852,9 @@ class FunctionDeclaration:
         generics: tuple[GenericArgument, ...],
         specialization: Iterable[UnresolvedSpecializationItem],
         arg_names: tuple[str, ...],
-        pack_type_name: Optional[str],
+        pack_type_name: str | None,
         arg_types: tuple[UnresolvedType, ...],
-        parameter_pack_argument_name: Optional[str],
+        parameter_pack_argument_name: str | None,
         return_type: UnresolvedType,
         location: Location,
         meta: Meta,
@@ -916,7 +909,7 @@ class FunctionDeclaration:
         self,
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
-    ) -> Optional[int]:
+    ) -> int | None:
         return self.signature.pattern_match_specialization(
             target_specialization, out, 0
         )
@@ -925,7 +918,7 @@ class FunctionDeclaration:
         self,
         target_args: list[TypedExpression] | list[Type],
         out: GenericMapping,
-    ) -> Optional[int]:
+    ) -> int | None:
         return self.signature.pattern_match_args(target_args, out, 0)
 
     def produce_specialized_copy(
@@ -1070,7 +1063,7 @@ class SymbolTable:
         fn_name: str,
         candidate_functions: list[tuple[FunctionSignature, FunctionDeclaration]],
         fn_args: list[TypedExpression] | list[Type],
-    ) -> Optional[tuple[FunctionSignature, FunctionDeclaration]]:
+    ) -> tuple[FunctionSignature, FunctionDeclaration] | None:
         functions_by_cost: list[tuple[int, FunctionSignature, FunctionDeclaration]] = []
 
         for function, declaration in candidate_functions:
@@ -1384,7 +1377,7 @@ class SymbolTable:
 
     def get_next_function_to_codegen(
         self,
-    ) -> Optional[tuple[FunctionDeclaration, FunctionSignature]]:
+    ) -> tuple[FunctionDeclaration, FunctionSignature] | None:
         try:
             return self._remaining_to_codegen.pop()
         except IndexError:

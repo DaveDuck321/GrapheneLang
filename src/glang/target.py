@@ -4,7 +4,6 @@ from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
 from sys import stderr
-from typing import Optional
 
 import yaml
 
@@ -185,8 +184,8 @@ class TargetConfig:
 
 TARGETS_DIR = Path(__file__).parent / "targets"
 
-_target: Optional[str] = None
-_target_config: Optional[TargetConfig] = None
+_target: str | None = None
+_target_config: TargetConfig | None = None
 
 
 def load_target_config(target: str) -> None:
