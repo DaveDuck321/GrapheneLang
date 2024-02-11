@@ -51,4 +51,4 @@ env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
-PYTHONPATH=src env python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
+PYTHONPATH="$PWD/src:$PYTHONPATH" env python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
