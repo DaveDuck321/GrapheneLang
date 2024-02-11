@@ -1,8 +1,9 @@
 import sys
 import traceback
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Generator, Iterable, Optional, TypeGuard
+from typing import Any, Optional, TypeGuard
 from uuid import UUID
 
 from . import codegen as cg
@@ -77,7 +78,7 @@ class TypeParser(lp.Interpreter):
     def NumericGenericIdentifier(
         self, node: lp.NumericGenericIdentifier
     ) -> cg.CompileTimeConstant:
-        if not node.value in self._generic_args:
+        if node.value not in self._generic_args:
             raise FailedLookupError("numeric generic", f"[{node.value}, ...]")
 
         result = self._generic_args[node.value]
@@ -631,7 +632,7 @@ class ExpressionParser(lp.Interpreter):
                         )
                 case _:
                     # cg.Type.Kind.MUTABLE_OR_CONST_REF shouldn't be possible.
-                    raise AssertionError()
+                    raise AssertionError
 
             unresolved_args.insert(0, this_arg)
 
@@ -990,7 +991,7 @@ def generate_body(
                 if name in generators:
                     break
             else:
-                assert False
+                raise AssertionError
 
             generators[name](program, function, scope, line, generic_mapping)
         except GrapheneError as exc:
@@ -1063,8 +1064,8 @@ def append_file_to_program(
         ImportParser(
             program,
             function_parser,
-            include_path + [Path(file_path).parent],
-            included_from + [file_path],
+            [*include_path, Path(file_path).parent],
+            [*included_from, file_path],
             already_processed,
         ).parse_file(top_level_features)
 

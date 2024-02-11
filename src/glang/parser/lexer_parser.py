@@ -1,11 +1,9 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
-from typing import Type as PyType
-from typing import TypeVar
+from typing import Any, Optional, TypeVar
 
-from .self_hosted_parser import parse
+from glang.parser.self_hosted_parser import parse
 
 # Mirrors the data structures in `syntax_tree.c3`
 # TODO: python bindings to automate this :-D
@@ -330,13 +328,13 @@ class StructIndexAccess(Expression):
 class Interpreter:
     T = TypeVar("T")
 
-    def parse(self, thing: ParsedNode, ret_type: PyType[T] | None) -> T:
+    def parse(self, thing: ParsedNode, ret_type: type[T] | None) -> T:
         for fn_type in type(thing).mro():
             if hasattr(self, fn_type.__name__):
                 fn = getattr(self, fn_type.__name__)
                 break
         else:
-            assert False, f"{self} could not dispatch '{thing}'"
+            raise AssertionError(f"{self} could not dispatch '{thing}'")
 
         result = fn(thing)
         if ret_type is not None:

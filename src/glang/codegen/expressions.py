@@ -1,8 +1,7 @@
 from abc import abstractmethod
-from typing import Iterator, Optional
+from typing import Optional
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     AnonymousType,
     BoolType,
     FunctionSignature,
@@ -13,7 +12,7 @@ from .builtin_types import (
     StructDefinition,
     format_array_dims_for_ir,
 )
-from .interfaces import (
+from glang.codegen.interfaces import (
     Generatable,
     IRContext,
     IROutput,
@@ -22,12 +21,12 @@ from .interfaces import (
     TypedExpression,
     Variable,
 )
-from .type_conversions import (
+from glang.codegen.type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
     get_implicit_conversion_cost,
 )
-from .user_facing_errors import (
+from glang.codegen.user_facing_errors import (
     ArrayIndexCount,
     BorrowWithNoAddressError,
     CannotAssignToInitializerList,
@@ -38,6 +37,7 @@ from .user_facing_errors import (
     OperandError,
     TypeCheckerError,
 )
+from glang.parser.lexer_parser import Meta
 
 
 class ConstantExpression(StaticTypedExpression):
@@ -135,7 +135,7 @@ class FunctionParameter(StaticTypedExpression):
     def assert_can_write_to(self) -> None:
         # We should only write to the implicit stack variable
         #   Writing directly to a parameter is a codegen error
-        assert False
+        raise AssertionError
 
 
 class FunctionCallExpression(StaticTypedExpression):
@@ -243,7 +243,7 @@ class BorrowExpression(StaticTypedExpression):
         )
 
     def __repr__(self) -> str:
-        return f"BorrowExpression(is_mut={self._is_mut}, {repr(self._expr)})"
+        return f"BorrowExpression(is_mut={self._is_mut}, {self._expr!r})"
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -386,11 +386,10 @@ class ArrayIndexAccess(StaticTypedExpression):
                     len(indices),
                     len(array_definition.dimensions),
                 )
-        else:
-            if len(indices) != 1 + len(array_definition.known_dimensions):
-                raise ArrayIndexCount(
-                    self._type_of_array.format_for_output_to_user(), len(indices), 1
-                )
+        elif len(indices) != 1 + len(array_definition.known_dimensions):
+            raise ArrayIndexCount(
+                self._type_of_array.format_for_output_to_user(), len(indices), 1
+            )
 
         self._element_type: Type = array_definition.member
         self._conversion_exprs: list[TypedExpression] = []
@@ -600,11 +599,11 @@ class InitializerList(TypedExpression):
 
     @property
     def ir_type_annotation(self) -> str:
-        assert False
+        raise AssertionError
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
-        assert False
+        raise AssertionError
 
     def assert_can_read_from(self) -> None:
         pass
@@ -850,4 +849,4 @@ class LogicalOperator(StaticTypedExpression):
 
     def assert_can_write_to(self) -> None:
         # TODO user-facing error.
-        assert False
+        raise AssertionError

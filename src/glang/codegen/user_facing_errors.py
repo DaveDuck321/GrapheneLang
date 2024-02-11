@@ -1,5 +1,6 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Literal, Optional
+from typing import Literal, Optional
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ class TypeCheckerError(GrapheneError):
         context: str,
         actual: str,
         expected: str,
+        *,
         maybe_missing_borrow: bool = False,
     ) -> None:
         extra_context = (
@@ -221,11 +223,11 @@ class InvalidFloatLiteralTooLarge(GrapheneError):
         min_str = str(min_unrepresentable_without_rounding)
         assert len(max_str) == len(min_str)
 
-        first_diff = [
+        first_diff = next(
             i
-            for i, (char1, char2) in enumerate(zip(max_str, min_str))
+            for i, (char1, char2) in enumerate(zip(max_str, min_str, strict=True))
             if char1 != char2
-        ][0]
+        )
 
         upper_truncated = f"{max_str[0]}.{max_str[1:first_diff+1]}e+{len(max_str)-1}"
 

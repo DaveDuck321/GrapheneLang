@@ -1,16 +1,17 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any, Optional
 
-from ..codegen.debug import DIFile, DILocation, DIScope, DIType, Metadata
+from ..codegen.debug import DIFile, DILocation, DIScope, Metadata
 from ..parser.lexer_parser import Meta
 from .user_facing_errors import MutableVariableContainsAReference
 
 
 class TypeDefinition(ABC):
     def graphene_literal_to_ir_constant(self, value: str) -> str:
-        assert False
+        raise AssertionError
 
     @abstractmethod
     def are_equivalent(self, other: "TypeDefinition") -> bool:
@@ -201,7 +202,7 @@ class Variable(ABC):
         pass
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._name}: {repr(self.type)}, is_mut: {self.is_mutable})"
+        return f"{self.__class__.__name__}({self._name}: {self.type!r}, is_mut: {self.is_mutable})"
 
     @abstractmethod
     def assert_can_read_from(self) -> None:

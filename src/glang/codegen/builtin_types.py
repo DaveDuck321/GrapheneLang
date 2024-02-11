@@ -1,9 +1,10 @@
 import uuid
 from abc import abstractmethod
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
-from typing import Callable, Iterator, Optional
+from typing import Optional
 
 from ..target import get_abi, get_int_type_info, get_ptr_type_info
 from .debug import (
@@ -41,7 +42,7 @@ class PlaceholderDefinition(TypeDefinition):
         return True
 
     def format_for_output_to_user(self) -> str:
-        assert False
+        raise AssertionError
 
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
         assert kind.is_reference()
@@ -57,22 +58,22 @@ class PlaceholderDefinition(TypeDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        assert False
+        raise AssertionError
 
     @property
     def ir_type(self) -> str:
-        assert False
+        raise AssertionError
 
     @property
     def size(self) -> int:
-        assert False
+        raise AssertionError
 
     @property
     def alignment(self) -> int:
-        assert False
+        raise AssertionError
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        assert False
+        raise AssertionError
 
 
 class NamedType(Type):
@@ -271,18 +272,18 @@ class VoidDefinition(PrimitiveDefinition):
 
     @property
     def size(self) -> int:
-        assert False
+        raise AssertionError
 
     @property
     def alignment(self) -> int:
-        assert False
+        raise AssertionError
 
     @property
     def is_void(self) -> bool:
         return True
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        assert False
+        raise AssertionError
 
     @property
     def ir_mangle(self) -> str:

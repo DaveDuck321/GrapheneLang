@@ -1,4 +1,5 @@
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from typing import Optional
 
 from ..parser.lexer_parser import Meta
 from .builtin_types import BoolType, CharArrayDefinition, VoidType

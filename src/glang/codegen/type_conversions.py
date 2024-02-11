@@ -1,19 +1,19 @@
 from typing import Optional
 
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     HeapArrayDefinition,
     IEEEFloatDefinition,
     IntegerDefinition,
     StackArrayDefinition,
 )
-from .interfaces import (
+from glang.codegen.interfaces import (
     IRContext,
     IROutput,
     StaticTypedExpression,
     Type,
     TypedExpression,
 )
-from .user_facing_errors import OperandError, TypeCheckerError
+from glang.codegen.user_facing_errors import OperandError, TypeCheckerError
 
 
 class RemoveIndirection(StaticTypedExpression):
@@ -197,7 +197,7 @@ def implicit_conversion_impl(
                 context,
                 src.format_for_output_to_user(),
                 dest_type.format_for_output_to_user(True),
-                maybe_missing_borrow,
+                maybe_missing_borrow=maybe_missing_borrow,
             )
 
     # Integer promotion.
@@ -290,7 +290,7 @@ def get_implicit_conversion_cost(
 
         @property
         def ir_ref_without_type_annotation(self) -> str:
-            assert False
+            raise AssertionError
 
         def assert_can_read_from(self) -> None:
             pass

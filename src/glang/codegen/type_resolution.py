@@ -1,13 +1,13 @@
 from abc import abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import partial
 from itertools import groupby
-from typing import Callable, Iterable, Optional
+from typing import Optional
 from uuid import UUID, uuid4
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     AnonymousType,
     FunctionSignature,
     HeapArrayDefinition,
@@ -17,8 +17,8 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
-from .debug import DIFile
-from .interfaces import (
+from glang.codegen.debug import DIFile
+from glang.codegen.interfaces import (
     GenericArgument,
     GenericMapping,
     SpecializationItem,
@@ -29,8 +29,8 @@ from .interfaces import (
     format_generics,
     format_specialization,
 )
-from .type_conversions import get_implicit_conversion_cost
-from .user_facing_errors import (
+from glang.codegen.type_conversions import get_implicit_conversion_cost
+from glang.codegen.user_facing_errors import (
     AmbiguousFunctionCall,
     BuiltinSourceLocation,
     DoubleReferenceError,
@@ -48,6 +48,7 @@ from .user_facing_errors import (
     SpecializationFailed,
     SubstitutionFailure,
 )
+from glang.parser.lexer_parser import Meta
 
 
 def get_cost_at_pattern_match_depth(depth: int) -> int:
@@ -160,7 +161,7 @@ class GenericValueReference(CompileTimeConstant):
         return NumericLiteralConstant(specialized_value)
 
     def resolve(self) -> int:
-        assert False
+        raise AssertionError
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
@@ -251,7 +252,9 @@ class UnresolvedNamedType(UnresolvedType):
             return None
 
         cost = 0
-        for this_arg, target_arg in zip(self.specialization, target.specialization):
+        for this_arg, target_arg in zip(
+            self.specialization, target.specialization, strict=True
+        ):
             if isinstance(this_arg, CompileTimeConstant) != isinstance(target_arg, int):
                 return None
 
@@ -322,7 +325,7 @@ class UnresolvedGenericType(UnresolvedType):
         return UnresolvedTypeWrapper(specialized_type)
 
     def resolve(self, _: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        assert False
+        raise AssertionError
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
@@ -431,7 +434,9 @@ class UnresolvedStructType(UnresolvedType):
             return None
 
         cost = 0
-        for our_member, target_member in zip(self.members, target.definition.members):
+        for our_member, target_member in zip(
+            self.members, target.definition.members, strict=True
+        ):
             if our_member[0] != target_member[0]:
                 return None  # Struct member names don't match
 
@@ -465,9 +470,7 @@ class UnresolvedStackArrayType(UnresolvedType):
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        resolved_dimensions = []
-        for dimension in self.dimensions:
-            resolved_dimensions.append(dimension.resolve())
+        resolved_dimensions = [dimension.resolve() for dimension in self.dimensions]
 
         resolved_member = self.member_type.resolve(lookup)
         return AnonymousType(StackArrayDefinition(resolved_member, resolved_dimensions))
@@ -491,7 +494,9 @@ class UnresolvedStackArrayType(UnresolvedType):
             return None
 
         cost = 0
-        for target_dim, our_dim in zip(target.definition.dimensions, self.dimensions):
+        for target_dim, our_dim in zip(
+            target.definition.dimensions, self.dimensions, strict=True
+        ):
             result = our_dim.pattern_match(target_dim, out, depth + 1)
             if result is None:
                 return None
@@ -599,7 +604,7 @@ class Typedef:
             return self.name
 
         specializations_fmt = ", ".join(
-            (item.format_for_output_to_user() for item in self.expanded_specialization)
+            item.format_for_output_to_user() for item in self.expanded_specialization
         )
         return f"{self.name}<{specializations_fmt}>"
 
@@ -702,7 +707,7 @@ class UnresolvedFunctionSignature:
         if isinstance(arg, Type):
             return arg
 
-        assert False
+        raise AssertionError
 
     def format_for_output_to_user(self) -> str:
         specialization_str = ""
@@ -738,9 +743,10 @@ class UnresolvedFunctionSignature:
         if self.parameter_pack_argument_name is None:
             assert len(generics.pack) == 0
 
-        new_specialization: list[UnresolvedSpecializationItem] = []
-        for item in self.expanded_specialization:
-            new_specialization.append(item.produce_specialized_copy(generics))
+        new_specialization: list[UnresolvedSpecializationItem] = [
+            item.produce_specialized_copy(generics)
+            for item in self.expanded_specialization
+        ]
 
         arguments: list[UnresolvedType] = []
         for arg in self.arguments:
@@ -825,10 +831,8 @@ class UnresolvedFunctionSignature:
         if self.parameter_pack_argument_name is not None:
             assert len(out.pack) == 0
             out.pack.extend(
-                (
-                    self.collapse_into_type(arg)
-                    for arg in target_args[len(self.arguments) :]
-                )
+                self.collapse_into_type(arg)
+                for arg in target_args[len(self.arguments) :]
             )
             cost += get_cost_at_pattern_match_depth(depth + 1) * len(out.pack)
 
@@ -1320,9 +1324,9 @@ class SymbolTable:
     def add_builtin_type(self, type_to_add: PrimitiveType) -> None:
         typedef = Typedef(
             type_to_add.name,
-            tuple(),
-            tuple(),
-            UnresolvedNamedType(type_to_add.name, tuple()),
+            (),
+            (),
+            UnresolvedNamedType(type_to_add.name, ()),
             BuiltinSourceLocation(),
             uuid4(),
         )

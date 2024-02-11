@@ -1,7 +1,8 @@
+from collections.abc import Iterator
 from functools import cached_property
 from itertools import count
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Optional
 
 from .. import target
 from ..parser.lexer_parser import Meta
@@ -101,7 +102,7 @@ class Function:
         self.top_level_scope.add_generatable(fn_param_var_assignment)
 
     def __repr__(self) -> str:
-        return f"Function({repr(self._signature)})"
+        return f"Function({self._signature!r})"
 
     @cached_property
     def mangled_name(self) -> str:
@@ -147,11 +148,11 @@ class Function:
             param.set_reg(ctx.next_reg())
 
         args_ir = ", ".join(
-            map(lambda param: param.ir_ref_with_type_annotation, self._parameters)
+            param.ir_ref_with_type_annotation for param in self._parameters
         )
 
         def indent_ir(lines: list[str]):
-            return map(lambda line: line if line.endswith(":") else f"  {line}", lines)
+            return [line if line.endswith(":") else f"  {line}" for line in lines]
 
         body_ir = self.top_level_scope.generate_ir(ctx)
 
@@ -282,6 +283,6 @@ class Program:
         )
         source += "\n\n"
 
-        source += "\n".join(map(lambda m: f"!{m.id} = {m}", output.metadata))
+        source += "\n".join(f"!{m.id} = {m}" for m in output.metadata)
 
         return source

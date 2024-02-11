@@ -1,4 +1,4 @@
-from typing import Iterable
+from collections.abc import Iterable
 
 from .interfaces import SpecializationItem, Type
 
@@ -39,7 +39,7 @@ def mangle_int(size_in_bits: int, is_signed: bool) -> str:
         case 128, False:
             return "o"
 
-    raise AssertionError()
+    raise AssertionError
 
 
 def mangle_float(size_in_bits: int) -> str:
@@ -57,7 +57,7 @@ def mangle_float(size_in_bits: int) -> str:
         case 128:
             return "g"
 
-    raise AssertionError()
+    raise AssertionError
 
 
 def mangle_source_name(identifier: str) -> str:

@@ -1,6 +1,7 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional, TypeGuard
+from typing import Any, Optional, TypeGuard
 
 from lark import Lark, Token, Tree, v_args
 from lark.visitors import Interpreter
