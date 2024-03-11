@@ -16,7 +16,7 @@ function checkout() {
 
 mkdir -p ./dist
 
-dest_dir="$(pwd)"
+dest_dir=$PWD
 stage_1_dir="$(checkout bootstrap/1)"
 stage_2_dir="$(checkout bootstrap/2)"
 stage_4_dir="$(checkout bootstrap/4)"
@@ -51,4 +51,4 @@ env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
-PYTHONPATH="$PWD/src:$PYTHONPATH" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
+PYTHONPATH="$dest_dir/src:$PYTHONPATH" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
