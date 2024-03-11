@@ -38,6 +38,7 @@ dependencies = ["hatch~=1.7.0", "interegular~=0.3.2", "lark~=1.1.7", "pylint"]
 
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
+parser = "glang ./src/glang/parser/parser.c3 -o ./dist/parser -O3"
 lint = ["pylint $(git ls-files \\*.py)"]
 
 
