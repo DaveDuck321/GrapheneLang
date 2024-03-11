@@ -131,7 +131,7 @@ def run_test(file_path: Path) -> bool:
         return False
 
     # @COMPILE (mandatory)
-    assert config.compile
+    assert config.compile_opts
     ir_output = run_command(
         "compile",
         file_path.parent,
@@ -141,7 +141,7 @@ def run_test(file_path: Path) -> bool:
             *config.compile_args,
             file_path,
         ],
-        config.compile,
+        config.compile_opts,
     )
 
     # @GREP_IR
@@ -150,7 +150,7 @@ def run_test(file_path: Path) -> bool:
             raise IRGrepFailure(needle)
 
     # @RUN
-    if config.run:
+    if config.run_opts:
         # If we're not using the C runtime, then don't resolve lli process
         # symbols in JIT'd code (or else the tests will be able to call into
         # glibc) and specify `_start` as the entry function (defined in
@@ -175,7 +175,7 @@ def run_test(file_path: Path) -> bool:
                 "-",
                 *config.run_args,
             ],
-            config.run,
+            config.run_opts,
             ir_output,
         )
 

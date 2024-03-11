@@ -369,9 +369,7 @@ class ArrayIndexAccess(StaticTypedExpression):
         self._array_ptr = array_ptr
 
         array_definition = self._type_of_array.definition
-        if not isinstance(
-            array_definition, (StackArrayDefinition, HeapArrayDefinition)
-        ):
+        if not isinstance(array_definition, StackArrayDefinition | HeapArrayDefinition):
             raise TypeCheckerError(
                 "array index access",
                 array_ptr.format_for_output_to_user(),
@@ -410,7 +408,7 @@ class ArrayIndexAccess(StaticTypedExpression):
     def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
         array_def = self._type_of_array.definition
-        assert isinstance(array_def, (StackArrayDefinition, HeapArrayDefinition))
+        assert isinstance(array_def, StackArrayDefinition | HeapArrayDefinition)
 
         ir = self.expand_ir(self._conversion_exprs, ctx)
 
@@ -691,7 +689,7 @@ class UnnamedInitializerList(InitializerList):
         return f"InitializerList({self._members})"
 
     def get_ordered_members(self, other: Type) -> list[TypedExpression]:
-        assert isinstance(other.definition, (StructDefinition, StackArrayDefinition))
+        assert isinstance(other.definition, StructDefinition | StackArrayDefinition)
 
         if isinstance(other.definition, StructDefinition):
             if len(other.definition.members) != len(self._members):

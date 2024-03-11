@@ -4,7 +4,7 @@ from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from os import getenv
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from tap import Tap
 
@@ -35,7 +35,7 @@ class PrintHostTargetAction(Action):
 class DriverArguments(Tap):
     # TODO support multiple source files.
     input: Path
-    output: Optional[Path] = None
+    output: Path | None = None
 
     compile_to_object: bool = False
     """Do not run the linker, generate a target ".o" object file instead."""
@@ -117,7 +117,9 @@ def main() -> None:
             llvm_output = args.output
 
     # Compile to ir
-    ir = generate_ir_from_source(args.input, args.include_path, args.debug_compiler)
+    ir = generate_ir_from_source(
+        args.input, args.include_path, debug_compiler=args.debug_compiler
+    )
 
     if will_emit_llvm:
         with llvm_output.open("w", encoding="utf-8") as file:

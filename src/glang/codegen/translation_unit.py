@@ -2,7 +2,6 @@ from collections.abc import Iterator
 from functools import cached_property
 from itertools import count
 from pathlib import Path
-from typing import Optional
 
 from glang import target
 from glang.codegen.builtin_callables import get_builtin_callables
@@ -51,7 +50,7 @@ class Function:
         self,
         parameter_names: tuple[str, ...],
         signature: FunctionSignature,
-        parameter_pack_name: Optional[str],
+        parameter_pack_name: str | None,
         di_file: DIFile,
         di_unit: DICompileUnit,
         meta: Meta,
@@ -72,7 +71,9 @@ class Function:
         # Implicit stack variable allocation for parameters
         #   TODO: constant parameters (when/ if added to grammar)
         self._parameters: list[FunctionParameter] = []
-        for param_name, param_type in zip(parameter_names, signature.arguments):
+        for param_name, param_type in zip(
+            parameter_names, signature.arguments, strict=False
+        ):
             self._add_parameter(param_name, param_type)
 
         if parameter_pack_name is not None:
@@ -89,7 +90,9 @@ class Function:
                     signature.return_type.format_for_output_to_user(True)
                 )
 
-        for arg_name, arg in zip(parameter_names, self._signature.arguments):
+        for arg_name, arg in zip(
+            parameter_names, self._signature.arguments, strict=False
+        ):
             if arg.definition.is_void:
                 raise VoidVariableDeclaration(
                     "argument", arg_name, arg.format_for_output_to_user(True)
@@ -218,7 +221,7 @@ class Program:
             return self._builtin_callables[fn_name](fn_specialization, fn_args, meta)
 
         signature, _ = self.symbol_table.lookup_function(
-            fn_name, fn_specialization, fn_args, True
+            fn_name, fn_specialization, fn_args, evaluated_context=True
         )
         return FunctionCallExpression(signature, fn_args, meta)
 

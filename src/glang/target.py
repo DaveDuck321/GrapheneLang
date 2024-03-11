@@ -82,7 +82,7 @@ class ABI(Enum):
             # Append member to the struct
             struct_size += member_size
 
-        # The size of any object is always a multiple of the object‘s alignment.
+        # The size of any object is always a multiple of the object's alignment.
         struct_size += compute_padding(
             struct_size, self.compute_struct_alignment(member_aligns)
         )

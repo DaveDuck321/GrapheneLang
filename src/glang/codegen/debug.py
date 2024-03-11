@@ -169,7 +169,7 @@ class MetadataList(Metadata):
     children: Sequence[Metadata]
 
     def __repr__(self) -> str:
-        return "!{" + ", ".join(map(lambda c: f"!{c.id}", self.children)) + "}"
+        return "!{" + ", ".join(f"!{c.id}" for c in self.children) + "}"
 
 
 @dataclass(repr=False, eq=False)

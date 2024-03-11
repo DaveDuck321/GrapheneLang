@@ -24,10 +24,10 @@ class ExpectedOutput:
 @dataclass
 class TestConfig:
     for_target: str | None
-    compile: ExpectedOutput | None
+    compile_opts: ExpectedOutput | None
     compile_args: list[str]
     grep_ir_strs: list[str]
-    run: ExpectedOutput | None
+    run_opts: ExpectedOutput | None
     run_args: list[str]
 
 
@@ -86,22 +86,22 @@ class ConfigInterpreter(Interpreter):
 
     @v_args(inline=True)
     def compile_cmd(self, *trees: Tree) -> None:
-        assert self.config.compile is None
+        assert self.config.compile_opts is None
 
         *arg_tokens, status_tree, msg_tree = trees
         assert is_list_of_str(arg_tokens)
 
-        self.config.compile = self._cmd_impl(status_tree, msg_tree)
+        self.config.compile_opts = self._cmd_impl(status_tree, msg_tree)
         self.config.compile_args.extend(arg_tokens)
 
     @v_args(inline=True)
     def run_cmd(self, *trees: Tree) -> None:
-        assert self.config.run is None
+        assert self.config.run_opts is None
 
         *arg_tokens, status_tree, msg_tree = trees
         assert is_list_of_str(arg_tokens)
 
-        self.config.run = self._cmd_impl(status_tree, msg_tree)
+        self.config.run_opts = self._cmd_impl(status_tree, msg_tree)
         self.config.run_args.extend(arg_tokens)
 
     @v_args(inline=True)

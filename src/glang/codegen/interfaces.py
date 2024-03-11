@@ -396,7 +396,7 @@ def do_specializations_match(
     if len(s1) != len(s2):
         return False
 
-    for item1, item2 in zip(s1, s2):
+    for item1, item2 in zip(s1, s2, strict=True):
         if isinstance(item1, Type) != isinstance(item2, Type):
             return False
 

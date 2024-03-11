@@ -29,6 +29,8 @@ UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
 
 
 class ResolvedPath(str):
+    __slots__ = ()
+
     def __new__(cls, path: Path) -> "ResolvedPath":
         return str.__new__(cls, str(path.resolve()))
 
@@ -1018,9 +1020,11 @@ def generate_function(
             program.di_compile_unit,
             declaration.meta,
         )
-    except GrapheneError as e:
+    except GrapheneError as err:
         assert isinstance(declaration.loc, SourceLocation)
-        raise ErrorWithLineInfo(e.message, declaration.loc.line, "function declaration")
+        raise ErrorWithLineInfo(
+            err.message, declaration.loc.line, "function declaration"
+        ) from err
 
     if body is None:
         assert declaration.is_foreign
@@ -1086,7 +1090,7 @@ def append_file_to_program(
 
 
 def generate_ir_from_source(
-    file_path: Path, include_path: list[Path], debug_compiler: bool = False
+    file_path: Path, include_path: list[Path], *, debug_compiler: bool = False
 ) -> str:
     program = cg.Program(file_path)
     try:

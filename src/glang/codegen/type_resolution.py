@@ -211,11 +211,12 @@ class UnresolvedNamedType(UnresolvedType):
         return f"{self.name}<{specialization_format}>"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
-        specialization: list[UnresolvedSpecializationItem] = []
-        for item in self.specialization:
-            specialization.append(item.produce_specialized_copy(generics))
-
-        return UnresolvedNamedType(self.name, tuple(specialization))
+        return UnresolvedNamedType(
+            self.name,
+            tuple(
+                item.produce_specialized_copy(generics) for item in self.specialization
+            ),
+        )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         resolved_specialization = []
@@ -568,7 +569,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
 
         cost = 0
         for target_dim, our_dim in zip(
-            target.definition.known_dimensions, self.known_dimensions
+            target.definition.known_dimensions, self.known_dimensions, strict=True
         ):
             result = our_dim.pattern_match(target_dim, out, depth + 1)
             if result is None:
@@ -681,7 +682,7 @@ class Typedef:
         new_alias = self.aliased.produce_specialized_copy(generics)
 
         return Typedef(
-            self.name, tuple(), new_specialization, new_alias, self.loc, self.uuid
+            self.name, (), new_specialization, new_alias, self.loc, self.uuid
         )
 
 
@@ -741,9 +742,9 @@ class UnresolvedFunctionSignature:
             for item in self.expanded_specialization
         ]
 
-        arguments: list[UnresolvedType] = []
-        for arg in self.arguments:
-            arguments.append(arg.produce_specialized_copy(generics))
+        arguments: list[UnresolvedType] = [
+            arg.produce_specialized_copy(generics) for arg in self.arguments
+        ]
 
         unresolved_packed_types = [
             UnresolvedTypeWrapper(pack_type) for pack_type in generics.pack
@@ -767,7 +768,7 @@ class UnresolvedFunctionSignature:
     ) -> int | None:
         cost = 0
         for target_item, item in zip(
-            target_specialization, self.expanded_specialization
+            target_specialization, self.expanded_specialization, strict=False
         ):
             if isinstance(item, CompileTimeConstant) != isinstance(target_item, int):
                 return None
@@ -808,7 +809,7 @@ class UnresolvedFunctionSignature:
 
         # Match the (non-packed) arguments
         for target_arg, unresolved_arg in zip(
-            target_args[: len(self.arguments)], self.arguments
+            target_args[: len(self.arguments)], self.arguments, strict=True
         ):
             if len(unresolved_arg.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
@@ -1071,7 +1072,7 @@ class SymbolTable:
             if len(fn_args) != len(function.arguments):
                 continue
 
-            for src_expr, dest_type in zip(fn_args, function.arguments):
+            for src_expr, dest_type in zip(fn_args, function.arguments, strict=True):
                 cost = get_implicit_conversion_cost(src_expr, dest_type)
                 if cost is not None:
                     total_cost += cost
@@ -1116,6 +1117,7 @@ class SymbolTable:
         name: str,
         given_specialization: list[SpecializationItem],
         args: list[TypedExpression] | list[Type],
+        *,
         evaluated_context: bool,
     ) -> tuple[FunctionSignature, FunctionDeclaration]:
         # Specializes and resolves the function corresponding to the correct definition

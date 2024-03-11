@@ -4,7 +4,6 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
-from typing import Optional
 
 from glang.codegen.debug import (
     DIBasicType,
@@ -87,7 +86,7 @@ class NamedType(Type):
         name: str,
         specialization: list[SpecializationItem],
         definition: TypeDefinition,
-        alias: Optional[Type],
+        alias: Type | None,
     ) -> None:
         super().__init__(definition)
 
@@ -95,7 +94,7 @@ class NamedType(Type):
         # TODO pass template parameter names; these are required for
         # DITemplateParameter.
         self.specialization = specialization
-        self.alias: Optional[Type] = alias
+        self.alias: Type | None = alias
 
     def should_defer_to_alias_for_ir(self) -> bool:
         return isinstance(self.alias, NamedType)
@@ -341,7 +340,7 @@ class IntegerDefinition(PrimitiveDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        return mangle_int(self.bits, self.is_signed)
+        return mangle_int(self.bits, is_signed=self.is_signed)
 
 
 class GenericIntType(PrimitiveType):

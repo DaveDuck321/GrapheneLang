@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from glang.parser.self_hosted_parser import parse
 
@@ -199,7 +199,7 @@ class For(LineOfCode):
 
 @dataclass
 class Return(LineOfCode):
-    expression: Optional[Expression]
+    expression: Expression | None
 
 
 @dataclass
@@ -214,7 +214,7 @@ class VariableDeclaration(LineOfCode):
     is_mut: bool
     variable: str
     type_: Type
-    expression: Optional[Expression]
+    expression: Expression | None
 
 
 @dataclass

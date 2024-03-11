@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class GrapheneError(ValueError):
 
 
 class ErrorWithLineInfo(ValueError):
-    def __init__(self, message: str, line: int, context: Optional[str] = None) -> None:
+    def __init__(self, message: str, line: int, context: str | None = None) -> None:
         super().__init__(message)
 
         self.line = line
@@ -57,7 +57,7 @@ class ErrorWithLineInfo(ValueError):
 
 class ErrorWithLocationInfo(ValueError):
     def __init__(
-        self, message: str, location: Location, context: Optional[str] = None
+        self, message: str, location: Location, context: str | None = None
     ) -> None:
         super().__init__(message)
 
