@@ -13,13 +13,11 @@ typedef Cursor : {
     allocator: Allocator mut&, // TODO: this should be somewhere else?
 }
 
-// TODO: should be `Cursor&`
-function get_sv : (cursor : Cursor mut&, slice : ProgramSlice) -> StringView = {
+function get_sv : (cursor : Cursor&, slice : ProgramSlice) -> StringView = {
     return { slice_between(&cursor.program.buffer, slice.start_offset, slice.end_offset) };
 }
 
-// TODO: should be `Cursor&`
-function slice : (cursor : Cursor mut&, length : isize) -> ProgramSlice = {
+function slice : (cursor : Cursor&, length : isize) -> ProgramSlice = {
     return {cursor.position, cursor.position + length};
 }
 
@@ -31,13 +29,11 @@ function ascii_is_text_token_char : (char : u8) -> bool = {
     return ascii_is_alphanumeric(char) or char == "_"[0];
 }
 
-// TODO: should be `Cursor&`
-function get_char : (cursor : Cursor mut&) -> u8 = {
+function get_char : (cursor : Cursor&) -> u8 = {
     return cursor:get_char_at_offset(0);
 }
 
-// TODO: should be `Cursor&`
-function get_char_at_offset : (cursor : Cursor mut&, offset : isize) -> u8 = {
+function get_char_at_offset : (cursor : Cursor&, offset : isize) -> u8 = {
     if cursor.position + offset >= cursor.program:length() {
         return "\0"[0];
     }
@@ -49,13 +45,11 @@ function meta : (start : isize, end : isize) -> Meta = {
     return {start, end};
 }
 
-// TODO: should be `Cursor&`
-function [@Len] is_next : (cursor : Cursor mut&, token : u8[@Len]&) -> bool = {
+function [@Len] is_next : (cursor : Cursor&, token : u8[@Len]&) -> bool = {
     return cursor:is_next(sv(&token));
 }
 
-// TODO: should be `Cursor&`
-function is_next : (cursor : Cursor mut&, token : StringView) -> bool = {
+function is_next : (cursor : Cursor&, token : StringView) -> bool = {
     for i in range(token:length()) {
         if cursor:get_char_at_offset(i) != token.buffer.data[i] {
             return false;
@@ -652,16 +646,11 @@ function parse_array_type : (cursor : Cursor mut&, prefix : Type) -> Type = {
     }
 
     mut sizes : Vector<CompileTimeConstant>;
-    // TODO: this would be cleaner with a short-circuit `and`
-    if is_heap_array {
-        // A heap array may/ may not have further dimensions specified
-        // TODO: I'm using `if ... {full} else {allocate empty}` pattern a lot... is there a nicer way
-        if cursor:try_skip_next_and_surrounding_white_space(",") {
-            sizes = cursor:parse_compile_time_constant_list();
-        } else {
-            sizes = make<Vector<CompileTimeConstant>>(&mut cursor.allocator);
-            cursor:expect_next_skipping_ws("]");
-        }
+    // A heap array may/ may not have further dimensions specified
+    // TODO: I'm using `if ... {full} else {allocate empty}` pattern a lot... is there a nicer way
+    if is_heap_array and !cursor:try_skip_next_and_surrounding_white_space(",") {
+        sizes = make<Vector<CompileTimeConstant>>(&mut cursor.allocator);
+        cursor:expect_next_skipping_ws("]");
     } else {
         // A stack array must have a known size
         sizes = cursor:parse_compile_time_constant_list();
