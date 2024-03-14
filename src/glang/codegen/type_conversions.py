@@ -195,7 +195,7 @@ def implicit_conversion_impl(
                 context,
                 src.format_for_output_to_user(),
                 dest_type.format_for_output_to_user(True),
-                maybe_missing_borrow=maybe_missing_borrow,
+                maybe_missing_borrow,
             )
 
     # Integer promotion.

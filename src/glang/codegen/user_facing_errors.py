@@ -75,7 +75,6 @@ class TypeCheckerError(GrapheneError):
         context: str,
         actual: str,
         expected: str,
-        *,
         maybe_missing_borrow: bool = False,
     ) -> None:
         extra_context = (

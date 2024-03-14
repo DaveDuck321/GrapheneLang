@@ -29,6 +29,7 @@ UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
 
 
 class ResolvedPath(str):
+    # See https://docs.astral.sh/ruff/rules/no-slots-in-str-subclass/.
     __slots__ = ()
 
     def __new__(cls, path: Path) -> "ResolvedPath":
