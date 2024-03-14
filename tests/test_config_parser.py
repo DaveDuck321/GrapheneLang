@@ -112,9 +112,7 @@ class ConfigInterpreter(Interpreter):
 def parse_file(path: Path) -> TestConfig:
     with path.open(encoding="utf-8") as file:
         lines = [
-            line.removeprefix("///").strip()
-            for line in file.readlines()
-            if line.startswith("///")
+            line.removeprefix("///").strip() for line in file if line.startswith("///")
         ]
 
     tree = lark.parse("\n".join(lines))
