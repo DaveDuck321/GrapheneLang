@@ -3,6 +3,8 @@ from itertools import count
 from pathlib import Path
 from typing import Iterator, Optional
 
+from glang.utils.stack import Stack
+
 from .. import target
 from ..parser.lexer_parser import Meta
 from .builtin_callables import get_builtin_callables
@@ -141,7 +143,7 @@ class Function:
             not self._signature.is_foreign,
         )
 
-        ctx = IRContext(count(0), metadata_gen, di_subprogram, [])
+        ctx = IRContext(count(0), metadata_gen, di_subprogram, Stack())
 
         for param in self._parameters:
             param.set_reg(ctx.next_reg())
@@ -245,7 +247,7 @@ class Program:
 
         output.lines.append("")
         # FIXME the file passed in is wrong (although we aren't using it yet).
-        ctx = IRContext(count(0), count(0), self.di_files[0], [])
+        ctx = IRContext(count(0), count(0), self.di_files[0], Stack())
         for variable in self._static_variables:
             output.extend(variable.generate_ir(ctx))
 

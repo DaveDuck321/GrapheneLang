@@ -3,7 +3,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Iterable, Iterator, Optional
 
-from ..codegen.debug import DIFile, DILocation, DIScope, DIType, Metadata
+from glang.utils.stack import Stack
+
+from ..codegen.debug import DIFile, DILocation, DIScope, Metadata
 from ..parser.lexer_parser import Meta
 from .user_facing_errors import MutableVariableContainsAReference
 
@@ -159,7 +161,7 @@ class IRContext:
     reg_gen: Iterator[int]
     metadata_gen: Iterator[int]
     scope: DIScope
-    loop_stack: list[LoopInfo]  # TODO make this an actual stack.
+    loop_stack: Stack[LoopInfo]
 
     def next_reg(self) -> int:
         return next(self.reg_gen)

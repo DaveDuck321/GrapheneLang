@@ -401,7 +401,7 @@ class WhileStatement(Generatable):
         )
         # Loop body
         ir.lines.append(f"{self.inner_scope.start_label}:")
-        ctx.loop_stack.append(self.info)  # TODO clean up with a context manager?
+        ctx.loop_stack.push(self.info)  # TODO clean up with a context manager?
         ir.extend(self.inner_scope.generate_ir(ctx))
         ctx.loop_stack.pop()
 
@@ -484,11 +484,13 @@ class ContinueStatement(Generatable):
     def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#br-instruction
 
+        assert not ctx.loop_stack.empty()
+
         ir = IROutput()
         dbg = self.add_di_location(ctx, ir)
 
         # br label <dest>
-        ir.lines.append(f"br label %{ctx.loop_stack[-1].start_label}, {dbg}")
+        ir.lines.append(f"br label %{ctx.loop_stack.peek().start_label}, {dbg}")
 
         return ir
 
