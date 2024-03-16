@@ -17,6 +17,7 @@ from .codegen.user_facing_errors import (
     GenericHasGenericAnnotation,
     GrapheneError,
     MissingFunctionReturn,
+    NotInLoopStatementError,
     RepeatedGenericName,
     SourceLocation,
     StructMemberRedeclaration,
@@ -839,7 +840,9 @@ def generate_while_statement(
 
     while_scope_id = function.get_next_scope_id()
 
-    inner_scope = cg.Scope(function.get_next_scope_id(), node.scope.meta, scope)
+    inner_scope = cg.Scope(
+        function.get_next_scope_id(), node.scope.meta, scope, is_inside_loop=True
+    )
     generate_body(program, function, inner_scope, node.scope, generic_mapping)
 
     scope.add_generatable(
@@ -889,7 +892,9 @@ def generate_for_statement(
     outer_scope.add_generatable([var_ref, borrowed_iter_expr])
 
     # Inner scope
-    inner_scope = cg.Scope(function.get_next_scope_id(), node.scope.meta, outer_scope)
+    inner_scope = cg.Scope(
+        function.get_next_scope_id(), node.scope.meta, outer_scope, is_inside_loop=True
+    )
 
     has_next_expr = program.lookup_call_expression(
         "__builtin_has_next", [], [borrowed_iter_expr], node.scope.meta
@@ -921,6 +926,19 @@ def generate_for_statement(
         )
     )
     scope.add_generatable(outer_scope)
+
+
+def generate_continue_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    node: lp.Return,
+    generic_mapping: cg.GenericMapping,
+) -> None:
+    if not scope.is_inside_loop():
+        raise NotInLoopStatementError("continue")
+
+    scope.add_generatable(cg.ContinueStatement(node.meta))
 
 
 def generate_assignment(
@@ -974,6 +992,7 @@ def generate_body(
 ) -> None:
     generators = {
         "Assignment": generate_assignment,
+        "Continue": generate_continue_statement,
         "Expression": generate_standalone_expression,
         "For": generate_for_statement,
         "If": generate_if_statement,

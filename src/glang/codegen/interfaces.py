@@ -149,10 +149,17 @@ class IROutput:
 
 
 @dataclass
+class LoopInfo:
+    start_label: str
+    end_label: str
+
+
+@dataclass
 class IRContext:
     reg_gen: Iterator[int]
     metadata_gen: Iterator[int]
     scope: DIScope
+    loop_stack: list[LoopInfo]  # TODO make this an actual stack.
 
     def next_reg(self) -> int:
         return next(self.reg_gen)
@@ -224,6 +231,9 @@ class Generatable(ABC):
     @abstractmethod
     def is_return_guaranteed(self) -> bool:
         pass
+
+    def is_jump_guaranteed(self) -> bool:
+        return self.is_return_guaranteed()
 
     @abstractmethod
     def __repr__(self) -> str:

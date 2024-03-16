@@ -21,6 +21,7 @@ from .expressions import (
 )
 from .generatable import (
     Assignment,
+    ContinueStatement,
     IfElseStatement,
     ReturnStatement,
     StackVariable,

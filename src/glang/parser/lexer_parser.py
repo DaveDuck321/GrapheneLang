@@ -205,6 +205,11 @@ class Return(LineOfCode):
 
 
 @dataclass
+class Continue(LineOfCode):
+    pass
+
+
+@dataclass
 class Assignment(LineOfCode):
     lhs: Expression
     operator: str
