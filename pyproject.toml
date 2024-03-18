@@ -13,7 +13,7 @@ authors = [
 description = "A Graphene front-end for LLVM"
 # TODO readme = "README.md"
 license = "AGPL-3.0-only"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "License :: OSI Approved :: GNU Affero General Public License v3",
@@ -73,3 +73,5 @@ hooks.custom.path = "hatch_build.py"
 [tool.ruff]
 # hatch sets this to 120 by default. 88 is what black uses.
 line-length = 88
+# Disable all rules without automatic fixes.
+fix-only = true

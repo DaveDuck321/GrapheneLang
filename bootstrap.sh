@@ -16,7 +16,7 @@ function checkout() {
 
 mkdir -p ./dist
 
-dest_dir="$(pwd)"
+dest_dir=$PWD
 stage_1_dir="$(checkout bootstrap/1)"
 stage_2_dir="$(checkout bootstrap/2)"
 stage_4_dir="$(checkout bootstrap/4)"
@@ -43,12 +43,12 @@ mkdir -p "$stage_4_dir/dist"
 # (but not the codegen) supports it. note: from this point forward we run as a
 # python module
 mkdir -p "$stage_5_dir/dist"
-/usr/bin/env -C "$stage_4_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "$stage_5_dir/dist/parser"
+env -C "$stage_4_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "$stage_5_dir/dist/parser"
 
 # Stage 5; we introduce floating point literal support, compile the last parser
 # that supports this before literals become required by the standard library.
-/usr/bin/env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "$dest_dir/dist/parser"
+env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "$dest_dir/dist/parser"
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
-/usr/bin/env python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
+PYTHONPATH="$dest_dir/src:$PYTHONPATH" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3

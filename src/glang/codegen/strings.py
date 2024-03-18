@@ -1,4 +1,4 @@
-from .user_facing_errors import InvalidEscapeSequence
+from glang.codegen.user_facing_errors import InvalidEscapeSequence
 
 # Based on https://en.cppreference.com/w/cpp/language/escape.
 # We omit \' because we don't have single-quoted strings, and \? because

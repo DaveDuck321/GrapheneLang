@@ -1,19 +1,18 @@
+from collections.abc import Iterator
 from functools import cached_property
 from itertools import count
 from pathlib import Path
-from typing import Iterator, Optional
 
-from .. import target
-from ..parser.lexer_parser import Meta
-from .builtin_callables import get_builtin_callables
-from .builtin_types import (
+from glang import target
+from glang.codegen.builtin_callables import get_builtin_callables
+from glang.codegen.builtin_types import (
     AnonymousType,
     CharArrayDefinition,
     FunctionSignature,
     IntType,
     get_builtin_types,
 )
-from .debug import (
+from glang.codegen.debug import (
     DICompileUnit,
     DIFile,
     DISubprogram,
@@ -22,13 +21,28 @@ from .debug import (
     ModuleFlagsBehavior,
     Tag,
 )
-from .expressions import FunctionCallExpression, FunctionParameter
-from .generatable import Scope, StackVariable, StaticVariable, VariableInitialize
-from .interfaces import IRContext, IROutput, SpecializationItem, Type, TypedExpression
-from .strings import encode_string
-from .type_conversions import get_implicit_conversion_cost
-from .type_resolution import FunctionDeclaration, SymbolTable
-from .user_facing_errors import InvalidMainReturnType, VoidVariableDeclaration
+from glang.codegen.expressions import FunctionCallExpression, FunctionParameter
+from glang.codegen.generatable import (
+    Scope,
+    StackVariable,
+    StaticVariable,
+    VariableInitialize,
+)
+from glang.codegen.interfaces import (
+    IRContext,
+    IROutput,
+    SpecializationItem,
+    Type,
+    TypedExpression,
+)
+from glang.codegen.strings import encode_string
+from glang.codegen.type_conversions import get_implicit_conversion_cost
+from glang.codegen.type_resolution import FunctionDeclaration, SymbolTable
+from glang.codegen.user_facing_errors import (
+    InvalidMainReturnType,
+    VoidVariableDeclaration,
+)
+from glang.parser.lexer_parser import Meta
 
 
 class Function:
@@ -36,7 +50,7 @@ class Function:
         self,
         parameter_names: tuple[str, ...],
         signature: FunctionSignature,
-        parameter_pack_name: Optional[str],
+        parameter_pack_name: str | None,
         di_file: DIFile,
         di_unit: DICompileUnit,
         meta: Meta,
@@ -57,7 +71,9 @@ class Function:
         # Implicit stack variable allocation for parameters
         #   TODO: constant parameters (when/ if added to grammar)
         self._parameters: list[FunctionParameter] = []
-        for param_name, param_type in zip(parameter_names, signature.arguments):
+        for param_name, param_type in zip(
+            parameter_names, signature.arguments, strict=False
+        ):
             self._add_parameter(param_name, param_type)
 
         if parameter_pack_name is not None:
@@ -74,7 +90,9 @@ class Function:
                     signature.return_type.format_for_output_to_user(True)
                 )
 
-        for arg_name, arg in zip(parameter_names, self._signature.arguments):
+        for arg_name, arg in zip(
+            parameter_names, self._signature.arguments, strict=False
+        ):
             if arg.definition.is_void:
                 raise VoidVariableDeclaration(
                     "argument", arg_name, arg.format_for_output_to_user(True)
@@ -101,7 +119,7 @@ class Function:
         self.top_level_scope.add_generatable(fn_param_var_assignment)
 
     def __repr__(self) -> str:
-        return f"Function({repr(self._signature)})"
+        return f"Function({self._signature!r})"
 
     @cached_property
     def mangled_name(self) -> str:
@@ -147,11 +165,11 @@ class Function:
             param.set_reg(ctx.next_reg())
 
         args_ir = ", ".join(
-            map(lambda param: param.ir_ref_with_type_annotation, self._parameters)
+            param.ir_ref_with_type_annotation for param in self._parameters
         )
 
         def indent_ir(lines: list[str]):
-            return map(lambda line: line if line.endswith(":") else f"  {line}", lines)
+            return [line if line.endswith(":") else f"  {line}" for line in lines]
 
         body_ir = self.top_level_scope.generate_ir(ctx)
 
@@ -203,7 +221,7 @@ class Program:
             return self._builtin_callables[fn_name](fn_specialization, fn_args, meta)
 
         signature, _ = self.symbol_table.lookup_function(
-            fn_name, fn_specialization, fn_args, True
+            fn_name, fn_specialization, fn_args, evaluated_context=True
         )
         return FunctionCallExpression(signature, fn_args, meta)
 
@@ -282,6 +300,6 @@ class Program:
         )
         source += "\n\n"
 
-        source += "\n".join(map(lambda m: f"!{m.id} = {m}", output.metadata))
+        source += "\n".join(f"!{m.id} = {m}" for m in output.metadata)
 
         return source

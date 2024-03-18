@@ -1,8 +1,6 @@
 from abc import abstractmethod
-from typing import Iterator, Optional
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     AnonymousType,
     BoolType,
     FunctionSignature,
@@ -13,7 +11,7 @@ from .builtin_types import (
     StructDefinition,
     format_array_dims_for_ir,
 )
-from .interfaces import (
+from glang.codegen.interfaces import (
     Generatable,
     IRContext,
     IROutput,
@@ -22,12 +20,12 @@ from .interfaces import (
     TypedExpression,
     Variable,
 )
-from .type_conversions import (
+from glang.codegen.type_conversions import (
     assert_is_implicitly_convertible,
     do_implicit_conversion,
     get_implicit_conversion_cost,
 )
-from .user_facing_errors import (
+from glang.codegen.user_facing_errors import (
     ArrayIndexCount,
     BorrowWithNoAddressError,
     CannotAssignToInitializerList,
@@ -38,6 +36,7 @@ from .user_facing_errors import (
     OperandError,
     TypeCheckerError,
 )
+from glang.parser.lexer_parser import Meta
 
 
 class ConstantExpression(StaticTypedExpression):
@@ -86,7 +85,7 @@ class VariableReference(StaticTypedExpression):
         )
 
         self.variable = variable
-        self._ir_ref: Optional[str] = None
+        self._ir_ref: str | None = None
 
     def __repr__(self) -> str:
         return (
@@ -135,7 +134,7 @@ class FunctionParameter(StaticTypedExpression):
     def assert_can_write_to(self) -> None:
         # We should only write to the implicit stack variable
         #   Writing directly to a parameter is a codegen error
-        assert False
+        raise AssertionError
 
 
 class FunctionCallExpression(StaticTypedExpression):
@@ -243,7 +242,7 @@ class BorrowExpression(StaticTypedExpression):
         )
 
     def __repr__(self) -> str:
-        return f"BorrowExpression(is_mut={self._is_mut}, {repr(self._expr)})"
+        return f"BorrowExpression(is_mut={self._is_mut}, {self._expr!r})"
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
@@ -370,9 +369,7 @@ class ArrayIndexAccess(StaticTypedExpression):
         self._array_ptr = array_ptr
 
         array_definition = self._type_of_array.definition
-        if not isinstance(
-            array_definition, (StackArrayDefinition, HeapArrayDefinition)
-        ):
+        if not isinstance(array_definition, StackArrayDefinition | HeapArrayDefinition):
             raise TypeCheckerError(
                 "array index access",
                 array_ptr.format_for_output_to_user(),
@@ -386,11 +383,10 @@ class ArrayIndexAccess(StaticTypedExpression):
                     len(indices),
                     len(array_definition.dimensions),
                 )
-        else:
-            if len(indices) != 1 + len(array_definition.known_dimensions):
-                raise ArrayIndexCount(
-                    self._type_of_array.format_for_output_to_user(), len(indices), 1
-                )
+        elif len(indices) != 1 + len(array_definition.known_dimensions):
+            raise ArrayIndexCount(
+                self._type_of_array.format_for_output_to_user(), len(indices), 1
+            )
 
         self._element_type: Type = array_definition.member
         self._conversion_exprs: list[TypedExpression] = []
@@ -412,7 +408,7 @@ class ArrayIndexAccess(StaticTypedExpression):
     def generate_ir(self, ctx: IRContext) -> IROutput:
         # https://llvm.org/docs/LangRef.html#getelementptr-instruction
         array_def = self._type_of_array.definition
-        assert isinstance(array_def, (StackArrayDefinition, HeapArrayDefinition))
+        assert isinstance(array_def, StackArrayDefinition | HeapArrayDefinition)
 
         ir = self.expand_ir(self._conversion_exprs, ctx)
 
@@ -478,11 +474,11 @@ class ArrayInitializer(StaticTypedExpression):
         assert len(array_type.definition.dimensions) == 1
         assert len(element_exprs) == array_type.definition.dimensions[0]
 
-        self._result_ref: Optional[str] = None
+        self._result_ref: str | None = None
         self._elements: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
         self.implicit_conversion_cost = 0
-        self.result_ref: Optional[str] = None
+        self.result_ref: str | None = None
 
         target_type = array_type.definition.member
         for member_expr in element_exprs:
@@ -539,11 +535,11 @@ class StructInitializer(StaticTypedExpression):
         assert isinstance(struct_type.definition, StructDefinition)
         assert len(member_exprs) == len(struct_type.definition.members)
 
-        self._result_ref: Optional[str] = None
+        self._result_ref: str | None = None
         self._members: list[TypedExpression] = []
         self._conversion_exprs: list[TypedExpression] = []
         self.implicit_conversion_cost = 0
-        self.result_ref: Optional[str] = None
+        self.result_ref: str | None = None
 
         for (_, target_type), member_expr in zip(
             struct_type.definition.members, member_exprs, strict=True
@@ -600,11 +596,11 @@ class InitializerList(TypedExpression):
 
     @property
     def ir_type_annotation(self) -> str:
-        assert False
+        raise AssertionError
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
-        assert False
+        raise AssertionError
 
     def assert_can_read_from(self) -> None:
         pass
@@ -693,7 +689,7 @@ class UnnamedInitializerList(InitializerList):
         return f"InitializerList({self._members})"
 
     def get_ordered_members(self, other: Type) -> list[TypedExpression]:
-        assert isinstance(other.definition, (StructDefinition, StackArrayDefinition))
+        assert isinstance(other.definition, StructDefinition | StackArrayDefinition)
 
         if isinstance(other.definition, StructDefinition):
             if len(other.definition.members) != len(self._members):
@@ -752,7 +748,7 @@ class LogicalOperator(StaticTypedExpression):
             rhs_expression, BoolType(), f"logical {operator}"
         )
 
-        self.result_reg: Optional[int] = None
+        self.result_reg: int | None = None
 
         self.operator = operator
         self.label_id = label_id
@@ -850,4 +846,4 @@ class LogicalOperator(StaticTypedExpression):
 
     def assert_can_write_to(self) -> None:
         # TODO user-facing error.
-        assert False
+        raise AssertionError

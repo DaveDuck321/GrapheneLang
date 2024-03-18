@@ -1,9 +1,10 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from hashlib import file_digest
 from inspect import getmembers
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional
 
 
 class Tag(StrEnum):
@@ -168,7 +169,7 @@ class MetadataList(Metadata):
     children: Sequence[Metadata]
 
     def __repr__(self) -> str:
-        return "!{" + ", ".join(map(lambda c: f"!{c.id}", self.children)) + "}"
+        return "!{" + ", ".join(f"!{c.id}" for c in self.children) + "}"
 
 
 @dataclass(repr=False, eq=False)
@@ -271,7 +272,7 @@ class DISubroutineType(DIType):
     # TODO implementation.
 
     def __repr__(self) -> str:
-        return f"!DISubroutineType(types: !{{null, null}})"
+        return "!DISubroutineType(types: !{null, null})"
 
 
 @dataclass(repr=False, eq=False)
