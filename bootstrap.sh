@@ -6,11 +6,11 @@ function checkout() {
     # Pass commit in $1. Output directory is returned.
     rpm_dir="GrapheneLang-${1/\//-}"
     if [ -d "$rpm_dir" ]; then
-        echo "$rpm_dir"
+        realpath "$rpm_dir"
     else
         dir="$(mktemp -d)"
         git archive "$1" --worktree-attributes ":(exclude)tests/" | tar -x -C "$dir"
-        echo "$dir"
+        realpath "$dir"
     fi
 }
 
