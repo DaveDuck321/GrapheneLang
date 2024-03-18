@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling~=1.21"]
 build-backend = "hatchling.build"
 
 
@@ -21,7 +21,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Topic :: Software Development :: Compilers",
 ]
-dependencies = ["PyYAML~=6.0.0", "typed-argument-parser>=1.8.1,<1.10.0"]
+dependencies = ["PyYAML~=6.0", "typed-argument-parser~=1.8"]
 
 [project.urls]
 "Homepage" = "https://github.com/DaveDuck321/GrapheneLang/"
@@ -34,20 +34,12 @@ glang = "glang.driver:main"
 # Development environment to be used with your IDE. Just set the venv path to
 # the output of `hatch env find dev`.
 [tool.hatch.envs.dev]
-dependencies = ["hatch~=1.7.0", "interegular~=0.3.2", "lark~=1.1.7", "pylint"]
+dependencies = ["interegular~=0.3", "lark~=1.1"]
 
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
 parser = "glang ./src/glang/parser/parser.c3 -o ./dist/parser -O3"
-lint = ["pylint $(git ls-files \\*.py)"]
-
-
-# Test environment.
-[tool.hatch.envs.test]
-dependencies = ["interegular~=0.3.2", "lark~=1.1.7"]
-
-[tool.hatch.envs.test.scripts]
-run = "python tests/run_tests.py {args}"
+test = "python tests/run_tests.py {args}"
 
 
 # Style environment. Does not depend on the project.
@@ -69,12 +61,7 @@ fmt = ["isort --profile black .", "black ."]
 [tool.hatch.build]
 # Exclude symlinks used for editable installs.
 exclude = ["src/glang/bin"]
-dependencies = [
-  "hatch~=1.7.0",
-  "lark~=1.1.7",
-  "PyYAML~=6.0.0",
-  "typed-argument-parser>=1.8.1,<1.10.0",
-]
+dependencies = ["lark~=1.1", "PyYAML~=6.0", "typed-argument-parser~=1.8"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [".github", "docs", "tests"]

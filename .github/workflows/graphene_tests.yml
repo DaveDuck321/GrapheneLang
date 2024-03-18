@@ -41,4 +41,4 @@ jobs:
     - name: Fetch tags
       run: git fetch --tags --force origin
     - name: Run tests
-      run: hatch run test:run
+      run: hatch run dev:test
