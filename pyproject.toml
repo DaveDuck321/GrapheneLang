@@ -69,3 +69,7 @@ exclude = [".github", "docs", "tests"]
 [tool.hatch.build.targets.wheel]
 packages = ["src/glang"]
 hooks.custom.path = "hatch_build.py"
+
+[tool.ruff]
+# hatch sets this to 120 by default. 88 is what black uses.
+line-length = 88
