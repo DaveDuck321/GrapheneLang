@@ -6,6 +6,7 @@
 @require_once "std/io.c3"
 @require_once "std/iterators.c3"
 @require_once "std/memory.c3"
+@require_once "std/string.c3"
 
 typedef Cursor : {
     program : StringView,
@@ -22,11 +23,11 @@ function slice : (cursor : Cursor&, length : isize) -> ProgramSlice = {
 }
 
 function ascii_is_text_token_start_char : (char : u8) -> bool = {
-    return ascii_is_alpha(char) or char == "_"[0];
+    return ascii_is_alpha(char) or char == char("_");
 }
 
 function ascii_is_text_token_char : (char : u8) -> bool = {
-    return ascii_is_alphanumeric(char) or char == "_"[0];
+    return ascii_is_alphanumeric(char) or char == char("_");
 }
 
 function get_char : (cursor : Cursor&) -> u8 = {
@@ -77,7 +78,7 @@ function try_skip_next_and_surrounding_white_space : (cursor : Cursor mut&, toke
 function try_skip_next_operator : (cursor : Cursor mut&, operator: StringView) -> bool = {
     // The small lookahead exists so we don't capture the operator part of an assignment
     cursor:try_skip_white_space();
-    if cursor:get_char_at_offset(operator:length()) == "="[0] {
+    if cursor:get_char_at_offset(operator:length()) == char("=") {
         return false;
     }
     if cursor:is_next("<<=") or cursor:is_next(">>=") or cursor:is_next("**=") {
@@ -215,12 +216,12 @@ function get_next_hex_token : (cursor : Cursor mut&) -> ProgramSlice = {
     while !cursor:is_end_of_token() {
         let next_char : u8 = ascii_to_lower(cursor:get_char());
         if ascii_is_digit(next_char) |
-          (next_char == "a"[0]) |
-          (next_char == "b"[0]) |
-          (next_char == "c"[0]) |
-          (next_char == "d"[0]) |
-          (next_char == "e"[0]) |
-          (next_char == "f"[0]) {
+          (next_char == char("a")) |
+          (next_char == char("b")) |
+          (next_char == char("c")) |
+          (next_char == char("d")) |
+          (next_char == char("e")) |
+          (next_char == char("f")) {
             cursor.position += 1;
             token.end_offset += 1;
         } else {
@@ -479,7 +480,7 @@ function parse_generic_definition_list : (cursor : Cursor mut&) -> Vector<Generi
         // TODO: this is a little ugly, should be refactored
         mut type : int;
         mut name : ProgramSlice;
-        if cursor:get_char() == "@"[0] {
+        if cursor:get_char() == char("@") {
             type = /* generic numeric */ 1;
             name = cursor:get_next_at_identifier();
         } else {
@@ -849,11 +850,11 @@ function is_likely_the_start_of_a_specialized_function : (cursor : Cursor mut&) 
     mut brackets_stack : Vector<u8> = make<Vector<u8>>(&mut cursor.allocator);
     mut lookahead : Cursor = cursor;
     while !lookahead:is_next("\0") {
-        if is_one_of(lookahead:get_char(), "<"[0], "("[0], "{"[0], "["[0]) {
+        if is_one_of(lookahead:get_char(), char("<"), char("("), char("{"), char("[")) {
             brackets_stack:push_back(lookahead:get_char());
         }
 
-        if is_one_of(lookahead:get_char(), ">"[0], ")"[0], "}"[0], "]"[0]) {
+        if is_one_of(lookahead:get_char(), char(">"), char(")"), char("}"), char("]")) {
             if !ascii_is_matched_pair(brackets_stack:pop_back(), lookahead:get_char()) {
                 brackets_stack:deallocate();
                 return false;
@@ -974,7 +975,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor mut&) -> Expres
 function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expression = {
     let start_offset : isize = cursor.position;
 
-    if is_one_of(cursor:get_char(), "!"[0], "-"[0], "+"[0], "~"[0]) {
+    if is_one_of(cursor:get_char(), char("!"), char("-"), char("+"), char("~")) {
         let name : ProgramSlice = cursor:slice(1);
         cursor.position += 1;
         cursor:try_skip_white_space();
