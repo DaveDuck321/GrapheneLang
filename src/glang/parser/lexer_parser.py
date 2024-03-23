@@ -203,6 +203,16 @@ class Return(LineOfCode):
 
 
 @dataclass
+class Break(LineOfCode):
+    pass
+
+
+@dataclass
+class Continue(LineOfCode):
+    pass
+
+
+@dataclass
 class Assignment(LineOfCode):
     lhs: Expression
     operator: str

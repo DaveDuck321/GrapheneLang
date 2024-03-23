@@ -43,6 +43,7 @@ from glang.codegen.user_facing_errors import (
     VoidVariableDeclaration,
 )
 from glang.parser.lexer_parser import Meta
+from glang.utils.stack import Stack
 
 
 class Function:
@@ -159,7 +160,7 @@ class Function:
             not self._signature.is_foreign,
         )
 
-        ctx = IRContext(count(0), metadata_gen, di_subprogram)
+        ctx = IRContext(count(0), metadata_gen, di_subprogram, Stack())
 
         for param in self._parameters:
             param.set_reg(ctx.next_reg())
@@ -263,7 +264,7 @@ class Program:
 
         output.lines.append("")
         # FIXME the file passed in is wrong (although we aren't using it yet).
-        ctx = IRContext(count(0), count(0), self.di_files[0])
+        ctx = IRContext(count(0), count(0), self.di_files[0], Stack())
         for variable in self._static_variables:
             output.extend(variable.generate_ir(ctx))
 

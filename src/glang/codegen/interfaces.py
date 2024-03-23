@@ -7,6 +7,7 @@ from typing import Any
 from glang.codegen.debug import DIFile, DILocation, DIScope, Metadata
 from glang.codegen.user_facing_errors import MutableVariableContainsAReference
 from glang.parser.lexer_parser import Meta
+from glang.utils.stack import Stack
 
 
 class TypeDefinition(ABC):
@@ -150,10 +151,17 @@ class IROutput:
 
 
 @dataclass
+class LoopInfo:
+    start_label: str
+    end_label: str
+
+
+@dataclass
 class IRContext:
     reg_gen: Iterator[int]
     metadata_gen: Iterator[int]
     scope: DIScope
+    loop_stack: Stack[LoopInfo]
 
     def next_reg(self) -> int:
         return next(self.reg_gen)
@@ -225,6 +233,9 @@ class Generatable(ABC):
     @abstractmethod
     def is_return_guaranteed(self) -> bool:
         pass
+
+    def is_jump_guaranteed(self) -> bool:
+        return self.is_return_guaranteed()
 
     @abstractmethod
     def __repr__(self) -> str:

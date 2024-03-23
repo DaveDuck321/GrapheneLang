@@ -502,3 +502,8 @@ class StructMemberRedeclaration(ErrorWithLineInfo):
             line,
             "struct definition",
         )
+
+
+class NotInLoopStatementError(GrapheneError):
+    def __init__(self, statement: str) -> None:
+        super().__init__(f"'{statement}' is not inside a loop")
