@@ -64,6 +64,7 @@ __all__ = [
     "BorrowExpression",
     "CompileTimeConstant",
     "ConstantExpression",
+    "ContinueStatement",
     "DIFile",
     "Function",
     "FunctionDeclaration",

@@ -18,7 +18,7 @@ class CustomBuildHook(BuildHookInterface):
     def initialize(self, version: str, build_data: dict[str, Any]):
         self.app.display_waiting("Bootstrapping parser")
 
-        rc = run(["./bootstrap.sh"]).returncode
+        rc = run(["./bootstrap.sh"], check=False).returncode
         if rc:
             self.app.abort("Bootstrap failed", rc)
 

@@ -504,7 +504,7 @@ class ContinueStatement(Generatable):
         return True
 
     def __repr__(self) -> str:
-        return f"ContinueStatement()"
+        return "ContinueStatement()"
 
 
 class VariableInitialize(Generatable):
