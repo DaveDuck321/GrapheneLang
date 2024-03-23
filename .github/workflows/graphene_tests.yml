@@ -23,12 +23,8 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Setup pipx
-      run: python3 -m pipx ensurepath
     - name: Install hatch
-      run: pipx install hatch
-    - name: Install Python
-      run: hatch python install 3.12
+      run: python3 -m pip install hatch --user
     - name: Install clang and lli
       run: |
         wget https://apt.llvm.org/llvm.sh
