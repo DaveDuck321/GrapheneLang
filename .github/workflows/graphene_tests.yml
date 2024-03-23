@@ -25,7 +25,6 @@ jobs:
         show-progress: false
     - name: Install pipx
       run: |
-        python3 -m pip install --upgrade pip
         python3 -m pip install --user pipx
         python3 -m pipx ensurepath
     - name: Install hatch
