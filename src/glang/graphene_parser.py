@@ -945,6 +945,19 @@ def generate_continue_statement(
     scope.add_generatable(cg.ContinueStatement(node.meta))
 
 
+def generate_break_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    node: lp.Return,
+    generic_mapping: cg.GenericMapping,
+) -> None:
+    if not scope.is_inside_loop():
+        raise NotInLoopStatementError("break")
+
+    scope.add_generatable(cg.BreakStatement(node.meta))
+
+
 def generate_assignment(
     program: cg.Program,
     function: cg.Function,
@@ -996,6 +1009,7 @@ def generate_body(
 ) -> None:
     generators = {
         "Assignment": generate_assignment,
+        "Break": generate_break_statement,
         "Continue": generate_continue_statement,
         "Expression": generate_standalone_expression,
         "For": generate_for_statement,

@@ -203,6 +203,11 @@ class Return(LineOfCode):
 
 
 @dataclass
+class Break(LineOfCode):
+    pass
+
+
+@dataclass
 class Continue(LineOfCode):
     pass
 

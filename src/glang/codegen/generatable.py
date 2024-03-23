@@ -507,6 +507,33 @@ class ContinueStatement(Generatable):
         return "ContinueStatement()"
 
 
+class BreakStatement(Generatable):
+    def __init__(self, meta: Meta) -> None:
+        super().__init__(meta)
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        # https://llvm.org/docs/LangRef.html#br-instruction
+
+        assert not ctx.loop_stack.empty()
+
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+
+        # br label <dest>
+        ir.lines.append(f"br label %{ctx.loop_stack.peek().end_label}, {dbg}")
+
+        return ir
+
+    def is_return_guaranteed(self) -> bool:
+        return False
+
+    def is_jump_guaranteed(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return "BreakStatement()"
+
+
 class VariableInitialize(Generatable):
     def __init__(
         self, variable: StackVariable, value: TypedExpression, meta: Meta

@@ -1182,6 +1182,14 @@ function parse_continue : (cursor : Cursor mut&) -> Continue = {
     return {meta(start_offset, cursor:skip_ws_return_offset())};
 }
 
+function parse_break : (cursor : Cursor mut&) -> Break = {
+    let start_offset : isize = cursor.position;
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("break"));
+
+    cursor:expect_next(";");
+    return {meta(start_offset, cursor:skip_ws_return_offset())};
+}
+
 function parse_line : (cursor : Cursor mut&) -> Line = {
     // TODO: this should be templated?
     cursor:try_skip_white_space();
@@ -1209,6 +1217,11 @@ function parse_line : (cursor : Cursor mut&) -> Line = {
         let pointer : Continue mut& = &mut cursor.allocator:allocate<Continue>();
         pointer = cursor:parse_continue();
         return {8, ref_to_addr(&pointer), pointer.meta};
+    }
+    if cursor:is_next("break") {
+        let pointer : Break mut& = &mut cursor.allocator:allocate<Break>();
+        pointer = cursor:parse_break();
+        return {9, ref_to_addr(&pointer), pointer.meta};
     }
     if cursor:is_next("{") {
         let pointer : Scope mut& = &mut cursor.allocator:allocate<Scope>();

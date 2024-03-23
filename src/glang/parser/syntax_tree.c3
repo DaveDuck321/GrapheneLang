@@ -88,7 +88,7 @@ typedef Typedef : {
 typedef Scope : { lines : Vector<Line>, meta : Meta }
 typedef Line : {
     // TODO: enum
-    type : int, // 0: expression, 1: assignment, 2: return, 3: if, 4: while, 5: for, 6: scope, 7: declaration, 8: continue
+    type : int, // 0: expression, 1: assignment, 2: return, 3: if, 4: while, 5: for, 6: scope, 7: declaration, 8: continue, 9: break
     pointer : iptr,
     meta : Meta,
 }
@@ -116,6 +116,8 @@ typedef For : {
 typedef Return : { expression : Optional<Expression>, meta : Meta }
 
 typedef Continue : { meta : Meta }
+
+typedef Break : { meta : Meta }
 
 typedef Assignment : {
     lhs : Expression,
@@ -640,6 +642,10 @@ function write_json_value : (stream : JSON_Stream mut&, line : Line&) -> void = 
         stream:write_json_value(&addr_to_ref<Continue>(line.pointer));
         return;
     }
+    if line.type == 9 {
+        stream:write_json_value(&addr_to_ref<Break>(line.pointer));
+        return;
+    }
     runtime_assert(false);
 }
 
@@ -684,6 +690,13 @@ function write_json_value : (stream : JSON_Stream mut&, node : Continue&) -> voi
     mut object : JSON_Object = stream:new_object();
     object
         :add_meta("Continue", node.meta)
+        :end();
+}
+
+function write_json_value : (stream : JSON_Stream mut&, node : Break&) -> void = {
+    mut object : JSON_Object = stream:new_object();
+    object
+        :add_meta("Break", node.meta)
         :end();
 }
 

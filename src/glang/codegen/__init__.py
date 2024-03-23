@@ -21,6 +21,7 @@ from glang.codegen.expressions import (
 )
 from glang.codegen.generatable import (
     Assignment,
+    BreakStatement,
     ContinueStatement,
     IfElseStatement,
     ReturnStatement,
@@ -62,6 +63,7 @@ __all__ = [
     "Assignment",
     "BoolType",
     "BorrowExpression",
+    "BreakStatement",
     "CompileTimeConstant",
     "ConstantExpression",
     "ContinueStatement",
