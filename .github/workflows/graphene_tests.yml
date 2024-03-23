@@ -17,14 +17,14 @@ jobs:
     env:
       GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
       GRAPHENE_LLI_CMD: lli-${{ matrix.llvm-version }}
-      PYTHON_CMD: python3.11
+      PYTHON_CMD: python3.12
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Install Python 3.11
+    - name: Install Python
       run: |
         sudo apt-get update
         sudo apt-get install -y $PYTHON_CMD
