@@ -17,21 +17,21 @@ jobs:
     env:
       GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
       GRAPHENE_LLI_CMD: lli-${{ matrix.llvm-version }}
-      PYTHON_CMD: python3.12
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         show-progress: false
-    - name: Install Python
+    - name: Install pipx
       run: |
-        sudo apt-get update
-        sudo apt-get install -y $PYTHON_CMD
+        python3 -m pip install --upgrade pip
+        python3 -m pip install --user pipx
+        python3 -m pipx ensurepath
     - name: Install hatch
-      run: |
-        $PYTHON_CMD -m pip install --upgrade pip
-        $PYTHON_CMD -m pip install hatch
+      run: pipx install hatch
+    - name: Install Python
+      run: hatch python install 3.12
     - name: Install clang and lli
       run: |
         wget https://apt.llvm.org/llvm.sh
