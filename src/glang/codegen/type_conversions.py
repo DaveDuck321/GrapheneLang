@@ -1,19 +1,17 @@
-from typing import Optional
-
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     HeapArrayDefinition,
     IEEEFloatDefinition,
     IntegerDefinition,
     StackArrayDefinition,
 )
-from .interfaces import (
+from glang.codegen.interfaces import (
     IRContext,
     IROutput,
     StaticTypedExpression,
     Type,
     TypedExpression,
 )
-from .user_facing_errors import OperandError, TypeCheckerError
+from glang.codegen.user_facing_errors import OperandError, TypeCheckerError
 
 
 class RemoveIndirection(StaticTypedExpression):
@@ -227,8 +225,8 @@ def implicit_conversion_impl(
     if (
         last_type().storage_kind.is_reference()
         and last_type().storage_kind == dest_type.storage_kind
-        and isinstance(last_array_def, (HeapArrayDefinition, StackArrayDefinition))
-        and isinstance(dest_array_def, (HeapArrayDefinition, StackArrayDefinition))
+        and isinstance(last_array_def, HeapArrayDefinition | StackArrayDefinition)
+        and isinstance(dest_array_def, HeapArrayDefinition | StackArrayDefinition)
         and last_array_def.member == dest_array_def.member
     ):
         if (
@@ -283,14 +281,14 @@ def assert_is_implicitly_convertible(
 
 def get_implicit_conversion_cost(
     src: Type | TypedExpression, dest_type: Type
-) -> Optional[int]:
+) -> int | None:
     class Wrapper(StaticTypedExpression):
         def __init__(self, expr_type: Type) -> None:
             super().__init__(expr_type, Type.Kind.VALUE, None)
 
         @property
         def ir_ref_without_type_annotation(self) -> str:
-            assert False
+            raise AssertionError
 
         def assert_can_read_from(self) -> None:
             pass

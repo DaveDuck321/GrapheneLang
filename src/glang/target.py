@@ -4,7 +4,6 @@ from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
 from sys import stderr
-from typing import Optional
 
 import yaml
 
@@ -29,19 +28,19 @@ class ManglingStyle(Enum):
     def llvm_datalayout_spec(self) -> str:
         if self == self.ELF:
             return "m:e"
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def private_symbol_prefix(self) -> str:
         if self == self.ELF:
             return ".L"
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @classmethod
     def from_str(cls, string: str) -> "ManglingStyle":
         if string == "elf":
             return cls.ELF
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class ABI(Enum):
@@ -83,7 +82,7 @@ class ABI(Enum):
             # Append member to the struct
             struct_size += member_size
 
-        # The size of any object is always a multiple of the object‘s alignment.
+        # The size of any object is always a multiple of the object's alignment.
         struct_size += compute_padding(
             struct_size, self.compute_struct_alignment(member_aligns)
         )
@@ -113,7 +112,7 @@ class ABI(Enum):
             # https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst#593arrays
             return member_align
 
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @classmethod
     def from_str(cls, string: str) -> "ABI":
@@ -124,7 +123,7 @@ class ABI(Enum):
             return cls.ARM_EABI
         if string == "aapcs64":
             return cls.AAPCS64
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,8 +184,8 @@ class TargetConfig:
 
 TARGETS_DIR = Path(__file__).parent / "targets"
 
-_target: Optional[str] = None
-_target_config: Optional[TargetConfig] = None
+_target: str | None = None
+_target_config: TargetConfig | None = None
 
 
 def load_target_config(target: str) -> None:
@@ -250,7 +249,7 @@ def get_datalayout() -> str:
 
     # Native integer widths.
     specs.append(
-        "n" + str.join(":", map(lambda w: str(w.in_bits), config.arch_native_widths))
+        "n" + str.join(":", (str(w.in_bits) for w in config.arch_native_widths))
     )
 
     # Alignment of the stack.

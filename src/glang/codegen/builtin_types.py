@@ -1,12 +1,11 @@
 import uuid
 from abc import abstractmethod
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from functools import cached_property, reduce
 from operator import mul
-from typing import Callable, Iterator, Optional
 
-from ..target import get_abi, get_int_type_info, get_ptr_type_info
-from .debug import (
+from glang.codegen.debug import (
     DIBasicType,
     DICompositeType,
     DIDerivedType,
@@ -17,22 +16,28 @@ from .debug import (
     Tag,
     TypeKind,
 )
-from .floats import float_literal_to_exact_hex
-from .interfaces import SpecializationItem, Type, TypeDefinition, format_specialization
-from .mangling import (
+from glang.codegen.floats import float_literal_to_exact_hex
+from glang.codegen.interfaces import (
+    SpecializationItem,
+    Type,
+    TypeDefinition,
+    format_specialization,
+)
+from glang.codegen.mangling import (
     mangle_float,
     mangle_int,
     mangle_operator_name,
     mangle_source_name,
     mangle_template_args,
 )
-from .user_facing_errors import (
+from glang.codegen.user_facing_errors import (
     ArrayDimensionError,
     FailedLookupError,
     InvalidIntSize,
     VoidArrayDeclaration,
     VoidStructDeclaration,
 )
+from glang.target import get_abi, get_int_type_info, get_ptr_type_info
 
 
 class PlaceholderDefinition(TypeDefinition):
@@ -41,7 +46,7 @@ class PlaceholderDefinition(TypeDefinition):
         return True
 
     def format_for_output_to_user(self) -> str:
-        assert False
+        raise AssertionError
 
     def copy_with_storage_kind(self, parent: Type, kind: Type.Kind) -> Type:
         assert kind.is_reference()
@@ -57,22 +62,22 @@ class PlaceholderDefinition(TypeDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        assert False
+        raise AssertionError
 
     @property
     def ir_type(self) -> str:
-        assert False
+        raise AssertionError
 
     @property
     def size(self) -> int:
-        assert False
+        raise AssertionError
 
     @property
     def alignment(self) -> int:
-        assert False
+        raise AssertionError
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        assert False
+        raise AssertionError
 
 
 class NamedType(Type):
@@ -81,7 +86,7 @@ class NamedType(Type):
         name: str,
         specialization: list[SpecializationItem],
         definition: TypeDefinition,
-        alias: Optional[Type],
+        alias: Type | None,
     ) -> None:
         super().__init__(definition)
 
@@ -89,7 +94,7 @@ class NamedType(Type):
         # TODO pass template parameter names; these are required for
         # DITemplateParameter.
         self.specialization = specialization
-        self.alias: Optional[Type] = alias
+        self.alias: Type | None = alias
 
     def should_defer_to_alias_for_ir(self) -> bool:
         return isinstance(self.alias, NamedType)
@@ -271,18 +276,18 @@ class VoidDefinition(PrimitiveDefinition):
 
     @property
     def size(self) -> int:
-        assert False
+        raise AssertionError
 
     @property
     def alignment(self) -> int:
-        assert False
+        raise AssertionError
 
     @property
     def is_void(self) -> bool:
         return True
 
     def to_di_type(self, metadata_gen: Iterator[int]) -> list[Metadata]:
-        assert False
+        raise AssertionError
 
     @property
     def ir_mangle(self) -> str:
@@ -335,14 +340,15 @@ class IntegerDefinition(PrimitiveDefinition):
 
     @property
     def ir_mangle(self) -> str:
-        return mangle_int(self.bits, self.is_signed)
+        return mangle_int(self.bits, is_signed=self.is_signed)
 
 
 class GenericIntType(PrimitiveType):
     def __init__(self, name: str, size_in_bits: int, is_signed: bool) -> None:
         is_power_of_2 = ((size_in_bits - 1) & size_in_bits) == 0
         is_divisible_into_bytes = (size_in_bits % 8) == 0
-        assert is_power_of_2 and is_divisible_into_bytes
+        assert is_power_of_2
+        assert is_divisible_into_bytes
 
         definition = IntegerDefinition(name, size_in_bits, is_signed)
         super().__init__(name, definition)
@@ -474,10 +480,7 @@ class StructDefinition(ValueTypeDefinition):
 
     @property
     def is_finite(self) -> bool:
-        for _, member_type in self.members:
-            if not member_type.is_finite:
-                return False
-        return True
+        return all(member_type.is_finite for _, member_type in self.members)
 
     @property
     def ir_type(self) -> str:
@@ -903,7 +906,8 @@ def get_builtin_types() -> list[PrimitiveType]:
         sized_int_types.append(GenericIntType(f"i{size}", size, True))
         sized_int_types.append(GenericIntType(f"u{size}", size, False))
 
-    return sized_int_types + [
+    return [
+        *sized_int_types,
         BoolType(),
         IntType(),
         IPtrType(),

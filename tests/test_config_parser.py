@@ -1,6 +1,7 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Optional, TypeGuard
+from typing import Any, TypeGuard
 
 from lark import Lark, Token, Tree, v_args
 from lark.visitors import Interpreter
@@ -16,17 +17,17 @@ def is_list_of_str(
 @dataclass
 class ExpectedOutput:
     status: int
-    stdout: Optional[list[str]]
-    stderr: Optional[list[str]]
+    stdout: list[str] | None
+    stderr: list[str] | None
 
 
 @dataclass
 class TestConfig:
-    for_target: Optional[str]
-    compile: Optional[ExpectedOutput]
+    for_target: str | None
+    compile_opts: ExpectedOutput | None
     compile_args: list[str]
     grep_ir_strs: list[str]
-    run: Optional[ExpectedOutput]
+    run_opts: ExpectedOutput | None
     run_args: list[str]
 
 
@@ -49,8 +50,8 @@ class ConfigInterpreter(Interpreter):
 
     def _cmd_impl(
         self,
-        status_tree: Optional[Tree],
-        msg_tree: Optional[Tree],
+        status_tree: Tree | None,
+        msg_tree: Tree | None,
     ) -> ExpectedOutput:
         expected_output = ExpectedOutput(0, None, None)
 
@@ -85,22 +86,22 @@ class ConfigInterpreter(Interpreter):
 
     @v_args(inline=True)
     def compile_cmd(self, *trees: Tree) -> None:
-        assert self.config.compile is None
+        assert self.config.compile_opts is None
 
         *arg_tokens, status_tree, msg_tree = trees
         assert is_list_of_str(arg_tokens)
 
-        self.config.compile = self._cmd_impl(status_tree, msg_tree)
+        self.config.compile_opts = self._cmd_impl(status_tree, msg_tree)
         self.config.compile_args.extend(arg_tokens)
 
     @v_args(inline=True)
     def run_cmd(self, *trees: Tree) -> None:
-        assert self.config.run is None
+        assert self.config.run_opts is None
 
         *arg_tokens, status_tree, msg_tree = trees
         assert is_list_of_str(arg_tokens)
 
-        self.config.run = self._cmd_impl(status_tree, msg_tree)
+        self.config.run_opts = self._cmd_impl(status_tree, msg_tree)
         self.config.run_args.extend(arg_tokens)
 
     @v_args(inline=True)
@@ -110,10 +111,9 @@ class ConfigInterpreter(Interpreter):
 
 def parse_file(path: Path) -> TestConfig:
     with path.open(encoding="utf-8") as file:
-        lines = map(
-            lambda line: line.removeprefix("///").strip(),
-            filter(lambda line: line.startswith("///"), file.readlines()),
-        )
+        lines = [
+            line.removeprefix("///").strip() for line in file if line.startswith("///")
+        ]
 
     tree = lark.parse("\n".join(lines))
     interpreter = ConfigInterpreter()

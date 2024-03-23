@@ -7,7 +7,6 @@ from os import getenv
 from pathlib import Path
 from sys import exit as sys_exit
 from threading import Lock
-from typing import Optional
 
 from tap import Tap
 from test_config_parser import ExpectedOutput, parse_file
@@ -75,7 +74,7 @@ def run_command(
     directory: Path,
     command: list[str | Path],
     expected_output: ExpectedOutput,
-    stdin: Optional[str] = None,
+    stdin: str | None = None,
 ) -> str:
     result = subprocess.run(
         command,
@@ -88,7 +87,7 @@ def run_command(
     status = result.returncode
     stdout, stderr = result.stdout.splitlines(), result.stderr.splitlines()
 
-    def match_output(actual: list[str], expected: Optional[list[str]]) -> bool:
+    def match_output(actual: list[str], expected: list[str] | None) -> bool:
         if expected is None:
             return True
 
@@ -132,7 +131,7 @@ def run_test(file_path: Path) -> bool:
         return False
 
     # @COMPILE (mandatory)
-    assert config.compile
+    assert config.compile_opts
     ir_output = run_command(
         "compile",
         file_path.parent,
@@ -142,7 +141,7 @@ def run_test(file_path: Path) -> bool:
             *config.compile_args,
             file_path,
         ],
-        config.compile,
+        config.compile_opts,
     )
 
     # @GREP_IR
@@ -151,7 +150,7 @@ def run_test(file_path: Path) -> bool:
             raise IRGrepFailure(needle)
 
     # @RUN
-    if config.run:
+    if config.run_opts:
         # If we're not using the C runtime, then don't resolve lli process
         # symbols in JIT'd code (or else the tests will be able to call into
         # glibc) and specify `_start` as the entry function (defined in
@@ -176,7 +175,7 @@ def run_test(file_path: Path) -> bool:
                 "-",
                 *config.run_args,
             ],
-            config.run,
+            config.run_opts,
             ir_output,
         )
 
@@ -245,7 +244,7 @@ def build_jit_dependencies() -> None:
 
 
 class Arguments(Tap):
-    test: Optional[Path] = None
+    test: Path | None = None
     workers: int = cpu_count()
 
 
