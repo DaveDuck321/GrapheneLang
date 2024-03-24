@@ -975,7 +975,16 @@ function parse_non_operator_expression_prefix : (cursor : Cursor mut&) -> Expres
 function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expression = {
     let start_offset : isize = cursor.position;
 
-    if is_one_of(cursor:get_char(), char("!"), char("-"), char("+"), char("~")) {
+    if cursor:try_skip_next_and_surrounding_white_space("not") {
+        let rhs : Expression = cursor:parse_maybe_unary_or_borrow_expression();
+
+        let operator_call : UnaryLogicalOperator mut& = &mut cursor.allocator:allocate<UnaryLogicalOperator>();
+        operator_call = {{start_offset, start_offset + length("not")}, rhs, meta(start_offset, rhs.meta.end_offset)};
+
+        return {13, ref_to_addr(&operator_call), operator_call.meta};
+    }
+
+    if is_one_of(cursor:get_char(), char("!"),char("-"), char("+"), char("~")) {
         let name : ProgramSlice = cursor:slice(1);
         cursor.position += 1;
         cursor:try_skip_white_space();

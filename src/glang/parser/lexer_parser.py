@@ -241,6 +241,12 @@ class UnaryOperatorUse(Expression):
 
 
 @dataclass
+class UnaryLogicalOperatorUse(Expression):
+    name: str
+    rhs: Expression
+
+
+@dataclass
 class LogicalOperatorUse(Expression):
     name: str
     lhs: Expression
