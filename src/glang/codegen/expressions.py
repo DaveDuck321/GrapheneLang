@@ -838,7 +838,7 @@ class LogicalOperator(StaticTypedExpression):
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
-        assert self.result_reg
+        assert self.result_reg is not None
         return f"%{self.result_reg}"
 
     def assert_can_read_from(self) -> None:
@@ -890,7 +890,7 @@ class LogicalNot(StaticTypedExpression):
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
-        assert self.result_reg
+        assert self.result_reg is not None
         return f"%{self.result_reg}"
 
     def assert_can_read_from(self) -> None:

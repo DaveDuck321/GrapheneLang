@@ -1,3 +1,5 @@
+@require_once "std/arithmetic.c3"
+
 function main : () -> int = {
     if not true != false {
         return 1;
