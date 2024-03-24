@@ -33,5 +33,5 @@ jobs:
       - name: Run ruff
         run: |
           output=$(hatch fmt --linter --check)
-          echo output >> $GITHUB_STEP_SUMMARY
-          echo output | grep "No errors fixed"
+          echo "$output" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | grep "No errors fixed"
