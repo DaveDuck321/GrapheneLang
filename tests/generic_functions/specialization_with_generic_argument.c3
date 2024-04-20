@@ -41,7 +41,7 @@ function [T] data : (opt : Optional<T&> mut&) -> T mut& = {
 function main: () -> int = {
     mut non_specialized : Optional<int> = make<Optional<int>>(8);
     non_specialized:data() = 7;
-    if !non_specialized:has_value() or non_specialized:data() != 7 {
+    if not non_specialized:has_value() or non_specialized:data() != 7 {
         return 1;
     }
 
@@ -52,7 +52,7 @@ function main: () -> int = {
 
     mut data : int = 9;
     mut specialized : Optional<int&> = make<Optional<int&>>(&mut data);
-    if !specialized:has_value() or specialized:data() != 9 {
+    if not specialized:has_value() or specialized:data() != 9 {
         return 3;
     }
     specialized:data() = 8;

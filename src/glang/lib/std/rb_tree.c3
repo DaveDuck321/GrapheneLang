@@ -43,7 +43,7 @@ typedef [K] RB_Tree : {
 }
 
 @operator [K] != : (left : RB_Node<K>&, right : RB_Node<K>&) -> bool = {
-    return !(&left == &right);
+    return not (&left == &right);
 }
 
 @operator [K] == : (
@@ -59,7 +59,7 @@ typedef [K] RB_Tree : {
 @operator [K] != : (
     left : Optional<RB_Node<K> mut&>, right : Optional<RB_Node<K> mut&>
 ) -> bool = {
-    return !(left == right);
+    return not (left == right);
 }
 
 function [K] new<RB_Node<K>> : (
@@ -119,7 +119,7 @@ function [K] is_red : (node_opt : Optional<RB_Node<K> mut&>&) -> bool = {
 }
 
 function [K] is_black : (node_opt : Optional<RB_Node<K> mut&>&) -> bool = {
-    return !node_opt:is_red();
+    return not node_opt:is_red();
 }
 
 function [K] colour_black : (node_opt : Optional<RB_Node<K> mut&> mut&) -> void = {
@@ -133,12 +133,12 @@ function [K] rotate : (
     self : RB_Tree<K> mut&, u : RB_Node<K> mut&, side : bool
 ) -> void = {
     // If we are rotating left, get the right child.
-    let v : RB_Node<K> mut& = &mut u:get_child(!side):data();
+    let v : RB_Node<K> mut& = &mut u:get_child(not side):data();
 
     // Move child from v to u, and update the child's parent pointer.
-    u:get_child(!side) = v:get_child(side);
-    if u:get_child(!side):has_value() {
-        u:get_child(!side):data().parent:store(&mut u);
+    u:get_child(not side) = v:get_child(side);
+    if u:get_child(not side):has_value() {
+        u:get_child(not side):data().parent:store(&mut u);
     }
 
     // Replace u with v.
@@ -167,7 +167,7 @@ function [K] fix_after_insert : (
         let u : RB_Node<K> mut& = &mut u_ptr:data();
 
         // Case 4: u has no parent.
-        if !u.parent:has_value() {
+        if not u.parent:has_value() {
             // u is the root node. Colour it black.
             u.colour = BLACK();
             return;
@@ -199,13 +199,13 @@ function [K] fix_after_insert : (
 
         // Case 3: u has a red parent and a black uncle.
         let u_side : bool = u:which_child_am_i();
-        let uncle_side : bool = !v:which_child_am_i();
+        let uncle_side : bool = not v:which_child_am_i();
 
         if u_side != uncle_side {
             // Case 3a: u is away from its uncle.
             // Rotate, then leave u red and colour w, its new sibling, red.
             // Their new parent should thus be black.
-            self:rotate(&mut w, !u_side);
+            self:rotate(&mut w, not u_side);
             v.colour = BLACK();
             w.colour = RED();
         }
@@ -213,7 +213,7 @@ function [K] fix_after_insert : (
             // Case 3b: u is towards its uncle.
             // Now u becomes the parent of v and w. Colour it black, leave v
             // red, and make w red.
-            self:rotate(&mut v, !u_side);
+            self:rotate(&mut v, not u_side);
             self:rotate(&mut w, u_side);
             u.colour = BLACK();
             w.colour = RED();
@@ -322,7 +322,7 @@ function [K] fix_after_delete_impl : (
 ) -> Optional<RB_Node<K> mut&> = {
     // x is guaranteed not to be the root.
     mut x_side : bool = which_child_am_i(x, &mut x_parent);
-    mut w_side : bool = !x_side;
+    mut w_side : bool = not x_side;
 
     // x's sibling, w, cannot be a leaf node (nil node). If x is double black,
     // then its sibling tree must also have a height of at least 2 black nodes.

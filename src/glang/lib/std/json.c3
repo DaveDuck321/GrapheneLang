@@ -85,7 +85,7 @@ function eat : (cursor : Cursor mut&, token : u8) -> bool = {
 
 function eat : (cursor : Cursor mut&, string : StringView) -> bool = {
     for token in string:get_iter() {
-        if !cursor:eat(token) {
+        if not cursor:eat(token) {
             return false;
         }
     }
@@ -98,7 +98,7 @@ function eat_whitespace : (cursor: Cursor mut&) -> void = {
         let next_char : Optional<u8> = cursor:peak();
         runtime_assert(next_char:has_value());
 
-        if !is_json_whitespace(next_char:data()) {
+        if not is_json_whitespace(next_char:data()) {
             return;
         }
 
@@ -109,7 +109,7 @@ function eat_whitespace : (cursor: Cursor mut&) -> void = {
 
 // TODO return ErrorOr<JSON_Node>.
 function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    if !cursor:eat(char("{")) {
+    if not cursor:eat(char("{")) {
         return make<Optional<JSON_Node>>();
     }
 
@@ -127,7 +127,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
         let string_node : Optional<JSON_Node> = cursor:parse_string();
 
-        if !string_node:has_value() {
+        if not string_node:has_value() {
             node.children:deallocate();
             return make<Optional<JSON_Node>>();
         }
@@ -136,14 +136,14 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
         cursor:eat_whitespace();
 
-        if !cursor:eat(char(":")) {
+        if not cursor:eat(char(":")) {
             node.children:deallocate();
             return make<Optional<JSON_Node>>();
         }
 
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
-        if !value_node:has_value() {
+        if not value_node:has_value() {
             node.children:deallocate();
             return make<Optional<JSON_Node>>();
         }
@@ -155,7 +155,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             return make<Optional<JSON_Node>>(node);
         }
 
-        if !cursor:eat(char(",")) {
+        if not cursor:eat(char(",")) {
             node.children:deallocate();
             return make<Optional<JSON_Node>>();
         }
@@ -167,7 +167,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 }
 
 function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    if !cursor:eat(char("[")) {
+    if not cursor:eat(char("[")) {
         return make<Optional<JSON_Node>>();
     }
 
@@ -183,7 +183,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     while true {
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
-        if !value_node:has_value() {
+        if not value_node:has_value() {
             return make<Optional<JSON_Node>>();
         }
 
@@ -194,7 +194,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
             return make<Optional<JSON_Node>>(node);
         }
 
-        if !cursor:eat(char(",")) {
+        if not cursor:eat(char(",")) {
             node.children:deallocate();
             return make<Optional<JSON_Node>>();
         }
@@ -206,7 +206,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
 function parse_value : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     let optional_next_token : Optional<u8> = cursor:peak();
-    if !optional_next_token:has_value() {
+    if not optional_next_token:has_value() {
         return make<Optional<JSON_Node>>();
     }
 
@@ -260,7 +260,7 @@ function is_control_character : (char : u8) -> bool = {
 }
 
 function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    if !cursor:eat(char("\"")) {
+    if not cursor:eat(char("\"")) {
         return make<Optional<JSON_Node>>();
     }
 
@@ -269,7 +269,7 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     mut string : Vector<u8> = make<Vector<u8>>(&mut cursor.allocator);
 
     while cursor:has_next() {
-        if !in_escape_seq and cursor:eat(char("\"")) {
+        if not in_escape_seq and cursor:eat(char("\"")) {
             mut node : JSON_Node = new_json_node(/* string */ 3, &mut cursor.allocator);
 
             // TODO: https://github.com/DaveDuck321/GrapheneLang/issues/124
@@ -337,7 +337,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     // This is optional, so discard the return value.
     cursor:eat(char("-"));
 
-    if !cursor:eat(char("0")) {
+    if not cursor:eat(char("0")) {
         while is_digit_helper(cursor:peak()) {
             is_valid = true;
             cursor:next();
@@ -352,7 +352,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
     let end_pos : isize = cursor:position();
 
-    if !is_valid {
+    if not is_valid {
         return make<Optional<JSON_Node>>();
     }
 
@@ -371,7 +371,7 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
 
     let result : Optional<JSON_Node> = cursor:parse_element();
 
-    if !result:has_value() {
+    if not result:has_value() {
         return result;
     }
 
@@ -379,7 +379,7 @@ function json_parse : (source : StringView) -> Optional<JSON_Node> = {
     // e.g. '[1, 2], 2' would parse up to the end of the array, but the
     // remaining input makes this invalid json.
     cursor:eat_whitespace();
-    if !cursor:has_next() {
+    if not cursor:has_next() {
         return result;
     }
 

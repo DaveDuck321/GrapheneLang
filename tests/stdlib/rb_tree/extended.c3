@@ -8,14 +8,14 @@ function [K] child_is_valid_rb_tree: (
 ) -> Optional<int> = {
     let child_opt : Optional<RB_Node<K> mut&> = node:get_child(side);
 
-    if !child_opt:has_value() {
+    if not child_opt:has_value() {
         return make<Optional<int>>(1);
     }
 
     let child : RB_Node<K> mut& = &mut child_opt:data();
 
     // Check that the child's parent reference is correct.
-    if !child.parent:has_value() or
+    if not child.parent:has_value() or
         ref_to_addr(&child.parent:data()) != ref_to_addr(&node) {
         return make<Optional<int>>();
     }
@@ -44,12 +44,12 @@ function [K] is_valid_rb_tree_impl : (node : RB_Node<K> mut&) -> Optional<int> =
     // Property 5: starting from any node, all simple paths down to leaf nodes
     // hold the same number of black nodes.
     let black_count_l : Optional<int> = node:child_is_valid_rb_tree(LEFT());
-    if !black_count_l:has_value() {
+    if not black_count_l:has_value() {
         return make<Optional<int>>();
     }
 
     let black_count_r : Optional<int> = node:child_is_valid_rb_tree(RIGHT());
-    if !black_count_r:has_value() {
+    if not black_count_r:has_value() {
         return make<Optional<int>>();
     }
 
@@ -84,14 +84,14 @@ function main : () -> int = {
 
     for i in range(n) {
         tree:insert(i);
-        if !tree:is_valid_rb_tree() {
+        if not tree:is_valid_rb_tree() {
             return 1;
         }
     }
 
     for i in range(n) {
         let value : Optional<int> = tree:search(i);
-        if !value:has_value() or value:data() != i {
+        if not value:has_value() or value:data() != i {
             return 2;
         }
     }
@@ -105,21 +105,21 @@ function main : () -> int = {
 
     for i in range(1, n, 5) {
         tree:delete(i);
-        if !tree:is_valid_rb_tree() {
+        if not tree:is_valid_rb_tree() {
             return 4;
         }
     }
 
     for i in range(0, n, 7) {
         tree:delete(i);
-        if !tree:is_valid_rb_tree() {
+        if not tree:is_valid_rb_tree() {
             return 5;
         }
     }
 
     for i in range(n) {
         tree:delete(i);
-        if !tree:is_valid_rb_tree() {
+        if not tree:is_valid_rb_tree() {
             return 6;
         }
     }

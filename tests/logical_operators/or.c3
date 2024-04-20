@@ -7,13 +7,13 @@ function main : () -> int = {
     if falsy() or falsy() {
         return 1;
     }
-    if !(truthy() or falsy()) {
+    if not (truthy() or falsy()) {
         return 1;
     }
-    if !(falsy() or truthy()) {
+    if not (falsy() or truthy()) {
         return 1;
     }
-    if !(truthy() or truthy()) {
+    if not (truthy() or truthy()) {
         return 1;
     }
     return 0;

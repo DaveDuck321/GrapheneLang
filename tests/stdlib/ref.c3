@@ -3,11 +3,11 @@
 @require_once "std/util.c3"
 
 function main : () -> int = {
-    if !value<AreEquivalent<int&, Ref<int>>>() {
+    if not value<AreEquivalent<int&, Ref<int>>>() {
         return 1;
     }
 
-    if !value<AreEquivalent<int&, Ref<int&>>>() {
+    if not value<AreEquivalent<int&, Ref<int&>>>() {
         return 2;
     }
 

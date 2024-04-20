@@ -975,16 +975,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor mut&) -> Expres
 function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expression = {
     let start_offset : isize = cursor.position;
 
-    if cursor:try_skip_next_and_surrounding_white_space("not") {
-        let rhs : Expression = cursor:parse_maybe_unary_or_borrow_expression();
-
-        let operator_call : UnaryLogicalOperator mut& = &mut cursor.allocator:allocate<UnaryLogicalOperator>();
-        operator_call = {{start_offset, start_offset + length("not")}, rhs, meta(start_offset, rhs.meta.end_offset)};
-
-        return {13, ref_to_addr(&operator_call), operator_call.meta};
-    }
-
-    if is_one_of(cursor:get_char(), char("!"),char("-"), char("+"), char("~")) {
+    if is_one_of(cursor:get_char(), char("!"), char("-"), char("+"), char("~")) {
         let name : ProgramSlice = cursor:slice(1);
         cursor.position += 1;
         cursor:try_skip_white_space();
@@ -1029,22 +1020,32 @@ function [T] parse_expression_with_order_of_operation : (cursor : Cursor mut&, o
     while cursor:try_skip_next_operator(current_op) {
         let op_name : ProgramSlice = {last_operator_start, cursor:skip_ws_return_offset()};
 
-        let rhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter_copy);
+        if cursor:get_sv(op_name) == "not" {
+            let meta : Meta = meta(lhs.meta.start_offset, cursor.position);
 
-        let meta : Meta = meta(lhs.meta.start_offset, cursor.position);
+            let operator_call : UnaryLogicalOperator mut& = &mut cursor.allocator:allocate<UnaryLogicalOperator>();
+            operator_call = {op_name, lhs, meta};
 
-        if is_one_of(cursor:get_sv(op_name), sv("and"), sv("or")) {
-            // This is currently very similar to the binary operator code.
-            // However, binary operators will be parsed directly as function
-            // calls in the future, so the code will diverge.
-            let logical_operator : LogicalOperator mut& = &mut cursor.allocator:allocate<LogicalOperator>();
-            logical_operator = {op_name, lhs, rhs, meta};
-            lhs = {12, ref_to_addr(&logical_operator), meta};
+            lhs = {13, ref_to_addr(&operator_call), operator_call.meta};
         }
         else {
-            let operator_call : Operator mut& = &mut cursor.allocator:allocate<Operator>();
-            operator_call = {op_name, lhs, rhs, meta};
-            lhs = {8, ref_to_addr(&operator_call), meta};
+            let rhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter_copy);
+
+            let meta : Meta = meta(lhs.meta.start_offset, cursor.position);
+
+            if is_one_of(cursor:get_sv(op_name), sv("and"), sv("or")) {
+                // This is currently very similar to the binary operator code.
+                // However, binary operators will be parsed directly as function
+                // calls in the future, so the code will diverge.
+                let logical_operator : LogicalOperator mut& = &mut cursor.allocator:allocate<LogicalOperator>();
+                logical_operator = {op_name, lhs, rhs, meta};
+                lhs = {12, ref_to_addr(&logical_operator), meta};
+            }
+            else {
+                let operator_call : Operator mut& = &mut cursor.allocator:allocate<Operator>();
+                operator_call = {op_name, lhs, rhs, meta};
+                lhs = {8, ref_to_addr(&operator_call), meta};
+            }
         }
 
         last_operator_start = cursor.position;
@@ -1055,9 +1056,10 @@ function [T] parse_expression_with_order_of_operation : (cursor : Cursor mut&, o
 function parse_expression : (cursor : Cursor mut&) -> Expression = {
     // TODO: this size argument needs to somehow be automatic
     // TODO: all items on the same line should have the same priority
-    let order_of_operation : StringView[21] = {
+    let order_of_operation : StringView[22] = {
         sv("or"),
         sv("and"),
+        sv("not"),
         sv("=="), sv("<"), sv(">"), sv(">="), sv("<="), sv("!="), sv("<=>"),
         sv("|"),
         sv("^"),

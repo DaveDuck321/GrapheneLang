@@ -40,6 +40,24 @@ function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>&, u8&
     return lhs.buffer == rhs.buffer;
 }
 
+@operator [@Len] == : (lhs : StringView, rhs : u8[@Len]&) -> bool = {
+    if lhs:length() != rhs:length() {
+        return false;
+    }
+
+    for i in range(lhs:length()) {
+        if lhs.buffer.data[i] != rhs[i] {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+@operator [@Len] == : (rhs : u8[@Len]&, rhs : StringView) -> bool = {
+    return rhs == lhs;
+}
+
 function slice_to : (sv : StringView&, end : isize) -> StringView = {
     return { sv.buffer:slice_to(end) };
 }

@@ -20,7 +20,7 @@ function main : () -> int = {
     runtime_assert(tree:delete(1));
     runtime_assert(tree:delete(2));
     runtime_assert(tree:delete(3));
-    runtime_assert(!tree:delete(4));
+    runtime_assert(not tree:delete(4));
 
     print(tree:search(4));
     print(tree:search(3));

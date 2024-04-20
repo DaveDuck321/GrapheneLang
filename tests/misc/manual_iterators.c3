@@ -18,7 +18,7 @@ function main : () -> int = {
     __builtin_get_next(&mut a);
     __builtin_get_next(&mut a);
 
-    if !__builtin_has_next(&a) {
+    if not __builtin_has_next(&a) {
         return 0;
     }
     return a.val;

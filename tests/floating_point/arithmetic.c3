@@ -6,7 +6,7 @@ function fp_are_equal : (a : f32, b : f32) -> bool = {
 }
 
 function main : () -> int = {
-    if !fp_are_equal(0.1 + 0.2, 0.3) {
+    if not fp_are_equal(0.1 + 0.2, 0.3) {
         return 1;
     }
 

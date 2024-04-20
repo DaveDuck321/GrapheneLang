@@ -22,7 +22,7 @@ function main : () -> int = {
     if value<AreEquivalent<A, B<isize>>>() {
         return 1;
     }
-    if !value<AreEquivalent<A, B<int>>>() {
+    if not value<AreEquivalent<A, B<int>>>() {
         return 2;
     }
     return 0;

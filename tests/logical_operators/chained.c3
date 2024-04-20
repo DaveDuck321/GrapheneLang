@@ -14,25 +14,25 @@ function main : () -> int = {
     if falsy() and truthy() and truthy() {
         return 1;
     }
-    if !(truthy() and truthy() and truthy()) {
+    if not (truthy() and truthy() and truthy()) {
         return 1;
     }
 
     if falsy() or falsy() or falsy() {
         return 1;
     }
-    if !(truthy() or falsy() or falsy()) {
+    if not (truthy() or falsy() or falsy()) {
         return 1;
     }
-    if !(falsy() or truthy() or truthy()) {
+    if not (falsy() or truthy() or truthy()) {
         return 1;
     }
-    if !(truthy() or truthy() or truthy()) {
+    if not (truthy() or truthy() or truthy()) {
         return 1;
     }
 
     // or has lower precedence.
-    if !(falsy() and falsy() or truthy()) {
+    if not (falsy() and falsy() or truthy()) {
         return 1;
     }
 
