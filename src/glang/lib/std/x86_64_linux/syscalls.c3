@@ -57,9 +57,8 @@ function sys_mmap : (
                       fd, offset, /* mmap */ 9);
 }
 
-function sys_munmap : (addr: isize, length : isize) -> int = {
-    let result : i64 = _syscall_2(addr, length, /* munmap */ 11);
-    return Narrow<int>(result);
+function sys_munmap : (addr: isize, length : isize) -> i64 = {
+    return _syscall_2(addr, length, /* munmap */ 11);
 }
 
 function sys_exit : (code : int) -> void = {

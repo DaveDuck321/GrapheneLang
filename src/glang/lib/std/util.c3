@@ -63,6 +63,18 @@ function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(v
 function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); }
 function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); }
 
+function [Ret, In] Narrow : (value : In) ->
+TypeIf<
+    Ret,
+    Either<
+        Both<IsIntegral<Ret>, IsIntegral<In>>,
+        Both<IsLogical<Ret>, IsLogical<In>>
+    >> =
+{
+    // TODO: reject sizeof(Ret) >= sizeof(In) at compile time
+    return __builtin_narrow<Ret>(value);
+}
+
 function value<TrueType> : () -> bool = { return true; }
 function value<FalseType> : () -> bool = { return false; }
 
