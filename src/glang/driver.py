@@ -5,7 +5,7 @@ import sys
 from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import dataclass
-from os import getenv, fdopen
+from os import fdopen, getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkstemp
 from typing import Any
