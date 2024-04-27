@@ -170,9 +170,6 @@ class LLVM_IR(Stage):
             ],
             stdin=self.get_bytes(),
         )
-        if args.emit_llvm_to_stdout:
-            print(result.decode("utf-8"))
-
         return ELF_Binary(result, self)
 
     def optimize(self, args: DriverArguments) -> "LLVM_IR":
@@ -207,6 +204,9 @@ class GrapheneSource(Stage):
             self.get_file(), args.include_path, debug_compiler=args.debug_compiler
         )
         ir_bytes = ir.encode("utf-8")
+
+        if args.emit_llvm_to_stdout:
+            print(ir_bytes.decode("utf-8"))
 
         if will_emit_llvm:
             if args.emit_everything or args.output is None:
