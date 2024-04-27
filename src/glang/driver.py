@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import subprocess
 import sys
 from argparse import Action, ArgumentParser, Namespace
 from collections.abc import Sequence
 from dataclasses import dataclass
-from os import getenv
+from os import getenv, fdopen
 from pathlib import Path
 from tempfile import TemporaryDirectory, mkstemp
 from typing import Any
@@ -108,22 +110,24 @@ class PrintHostTargetAction(Action):
 @dataclass(frozen=True)
 class Stage:
     source: Path | bytes
-    derived_from: "Stage | None"
+    derived_from: Stage | None
 
     def get_bytes(self) -> bytes:
         if isinstance(self.source, bytes):
             return self.source
 
-        with open(self.source, "rb") as f:
-            return f.read()
+        assert isinstance(self.source, Path)
+        return self.source.read_bytes()
 
     def get_file(self) -> Path:
         if isinstance(self.source, Path):
             return self.source
 
-        path = Path(mkstemp(dir=Path(global_tmp_dir.name))[1])
-        path.write_bytes(self.source)
-        return path
+        fd, path = mkstemp(dir=Path(global_tmp_dir.name))
+        with fdopen(fd, "wb") as file:
+            file.write(self.source)
+
+        return Path(path)
 
     def get_top_level_source_file(self) -> Path:
         if self.derived_from is None:
@@ -151,6 +155,7 @@ class Assembly(Stage):
                 getenv("GRAPHENE_LLVM_MC_CMD", "llvm-mc"),
                 "--filetype=obj",
                 f"--triple={get_target_triple()}",
+                "-g",
             ],
             stdin=expanded,
         )
@@ -172,7 +177,7 @@ class LLVM_IR(Stage):
         )
         return ELF_Binary(result, self)
 
-    def optimize(self, args: DriverArguments) -> "LLVM_IR":
+    def optimize(self, args: DriverArguments) -> LLVM_IR:
         will_emit_optimized_llvm = args.emit_optimized_llvm or args.emit_everything
         optimized_ir = run_checked(
             [
@@ -228,6 +233,7 @@ def link_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
     run_checked(
         [
             getenv("GRAPHENE_LLD_CMD", "ld.lld"),
+            "--build-id=sha1",
             *linker_args,
             *(obj.get_file() for obj in objects),
             "-o",
