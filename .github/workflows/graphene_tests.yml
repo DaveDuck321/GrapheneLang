@@ -17,6 +17,7 @@ jobs:
     env:
       GRAPHENE_CLANG_CMD: clang-${{ matrix.llvm-version }}
       GRAPHENE_LLC_CMD: llc-${{ matrix.llvm-version }}
+      GRAPHENE_LLD_CMD: ld.lld-${{ matrix.llvm-version }}
       GRAPHENE_LLI_CMD: lli-${{ matrix.llvm-version }}
       GRAPHENE_LLVM_AR_CMD: llvm-ar-${{ matrix.llvm-version }}
       GRAPHENE_LLVM_MC_CMD: llvm-mc-${{ matrix.llvm-version }}
