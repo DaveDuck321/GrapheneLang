@@ -40,6 +40,21 @@ def run_checked(args: list[str | Path], stdin: bytes | None = None) -> bytes:
     return result.stdout
 
 
+class PrintHostTargetAction(Action):
+    def __call__(
+        self,
+        parser: ArgumentParser,
+        namespace: Namespace,
+        values: str | Sequence[Any] | None,
+        option_string: str | None = None,
+    ) -> None:
+        # Stop parsing and exit after printing the host's target. If we keep
+        # parsing, then the parser complains that `input`, a required position
+        # argument, is missing.
+        print(get_host_target())
+        parser.exit()
+
+
 class DriverArguments(Tap):
     inputs: list[Path]
     output: Path | None = None
@@ -90,21 +105,6 @@ class DriverArguments(Tap):
         self.add_argument("-I", "--include_path")
         self.add_argument("-O", "--optimize")
         self.add_argument("--print_host_target", nargs=0, action=PrintHostTargetAction)
-
-
-class PrintHostTargetAction(Action):
-    def __call__(
-        self,
-        parser: ArgumentParser,
-        namespace: Namespace,
-        values: str | Sequence[Any] | None,
-        option_string: str | None = None,
-    ) -> None:
-        # Stop parsing and exit after printing the host's target. If we keep
-        # parsing, then the parser complains that `input`, a required position
-        # argument, is missing.
-        print(get_host_target())
-        parser.exit()
 
 
 @dataclass(frozen=True)
