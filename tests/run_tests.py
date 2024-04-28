@@ -172,6 +172,7 @@ def run_test(file_path: Path) -> bool:
                 *lli_runtime_options,
                 "--extra-object",
                 RUNTIME_OBJ_PATH,
+                "--lljit-platform=Inactive",
                 "-",
                 *config.run_args,
             ],
