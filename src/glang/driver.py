@@ -23,7 +23,7 @@ from glang.target import (
 global_tmp_dir = TemporaryDirectory()
 
 
-def run_checked(args: list[str | Path], stdin: bytes | None) -> bytes:
+def run_checked(args: list[str | Path], stdin: bytes | None = None) -> bytes:
     # Like the python one but actually output the stderr on fail
     result = subprocess.run(
         args,
@@ -146,9 +146,8 @@ class Assembly(Stage):
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 "-E",
                 "-xassembler-with-cpp",
-                "-",
+                self.get_file(),
             ],
-            stdin=self.get_bytes(),
         )
         compiled = run_checked(
             [
@@ -239,7 +238,6 @@ def link_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
             "-o",
             binary_output,
         ],
-        stdin=None,
     )
 
 
@@ -252,7 +250,6 @@ def bundle_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
             lib_output,
             *(obj.get_file() for obj in objects),
         ],
-        stdin=None,
     )
 
 
