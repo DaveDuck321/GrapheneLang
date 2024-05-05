@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install hatch
-        run: python3 -m pip install hatch --user
+        run: python3 -m pip install hatch==1.9.4 --user
       - name: Run ruff
         run: |
           output=$(hatch fmt --linter --check)
