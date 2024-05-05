@@ -29,7 +29,7 @@ jobs:
       with:
         show-progress: false
     - name: Install hatch
-      run: python3 -m pip install hatch --user
+      run: python3 -m pip install hatch==1.9.4 --user
     - name: Install clang and lli
       run: |
         wget https://apt.llvm.org/llvm.sh
