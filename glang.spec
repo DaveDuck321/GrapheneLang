@@ -1,5 +1,5 @@
 Name:           glang
-Version:        0.4.0
+Version:        0.4.1
 Release:        %autorelease
 Summary:        A Graphene front-end for LLVM
 
