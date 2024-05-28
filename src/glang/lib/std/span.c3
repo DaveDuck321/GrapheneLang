@@ -95,30 +95,27 @@ function [T] get : (span : _SpanImpl<T>&, index : isize)
 
 @operator [T] < : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {
     // Use lexicographic ordering:
-    // - Given two sequences of the same lenght, the order of the two sequences
+    // - Given two sequences of the same length, the order of the two sequences
     //   depends on the order of the symbols in the first place where the two
     //   sequences differ.
     // - If the sequences have different lengths, the shortest sequence is
     //   padded with symbols that compare less than all other symbols until the
-    //   two sequences have the same lenght.
-    if lhs.length == rhs.length {
-        for i in range(lhs.length) {
-            if lhs:get(i) != rhs:get(i) {
-                // We've found the first place where they differ.
-                return lhs:get(i) < rhs:get(i);
-            }
+    //   two sequences have the same length.
+    let common_length : isize = min(lhs.length, rhs.length);
+    for i in range(common_length) {
+        if lhs:get(i) != rhs:get(i) {
+            // We've found the first place where they differ.
+            return lhs:get(i) < rhs:get(i);
         }
+    }
 
-        // Spans are equal.
+    // Spans are equal.
+    if lhs.length == rhs.length {
         return false;
     }
 
-    let common_length : isize = min(lhs.length, rhs.length);
-    if lhs:slice_to(common_length) == rhs:slice_to(common_length) {
-        return lhs.length < rhs.length;
-    }
-
-    return lhs:slice_to(common_length) < rhs:slice_to(common_length);
+    // The shortest sequence compares less.
+    return lhs.length < rhs.length;
 }
 
 function [T] slice_to : (span : Span<T>&, end : isize) -> Span<T> = {

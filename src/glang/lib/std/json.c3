@@ -451,12 +451,12 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
         // FIXME we should be using a buffer here.
         io:write(sv("{"));
 
-        mut iter : MapIter<JSON_Node, JSON_Node> = node.map:get_citer();
+        mut iter : MapIter<StringView, JSON_Node> = node.map:get_citer();
 
         // XXX we have to borrow the iterator, otherwise it is not updated
         // in place by the implicit call to get_next().
         for element in &mut iter {
-            io:writef(sv("%: %"), element.key, element.value);
+            io:writef(sv("\"%\": %"), element.key, element.value);
             if iter:has_next() {
                 io:write(sv(", "));
             }

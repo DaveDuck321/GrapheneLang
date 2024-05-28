@@ -9,6 +9,8 @@ function main : () -> int = {
 
     // Should be accepted.
     if result:has_value() {
+        // Note that the order of the keys in the dictionary isn't necessarily
+        // preserved.
         print(result:data());
         return 0;
     }
@@ -18,4 +20,4 @@ function main : () -> int = {
 
 /// @COMPILE
 /// @RUN; EXPECT OUT
-/// {"name": "program", "children": [[]{"name": "require_once", "children": [[]{"name": "ESCAPED_STRING", "value": "std/format.c3"}[]]}[]]}
+/// {"children": [[]{"children": [[]{"name": "ESCAPED_STRING", "value": "std/format.c3"}[]], "name": "require_once"}[]], "name": "program"}
