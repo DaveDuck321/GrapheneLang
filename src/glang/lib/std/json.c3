@@ -412,6 +412,7 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
             buffer.data[0] = char("\"");
             buffer.data[buffer.length - 1] = char("\"");
             for i in range(string:length()) {
+                // FIXME we need to escape the strings we print here.
                 buffer.data[i + 1] = string.buffer.data[i];
             }
 
@@ -454,6 +455,7 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
         // XXX we have to borrow the iterator, otherwise it is not updated
         // in place by the implicit call to get_next().
         for element in &mut iter {
+            // FIXME we need to escape the strings we print here.
             io:writef(sv("\"%\": %"), element.key, element.value);
             if iter:has_next() {
                 io:write(sv(", "));
