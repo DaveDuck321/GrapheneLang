@@ -2,7 +2,8 @@
 @require_once "std/iterators.c3"
 
 function main : () -> int = {
-    mut tree : RB_Tree<int> = make<RB_Tree<int>>();
+    mut allocator : Allocator = initialize_allocator();
+    mut tree : RB_Tree<int> = make<RB_Tree<int>>(&mut allocator);
     mut res : Optional<int>;
 
     for i in range(-10, 11) {

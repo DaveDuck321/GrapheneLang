@@ -4,7 +4,8 @@
 @require_once "std/string.c3"
 
 function main : () -> int = {
-    mut map : Map<int, StringView> = make<Map<int, StringView>>();
+    mut allocator : Allocator = initialize_allocator();
+    mut map : Map<int, StringView> = make<Map<int, StringView>>(&mut allocator);
 
     runtime_assert(map:empty() == true);
     runtime_assert(map:size() == 0);

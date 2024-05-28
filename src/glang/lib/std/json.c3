@@ -12,7 +12,7 @@ typedef VectorIter<JSON_Node> : ContiguousContainerIter<Vector<JSON_Node>&, JSON
 
 typedef Cursor : {
     iter      : StringViewIter,
-    allocator : Allocator,  // FIXME use global allocator.
+    allocator : Allocator mut&,  // FIXME use global allocator.
     // TODO when we get RAII working, add a max_depth field to prevent crashes
     // when the input is too nested.
 }
@@ -30,7 +30,7 @@ function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON
         node_type,
         make<Optional<StringView>>(),
         make<Vector<JSON_Node>>(&mut allocator),
-        make<Map<StringView, JSON_Node>>(),
+        make<Map<StringView, JSON_Node>>(&mut allocator),
     };
 }
 
@@ -129,7 +129,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         let string_node : Optional<JSON_Node> = cursor:parse_string();
 
         if !string_node:has_value() {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
 
@@ -139,14 +139,14 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         cursor:eat_whitespace();
 
         if !cursor:eat(char(":")) {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
 
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
         if !value_node:has_value() {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
 
@@ -158,7 +158,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         }
 
         if !cursor:eat(char(",")) {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
     }
@@ -365,11 +365,9 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 }
 
 // TODO this and write below should be the only public functions.
-function json_parse : (source : StringView) -> Optional<JSON_Node> = {
+function json_parse : (source : StringView, allocator : Allocator mut&) -> Optional<JSON_Node> = {
     // FIXME memory safety, memory leaks.
-    mut cursor : Cursor = {
-        source:get_iter(), initialize_allocator()
-    };
+    mut cursor : Cursor = { source:get_iter(), &mut allocator };
 
     let result : Optional<JSON_Node> = cursor:parse_element();
 

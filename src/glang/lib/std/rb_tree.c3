@@ -35,7 +35,7 @@ typedef [K] RB_Node : {
 
 typedef [K] RB_Tree : {
     root : Optional<RB_Node<K> mut&>,
-    allocator : Allocator,  // FIXME use global allocator.
+    allocator : Allocator mut&,  // FIXME use global allocator.
 }
 
 typedef [K] RB_Iter: {
@@ -82,10 +82,10 @@ function [K] new<RB_Node<K>> : (
     return &mut node;
 }
 
-function [K] make<RB_Tree<K>> : () -> RB_Tree<K> = {
+function [K] make<RB_Tree<K>> : (allocator : Allocator mut&) -> RB_Tree<K> = {
     return {
         .root = make<Optional<RB_Node<K> mut&>>(),
-        .allocator = initialize_allocator(),
+        .allocator = &mut allocator,
     };
 }
 
@@ -272,7 +272,7 @@ function [K, Comparable] search : (
     mut result : Optional<RB_Node<K> mut&> = self:search_impl(key);
 
     if result:has_value() {
-        return make(result:data().key);
+        return make<Optional<K>>(result:data().key);
     }
 
     return make<Optional<K>>();
@@ -316,7 +316,7 @@ function [K] maximum : (node : RB_Node<K> mut&) -> RB_Node<K> mut& = {
 
 function [K] minmax : (tree : RB_Tree<K> mut&, direction : bool) -> Optional<K> = {
     if tree.root:has_value() {
-        return make(tree.root:data():minmax(direction).key);
+        return make<Optional<K>>(tree.root:data():minmax(direction).key);
     }
     return make<Optional<K>>();
 }
@@ -358,7 +358,7 @@ function [K] fix_after_delete_impl : (
         // was black, then now it is double black; if it was red, then now it is
         // red-and-black.
         w.colour = RED();
-        return make(&mut x_parent);
+        return make<Optional<RB_Node<K> mut&>>(&mut x_parent);
     }
 
     // Case 3: w is black with red close and black distant child.
@@ -455,11 +455,11 @@ function [K] delete_impl : (self : RB_Tree<K> mut&, u : RB_Node<K> mut&) -> void
             x.parent:store(&mut v);
         }
         else {
-            x_parent = make(&mut v);
+            x_parent = make<Optional<RB_Node<K> mut&>>(&mut v);
         }
 
         // Replace u with v.
-        self:replace_node_with(&mut u, make(&mut v));
+        self:replace_node_with(&mut u, make<Optional<RB_Node<K> mut&>>(&mut v));
         v.left = u.left;
         v.left:data().parent:store(&mut v);
         v.colour = u.colour;

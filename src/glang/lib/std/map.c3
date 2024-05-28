@@ -39,9 +39,9 @@ typedef [K, V] Map : {
     length : isize
 }
 
-function [K, V] make<Map<K, V>> : () -> Map<K, V> = {
+function [K, V] make<Map<K, V>> : (allocator : Allocator mut&) -> Map<K, V> = {
     return {
-        .tree = make<RB_Tree<MapNode<K, V>>>(),
+        .tree = make<RB_Tree<MapNode<K, V>>>(&mut allocator),
         .length = 0,
     };
 }

@@ -3,7 +3,8 @@
 @require_once "std/format.c3"
 
 function main : () -> int = {
-    mut tree : RB_Tree<int> = make<RB_Tree<int>>();
+    mut allocator : Allocator = initialize_allocator();
+    mut tree : RB_Tree<int> = make<RB_Tree<int>>(&mut allocator);
 
     for i in range(-10, 11) {
         tree:insert(i);
