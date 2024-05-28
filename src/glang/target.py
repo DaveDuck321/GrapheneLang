@@ -1,10 +1,10 @@
 import platform
+from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from sys import exit as sys_exit
 from sys import stderr
-from typing import Iterator
 
 import yaml
 
