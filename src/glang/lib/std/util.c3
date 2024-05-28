@@ -45,6 +45,12 @@ function [T, AddrT] addr_to_mut_heap_array : (address : AddrT)
     return &mut __builtin_int_to_ptr<T[mut&]>(address);
 }
 
+function [TRef, BRef] reinterpret_addr : (base : BRef)
+    -> TypeIf<TRef, Both<IsRef<TRef>, IsRef<BRef>>> =
+{
+    return &__builtin_int_to_ptr<TRef>(__builtin_ptr_to_int(&base));
+}
+
 function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); }
 function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); }
 function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); }
@@ -56,6 +62,18 @@ function as_logical : (value : i16)  -> u16  = { return __builtin_bitcast<u16>(v
 function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(value); }
 function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); }
 function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); }
+
+function [Ret, In] Narrow : (value : In) ->
+TypeIf<
+    Ret,
+    Either<
+        Both<IsIntegral<Ret>, IsIntegral<In>>,
+        Both<IsLogical<Ret>, IsLogical<In>>
+    >> =
+{
+    // TODO: reject sizeof(Ret) >= sizeof(In) at compile time
+    return __builtin_narrow<Ret>(value);
+}
 
 function value<TrueType> : () -> bool = { return true; }
 function value<FalseType> : () -> bool = { return false; }

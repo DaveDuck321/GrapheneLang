@@ -22,3 +22,16 @@ jobs:
         with:
             requirements-files: requirements.txt
             configuration: --check-only --diff --profile black
+
+  ruff:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install hatch
+        run: python3 -m pip install hatch==1.9.4 --user
+      - name: Run ruff
+        run: |
+          output=$(hatch fmt --linter --check)
+          echo "$output" >> $GITHUB_STEP_SUMMARY
+          echo "$output" | grep "No errors fixed"

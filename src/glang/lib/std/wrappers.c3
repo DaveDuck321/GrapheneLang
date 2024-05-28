@@ -67,12 +67,12 @@ function [T] has_value : (self : Optional<T>&) -> bool = {
 
 function [IO, T] write : (
     io : IO mut&, optional : Optional<T>
-) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
+) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     if optional:has_value() {
         return io:write(optional:data());
     }
 
-    return io:write("<empty>");
+    io:write("<empty>");
 }
 
 

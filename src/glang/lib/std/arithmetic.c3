@@ -95,11 +95,6 @@ typedef [T] RegisterHasTrivialAssignments<Override<T>> : TypeIf<TrueType, IsArit
     return __builtin_is_greater_than(lhs_widen, rhs_widen);
 }
 
-// TODO: remove unnecessary widening by allowing partial specialization
-function [T] Narrow : (value : i128) -> TypeIf<T, IsIntegral<T>> = {
-    return __builtin_narrow<T>(value);
-}
-
 @operator [U, V] <= : (lhs: U, rhs: V) -> ArithmeticCompareResult<U, V> = {
     return !(lhs > rhs);
 }

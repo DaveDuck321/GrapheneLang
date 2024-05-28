@@ -1,16 +1,18 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Iterable, Iterator, Optional
+from typing import Any
 
-from ..codegen.debug import DIFile, DILocation, DIScope, DIType, Metadata
-from ..parser.lexer_parser import Meta
-from .user_facing_errors import MutableVariableContainsAReference
+from glang.codegen.debug import DIFile, DILocation, DIScope, Metadata
+from glang.codegen.user_facing_errors import MutableVariableContainsAReference
+from glang.parser.lexer_parser import Meta
+from glang.utils.stack import Stack
 
 
 class TypeDefinition(ABC):
     def graphene_literal_to_ir_constant(self, value: str) -> str:
-        assert False
+        raise AssertionError
 
     @abstractmethod
     def are_equivalent(self, other: "TypeDefinition") -> bool:
@@ -84,7 +86,7 @@ class Type(ABC):
 
         self._visited_in_finite_resolution = False
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         assert isinstance(other, Type)
         return self.definition.are_equivalent(other.definition)
 
@@ -149,10 +151,17 @@ class IROutput:
 
 
 @dataclass
+class LoopInfo:
+    start_label: str
+    end_label: str
+
+
+@dataclass
 class IRContext:
     reg_gen: Iterator[int]
     metadata_gen: Iterator[int]
     scope: DIScope
+    loop_stack: Stack[LoopInfo]
 
     def next_reg(self) -> int:
         return next(self.reg_gen)
@@ -180,7 +189,7 @@ class Variable(ABC):
                 self._name, self.type.format_for_output_to_user(True)
             )
 
-        self.ir_reg: Optional[int] = None
+        self.ir_reg: int | None = None
 
     @property
     def user_facing_name(self) -> str:
@@ -201,7 +210,7 @@ class Variable(ABC):
         pass
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self._name}: {repr(self.type)}, is_mut: {self.is_mutable})"
+        return f"{self.__class__.__name__}({self._name}: {self.type!r}, is_mut: {self.is_mutable})"
 
     @abstractmethod
     def assert_can_read_from(self) -> None:
@@ -213,7 +222,7 @@ class Variable(ABC):
 
 
 class Generatable(ABC):
-    def __init__(self, meta: Optional[Meta]) -> None:
+    def __init__(self, meta: Meta | None) -> None:
         super().__init__()
 
         self.meta = meta
@@ -224,6 +233,9 @@ class Generatable(ABC):
     @abstractmethod
     def is_return_guaranteed(self) -> bool:
         pass
+
+    def is_jump_guaranteed(self) -> bool:
+        return self.is_return_guaranteed()
 
     @abstractmethod
     def __repr__(self) -> str:
@@ -254,11 +266,11 @@ class Generatable(ABC):
 
 class TypedExpression(Generatable):
     def __init__(
-        self, underlying_indirection_kind: Type.Kind, meta: Optional[Meta]
+        self, underlying_indirection_kind: Type.Kind, meta: Meta | None
     ) -> None:
         super().__init__(meta)
         self.underlying_indirection_kind = underlying_indirection_kind
-        self.result_reg: Optional[int] = None
+        self.result_reg: int | None = None
 
     @property
     @abstractmethod
@@ -332,7 +344,7 @@ class StaticTypedExpression(TypedExpression):
         self,
         expr_type: Type,
         underlying_indirection_kind: Type.Kind,
-        meta: Optional[Meta],
+        meta: Meta | None,
         was_reference_type_at_any_point: bool = False,
     ) -> None:
         # It is the caller's responsibility to escape double indirections
@@ -395,7 +407,7 @@ def do_specializations_match(
     if len(s1) != len(s2):
         return False
 
-    for item1, item2 in zip(s1, s2):
+    for item1, item2 in zip(s1, s2, strict=True):
         if isinstance(item1, Type) != isinstance(item2, Type):
             return False
 
@@ -421,7 +433,7 @@ def format_arguments(args: Iterable[Type] | Iterable[TypedExpression]) -> str:
     return f"({items})"
 
 
-def format_generics(args: Iterable[GenericArgument], pack_name: Optional[str]) -> str:
+def format_generics(args: Iterable[GenericArgument], pack_name: str | None) -> str:
     formatted_generics = [item.name for item in args]
     if pack_name is not None:
         formatted_generics.append(pack_name)

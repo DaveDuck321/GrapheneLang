@@ -1,7 +1,7 @@
 from pathlib import Path
+from subprocess import run
 from typing import Any
 
-from hatch.utils.platform import Platform
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 
@@ -18,7 +18,9 @@ class CustomBuildHook(BuildHookInterface):
     def initialize(self, version: str, build_data: dict[str, Any]):
         self.app.display_waiting("Bootstrapping parser")
 
-        Platform().check_command(["./bootstrap.sh"], shell=False)
+        rc = run(["./bootstrap.sh"], check=False).returncode
+        if rc:
+            self.app.abort("Bootstrap failed", rc)
 
         self.app.display_success("Done!")
 

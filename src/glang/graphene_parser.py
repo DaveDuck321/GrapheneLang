@@ -1,12 +1,13 @@
 import sys
 import traceback
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Generator, Iterable, Optional, TypeGuard
+from typing import Any, TypeGuard
 from uuid import UUID
 
-from . import codegen as cg
-from .codegen.user_facing_errors import (
+from glang import codegen as cg
+from glang.codegen.user_facing_errors import (
     BorrowWithNoAddressError,
     CircularImportException,
     ErrorWithLineInfo,
@@ -17,24 +18,28 @@ from .codegen.user_facing_errors import (
     GenericHasGenericAnnotation,
     GrapheneError,
     MissingFunctionReturn,
+    NotInLoopStatementError,
     RepeatedGenericName,
     SourceLocation,
     StructMemberRedeclaration,
     VoidVariableDeclaration,
 )
-from .parser import lexer_parser as lp
+from glang.parser import lexer_parser as lp
 
 UnresolvedGenericMapping = dict[str, cg.UnresolvedSpecializationItem]
 
 
 class ResolvedPath(str):
+    # See https://docs.astral.sh/ruff/rules/no-slots-in-str-subclass/.
+    __slots__ = ()
+
     def __new__(cls, path: Path) -> "ResolvedPath":
         return str.__new__(cls, str(path.resolve()))
 
 
 def search_include_path_for_file(
     relative_file_path: str, include_path: list[Path]
-) -> Optional[ResolvedPath]:
+) -> ResolvedPath | None:
     matching_files: set[ResolvedPath] = set()
     for path in include_path:
         file_path = path / relative_file_path
@@ -77,7 +82,7 @@ class TypeParser(lp.Interpreter):
     def NumericGenericIdentifier(
         self, node: lp.NumericGenericIdentifier
     ) -> cg.CompileTimeConstant:
-        if not node.value in self._generic_args:
+        if node.value not in self._generic_args:
             raise FailedLookupError("numeric generic", f"[{node.value}, ...]")
 
         result = self._generic_args[node.value]
@@ -211,9 +216,9 @@ class FunctionSignatureParser(lp.Interpreter):
     def __init__(self, program: cg.Program) -> None:
         super().__init__()
 
-        self._current_file: Optional[str] = None
-        self._current_di_file: Optional[cg.DIFile] = None
-        self._include_hierarchy: Optional[tuple[str, ...]] = None
+        self._current_file: str | None = None
+        self._current_di_file: cg.DIFile | None = None
+        self._include_hierarchy: tuple[str, ...] | None = None
 
         self._program = program
         self._function_mapping: dict[UUID, lp.GenericFunctionDefinition] = {}
@@ -241,7 +246,7 @@ class FunctionSignatureParser(lp.Interpreter):
         tuple[
             cg.FunctionDeclaration,
             cg.FunctionSignature,
-            Optional[lp.GenericFunctionDefinition],
+            lp.GenericFunctionDefinition | None,
         ],
         None,
         None,
@@ -276,8 +281,8 @@ class FunctionSignatureParser(lp.Interpreter):
         generic_definitions: list[cg.GenericArgument] = []
 
         # One for the type and one for the actual args.
-        variadic_type_pack_name: Optional[str] = None
-        variadic_args_pack_name: Optional[str] = None
+        variadic_type_pack_name: str | None = None
+        variadic_args_pack_name: str | None = None
 
         for generic in node.generic_definitions:
             if generic.is_packed:
@@ -573,7 +578,7 @@ class ExpressionParser(lp.Interpreter):
     @staticmethod
     def _extract_parameter_pack(
         args: list[lp.Expression],
-    ) -> tuple[list[lp.Expression], Optional[str]]:
+    ) -> tuple[list[lp.Expression], str | None]:
         if len(args) == 0:
             return args, None
 
@@ -631,7 +636,7 @@ class ExpressionParser(lp.Interpreter):
                         )
                 case _:
                     # cg.Type.Kind.MUTABLE_OR_CONST_REF shouldn't be possible.
-                    raise AssertionError()
+                    raise AssertionError
 
             unresolved_args.insert(0, this_arg)
 
@@ -748,8 +753,10 @@ def generate_return_statement(
     node: lp.Return,
     generic_mapping: cg.GenericMapping,
 ) -> None:
+    return_type = function.get_signature().return_type
+
     if node.expression is None:
-        scope.add_generatable(cg.ReturnStatement(cg.VoidType(), node.meta))
+        scope.add_generatable(cg.ReturnStatement(return_type, node.meta))
         return
 
     parser = ExpressionParser(program, function, scope, generic_mapping)
@@ -757,9 +764,7 @@ def generate_return_statement(
     scope.add_generatable(flattened_expr.subexpressions)
 
     expr = cg.ReturnStatement(
-        function.get_signature().return_type,
-        node.meta,
-        returned_expr=flattened_expr.expression(),
+        return_type, node.meta, returned_expr=flattened_expr.expression()
     )
     scope.add_generatable(expr)
 
@@ -839,7 +844,9 @@ def generate_while_statement(
 
     while_scope_id = function.get_next_scope_id()
 
-    inner_scope = cg.Scope(function.get_next_scope_id(), node.scope.meta, scope)
+    inner_scope = cg.Scope(
+        function.get_next_scope_id(), node.scope.meta, scope, is_inside_loop=True
+    )
     generate_body(program, function, inner_scope, node.scope, generic_mapping)
 
     scope.add_generatable(
@@ -889,7 +896,9 @@ def generate_for_statement(
     outer_scope.add_generatable([var_ref, borrowed_iter_expr])
 
     # Inner scope
-    inner_scope = cg.Scope(function.get_next_scope_id(), node.scope.meta, outer_scope)
+    inner_scope = cg.Scope(
+        function.get_next_scope_id(), node.scope.meta, outer_scope, is_inside_loop=True
+    )
 
     has_next_expr = program.lookup_call_expression(
         "__builtin_has_next", [], [borrowed_iter_expr], node.scope.meta
@@ -921,6 +930,32 @@ def generate_for_statement(
         )
     )
     scope.add_generatable(outer_scope)
+
+
+def generate_continue_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    node: lp.Return,
+    generic_mapping: cg.GenericMapping,
+) -> None:
+    if not scope.is_inside_loop():
+        raise NotInLoopStatementError("continue")
+
+    scope.add_generatable(cg.ContinueStatement(node.meta))
+
+
+def generate_break_statement(
+    program: cg.Program,
+    function: cg.Function,
+    scope: cg.Scope,
+    node: lp.Return,
+    generic_mapping: cg.GenericMapping,
+) -> None:
+    if not scope.is_inside_loop():
+        raise NotInLoopStatementError("break")
+
+    scope.add_generatable(cg.BreakStatement(node.meta))
 
 
 def generate_assignment(
@@ -974,6 +1009,8 @@ def generate_body(
 ) -> None:
     generators = {
         "Assignment": generate_assignment,
+        "Break": generate_break_statement,
+        "Continue": generate_continue_statement,
         "Expression": generate_standalone_expression,
         "For": generate_for_statement,
         "If": generate_if_statement,
@@ -990,7 +1027,7 @@ def generate_body(
                 if name in generators:
                     break
             else:
-                assert False
+                raise AssertionError
 
             generators[name](program, function, scope, line, generic_mapping)
         except GrapheneError as exc:
@@ -1006,7 +1043,7 @@ def generate_function(
     program: cg.Program,
     declaration: cg.FunctionDeclaration,
     signature: cg.FunctionSignature,
-    body: Optional[lp.GenericFunctionDefinition],
+    body: lp.GenericFunctionDefinition | None,
 ) -> None:
     try:
         fn = cg.Function(
@@ -1017,9 +1054,11 @@ def generate_function(
             program.di_compile_unit,
             declaration.meta,
         )
-    except GrapheneError as e:
+    except GrapheneError as err:
         assert isinstance(declaration.loc, SourceLocation)
-        raise ErrorWithLineInfo(e.message, declaration.loc.line, "function declaration")
+        raise ErrorWithLineInfo(
+            err.message, declaration.loc.line, "function declaration"
+        ) from err
 
     if body is None:
         assert declaration.is_foreign
@@ -1051,7 +1090,7 @@ def append_file_to_program(
     include_path: list[Path],
     included_from: list[ResolvedPath],
     already_processed: set[ResolvedPath],
-    di_file: Optional[cg.DIFile] = None,
+    di_file: cg.DIFile | None = None,
 ) -> None:
     already_processed.add(file_path)
     if di_file is None:
@@ -1063,8 +1102,8 @@ def append_file_to_program(
         ImportParser(
             program,
             function_parser,
-            include_path + [Path(file_path).parent],
-            included_from + [file_path],
+            [*include_path, Path(file_path).parent],
+            [*included_from, file_path],
             already_processed,
         ).parse_file(top_level_features)
 
@@ -1085,7 +1124,7 @@ def append_file_to_program(
 
 
 def generate_ir_from_source(
-    file_path: Path, include_path: list[Path], debug_compiler: bool = False
+    file_path: Path, include_path: list[Path], *, debug_compiler: bool = False
 ) -> str:
     program = cg.Program(file_path)
     try:

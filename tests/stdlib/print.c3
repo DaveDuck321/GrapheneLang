@@ -5,8 +5,8 @@ typedef MyStruct : {
     a : int,
 }
 
-function [IO] write : (io : IO mut&, struct : MyStruct) -> TypeIf<StringView, IsStreamableTextIO<IO>> = {
-    return io:write(sv("struct"));
+function [IO] write : (io : IO mut&, struct : MyStruct) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    io:write(sv("struct"));
 }
 
 function main : () -> int = {

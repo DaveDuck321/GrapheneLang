@@ -1,25 +1,32 @@
-from typing import Iterable, Iterator, Optional
+from __future__ import annotations
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import BoolType, CharArrayDefinition, VoidType
-from .debug import DIFile, DILocalVariable, DILocation, DIType
-from .interfaces import (
+from collections.abc import Iterable
+
+from glang.codegen.builtin_types import BoolType, CharArrayDefinition, VoidType
+from glang.codegen.debug import DIFile, DILocalVariable, DILocation, DIType
+from glang.codegen.interfaces import (
     Generatable,
     IRContext,
     IROutput,
+    LoopInfo,
     Type,
     TypedExpression,
     Variable,
 )
-from .type_conversions import assert_is_implicitly_convertible, do_implicit_conversion
-from .user_facing_errors import (
+from glang.codegen.type_conversions import (
+    assert_is_implicitly_convertible,
+    do_implicit_conversion,
+)
+from glang.codegen.user_facing_errors import (
     AssignmentToBorrowedReference,
     AssignmentToNonPointerError,
     CannotAssignToAConstant,
     FailedLookupError,
     OperandError,
     RedefinitionError,
+    TypeCheckerError,
 )
+from glang.parser.lexer_parser import Meta
 
 
 class StackVariable(Variable):
@@ -156,18 +163,23 @@ class StaticVariable(Variable):
 
 class Scope(Generatable):
     def __init__(
-        self, scope_id: int, meta: Meta, outer_scope: Optional["Scope"] = None
+        self,
+        scope_id: int,
+        meta: Meta,
+        outer_scope: Scope | None = None,
+        is_inside_loop: bool = False,
     ) -> None:
         super().__init__(meta)
 
         assert scope_id >= 0
         self.id = scope_id
 
-        self._outer_scope: Optional[Scope] = outer_scope
+        self._outer_scope: Scope | None = outer_scope
         self._variables: dict[str, StackVariable] = {}
         self._lines: list[Generatable] = []
-        self._generic_pack: Optional[tuple[str, int]] = None
+        self._generic_pack: tuple[str, int] | None = None
         self._allocations: list[StackVariable] = []
+        self._is_inside_loop: bool = is_inside_loop
 
     def _record_allocation(self, var: StackVariable) -> None:
         self._allocations.append(var)
@@ -190,7 +202,7 @@ class Scope(Generatable):
         self._record_allocation(var)
         self._variables[var.user_facing_name] = var
 
-    def search_for_variable(self, var_name: str) -> Optional[StackVariable]:
+    def search_for_variable(self, var_name: str) -> StackVariable | None:
         # Search this scope first.
         if var_name in self._variables:
             return self._variables[var_name]
@@ -254,6 +266,22 @@ class Scope(Generatable):
                 return True
         return False
 
+    def is_jump_guaranteed(self) -> bool:
+        for line in self._lines:
+            if line.is_jump_guaranteed():
+                # TODO: it would be nice if we could give a dead code warning here
+                return True
+        return False
+
+    def is_inside_loop(self) -> bool:
+        if self._is_inside_loop:
+            return True
+
+        if self._outer_scope:
+            return self._outer_scope.is_inside_loop()
+
+        return False
+
     def __repr__(self) -> str:
         return f"{{{','.join(map(repr, self._lines))}}}"
 
@@ -296,7 +324,7 @@ class IfElseStatement(Generatable):
         ir.lines.append(f"{self.if_scope.start_label}:")
         ir.extend(self.if_scope.generate_ir(ctx))
 
-        if not self.if_scope.is_return_guaranteed():
+        if not self.if_scope.is_jump_guaranteed():
             # Jump to the end of the if/else statement.
             ir.lines.append(f"br label %{self.else_scope.end_label}, {dbg}")
             need_label_after_statement = True
@@ -305,7 +333,7 @@ class IfElseStatement(Generatable):
         ir.lines.append(f"{self.else_scope.start_label}:")
         ir.extend(self.else_scope.generate_ir(ctx))
 
-        if not self.else_scope.is_return_guaranteed():
+        if not self.else_scope.is_jump_guaranteed():
             # Jump to the end of the if/else statement.
             ir.lines.append(f"br label %{self.else_scope.end_label}, {dbg}")
             need_label_after_statement = True
@@ -320,6 +348,11 @@ class IfElseStatement(Generatable):
         return (
             self.if_scope.is_return_guaranteed()
             and self.else_scope.is_return_guaranteed()
+        )
+
+    def is_jump_guaranteed(self) -> bool:
+        return (
+            self.if_scope.is_jump_guaranteed() and self.else_scope.is_jump_guaranteed()
         )
 
     def __repr__(self) -> str:
@@ -340,8 +373,7 @@ class WhileStatement(Generatable):
         condition.assert_can_read_from()
         assert_is_implicitly_convertible(condition, BoolType(), "while condition")
 
-        self.start_label = f"while_{new_scope_id}_begin"
-        self.end_label = f"while_{new_scope_id}_end"
+        self.info = LoopInfo(f"while_{new_scope_id}_begin", f"while_{new_scope_id}_end")
 
         self.condition = condition
         self.condition_generatable = condition_generatable
@@ -355,29 +387,32 @@ class WhileStatement(Generatable):
         ir = IROutput()
         dbg = self.add_di_location(ctx, ir)
 
-        # br i1 <cond>, label <iftrue>, label <iffalse>
+        # br label <dest>
         ir.lines.extend(
             [
-                f"br label %{self.start_label}, {dbg}",
-                f"{self.start_label}:",
+                f"br label %{self.info.start_label}, {dbg}",
+                f"{self.info.start_label}:",
             ]
         )
         # Evaluate condition
         ir.extend(self.expand_ir(self.condition_generatable, ctx))
         ir.extend(self.expand_ir(extra_exprs, ctx))
+        # br i1 <cond>, label <iftrue>, label <iffalse>
         ir.lines.append(
             f"br {conv_condition.ir_ref_with_type_annotation}, label "
-            f"%{self.inner_scope.start_label}, label %{self.end_label}, {dbg}"
+            f"%{self.inner_scope.start_label}, label %{self.info.end_label}, {dbg}"
         )
         # Loop body
         ir.lines.append(f"{self.inner_scope.start_label}:")
+        ctx.loop_stack.push(self.info)  # TODO clean up with a context manager?
         ir.extend(self.inner_scope.generate_ir(ctx))
-        ir.lines.extend(
-            [
-                f"br label %{self.start_label}, {dbg}",  # Loop
-                f"{self.end_label}:",
-            ]
-        )
+        ctx.loop_stack.pop()
+
+        # e.g. if the scope includes continue statements in all code paths.
+        if not self.inner_scope.is_jump_guaranteed():
+            ir.lines.append(f"br label %{self.info.start_label}, {dbg}")
+
+        ir.lines.append(f"{self.info.end_label}:")
 
         return ir
 
@@ -393,7 +428,7 @@ class ReturnStatement(Generatable):
         self,
         return_type: Type,
         meta: Meta,
-        returned_expr: Optional[TypedExpression] = None,
+        returned_expr: TypedExpression | None = None,
     ) -> None:
         super().__init__(meta)
 
@@ -401,6 +436,13 @@ class ReturnStatement(Generatable):
             returned_expr.assert_can_read_from()
             assert_is_implicitly_convertible(
                 returned_expr, return_type, "return statement"
+            )
+        elif return_type != VoidType():
+            raise TypeCheckerError(
+                "return statement",
+                return_type.format_for_output_to_user(),
+                VoidType().format_for_output_to_user(),
+                maybe_missing_borrow=False,
             )
 
         self.return_type = return_type
@@ -436,6 +478,60 @@ class ReturnStatement(Generatable):
 
     def __repr__(self) -> str:
         return f"ReturnStatement({self.returned_expr})"
+
+
+class ContinueStatement(Generatable):
+    def __init__(self, meta: Meta) -> None:
+        super().__init__(meta)
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        # https://llvm.org/docs/LangRef.html#br-instruction
+
+        assert not ctx.loop_stack.empty()
+
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+
+        # br label <dest>
+        ir.lines.append(f"br label %{ctx.loop_stack.peek().start_label}, {dbg}")
+
+        return ir
+
+    def is_return_guaranteed(self) -> bool:
+        return False
+
+    def is_jump_guaranteed(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return "ContinueStatement()"
+
+
+class BreakStatement(Generatable):
+    def __init__(self, meta: Meta) -> None:
+        super().__init__(meta)
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        # https://llvm.org/docs/LangRef.html#br-instruction
+
+        assert not ctx.loop_stack.empty()
+
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+
+        # br label <dest>
+        ir.lines.append(f"br label %{ctx.loop_stack.peek().end_label}, {dbg}")
+
+        return ir
+
+    def is_return_guaranteed(self) -> bool:
+        return False
+
+    def is_jump_guaranteed(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return "BreakStatement()"
 
 
 class VariableInitialize(Generatable):

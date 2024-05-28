@@ -1,13 +1,12 @@
 from abc import abstractmethod
 from collections import defaultdict
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from functools import partial
 from itertools import groupby
-from typing import Callable, Iterable, Optional
 from uuid import UUID, uuid4
 
-from ..parser.lexer_parser import Meta
-from .builtin_types import (
+from glang.codegen.builtin_types import (
     AnonymousType,
     FunctionSignature,
     HeapArrayDefinition,
@@ -17,8 +16,8 @@ from .builtin_types import (
     StackArrayDefinition,
     StructDefinition,
 )
-from .debug import DIFile
-from .interfaces import (
+from glang.codegen.debug import DIFile
+from glang.codegen.interfaces import (
     GenericArgument,
     GenericMapping,
     SpecializationItem,
@@ -29,8 +28,8 @@ from .interfaces import (
     format_generics,
     format_specialization,
 )
-from .type_conversions import get_implicit_conversion_cost
-from .user_facing_errors import (
+from glang.codegen.type_conversions import get_implicit_conversion_cost
+from glang.codegen.user_facing_errors import (
     AmbiguousFunctionCall,
     BuiltinSourceLocation,
     DoubleReferenceError,
@@ -48,6 +47,7 @@ from .user_facing_errors import (
     SpecializationFailed,
     SubstitutionFailure,
 )
+from glang.parser.lexer_parser import Meta
 
 
 def get_cost_at_pattern_match_depth(depth: int) -> int:
@@ -77,7 +77,7 @@ class UnresolvedType:
     @abstractmethod
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         pass
 
 
@@ -102,9 +102,7 @@ class CompileTimeConstant:
         pass
 
     @abstractmethod
-    def pattern_match(
-        self, target: int, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    def pattern_match(self, target: int, out: GenericMapping, depth: int) -> int | None:
         pass
 
 
@@ -127,9 +125,7 @@ class NumericLiteralConstant(CompileTimeConstant):
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return set()
 
-    def pattern_match(
-        self, target: int, _: GenericMapping, depth: int
-    ) -> Optional[int]:
+    def pattern_match(self, target: int, _: GenericMapping, depth: int) -> int | None:
         if target != self.value:
             return None
         return 0
@@ -160,14 +156,12 @@ class GenericValueReference(CompileTimeConstant):
         return NumericLiteralConstant(specialized_value)
 
     def resolve(self) -> int:
-        assert False
+        raise AssertionError
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
 
-    def pattern_match(
-        self, target: int, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    def pattern_match(self, target: int, out: GenericMapping, depth: int) -> int | None:
         if self.argument in out.mapping:
             # TODO: user facing error
             if out.mapping[self.argument] != target:
@@ -196,7 +190,7 @@ class UnresolvedTypeWrapper(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if self.resolved_type != target:
             return None
         return 0
@@ -217,11 +211,12 @@ class UnresolvedNamedType(UnresolvedType):
         return f"{self.name}<{specialization_format}>"
 
     def produce_specialized_copy(self, generics: GenericMapping) -> UnresolvedType:
-        specialization: list[UnresolvedSpecializationItem] = []
-        for item in self.specialization:
-            specialization.append(item.produce_specialized_copy(generics))
-
-        return UnresolvedNamedType(self.name, tuple(specialization))
+        return UnresolvedNamedType(
+            self.name,
+            tuple(
+                item.produce_specialized_copy(generics) for item in self.specialization
+            ),
+        )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
         resolved_specialization = []
@@ -236,7 +231,7 @@ class UnresolvedNamedType(UnresolvedType):
 
     def _pattern_match_impl(
         self, target: Type, mapping_out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target, NamedType):
             return None
 
@@ -251,11 +246,13 @@ class UnresolvedNamedType(UnresolvedType):
             return None
 
         cost = 0
-        for this_arg, target_arg in zip(self.specialization, target.specialization):
+        for this_arg, target_arg in zip(
+            self.specialization, target.specialization, strict=True
+        ):
             if isinstance(this_arg, CompileTimeConstant) != isinstance(target_arg, int):
                 return None
 
-            result: Optional[int] = None
+            result: int | None = None
             if isinstance(this_arg, CompileTimeConstant):
                 assert isinstance(target_arg, int)
                 result = this_arg.pattern_match(target_arg, mapping_out, depth + 1)
@@ -281,7 +278,7 @@ class UnresolvedNamedType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         curr = target
 
         while curr:
@@ -322,14 +319,14 @@ class UnresolvedGenericType(UnresolvedType):
         return UnresolvedTypeWrapper(specialized_type)
 
     def resolve(self, _: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        assert False
+        raise AssertionError
 
     def get_generics_taking_part_in_pattern_match(self) -> set[GenericArgument]:
         return {self.argument}
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if self.argument in out.mapping:
             if target != out.mapping[self.argument]:
                 return None
@@ -366,7 +363,7 @@ class UnresolvedReferenceType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if target.storage_kind == Type.Kind.VALUE:
             return None
 
@@ -426,12 +423,14 @@ class UnresolvedStructType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, generics: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target.definition, StructDefinition):
             return None
 
         cost = 0
-        for our_member, target_member in zip(self.members, target.definition.members):
+        for our_member, target_member in zip(
+            self.members, target.definition.members, strict=True
+        ):
             if our_member[0] != target_member[0]:
                 return None  # Struct member names don't match
 
@@ -465,9 +464,7 @@ class UnresolvedStackArrayType(UnresolvedType):
         )
 
     def resolve(self, lookup: Callable[[str, list[SpecializationItem]], Type]) -> Type:
-        resolved_dimensions = []
-        for dimension in self.dimensions:
-            resolved_dimensions.append(dimension.resolve())
+        resolved_dimensions = [dimension.resolve() for dimension in self.dimensions]
 
         resolved_member = self.member_type.resolve(lookup)
         return AnonymousType(StackArrayDefinition(resolved_member, resolved_dimensions))
@@ -483,7 +480,7 @@ class UnresolvedStackArrayType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target.definition, StackArrayDefinition):
             return None
 
@@ -491,7 +488,9 @@ class UnresolvedStackArrayType(UnresolvedType):
             return None
 
         cost = 0
-        for target_dim, our_dim in zip(target.definition.dimensions, self.dimensions):
+        for target_dim, our_dim in zip(
+            target.definition.dimensions, self.dimensions, strict=True
+        ):
             result = our_dim.pattern_match(target_dim, out, depth + 1)
             if result is None:
                 return None
@@ -554,7 +553,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
 
     def pattern_match(
         self, target: Type, out: GenericMapping, depth: int
-    ) -> Optional[int]:
+    ) -> int | None:
         if not isinstance(target.definition, HeapArrayDefinition):
             return None
 
@@ -570,7 +569,7 @@ class UnresolvedHeapArrayType(UnresolvedType):
 
         cost = 0
         for target_dim, our_dim in zip(
-            target.definition.known_dimensions, self.known_dimensions
+            target.definition.known_dimensions, self.known_dimensions, strict=True
         ):
             result = our_dim.pattern_match(target_dim, out, depth + 1)
             if result is None:
@@ -599,7 +598,7 @@ class Typedef:
             return self.name
 
         specializations_fmt = ", ".join(
-            (item.format_for_output_to_user() for item in self.expanded_specialization)
+            item.format_for_output_to_user() for item in self.expanded_specialization
         )
         return f"{self.name}<{specializations_fmt}>"
 
@@ -646,7 +645,7 @@ class Typedef:
         self,
         target_specialization: list[SpecializationItem],
         mapping_out: GenericMapping,
-    ) -> Optional[int]:
+    ) -> int | None:
         cost = 0
         for item, target in zip(
             self.expanded_specialization, target_specialization, strict=True
@@ -659,7 +658,7 @@ class Typedef:
                 # This costs nothing
                 continue
 
-            result: Optional[int] = None
+            result: int | None = None
             if isinstance(item, CompileTimeConstant):
                 assert isinstance(target, int)
                 result = item.pattern_match(target, mapping_out, 1)
@@ -683,7 +682,7 @@ class Typedef:
         new_alias = self.aliased.produce_specialized_copy(generics)
 
         return Typedef(
-            self.name, tuple(), new_specialization, new_alias, self.loc, self.uuid
+            self.name, (), new_specialization, new_alias, self.loc, self.uuid
         )
 
 
@@ -692,7 +691,7 @@ class UnresolvedFunctionSignature:
     name: str
     expanded_specialization: tuple[UnresolvedSpecializationItem, ...]
     arguments: tuple[UnresolvedType, ...]
-    parameter_pack_argument_name: Optional[str]
+    parameter_pack_argument_name: str | None
     return_type: UnresolvedType
 
     @staticmethod
@@ -702,7 +701,7 @@ class UnresolvedFunctionSignature:
         if isinstance(arg, Type):
             return arg
 
-        assert False
+        raise AssertionError
 
     def format_for_output_to_user(self) -> str:
         specialization_str = ""
@@ -738,13 +737,14 @@ class UnresolvedFunctionSignature:
         if self.parameter_pack_argument_name is None:
             assert len(generics.pack) == 0
 
-        new_specialization: list[UnresolvedSpecializationItem] = []
-        for item in self.expanded_specialization:
-            new_specialization.append(item.produce_specialized_copy(generics))
+        new_specialization: list[UnresolvedSpecializationItem] = [
+            item.produce_specialized_copy(generics)
+            for item in self.expanded_specialization
+        ]
 
-        arguments: list[UnresolvedType] = []
-        for arg in self.arguments:
-            arguments.append(arg.produce_specialized_copy(generics))
+        arguments: list[UnresolvedType] = [
+            arg.produce_specialized_copy(generics) for arg in self.arguments
+        ]
 
         unresolved_packed_types = [
             UnresolvedTypeWrapper(pack_type) for pack_type in generics.pack
@@ -765,10 +765,10 @@ class UnresolvedFunctionSignature:
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
         depth: int,
-    ) -> Optional[int]:
+    ) -> int | None:
         cost = 0
         for target_item, item in zip(
-            target_specialization, self.expanded_specialization
+            target_specialization, self.expanded_specialization, strict=False
         ):
             if isinstance(item, CompileTimeConstant) != isinstance(target_item, int):
                 return None
@@ -776,7 +776,7 @@ class UnresolvedFunctionSignature:
             if len(item.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
 
-            result: Optional[int] = None
+            result: int | None = None
             if isinstance(item, CompileTimeConstant):
                 assert isinstance(target_item, int)
                 result = item.pattern_match(target_item, out, depth + 1)
@@ -796,7 +796,7 @@ class UnresolvedFunctionSignature:
         target_args: list[TypedExpression] | list[Type],
         out: GenericMapping,
         depth: int,
-    ) -> Optional[int]:
+    ) -> int | None:
         cost = 0
 
         # Check the argument count
@@ -809,7 +809,7 @@ class UnresolvedFunctionSignature:
 
         # Match the (non-packed) arguments
         for target_arg, unresolved_arg in zip(
-            target_args[: len(self.arguments)], self.arguments
+            target_args[: len(self.arguments)], self.arguments, strict=True
         ):
             if len(unresolved_arg.get_generics_taking_part_in_pattern_match()) == 0:
                 continue  # Allow for implicit conversions + type equivalency
@@ -825,10 +825,8 @@ class UnresolvedFunctionSignature:
         if self.parameter_pack_argument_name is not None:
             assert len(out.pack) == 0
             out.pack.extend(
-                (
-                    self.collapse_into_type(arg)
-                    for arg in target_args[len(self.arguments) :]
-                )
+                self.collapse_into_type(arg)
+                for arg in target_args[len(self.arguments) :]
             )
             cost += get_cost_at_pattern_match_depth(depth + 1) * len(out.pack)
 
@@ -839,7 +837,7 @@ class UnresolvedFunctionSignature:
 class FunctionDeclaration:
     is_foreign: bool
     arg_names: tuple[str, ...]
-    pack_type_name: Optional[str]
+    pack_type_name: str | None
     generics: tuple[GenericArgument, ...]
     signature: UnresolvedFunctionSignature
     mapping: GenericMapping
@@ -855,9 +853,9 @@ class FunctionDeclaration:
         generics: tuple[GenericArgument, ...],
         specialization: Iterable[UnresolvedSpecializationItem],
         arg_names: tuple[str, ...],
-        pack_type_name: Optional[str],
+        pack_type_name: str | None,
         arg_types: tuple[UnresolvedType, ...],
-        parameter_pack_argument_name: Optional[str],
+        parameter_pack_argument_name: str | None,
         return_type: UnresolvedType,
         location: Location,
         meta: Meta,
@@ -912,7 +910,7 @@ class FunctionDeclaration:
         self,
         target_specialization: list[SpecializationItem],
         out: GenericMapping,
-    ) -> Optional[int]:
+    ) -> int | None:
         return self.signature.pattern_match_specialization(
             target_specialization, out, 0
         )
@@ -921,7 +919,7 @@ class FunctionDeclaration:
         self,
         target_args: list[TypedExpression] | list[Type],
         out: GenericMapping,
-    ) -> Optional[int]:
+    ) -> int | None:
         return self.signature.pattern_match_args(target_args, out, 0)
 
     def produce_specialized_copy(
@@ -1066,7 +1064,7 @@ class SymbolTable:
         fn_name: str,
         candidate_functions: list[tuple[FunctionSignature, FunctionDeclaration]],
         fn_args: list[TypedExpression] | list[Type],
-    ) -> Optional[tuple[FunctionSignature, FunctionDeclaration]]:
+    ) -> tuple[FunctionSignature, FunctionDeclaration] | None:
         functions_by_cost: list[tuple[int, FunctionSignature, FunctionDeclaration]] = []
 
         for function, declaration in candidate_functions:
@@ -1074,7 +1072,7 @@ class SymbolTable:
             if len(fn_args) != len(function.arguments):
                 continue
 
-            for src_expr, dest_type in zip(fn_args, function.arguments):
+            for src_expr, dest_type in zip(fn_args, function.arguments, strict=True):
                 cost = get_implicit_conversion_cost(src_expr, dest_type)
                 if cost is not None:
                     total_cost += cost
@@ -1119,6 +1117,7 @@ class SymbolTable:
         name: str,
         given_specialization: list[SpecializationItem],
         args: list[TypedExpression] | list[Type],
+        *,
         evaluated_context: bool,
     ) -> tuple[FunctionSignature, FunctionDeclaration]:
         # Specializes and resolves the function corresponding to the correct definition
@@ -1181,9 +1180,9 @@ class SymbolTable:
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])
         for _, candidates in groupby(all_candidates, key=lambda item: item[0]):
-            resolved_candidates: list[
-                tuple[FunctionSignature, FunctionDeclaration]
-            ] = []
+            resolved_candidates: list[tuple[FunctionSignature, FunctionDeclaration]] = (
+                []
+            )
             for _, candidate in candidates:
                 try:
                     resolved = self.resolve_function(candidate)
@@ -1320,9 +1319,9 @@ class SymbolTable:
     def add_builtin_type(self, type_to_add: PrimitiveType) -> None:
         typedef = Typedef(
             type_to_add.name,
-            tuple(),
-            tuple(),
-            UnresolvedNamedType(type_to_add.name, tuple()),
+            (),
+            (),
+            UnresolvedNamedType(type_to_add.name, ()),
             BuiltinSourceLocation(),
             uuid4(),
         )
@@ -1380,7 +1379,7 @@ class SymbolTable:
 
     def get_next_function_to_codegen(
         self,
-    ) -> Optional[tuple[FunctionDeclaration, FunctionSignature]]:
+    ) -> tuple[FunctionDeclaration, FunctionSignature] | None:
         try:
             return self._remaining_to_codegen.pop()
         except IndexError:

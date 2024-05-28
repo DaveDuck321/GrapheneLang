@@ -198,33 +198,32 @@ function [K] fix_after_insert : (
             // Push the issue up the tree.
             w.colour = RED();
             u_ptr = {&mut w};
-            // TODO continue;
+            continue;
+        }
+
+        // Case 3: u has a red parent and a black uncle.
+        let u_side : bool = u:which_child_am_i();
+        let uncle_side : bool = !v:which_child_am_i();
+
+        if u_side != uncle_side {
+            // Case 3a: u is away from its uncle.
+            // Rotate, then leave u red and colour w, its new sibling, red.
+            // Their new parent should thus be black.
+            self:rotate(&mut w, !u_side);
+            v.colour = BLACK();
+            w.colour = RED();
         }
         else {
-            // Case 3: u has a red parent and a black uncle.
-            let u_side : bool = u:which_child_am_i();
-            let uncle_side : bool = !v:which_child_am_i();
-
-            if u_side != uncle_side {
-                // Case 3a: u is away from its uncle.
-                // Rotate, then leave u red and colour w, its new sibling, red.
-                // Their new parent should thus be black.
-                self:rotate(&mut w, !u_side);
-                v.colour = BLACK();
-                w.colour = RED();
-            }
-            else {
-                // Case 3b: u is towards its uncle.
-                // Now u becomes the parent of v and w. Colour it black, leave v
-                // red, and make w red.
-                self:rotate(&mut v, !u_side);
-                self:rotate(&mut w, u_side);
-                u.colour = BLACK();
-                w.colour = RED();
-            }
-
-            return;
+            // Case 3b: u is towards its uncle.
+            // Now u becomes the parent of v and w. Colour it black, leave v
+            // red, and make w red.
+            self:rotate(&mut v, !u_side);
+            self:rotate(&mut w, u_side);
+            u.colour = BLACK();
+            w.colour = RED();
         }
+
+        return;
     }
 }
 

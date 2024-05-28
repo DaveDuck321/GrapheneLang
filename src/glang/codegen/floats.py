@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from .user_facing_errors import (
+from glang.codegen.user_facing_errors import (
     InvalidFloatLiteralPrecision,
     InvalidFloatLiteralTooLarge,
 )
