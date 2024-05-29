@@ -79,7 +79,8 @@ function [K] is_valid_rb_tree : (tree : RB_Tree<K> mut&) -> bool = {
 }
 
 function main : () -> int = {
-    mut tree : RB_Tree<int> = make<RB_Tree<int>>();
+    mut allocator : Allocator = initialize_allocator();
+    mut tree : RB_Tree<int> = make<RB_Tree<int>>(&mut allocator);
     mut n : int = 1000;
 
     for i in range(n) {

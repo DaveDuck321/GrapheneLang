@@ -1,17 +1,18 @@
 @require_once "std/arithmetic.c3"
+@require_once "std/iterators.c3"
 @require_once "std/logical.c3"
-@require_once "std/string.c3"
+@require_once "std/map.c3"
 @require_once "std/memory.c3"
+@require_once "std/string.c3"
 @require_once "std/vector.c3"
 @require_once "std/wrappers.c3"
-@require_once "std/iterators.c3"
 
 typedef StringViewIter : ContiguousContainerIter<View<u8>&, u8&>
 typedef VectorIter<JSON_Node> : ContiguousContainerIter<Vector<JSON_Node>&, JSON_Node mut&>
 
 typedef Cursor : {
     iter      : StringViewIter,
-    allocator : Allocator,  // FIXME use global allocator.
+    allocator : Allocator mut&,  // FIXME use global allocator.
     // TODO when we get RAII working, add a max_depth field to prevent crashes
     // when the input is too nested.
 }
@@ -21,15 +22,15 @@ typedef JSON_Node : {
                     // 5: array, 6: object
     value    : Optional<StringView>,
     children : Vector<JSON_Node>,
+    map      : Map<StringView, JSON_Node>,
 }
 
-// TODO something like new<JSON_Node> would be nice, but we don't support
-// function specializations.
-function new_json_node : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
+function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON_Node = {
     return {
         node_type,
         make<Optional<StringView>>(),
         make<Vector<JSON_Node>>(&mut allocator),
+        make<Map<StringView, JSON_Node>>(&mut allocator),
     };
 }
 
@@ -113,7 +114,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         return make<Optional<JSON_Node>>();
     }
 
-    mut node : JSON_Node = new_json_node(/* object */ 6, &mut cursor.allocator);
+    mut node : JSON_Node = make<JSON_Node>(/* object */ 6, &mut cursor.allocator);
 
     cursor:eat_whitespace();
 
@@ -128,27 +129,28 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         let string_node : Optional<JSON_Node> = cursor:parse_string();
 
         if !string_node:has_value() {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
 
-        node.children:push_back(string_node:data());
+        runtime_assert(string_node:data().value:has_value());
+        let string_view : StringView = string_node:data().value:data();
 
         cursor:eat_whitespace();
 
         if !cursor:eat(char(":")) {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
 
         let value_node : Optional<JSON_Node> = cursor:parse_element();
 
         if !value_node:has_value() {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
 
-        node.children:push_back(value_node:data());
+        node.map:insert(string_view, value_node:data());
 
         if cursor:eat(char("}")) {
             // We're done.
@@ -156,7 +158,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         }
 
         if !cursor:eat(char(",")) {
-            node.children:deallocate();
+            node.map:clear();
             return make<Optional<JSON_Node>>();
         }
     }
@@ -171,7 +173,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         return make<Optional<JSON_Node>>();
     }
 
-    mut node : JSON_Node = new_json_node(/* array */ 5, &mut cursor.allocator);
+    mut node : JSON_Node = make<JSON_Node>(/* array */ 5, &mut cursor.allocator);
 
     cursor:eat_whitespace();
 
@@ -225,15 +227,15 @@ function parse_value : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     }
 
     if cursor:eat(sv("null")) {
-        return make<Optional<JSON_Node>>(new_json_node(/* null */ 0, &mut cursor.allocator));
+        return make<Optional<JSON_Node>>(make<JSON_Node>(/* null */ 0, &mut cursor.allocator));
     }
 
     if cursor:eat(sv("true")) {
-        return make<Optional<JSON_Node>>(new_json_node(/* true */ 1, &mut cursor.allocator));
+        return make<Optional<JSON_Node>>(make<JSON_Node>(/* true */ 1, &mut cursor.allocator));
     }
 
     if cursor:eat(sv("false")) {
-        return make<Optional<JSON_Node>>(new_json_node(/* false */ 2, &mut cursor.allocator));
+        return make<Optional<JSON_Node>>(make<JSON_Node>(/* false */ 2, &mut cursor.allocator));
     }
 
     // Numbers don't have a prefix character, so just try and parse them.
@@ -270,11 +272,11 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
     while cursor:has_next() {
         if !in_escape_seq and cursor:eat(char("\"")) {
-            mut node : JSON_Node = new_json_node(/* string */ 3, &mut cursor.allocator);
+            mut node : JSON_Node = make<JSON_Node>(/* string */ 3, &mut cursor.allocator);
 
-            // TODO: https://github.com/DaveDuck321/GrapheneLang/issues/124
-            let value: StringView = {string:view()};
-            node.value = make<Optional<StringView>>(value);
+            node.value = make<Optional<StringView>>(
+                make<StringView>(string:view())
+            );
 
             return make<Optional<JSON_Node>>(node);
         }
@@ -356,18 +358,16 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         return make<Optional<JSON_Node>>();
     }
 
-    mut node : JSON_Node = new_json_node(/* string */ 4, &mut cursor.allocator);
+    mut node : JSON_Node = make<JSON_Node>(/* string */ 4, &mut cursor.allocator);
     node.value = make<Optional<StringView>>(cursor:slice_between(start_pos, end_pos));
 
     return make<Optional<JSON_Node>>(node);
 }
 
 // TODO this and write below should be the only public functions.
-function json_parse : (source : StringView) -> Optional<JSON_Node> = {
+function json_parse : (source : StringView, allocator : Allocator mut&) -> Optional<JSON_Node> = {
     // FIXME memory safety, memory leaks.
-    mut cursor : Cursor = {
-        source:get_iter(), initialize_allocator()
-    };
+    mut cursor : Cursor = { source:get_iter(), &mut allocator };
 
     let result : Optional<JSON_Node> = cursor:parse_element();
 
@@ -412,6 +412,7 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
             buffer.data[0] = char("\"");
             buffer.data[buffer.length - 1] = char("\"");
             for i in range(string:length()) {
+                // FIXME we need to escape the strings we print here.
                 buffer.data[i + 1] = string.buffer.data[i];
             }
 
@@ -449,22 +450,16 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
         // FIXME we should be using a buffer here.
         io:write(sv("{"));
 
-        mut iter : VectorIter<JSON_Node> = node.children:get_iter();
-        mut flag : bool = true;
+        mut iter : MapIter<StringView, JSON_Node> = node.map:get_citer();
 
         // XXX we have to borrow the iterator, otherwise it is not updated
         // in place by the implicit call to get_next().
         for element in &mut iter {
-            io:write(element);
-
-            if flag {
-                io:write(sv(": "));
-            } else {
-                if iter:has_next() {
-                    io:write(sv(", "));
-                }
+            // FIXME we need to escape the strings we print here.
+            io:writef(sv("\"%\": %"), element.key, element.value);
+            if iter:has_next() {
+                io:write(sv(", "));
             }
-            flag ^= true;
         }
 
         return io:write(sv("}"));

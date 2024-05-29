@@ -66,17 +66,7 @@ function [T] get : (self : Vector<T>&, index : isize) -> T mut& = {
     return &mut self.memory.data[index];
 }
 
-function [T] get : (self : Vector<T> mut&, index : isize) -> T mut& = {
-    runtime_assert(index >= 0 and index < self.length);
-    return &mut self.memory.data[index];
-}
-
 function [T] length : (self : Vector<T>&) -> isize = {
-    return self.length;
-}
-
-function [T] length : (self : Vector<T> mut&) -> isize = {
-    // TODO: I really don't like this way of supporting UFCS
     return self.length;
 }
 
@@ -84,23 +74,9 @@ function [T] capacity : (self : Vector<T>&) -> isize = {
     return self.memory.length;
 }
 
-function [T] capacity : (self : Vector<T> mut&) -> isize = {
-    return self.memory.length;
-}
-
-function [T] data : (self : Vector<T> mut&) -> Span<T> = {
-    return self.memory:slice_to(self.length);
-}
-
 function [T] data : (self : Vector<T>&) -> Span<T> = {
     // TODO: we can extract the mutable data from a constant vector... Do I like this?
     return self.memory:slice_to(self.length);
-}
-
-function [T] view : (self : Vector<T> mut&) -> View<T> = {
-    // TODO: take value types as const reference
-    let data : Span<T> = self:data();
-    return data:to_view();
 }
 
 function [T] view : (self : Vector<T>&) -> View<T> = {

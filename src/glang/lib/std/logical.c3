@@ -65,3 +65,8 @@ typedef [T] RegisterHasTrivialAssignments<Override<T>> : TypeIf<TrueType, IsLogi
 @operator [U, V] != : (lhs: U, rhs: V) -> LogicalCompareResult<U, V> = {
     return !(lhs == rhs);
 }
+
+// TODO just for string comparisons to work; come up with something better.
+@operator < : (lhs: u8, rhs: u8) -> bool = {
+    return __builtin_is_less_than(lhs, rhs);
+}

@@ -3,7 +3,8 @@
 @require_once "std/assert.c3"
 
 function main : () -> int = {
-    mut tree : RB_Tree<int> = make<RB_Tree<int>>();
+    mut allocator : Allocator = initialize_allocator();
+    mut tree : RB_Tree<int> = make<RB_Tree<int>>(&mut allocator);
 
     tree:insert(0);
     tree:insert(1);
