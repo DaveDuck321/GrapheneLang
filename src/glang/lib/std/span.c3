@@ -8,7 +8,11 @@ typedef [T] View : _SpanImpl<T[&]>
 typedef [T] Span : _SpanImpl<T[mut&]>
 
 typedef [T] _SpanImplMemberReference<T[&]> : T&
-typedef [T] _SpanImplMemberReference<T[mut&]> : T mut&
+typedef [T] _SpanImplMemberReference<T[mut&]> : T&
+
+function [T] to_view : (span : Span<T>) -> View<T> = {
+    return make<View<T>>(&span.data, span.length);
+}
 
 function [T] to_view : (span : Span<T>&) -> View<T> = {
     return make<View<T>>(&span.data, span.length);
@@ -134,7 +138,7 @@ function [T] slice_between : (span : Span<T>&, start : isize, end : isize) -> Sp
     let start_addr : iptr = ref_to_addr(&span:get(start));
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
-        min(end, view.length) - start
+        min(end, span.length) - start
     );
 }
 

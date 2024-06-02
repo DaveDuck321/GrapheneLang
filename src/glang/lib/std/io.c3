@@ -18,6 +18,10 @@ function write : ( file : File&, buffer : View<u8> ) -> void = {
     sys_write(file.fd, &buffer.data, buffer.length);
 }
 
+function write : ( file : File&, sv : StringView ) -> void = {
+    file:write(sv.buffer);
+}
+
 function read : ( file : File&, buffer: Span<u8> ) -> View<u8> = {
     let bytes_read: isize = sys_read(file.fd, &mut buffer.data, buffer.length);
     return {&buffer.data, bytes_read};
@@ -30,12 +34,16 @@ function close : ( file : File& ) -> void = {
     }
 }
 
-function open : ( file_path: CString, mode: u32 ) -> Optional<File> = {
-    let fd : int = sys_open(&file_path.data, mode, 0x00);
+function open : ( file_path: CString, flags: u32, mode: u32 ) -> Optional<File> = {
+    let fd : int = sys_open(&file_path.data, flags, mode);
     if fd < 0 {
         return make<Optional<File>>();
     }
     return make<Optional<File>>({fd});
+}
+
+function open : ( file_path: CString, flags: u32 ) -> Optional<File> = {
+    return open(file_path, flags, 0x0);
 }
 
 function read : ( file : File& ) -> Optional<MappedFile> = {
