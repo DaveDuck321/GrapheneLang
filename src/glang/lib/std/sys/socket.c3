@@ -1,5 +1,6 @@
 // sys/socket.h - main sockets header
 // https://pubs.opengroup.org/onlinepubs/009695399/basedefs/sys/socket.h.html
+@require_once "../io.c3"
 @require_once "../util.c3"
 @require_once "syscalls.c3"
 
@@ -19,15 +20,19 @@ function SOCK_STREAM : () -> int = {
     return 1;
 }
 
-function socket : (domain : int, type : int, protocol : int) -> int = {
-    return Narrow<int>(sys_socket(domain, type, protocol));
+function socket : (domain : int, type : int, protocol : int) -> Optional<File> = {
+    let fd : int = Narrow<int>(sys_socket(domain, type, protocol));
+    if fd < 0 {
+        return make<Optional<File>>();
+    }
+    return make<Optional<File>>({ fd });
 }
 
 function connect : (
-    socket : int, address : sockaddr_un&
+    socket : File, address : sockaddr_un&
 ) -> int = {
     // Need to work out the real size of the address.
     let path : CString = { &address.sun_path };
     let size : isize = sizeof<sa_family_t>() + path:length();
-    return Narrow<int>(sys_connect(socket, ref_to_addr(&address), Narrow<int>(size)));
+    return Narrow<int>(sys_connect(socket.fd, ref_to_addr(&address), Narrow<int>(size)));
 }
