@@ -212,7 +212,7 @@ class LLVM_IR(Stage):
             [
                 getenv("GRAPHENE_LLC_CMD", "llc"),
                 f"--mtriple={get_target_triple()}",
-                f"--filetype=asm",
+                "--filetype=asm",
                 f"-O{args.optimize}",
                 "-",
             ],
