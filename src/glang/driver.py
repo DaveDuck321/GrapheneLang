@@ -77,6 +77,9 @@ class DriverArguments(Tap):
     emit_optimized_llvm: bool = False
     """Output IR optimized by clang to a file."""
 
+    emit_asm: bool = False
+    """Output human-readable assembly."""
+
     emit_everything: bool = False
     """Output generated IR, optimized IR, and the binary."""
 
@@ -107,6 +110,7 @@ class DriverArguments(Tap):
         self.add_argument("-c", "--compile_to_object")
         self.add_argument("-I", "--include_path")
         self.add_argument("-O", "--optimize")
+        self.add_argument("-S", "--emit-asm")
         self.add_argument("-T", "--linker-script")
         self.add_argument("--print_host_target", nargs=0, action=PrintHostTargetAction)
 
@@ -203,6 +207,19 @@ class LLVM_IR(Stage):
 
         return LLVM_IR(optimized_ir, self)
 
+    def assemble(self, args: DriverArguments) -> Assembly:
+        result = run_checked(
+            [
+                getenv("GRAPHENE_LLC_CMD", "llc"),
+                f"--mtriple={get_target_triple()}",
+                f"--filetype=asm",
+                f"-O{args.optimize}",
+                "-",
+            ],
+            stdin=self.get_bytes(),
+        )
+        return Assembly(result, self)
+
 
 class GrapheneSource(Stage):
     def compile(self, args: DriverArguments) -> LLVM_IR:
@@ -263,7 +280,12 @@ def bundle_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
 def main() -> None:
     args = DriverArguments().parse_args()
     will_emit_binary = (
-        not (args.emit_llvm or args.emit_optimized_llvm or args.emit_llvm_to_stdout)
+        not (
+            args.emit_llvm
+            or args.emit_optimized_llvm
+            or args.emit_llvm_to_stdout
+            or args.emit_asm
+        )
         or args.emit_everything
     )
 
@@ -290,6 +312,13 @@ def main() -> None:
         opt_sources = llvm_sources  # Don't even touch on O0
     else:
         opt_sources = [llvm.optimize(args) for llvm in llvm_sources]
+
+    # 2.5) Emit asm
+    if args.emit_asm or args.emit_everything:
+        for source in opt_sources:
+            asm = source.assemble(args)
+            target_output = asm.get_top_level_source_file().with_suffix(".S")
+            target_output.write_bytes(asm.get_bytes())
 
     # 3) Compile
     if not will_emit_binary:
