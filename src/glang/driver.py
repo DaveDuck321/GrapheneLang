@@ -95,6 +95,9 @@ class DriverArguments(Tap):
     print_host_target: bool = False
     """Print the target corresponding to the host."""
 
+    linker_script: Path | None = None
+    """Link with custom script"""
+
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
 
@@ -104,6 +107,7 @@ class DriverArguments(Tap):
         self.add_argument("-c", "--compile_to_object")
         self.add_argument("-I", "--include_path")
         self.add_argument("-O", "--optimize")
+        self.add_argument("-T", "--linker-script")
         self.add_argument("--print_host_target", nargs=0, action=PrintHostTargetAction)
 
 
@@ -228,6 +232,9 @@ def link_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
     if not args.use_crt:
         linker_args.extend(["--nostdlib", "--static"])
 
+    if args.linker_script:
+        linker_args.append(f"-T{args.linker_script}")
+
     binary_output = args.output or Path("a.out")
     run_checked(
         [
@@ -301,7 +308,10 @@ def main() -> None:
             bundle_and_output(args, objects)
         else:
             # Object
-            target_output = objects[0].get_top_level_source_file().with_suffix(".o")
+            if args.output:
+                target_output = args.output
+            else:
+                target_output = objects[0].get_top_level_source_file().with_suffix(".o")
             target_output.write_bytes(objects[0].get_bytes())
         return
 
