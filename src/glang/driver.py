@@ -317,7 +317,7 @@ def main() -> None:
     if args.emit_asm or args.emit_everything:
         for source in opt_sources:
             asm = source.assemble(args)
-            target_output = asm.get_top_level_source_file().with_suffix(".S")
+            target_output = asm.get_top_level_source_file().with_suffix(".s")
             target_output.write_bytes(asm.get_bytes())
 
     # 3) Compile
