@@ -80,3 +80,17 @@ function sys_socket : (family : int, type : int, protocol : int) -> i64 = {
 function sys_connect : (fd : int, addr : iptr, addrlen : int) -> i64 = {
     return _syscall_3(fd, addr, addrlen, /* connect */ 42);
 }
+
+function sys_pipe : (fds : int[&]) -> int = {
+    return Narrow<int>(_syscall_1(__builtin_ptr_to_int(&fds), /* pipe */ 22));
+}
+
+function sys_dup2 : (old_fd : int, new_fd : int) -> int = {
+    return Narrow<int>(_syscall_2(old_fd, new_fd, /* dup2 */ 33));
+}
+
+function sys_execve : (path : u8[&]) -> int = {
+    // TODO argv and envp.
+    return Narrow<int>(_syscall_3(__builtin_ptr_to_int(&path), 0, 0, /* execve */ 59));
+
+}
