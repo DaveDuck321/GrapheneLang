@@ -89,8 +89,9 @@ function sys_dup2 : (old_fd : int, new_fd : int) -> int = {
     return Narrow<int>(_syscall_2(old_fd, new_fd, /* dup2 */ 33));
 }
 
-function sys_execve : (path : u8[&]) -> int = {
-    // TODO argv and envp.
-    return Narrow<int>(_syscall_3(__builtin_ptr_to_int(&path), 0, 0, /* execve */ 59));
+function sys_execve : (path : u8[&], argv : u8[&][&]) -> int = {
+    // TODO envp.
+    return Narrow<int>(_syscall_3(__builtin_ptr_to_int(&path),
+        __builtin_ptr_to_int(&argv), 0, /* execve */ 59));
 
 }

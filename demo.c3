@@ -7,7 +7,8 @@ function main : () -> int = {
     mut allocator : Allocator = initialize_allocator();
     let buffer : Span<u8> = allocator:allocate_span<u8>(1024);
 
-    let process : Optional<Process> = execute({ "/usr/bin/whoami\0" });
+    let args : CString[1] = { make<CString>("/\0") };
+    let process : Optional<Process> = execute({ "/usr/bin/ls\0" }, make<View<CString>>(&args, 1));
 
     if !process:has_value() {
         print(sv("Failed to start process"));
