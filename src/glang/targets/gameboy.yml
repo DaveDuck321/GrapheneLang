@@ -1,0 +1,32 @@
+arch: gb
+arch_native_widths:
+  - 1
+  - 2
+# https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst
+abi: SystemV_AMD64
+endianness: little
+mangling: elf
+stack_align: 1
+int_type:
+  size: 2
+  align: 1
+llvm_target_triple: gb-unknown-unknown
+llvm_types:
+  ptr:
+    size: 2
+    align: 1
+  i1:
+    size: 1
+    align: 1
+  i8:
+    size: 1
+    align: 1
+  i16:
+    size: 2
+    align: 1
+  i32:
+    size: 4
+    align: 1
+  i64:
+    size: 8
+    align: 1
