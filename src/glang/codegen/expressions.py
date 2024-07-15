@@ -5,7 +5,7 @@ from glang.codegen.builtin_types import (
     BoolType,
     FunctionSignature,
     HeapArrayDefinition,
-    IntType,
+    LLVMConstantOffsetType,
     SizeType,
     StackArrayDefinition,
     StructDefinition,
@@ -292,8 +292,8 @@ class StructMemberAccess(StaticTypedExpression):
 
         # In llvm structs behind a pointer are treated like an array
         assert self.meta is not None
-        pointer_offset = ConstantExpression(IntType(), "0", self.meta)
-        index = ConstantExpression(IntType(), str(self._index), self.meta)
+        pointer_offset = ConstantExpression(LLVMConstantOffsetType(), "0", self.meta)
+        index = ConstantExpression(LLVMConstantOffsetType(), str(self._index), self.meta)
 
         self.result_reg = ctx.next_reg()
         ir = IROutput()
