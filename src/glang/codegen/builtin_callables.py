@@ -8,6 +8,7 @@ from glang.codegen.builtin_types import (
     IntegerDefinition,
     IPtrType,
     SizeType,
+    VoidType,
 )
 from glang.codegen.expressions import ConstantExpression, StaticTypedExpression
 from glang.codegen.interfaces import (
@@ -606,6 +607,43 @@ class BitcastExpression(BuiltinCallable):
         self._src_expr.assert_can_write_to()
 
 
+class TrapExpression(BuiltinCallable):
+    def __init__(
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
+    ) -> None:
+        assert len(specialization) == 0
+        assert len(arguments) == 0
+
+        StaticTypedExpression.__init__(
+            self,
+            VoidType(),
+            Type.Kind.VALUE,
+            meta,
+        )
+
+    def __repr__(self) -> str:
+        return "TrapExpression()"
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+        ir.lines.append(f"call void @llvm.trap(), {dbg}")
+        return ir
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert False
+
+    def assert_can_read_from(self) -> None:
+        assert False
+
+    def assert_can_write_to(self) -> None:
+        assert False
+
+
 def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
     def get_arithmetic_builtin(
         expression_class: type[BasicNumericExpression | UnaryExpression],
@@ -646,4 +684,5 @@ def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
         "__builtin_narrow": NarrowExpression,
         "__builtin_ptr_to_int": PtrToIntExpression,
         "__builtin_sizeof": SizeOfExpression,
+        "__builtin_trap": TrapExpression,
     }
