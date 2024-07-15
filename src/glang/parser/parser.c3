@@ -131,6 +131,7 @@ function [Args...] syntax_error_at_position : (cursor : Cursor mut&, position : 
     io:writef(format_args...);
     io:write("\"");
     io:write("}");
+    io:write("\n");
     io:close();
     sys_exit(1);
 }
@@ -1448,6 +1449,7 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
             .file = get_stdout_io(),
         };
         json_output:write_json_value(&program);
+        json_output:write("\n");
         json_output:close();
     }
 

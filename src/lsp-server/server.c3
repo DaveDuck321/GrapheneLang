@@ -1,8 +1,9 @@
-@require_once "std/io.c3"
-@require_once "std/memory.c3"
-@require_once "std/format.c3"
 @require_once "std/fcntl.c3"
+@require_once "std/format.c3"
+@require_once "std/io.c3"
 @require_once "std/json.c3"
+@require_once "std/memory.c3"
+@require_once "std/process.c3"
 @require_once "std/sys/socket.c3"
 
 @require_once "ring_buffer.c3"
@@ -15,6 +16,61 @@ typedef RPCRequest : {
 
 function [IO] write : (io : IO mut&, req : RPCRequest) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     io:writef(sv("RPCRequest {id=%, method=%, params=%}"), req.id, req.method, req.params);
+}
+
+typedef StringStream : {
+    buffer : u8[4096],
+    buffer_pointer : isize,
+}
+
+function write : (ss : StringStream mut&, sv : StringView) -> void = {
+    // TODO bounds check.
+    for i in range(sv:length()) {
+        ss.buffer[ss.buffer_pointer + i] = sv.buffer.data[i];
+    }
+
+    ss.buffer_pointer += sv:length();
+}
+
+function write : (ss : StringStream mut&, number : isize) -> void = {
+    if number == 0 {
+        ss.buffer[ss.buffer_pointer] = "0"[0];
+        ss.buffer_pointer += 1;
+
+        return;
+    }
+
+    let is_negative : bool = number < 0;
+    mut current_number : isize = number;
+    mut length : isize = 0;
+    while current_number != 0 {
+        let next_digit: u8 = as_logical(__builtin_narrow<i8>(abs(current_number % 10) + as_arithmetic("0"[0])));
+
+        ss.buffer[ss.buffer_pointer + length] = next_digit;
+
+        current_number /= 10;
+        length += 1;
+    }
+
+    if is_negative {
+        ss.buffer[length] = "-"[0];
+        length += 1;
+    }
+
+    let span : Span<u8> = make<Span<u8>>(&mut ss.buffer, 4096);
+    let result : Span<u8> = span:slice_between(ss.buffer_pointer, ss.buffer_pointer + length);
+    result:reverse();
+    ss.buffer_pointer += length;
+}
+
+function length : (ss : StringStream&) -> isize = {
+    return ss.buffer_pointer;
+}
+
+// FIXME we really do want to take this by reference.
+function [IO] write : (io : IO mut&, ss : StringStream) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    let span : View<u8> = make<View<u8>>(&ss.buffer, ss.buffer_pointer);
+    io:write(make<StringView>(span));
 }
 
 function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
@@ -147,6 +203,153 @@ function handle_initialize : (params : JSON_Node) -> void = {
     printf(sv("Received initialize request with params=%"), params);
 }
 
+function handle_diagnostic : (req : RPCRequest, out : BufferedFile) -> void = {
+    printf(sv("Received diagnostic request with params=%"), req.params);
+
+    let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
+    if !text_document:has_value() {
+        print(sv("Bad diagnostic request 1"));
+        return;
+    }
+
+    let uri : Optional<JSON_Node> = text_document:data().map:at(sv("uri"));
+    if !uri:has_value() {
+        print(sv("Bad diagnostic request 2"));
+        return;
+    }
+    if !uri:data().value:has_value() {
+        print(sv("Bad diagnostic request 3"));
+        return;
+    }
+
+    // We expect `file:///file/system/path`.
+    let protocol : StringView = uri:data().value:data():slice_to(7);
+    if protocol != sv("file://") {
+        printf(sv("Unsupported URI protocol `%`"), protocol);
+        return;
+    }
+
+    let path : StringView = uri:data().value:data():slice_from(7);
+    printf(sv("Reading from `%`"), path);
+
+    mut path_buffer : u8[512];
+    for i in range(512) {
+        path_buffer[i] = Narrow<u8>(0x00);
+    }
+    for i in range(path:length()) {
+        path_buffer[i] = path.buffer.data[i];
+    }
+
+    let path_cstring : CString[1] = { make<CString>(&path_buffer) };
+
+    let process : Optional<Process> = execute(
+        make<CString>("/var/home/antros/Source/GrapheneLang/dist/parser\0"),
+        make<View<CString>>(&path_cstring, 1)
+    );
+    if !process:has_value() {
+        print(sv("Failed to start process"));
+        return;
+    }
+
+    mut allocator : Allocator = initialize_allocator();
+    mut cb_opt : Optional<RingBuffer> = make<RingBuffer>(65536, {"parser_buffer"});
+    if !cb_opt:has_value() {
+        print(sv("Failed to allocate ring buffer"));
+        return;
+    }
+
+    mut cb : RingBuffer = cb_opt:data();
+
+    mut view_opt : Optional<View<u8>> = cb:read_line(process:data().stdout);
+    if !view_opt:has_value() {
+        print(sv("Failed to read line"));
+        return;
+    }
+    let view : StringView = make<StringView>(view_opt:data());
+
+    let json : Optional<JSON_Node> = json_parse(view, &mut allocator);
+    if !json:has_value() {
+        print(sv("Failed to parse json"));
+        return;
+    }
+
+    cb:advance(view:length());
+
+    printf(sv("Received %"), json:data());
+    let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
+    if !success:has_value() {
+        // The parser didn't output an error, so the code is good. We still need
+        // to reply though.
+        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": []}}");
+        mut ss : StringStream;
+        ss.buffer_pointer = 0;
+        ss:writef(resp, req.id);
+        print(ss);
+        out:writef(sv("Content-Length: %\r\n"), ss:length());
+        out:write(sv("\r\n"));
+        out:write(ss);
+        out:flush();
+        return;
+    }
+
+    // TODO need an actual API here.
+    if success:data().type != /* false */ 2 {
+        return;
+    }
+
+    let message : Optional<JSON_Node> = json:data().map:at(sv("message"));
+    if !message:has_value() {
+        print(sv("'message' not found"));
+        return;
+    }
+
+    let location : Optional<JSON_Node> = json:data().map:at(sv("location"));
+    if !location:has_value() {
+        print(sv("'location' not found"));
+        return;
+    }
+
+    let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
+    if !line:has_value() {
+        print(sv("'line' not found"));
+        return;
+    }
+
+    let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
+    if !column:has_value() {
+        print(sv("'column' not found"));
+        return;
+    }
+
+    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut allocator };
+    let line_number : Optional<int> = cursor:parse_natural_number();
+
+    if !line_number:has_value() {
+        print(sv("Couldn't parse line number"));
+        return;
+    }
+
+    cursor.iter = column:data().value:data():get_iter();
+    let column_number : Optional<int> = cursor:parse_natural_number();
+
+    if !column_number:has_value() {
+        print(sv("Couldn't parse column number"));
+        return;
+    }
+
+    // FIXME LSP positions are zero-based, but we don't currently parse numbers.
+    printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
+    mut ss : StringStream;
+    ss.buffer_pointer = 0;
+    ss:writef(resp, req.id, line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
+    print(ss);
+    out:writef(sv("Content-Length: %\r\n"), ss:length());
+    out:write(sv("\r\n"));
+    out:write(ss);
+    out:flush();
+}
+
 function dispatch_rpc_request : (req : RPCRequest, fd : File) -> void = {
     // FIXME we need a better way; mostly because our formatters don't work with
     // raw `File`s.
@@ -163,6 +366,11 @@ function dispatch_rpc_request : (req : RPCRequest, fd : File) -> void = {
         out:write(sv("\r\n"));
         out:write(resp);
         out:flush();
+        return;
+    }
+
+    if req.method == sv("textDocument/diagnostic") {
+        handle_diagnostic(req, out);
         return;
     }
 
@@ -228,6 +436,7 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
     mut allocator : Allocator = initialize_allocator();
 
+    // FIXME we're mmap'ing new ring buffers on every request...
     while true {
         let parsed : Optional<RPCRequest> = parse_next_rpc(in_file, &mut allocator);
 
