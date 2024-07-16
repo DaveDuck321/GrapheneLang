@@ -136,7 +136,7 @@ function parse_next_rpc : (
         return make<Optional<RPCRequest>>();
     }
 
-    mut view : StringView = { .buffer = view_opt:data() };
+    mut view : StringView = make<StringView>(view_opt:data());
     if view:length() == 0 {
         print(sv("Received EOF"));
         return make<Optional<RPCRequest>>();
@@ -173,7 +173,7 @@ function parse_next_rpc : (
         return make<Optional<RPCRequest>>();
     }
 
-    view = { .buffer = view_opt:data() };
+    view = make<StringView>(view_opt:data());
     if view:length() == 0 {
         print(sv("Received EOF"));
         return make<Optional<RPCRequest>>();
@@ -463,6 +463,10 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
         if parsed:has_value() {
             state:data():dispatch_rpc_request(parsed:data(), out_file);
+        }
+        else {
+            // Try and resync if something went wrong.
+            state:data().client_buffer:clear();
         }
     }
 
