@@ -135,3 +135,9 @@ function advance : (buffer : RingBuffer mut&, size : isize) -> void = {
     buffer.head += size;
     buffer.head %= buffer.size;
 }
+
+function clear : (buffer : RingBuffer mut&) -> void = {
+    // Clear the contents of the buffer.
+    buffer.head = 0;
+    buffer.tail = 0;
+}

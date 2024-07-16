@@ -8,6 +8,29 @@
 
 @require_once "ring_buffer.c3"
 
+typedef State : {
+    // Buffers for IPC (one per process).
+    client_buffer : RingBuffer,
+    parser_buffer : RingBuffer,
+}
+
+function make<State> : () -> Optional<State> = {
+    let client_buffer : Optional<RingBuffer> =
+        make<RingBuffer>(262144, make<CString>("client_buffer\0"));
+    if !client_buffer:has_value() {
+        return make<Optional<State>>();
+    }
+
+    let parser_buffer : Optional<RingBuffer> =
+        make<RingBuffer>(262144, make<CString>("parser_buffer\0"));
+    if !parser_buffer:has_value() {
+        // FIXME deallocate the client buffer.
+        return make<Optional<State>>();
+    }
+
+    return make<Optional<State>>({client_buffer:data(), parser_buffer:data()});
+}
+
 typedef RPCRequest : {
     id : StringView, // TODO parse to int.
     method : StringView, // TODO string.
@@ -100,17 +123,9 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
 }
 
 function parse_next_rpc : (
-    fd : File, allocator : Allocator mut&
+    state : State mut&, fd : File, allocator : Allocator mut&
 ) -> Optional<RPCRequest> = {
-    mut cb_opt : Optional<RingBuffer> = make<RingBuffer>(8192, {"ipc_buffer"});
-    if !cb_opt:has_value() {
-        print(sv("Failed to allocate ring buffer"));
-        return make<Optional<RPCRequest>>();
-    }
-
-    mut cb : RingBuffer = cb_opt:data();
-
-    mut view_opt : Optional<View<u8>> = cb:read_line(fd);
+    mut view_opt : Optional<View<u8>> = state.client_buffer:read_line(fd);
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
         return make<Optional<RPCRequest>>();
@@ -146,8 +161,8 @@ function parse_next_rpc : (
         return make<Optional<RPCRequest>>();
     }
 
-    cb:advance(view:length());
-    view_opt = cb:read_line(fd);
+    state.client_buffer:advance(view:length());
+    view_opt = state.client_buffer:read_line(fd);
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
         return make<Optional<RPCRequest>>();
@@ -164,8 +179,8 @@ function parse_next_rpc : (
         return make<Optional<RPCRequest>>();
     }
 
-    cb:advance(view:length());
-    view_opt = cb:read(fd, length:data());
+    state.client_buffer:advance(view:length());
+    view_opt = state.client_buffer:read(fd, length:data());
     if !view_opt:has_value() {
         print(sv("Failed to read length"));
         return make<Optional<RPCRequest>>();
@@ -178,7 +193,7 @@ function parse_next_rpc : (
         return make<Optional<RPCRequest>>();
     }
 
-    cb:advance(view:length());
+    state.client_buffer:advance(view:length());
 
     printf(sv("Received %"), json:data());
 
@@ -203,7 +218,9 @@ function handle_initialize : (params : JSON_Node) -> void = {
     printf(sv("Received initialize request with params=%"), params);
 }
 
-function handle_diagnostic : (req : RPCRequest, out : BufferedFile) -> void = {
+function handle_diagnostic : (
+    state : State mut&, req : RPCRequest, out : BufferedFile
+) -> void = {
     printf(sv("Received diagnostic request with params=%"), req.params);
 
     let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
@@ -252,15 +269,13 @@ function handle_diagnostic : (req : RPCRequest, out : BufferedFile) -> void = {
     }
 
     mut allocator : Allocator = initialize_allocator();
-    mut cb_opt : Optional<RingBuffer> = make<RingBuffer>(65536, {"parser_buffer"});
-    if !cb_opt:has_value() {
-        print(sv("Failed to allocate ring buffer"));
-        return;
-    }
 
-    mut cb : RingBuffer = cb_opt:data();
+    // This buffer is reused across multiple, independent calls to the parser.
+    // We need to make sure that the output of one invocation doesn't affect
+    // subsequent invocations.
+    state.parser_buffer:clear();
 
-    mut view_opt : Optional<View<u8>> = cb:read_line(process:data().stdout);
+    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
         return;
@@ -272,8 +287,6 @@ function handle_diagnostic : (req : RPCRequest, out : BufferedFile) -> void = {
         print(sv("Failed to parse json"));
         return;
     }
-
-    cb:advance(view:length());
 
     printf(sv("Received %"), json:data());
     let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
@@ -337,7 +350,6 @@ function handle_diagnostic : (req : RPCRequest, out : BufferedFile) -> void = {
         return;
     }
 
-    // FIXME LSP positions are zero-based, but we don't currently parse numbers.
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
     mut ss : StringStream;
@@ -350,7 +362,9 @@ function handle_diagnostic : (req : RPCRequest, out : BufferedFile) -> void = {
     out:flush();
 }
 
-function dispatch_rpc_request : (req : RPCRequest, fd : File) -> void = {
+function dispatch_rpc_request : (
+    state : State mut&, req : RPCRequest, fd : File
+) -> void = {
     // FIXME we need a better way; mostly because our formatters don't work with
     // raw `File`s.
     mut out : BufferedFile;
@@ -370,7 +384,7 @@ function dispatch_rpc_request : (req : RPCRequest, fd : File) -> void = {
     }
 
     if req.method == sv("textDocument/diagnostic") {
-        handle_diagnostic(req, out);
+        state:handle_diagnostic(req, out);
         return;
     }
 
@@ -435,13 +449,18 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
     print(sv("Starting!"));
 
     mut allocator : Allocator = initialize_allocator();
+    mut state : Optional<State> = make<State>();
+    if !state:has_value() {
+        print(sv("Error: failed to initialize state"));
+        return 1;
+    }
 
     // FIXME we're mmap'ing new ring buffers on every request...
     while true {
-        let parsed : Optional<RPCRequest> = parse_next_rpc(in_file, &mut allocator);
+        let parsed : Optional<RPCRequest> = state:data():parse_next_rpc(in_file, &mut allocator);
 
         if parsed:has_value() {
-            dispatch_rpc_request(parsed:data(), out_file);
+            state:data():dispatch_rpc_request(parsed:data(), out_file);
         }
     }
 
