@@ -24,3 +24,7 @@ function pipe : () -> Optional<Pipe> = {
 
     return make<Optional<Pipe>>();
 }
+
+function getpid : () -> pid_t = {
+    return sys_getpid();
+}

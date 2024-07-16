@@ -95,3 +95,7 @@ function sys_execve : (path : u8[&], argv : u8[&][&]) -> int = {
         __builtin_ptr_to_int(&argv), 0, /* execve */ 59));
 
 }
+
+function sys_getpid : () -> int = {
+    return Narrow<int>(_syscall_0(/* getpid */ 39));
+}
