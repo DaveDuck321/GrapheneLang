@@ -9,6 +9,7 @@
 @require_once "ring_buffer.c3"
 
 typedef State : {
+    allocator : Allocator,
     // Buffers for IPC (one per process).
     client_buffer : RingBuffer,
     parser_buffer : RingBuffer,
@@ -28,7 +29,11 @@ function make<State> : () -> Optional<State> = {
         return make<Optional<State>>();
     }
 
-    return make<Optional<State>>({client_buffer:data(), parser_buffer:data()});
+    return make<Optional<State>>({
+        initialize_allocator(),
+        client_buffer:data(),
+        parser_buffer:data()
+    });
 }
 
 typedef RPCRequest : {
@@ -123,7 +128,7 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
 }
 
 function parse_next_rpc : (
-    state : State mut&, fd : File, allocator : Allocator mut&
+    state : State mut&, fd : File
 ) -> Optional<RPCRequest> = {
     mut view_opt : Optional<View<u8>> = state.client_buffer:read_line(fd);
     if !view_opt:has_value() {
@@ -138,7 +143,7 @@ function parse_next_rpc : (
     }
 
     // TODO stop using stuff from json.c3 (move to e.g. parse.c3?).
-    mut cursor : Cursor = { view:get_iter(), &mut allocator };
+    mut cursor : Cursor = { view:get_iter(), &mut state.allocator };
 
     if !cursor:eat(sv("Content-Length: ")) {
         print(sv("Message does not start with 'Content-Length: '"));
@@ -187,7 +192,7 @@ function parse_next_rpc : (
     }
 
     view = { .buffer = view_opt:data() };
-    let json : Optional<JSON_Node> = json_parse(view, &mut allocator);
+    let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(sv("Failed to parse json"));
         return make<Optional<RPCRequest>>();
@@ -268,8 +273,6 @@ function handle_diagnostic : (
         return;
     }
 
-    mut allocator : Allocator = initialize_allocator();
-
     // This buffer is reused across multiple, independent calls to the parser.
     // We need to make sure that the output of one invocation doesn't affect
     // subsequent invocations.
@@ -282,7 +285,7 @@ function handle_diagnostic : (
     }
     let view : StringView = make<StringView>(view_opt:data());
 
-    let json : Optional<JSON_Node> = json_parse(view, &mut allocator);
+    let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(sv("Failed to parse json"));
         return;
@@ -334,7 +337,7 @@ function handle_diagnostic : (
         return;
     }
 
-    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut allocator };
+    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut state.allocator };
     let line_number : Optional<int> = cursor:parse_natural_number();
 
     if !line_number:has_value() {
@@ -448,7 +451,6 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
     print(sv("Starting!"));
 
-    mut allocator : Allocator = initialize_allocator();
     mut state : Optional<State> = make<State>();
     if !state:has_value() {
         print(sv("Error: failed to initialize state"));
@@ -457,7 +459,7 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
     // FIXME we're mmap'ing new ring buffers on every request...
     while true {
-        let parsed : Optional<RPCRequest> = state:data():parse_next_rpc(in_file, &mut allocator);
+        let parsed : Optional<RPCRequest> = state:data():parse_next_rpc(in_file);
 
         if parsed:has_value() {
             state:data():dispatch_rpc_request(parsed:data(), out_file);
