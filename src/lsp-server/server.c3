@@ -36,8 +36,9 @@ function make<State> : () -> Optional<State> = {
     });
 }
 
+// TODO split this into RPCRequest and RPCNotification.
 typedef RPCRequest : {
-    id : StringView, // TODO parse to int.
+    id : Optional<StringView>, // TODO parse to int.
     method : StringView, // TODO string.
     params : JSON_Node, // TODO mut&?
 }
@@ -49,6 +50,14 @@ function [IO] write : (io : IO mut&, req : RPCRequest) -> TypeIf<void, IsStreama
 typedef StringStream : {
     buffer : u8[4096],
     buffer_pointer : isize,
+}
+
+function make<StringStream> : () -> StringStream = {
+    // Leave buffer uninitialized.
+    mut ss : StringStream;
+    ss.buffer_pointer = 0;
+
+    return ss;
 }
 
 function write : (ss : StringStream mut&, sv : StringView) -> void = {
@@ -207,13 +216,8 @@ function parse_next_rpc : (
     let method : Optional<JSON_Node> = json:data().map:at(sv("method"));
     let params : Optional<JSON_Node> = json:data().map:at(sv("params"));
 
-    if !id:has_value() {
-        print(sv("Ignoring RPC notification"));
-        return make<Optional<RPCRequest>>();
-    }
-
     return make<Optional<RPCRequest>>({
-        .id = id:data().value:data(),
+        .id = id:data().value,
         .method = method:data().value:data(),
         .params = params:data(),
     });
@@ -297,9 +301,8 @@ function handle_diagnostic : (
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": []}}");
-        mut ss : StringStream;
-        ss.buffer_pointer = 0;
-        ss:writef(resp, req.id);
+        mut ss : StringStream = make<StringStream>();
+        ss:writef(resp, req.id:data());
         print(ss);
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
@@ -355,9 +358,186 @@ function handle_diagnostic : (
 
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
-    mut ss : StringStream;
-    ss.buffer_pointer = 0;
-    ss:writef(resp, req.id, line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
+    mut ss : StringStream = make<StringStream>();
+    ss:writef(resp, req.id:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
+    print(ss);
+    out:writef(sv("Content-Length: %\r\n"), ss:length());
+    out:write(sv("\r\n"));
+    out:write(ss);
+    out:flush();
+}
+
+function handle_text_change : (
+    state : State mut&, req : RPCRequest, out : BufferedFile
+) -> void = {
+    // {"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///var/home/antros/Source/GrapheneLang/src/lsp-server/server.c3","version":238},"contentChanges":[{"text":"@req
+    printf(sv("Received textDocument/didChange notification"));
+
+    let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
+    if !text_document:has_value() {
+        print(sv("textDocument not found"));
+        return;
+    }
+
+    let uri : Optional<JSON_Node> = text_document:data().map:at(sv("uri"));
+    if !uri:has_value() {
+        print(sv("uri not found"));
+        return;
+    }
+
+    let version : Optional<JSON_Node> = text_document:data().map:at(sv("version"));
+    if !version:has_value() {
+        print(sv("version not found"));
+        return;
+    }
+
+    let content_changes : Optional<JSON_Node> = req.params.map:at(sv("contentChanges"));
+    if !content_changes:has_value() {
+        print(sv("contentChanges not found"));
+        return;
+    }
+
+    let text : Optional<JSON_Node> = content_changes:data().map:at(sv("text"));
+    if !text:has_value() {
+        print(sv("text not found"));
+        return;
+    }
+
+    // Share the new file contents via an anonymous file.
+    let fd : int = memfd_create(make<CString>("shared_file\0"), 0x0);
+    if fd < 0 {
+        print(sv("memfd_create failed"));
+        return;
+    }
+
+    let text_length : isize = text:data().value:data():length();
+
+    if ftruncate(fd, text_length) != 0 {
+        print(sv("ftruncate failed"));
+        return;
+    }
+
+    // TODO we could seal the file before passing it to a different process.
+    let addr : iptr = mmap(
+        0, text_length, SYS_PROT_READ() | SYS_PROT_WRITE(),
+        SYS_MAP_SHARED(), fd, 0
+    );
+    let text_buffer : u8[mut&] = &mut addr_to_mut_heap_array<u8>(addr);
+
+    for i in range(text_length) {
+        text_buffer[i] = text:data().value:data().buffer.data[i];
+    }
+
+    mut path : StringStream = make<StringStream>();
+    path:writef(sv("/proc/%/fd/%"), getpid(), fd);
+    printf(sv("Shared fd path: %"), path);
+
+    mut path_buffer : u8[512];
+    for i in range(512) {
+        path_buffer[i] = Narrow<u8>(0x00);
+    }
+    for i in range(path:length()) {
+        path_buffer[i] = path.buffer[i];
+    }
+
+    let path_cstring : CString[1] = { make<CString>(&path_buffer) };
+
+    let process : Optional<Process> = execute(
+        make<CString>("/var/home/antros/Source/GrapheneLang/dist/parser\0"),
+        make<View<CString>>(&path_cstring, 1)
+    );
+    if !process:has_value() {
+        print(sv("Failed to start process"));
+        return;
+    }
+
+    // This buffer is reused across multiple, independent calls to the parser.
+    // We need to make sure that the output of one invocation doesn't affect
+    // subsequent invocations.
+    state.parser_buffer:clear();
+
+    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
+    if !view_opt:has_value() {
+        print(sv("Failed to read line"));
+        return;
+    }
+    let view : StringView = make<StringView>(view_opt:data());
+
+    let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
+    if !json:has_value() {
+        print(sv("Failed to parse json"));
+        return;
+    }
+
+    printf(sv("Received %"), json:data());
+
+    // FIXME we leak the fd (and the memory) if an error occurs.
+    sys_close(fd);
+
+    let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
+    if !success:has_value() {
+        // The parser didn't output an error, so the code is good. We still need
+        // to reply though.
+        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"full\", \"items\": []}}");
+        mut ss : StringStream = make<StringStream>();
+        ss:writef(resp, req.id:data());
+        print(ss);
+        out:writef(sv("Content-Length: %\r\n"), ss:length());
+        out:write(sv("\r\n"));
+        out:write(ss);
+        out:flush();
+        return;
+    }
+
+    // TODO need an actual API here.
+    if success:data().type != /* false */ 2 {
+        return;
+    }
+
+    let message : Optional<JSON_Node> = json:data().map:at(sv("message"));
+    if !message:has_value() {
+        print(sv("'message' not found"));
+        return;
+    }
+
+    let location : Optional<JSON_Node> = json:data().map:at(sv("location"));
+    if !location:has_value() {
+        print(sv("'location' not found"));
+        return;
+    }
+
+    let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
+    if !line:has_value() {
+        print(sv("'line' not found"));
+        return;
+    }
+
+    let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
+    if !column:has_value() {
+        print(sv("'column' not found"));
+        return;
+    }
+
+    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut state.allocator };
+    let line_number : Optional<int> = cursor:parse_natural_number();
+
+    if !line_number:has_value() {
+        print(sv("Couldn't parse line number"));
+        return;
+    }
+
+    cursor.iter = column:data().value:data():get_iter();
+    let column_number : Optional<int> = cursor:parse_natural_number();
+
+    if !column_number:has_value() {
+        print(sv("Couldn't parse column number"));
+        return;
+    }
+
+    printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\"\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
+    mut ss : StringStream = make<StringStream>();
+    ss:writef(resp, uri:data().value:data(), version:data().value:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
     print(ss);
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
@@ -378,7 +558,7 @@ function dispatch_rpc_request : (
     if req.method == sv("initialize") {
         handle_initialize(req.params);
 
-        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}}}}");
+        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}, \"textDocumentSync\": {\"change\": 1}}}}");
         out:writef(sv("Content-Length: %\r\n"), resp:length());
         out:write(sv("\r\n"));
         out:write(resp);
@@ -388,6 +568,11 @@ function dispatch_rpc_request : (
 
     if req.method == sv("textDocument/diagnostic") {
         state:handle_diagnostic(req, out);
+        return;
+    }
+
+    if req.method == sv("textDocument/didChange") {
+        state:handle_text_change(req, out);
         return;
     }
 
