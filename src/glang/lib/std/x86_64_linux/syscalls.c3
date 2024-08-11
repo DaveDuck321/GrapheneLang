@@ -99,3 +99,7 @@ function sys_execve : (path : u8[&], argv : u8[&][&]) -> int = {
 function sys_getpid : () -> int = {
     return Narrow<int>(_syscall_0(/* getpid */ 39));
 }
+
+function sys_kill : (pid : int, sig : int) -> int = {
+    return Narrow<int>(_syscall_2(pid, sig, /* kill */ 62));
+}
