@@ -17,13 +17,13 @@ typedef State : {
 
 function make<State> : () -> Optional<State> = {
     let client_buffer : Optional<RingBuffer> =
-        make<RingBuffer>(262144, make<CString>("client_buffer\0"));
+        make<RingBuffer>(10 * 1024 * 1024, make<CString>("client_buffer\0"));
     if !client_buffer:has_value() {
         return make<Optional<State>>();
     }
 
     let parser_buffer : Optional<RingBuffer> =
-        make<RingBuffer>(262144, make<CString>("parser_buffer\0"));
+        make<RingBuffer>(10 * 1024 * 1024, make<CString>("parser_buffer\0"));
     if !parser_buffer:has_value() {
         // FIXME deallocate the client buffer.
         return make<Optional<State>>();
@@ -209,18 +209,34 @@ function parse_next_rpc : (
 
     state.client_buffer:advance(view:length());
 
-    printf(sv("Received %"), json:data());
+    // printf(sv("Received %"), json:data());
 
     // TODO this is all kinda horrible.
     let id : Optional<JSON_Node> = json:data().map:at(sv("id"));
     let method : Optional<JSON_Node> = json:data().map:at(sv("method"));
     let params : Optional<JSON_Node> = json:data().map:at(sv("params"));
 
-    return make<Optional<RPCRequest>>({
-        .id = id:data().value,
-        .method = method:data().value:data(),
-        .params = params:data(),
-    });
+    if method:data().value:data() == sv("shutdown") {
+        // FIXME This shouldn't be handled here, but it doesn't have params, so
+        // quit instead of attempting to dereference that.
+        print(sv("Shutting down"));
+        sys_exit(0);
+    }
+
+    if id:has_value() {
+        return make<Optional<RPCRequest>>({
+            .id = id:data().value,
+            .method = method:data().value:data(),
+            .params = params:data(),
+        });
+    }
+    else {
+        return make<Optional<RPCRequest>>({
+            .id = make<Optional<StringView>>(),
+            .method = method:data().value:data(),
+            .params = params:data(),
+        });
+    }
 }
 
 function handle_initialize : (params : JSON_Node) -> void = {
@@ -291,11 +307,11 @@ function handle_diagnostic : (
 
     let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
+        print(view);
         print(sv("Failed to parse json"));
         return;
     }
 
-    printf(sv("Received %"), json:data());
     let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
     if !success:has_value() {
         // The parser didn't output an error, so the code is good. We still need
@@ -397,7 +413,13 @@ function handle_text_change : (
         return;
     }
 
-    let text : Optional<JSON_Node> = content_changes:data().map:at(sv("text"));
+    if content_changes:data().children:length() == 0 {
+        print(sv("contentChanges is empty"));
+        return;
+    }
+
+    let text_wrapper : JSON_Node = content_changes:data().children:get(0);
+    let text : Optional<JSON_Node> = text_wrapper.map:at(sv("text"));
     if !text:has_value() {
         print(sv("text not found"));
         return;
@@ -469,8 +491,6 @@ function handle_text_change : (
         return;
     }
 
-    printf(sv("Received %"), json:data());
-
     // FIXME we leak the fd (and the memory) if an error occurs.
     sys_close(fd);
 
@@ -535,7 +555,7 @@ function handle_text_change : (
     }
 
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
-    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\"\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
     mut ss : StringStream = make<StringStream>();
     ss:writef(resp, uri:data().value:data(), version:data().value:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
     print(ss);

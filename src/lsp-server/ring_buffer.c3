@@ -69,7 +69,7 @@ function read_impl : (
     buffer.tail += view:length();
     buffer.tail %= buffer.size;
 
-    printf(sv("Read % bytes into the ring"), view:length());
+    // printf(sv("Read % bytes into the ring"), view:length());
     return view:length();
 }
 
@@ -101,9 +101,12 @@ function read_line : (
         // Read from the fd and try again.
         if buffer:read_impl(source) == 0 {
             // Read failed, give up.
+            print(sv("ERROR: read_line - read failed"));
             return make<Optional<View<u8>>>();
         }
     }
+
+    print(sv("ERROR: read_line - buffer exhausted"));
 
     // FIXME compiler bug, this shouldn't be necessary.
     return make<Optional<View<u8>>>();

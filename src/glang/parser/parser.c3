@@ -326,8 +326,13 @@ function get_next_numeric_token : (cursor : Cursor mut&) -> NumericToken = {
 }
 
 function get_next_string_literal_token : (cursor : Cursor mut&) -> ProgramSlice = {
-    runtime_assert(cursor:try_skip_next("\""));
-    let start_offset : isize = cursor.position;
+    mut start_offset : isize = cursor.position;
+
+    if !cursor:try_skip_next("\"") {
+        syntax_error_at_position(&mut cursor, start_offset, sv("expected start of string"));
+    }
+
+    start_offset = cursor.position;
 
     while !cursor:try_skip_next("\"") {
         if cursor:is_next("\0") {
