@@ -496,7 +496,7 @@ function handle_text_change : (
     if !success:has_value() {
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
-        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": []}}");
+        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": []}}");
         mut ss : StringStream = make<StringStream>();
         ss:writef(resp, uri:data().value:data(), version:data().value:data());
         print(ss);
