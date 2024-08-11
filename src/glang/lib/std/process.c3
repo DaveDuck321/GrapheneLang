@@ -45,4 +45,6 @@ function execute : (
     // Parent process.
     close(&stdout:data().write);
     return make<Optional<Process>>({ pid, stdout:data().read });
+
+    // FIXME clean up pipe fds (check /proc/$PID/fd/)
 }

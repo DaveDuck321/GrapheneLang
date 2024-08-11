@@ -293,6 +293,9 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         if in_escape_seq {
             in_escape_seq = false;
 
+            if char == char("\"") {
+                string:push_back(char("\""));
+            }
             if char == char("\\") {
                 string:push_back(char("\\"));
             }

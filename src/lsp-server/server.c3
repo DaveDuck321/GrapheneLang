@@ -167,8 +167,6 @@ function parse_next_rpc : (
         return make<Optional<RPCRequest>>();
     }
 
-    printf(sv("Content length=%"), length:data());
-
     // 2 newlines, and then JSON.
     if !cursor:eat(sv("\r\n")) {
         print(sv("Failed to eat newline"));
@@ -498,9 +496,9 @@ function handle_text_change : (
     if !success:has_value() {
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
-        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"full\", \"items\": []}}");
+        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": []}}");
         mut ss : StringStream = make<StringStream>();
-        ss:writef(resp, req.id:data());
+        ss:writef(resp, uri:data().value:data(), version:data().value:data());
         print(ss);
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
