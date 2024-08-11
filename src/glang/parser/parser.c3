@@ -1413,6 +1413,10 @@ function parse_next_top_level_feature : (cursor : Cursor mut&) -> TopLevelFeatur
 
 function main : (argc: int, argv: u8[&][&]) -> int = {
     // 1) Read the entire file
+    if argc != 2 {
+        printf(sv("Usage: parser FILE"));
+        return 1;
+    }
     let file_to_parse : CString = {&argv[1]};
     let file : Optional<File> = open(file_to_parse, O_RDONLY());
     if !file:has_value() {
