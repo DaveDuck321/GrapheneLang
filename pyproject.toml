@@ -34,7 +34,7 @@ glang = "glang.driver:main"
 # Development environment to be used with your IDE. Just set the venv path to
 # the output of `hatch env find dev`.
 [tool.hatch.envs.dev]
-dependencies = ["interegular~=0.3", "lark~=1.1"]
+dependencies = ["interegular~=0.3", "lark==1.1.9"]
 
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
@@ -61,7 +61,7 @@ fmt = ["isort --profile black .", "black ."]
 [tool.hatch.build]
 # Exclude symlinks used for editable installs.
 exclude = ["src/glang/bin"]
-dependencies = ["lark~=1.1", "PyYAML~=6.0", "typed-argument-parser~=1.8"]
+dependencies = ["lark==1.1.9", "PyYAML~=6.0", "typed-argument-parser~=1.8"]
 
 [tool.hatch.build.targets.sdist]
 exclude = [".github", "docs", "tests"]
