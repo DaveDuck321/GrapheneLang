@@ -10,7 +10,7 @@ jobs:
     strategy:
       matrix:
         llvm-version: [17, 18]
-        python-version: [3.12, 3.13]
+        python-version: [3.12, 3.13.0-rc.1]
         runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
 
     runs-on: ${{ matrix.runner }}
