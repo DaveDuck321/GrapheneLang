@@ -10,6 +10,7 @@ jobs:
     strategy:
       matrix:
         llvm-version: [17, 18]
+        python-version: [3.12, 3.13]
         runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
 
     runs-on: ${{ matrix.runner }}
@@ -28,8 +29,11 @@ jobs:
       uses: actions/checkout@v4
       with:
         show-progress: false
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
     - name: Install hatch
-      run: python3 -m pip install hatch==1.9.4 --user
+      run: pip install hatch==1.9.4
     - name: Install clang and lli
       run: |
         wget https://apt.llvm.org/llvm.sh
