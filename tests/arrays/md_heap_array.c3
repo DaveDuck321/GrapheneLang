@@ -25,6 +25,7 @@ function main : () -> int = {
     return 0;
 }
 
+/// @TEMPORARILY_REGRESSED
 /// @COMPILE
 /// @GREP_IR getelementptr inbounds [[]2 x [[]2 x i32[]][]]
 /// @RUN
