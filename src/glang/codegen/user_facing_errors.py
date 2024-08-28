@@ -249,13 +249,6 @@ class InvalidFloatLiteralPrecision(GrapheneError):
         )
 
 
-class ArrayIndexCount(GrapheneError):
-    def __init__(self, type_name: str, actual: int, expected: int) -> None:
-        super().__init__(
-            f"Error: array type '{type_name}' expects {expected} indices but received {actual}"
-        )
-
-
 class BorrowWithNoAddressError(GrapheneError):
     def __init__(self, type_name: str) -> None:
         super().__init__(f"Error: cannot borrow type '{type_name}' (with no address)")
@@ -268,9 +261,9 @@ class DoubleBorrowError(GrapheneError):
         )
 
 
-class DoubleReferenceError(GrapheneError):
+class DoubleReferenceError(SubstitutionFailure):
     def __init__(self, type_name: str) -> None:
-        super().__init__(
+        super(GrapheneError, self).__init__(
             f"Error: cannot construct reference type since '{type_name}' is already a reference"
         )
 

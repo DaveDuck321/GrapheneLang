@@ -591,15 +591,20 @@ class ExpressionParser(lp.Interpreter):
         return args, None
 
     def _function_call_outer(
-        self, node: lp.UFCS_Call | lp.FunctionCall
+        self,
+        fn_name: str,
+        fn_specialization: Iterable[lp.CompileTimeConstant | lp.Type],
+        fn_args: Iterable[lp.Expression],
+        ufcs_expression: lp.Expression | None,
+        meta: lp.Meta,
     ) -> FlattenedExpression:
-        normal_args, pack_name = self._extract_parameter_pack(node.args)
+        normal_args, pack_name = self._extract_parameter_pack(list(fn_args))
         unresolved_args = [self.parse_expr(arg) for arg in normal_args]
 
         if pack_name:
             variadic_vars = self._scope.search_for_generic_pack(pack_name)
             unresolved_args.extend(
-                FlattenedExpression([cg.VariableReference(var, node.meta)])
+                FlattenedExpression([cg.VariableReference(var, meta)])
                 for var in variadic_vars
             )
 
@@ -608,14 +613,14 @@ class ExpressionParser(lp.Interpreter):
         # whether we borrow or not). A solution would be to borrow if we can,
         # otherwise pass an unborrowed/const-reference and let overload
         # resolution figure it out, although this isn't very explicit.
-        if isinstance(node, lp.UFCS_Call):
-            this_arg = self.parse_expr(node.expression)
+        if ufcs_expression is not None:
+            this_arg = self.parse_expr(ufcs_expression)
             # TODO: should there be syntax for this? It seems a bit adhoc
             match this_arg.expression().underlying_indirection_kind:
                 case cg.Type.Kind.CONST_REF:
                     this_arg.add_parent(
                         cg.BorrowExpression(
-                            this_arg.expression(), cg.Type.Kind.CONST_REF, node.meta
+                            this_arg.expression(), cg.Type.Kind.CONST_REF, meta
                         )
                     )
                 case cg.Type.Kind.MUTABLE_REF:
@@ -623,7 +628,7 @@ class ExpressionParser(lp.Interpreter):
                         cg.BorrowExpression(
                             this_arg.expression(),
                             cg.Type.Kind.MUTABLE_OR_CONST_REF,
-                            node.meta,
+                            meta,
                         )
                     )
                 case cg.Type.Kind.VALUE:
@@ -641,14 +646,17 @@ class ExpressionParser(lp.Interpreter):
             unresolved_args.insert(0, this_arg)
 
         return self._function_call_inner(
-            node.name, node.specialization, unresolved_args, node.meta
+            fn_name, fn_specialization, unresolved_args, meta
         )
 
     def FunctionCall(self, node: lp.FunctionCall) -> FlattenedExpression:
-        return self._function_call_outer(node)
+        return self._function_call_outer(node.name, node.specialization, node.args, None, node.meta)
 
-    def UFCS_Call(self, node: lp.FunctionCall) -> FlattenedExpression:
-        return self._function_call_outer(node)
+    def UFCS_Call(self, node: lp.UFCS_Call) -> FlattenedExpression:
+        return self._function_call_outer(node.name, node.specialization, node.args, node.expression, node.meta)
+
+    def IndexOperator(self, node: lp.IndexOperator) -> FlattenedExpression:
+        return self._function_call_outer("[]", [], node.indexes, node.expression, node.meta)
 
     def VariableAccess(self, node: lp.VariableAccess) -> FlattenedExpression:
         var = self._scope.search_for_variable(node.name)
@@ -673,20 +681,6 @@ class ExpressionParser(lp.Interpreter):
             cg.VariableInitialize(temp_var, expr.expression(), meta)
         )
         return expr.add_parent(cg.VariableReference(temp_var, meta))
-
-    def ArrayIndexAccess(self, node: lp.ArrayIndexAccess) -> FlattenedExpression:
-        index_exprs = [self.parse_expr(item) for item in node.indexes]
-        lhs = self._ensure_pointer_is_available(
-            self.parse_expr(node.expression), node.meta
-        )
-        lhs_expr = lhs.expression()
-
-        cg_indices: list[cg.TypedExpression] = []
-        for index_expr in index_exprs:
-            cg_indices.append(index_expr.expression())
-            lhs.subexpressions.extend(index_expr.subexpressions)
-
-        return lhs.add_parent(cg.ArrayIndexAccess(lhs_expr, cg_indices, node.meta))
 
     def StructIndexAccess(self, node: lp.StructIndexAccess) -> FlattenedExpression:
         lhs = self.parse_expr(node.expression)

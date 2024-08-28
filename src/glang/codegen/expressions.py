@@ -4,12 +4,9 @@ from glang.codegen.builtin_types import (
     AnonymousType,
     BoolType,
     FunctionSignature,
-    HeapArrayDefinition,
     IntType,
-    SizeType,
     StackArrayDefinition,
     StructDefinition,
-    format_array_dims_for_ir,
 )
 from glang.codegen.interfaces import (
     Generatable,
@@ -26,7 +23,6 @@ from glang.codegen.type_conversions import (
     get_implicit_conversion_cost,
 )
 from glang.codegen.user_facing_errors import (
-    ArrayIndexCount,
     BorrowWithNoAddressError,
     CannotAssignToInitializerList,
     DoubleBorrowError,
@@ -356,112 +352,6 @@ class StructMemberAccess(StaticTypedExpression):
 
         self._lhs.assert_can_write_to()
         # TODO: check if the reference is const
-
-
-class ArrayIndexAccess(StaticTypedExpression):
-    def __init__(
-        self, array_ptr: TypedExpression, indices: list[TypedExpression], meta: Meta
-    ) -> None:
-        # NOTE: needs address since getelementptr must be used for runtime indexing
-        assert array_ptr.has_address
-
-        self._type_of_array: Type = array_ptr.result_type.convert_to_value_type()
-        self._array_ptr = array_ptr
-
-        array_definition = self._type_of_array.definition
-        if not isinstance(array_definition, StackArrayDefinition | HeapArrayDefinition):
-            raise TypeCheckerError(
-                "array index access",
-                array_ptr.format_for_output_to_user(),
-                "T[...]",
-            )
-
-        if isinstance(array_definition, StackArrayDefinition):
-            if len(array_definition.dimensions) != len(indices):
-                raise ArrayIndexCount(
-                    self._type_of_array.format_for_output_to_user(),
-                    len(indices),
-                    len(array_definition.dimensions),
-                )
-        elif len(indices) != 1 + len(array_definition.known_dimensions):
-            raise ArrayIndexCount(
-                self._type_of_array.format_for_output_to_user(), len(indices), 1
-            )
-
-        self._element_type: Type = array_definition.member
-        self._conversion_exprs: list[TypedExpression] = []
-
-        # Now convert all the indices into integers using standard implicit rules
-        self._indices: list[TypedExpression] = []
-        for index in indices:
-            index_expr, conversions = do_implicit_conversion(
-                index, SizeType(), "array index access"
-            )
-            self._indices.append(index_expr)
-            self._conversion_exprs.extend(conversions)
-
-        result_type = array_ptr.result_type_as_if_borrowed
-        super().__init__(
-            self._element_type.convert_to_value_type(), result_type.storage_kind, meta
-        )
-
-    def generate_ir(self, ctx: IRContext) -> IROutput:
-        # https://llvm.org/docs/LangRef.html#getelementptr-instruction
-        array_def = self._type_of_array.definition
-        assert isinstance(array_def, StackArrayDefinition | HeapArrayDefinition)
-
-        ir = self.expand_ir(self._conversion_exprs, ctx)
-
-        # To access a stack array, we need to dereference the pointer returend
-        # by `alloca` to get the address of the first element, and then we can
-        # index into it. For heap arrays, we already have its address so we can
-        # index it immediately.
-        if isinstance(array_def, StackArrayDefinition):
-            assert self.meta is not None
-            indices_ir = [
-                ConstantExpression(
-                    SizeType(), "0", self.meta
-                ).ir_ref_with_type_annotation
-            ]
-            gep_type_ir = self._type_of_array.ir_type
-        else:
-            indices_ir = []
-            gep_type_ir = format_array_dims_for_ir(
-                array_def.known_dimensions, array_def.member
-            )
-
-        for index in self._indices:
-            indices_ir.append(index.ir_ref_with_type_annotation)
-
-        self.result_reg = ctx.next_reg()
-        dbg = self.add_di_location(ctx, ir)
-
-        # <result> = getelementptr inbounds <ty>, ptr <ptrval>{, [inrange] <ty> <idx>}*
-        ir.lines.append(
-            f"%{self.result_reg} = getelementptr inbounds {gep_type_ir},"
-            f" {self._array_ptr.ir_ref_with_type_annotation}, {', '.join(indices_ir)},"
-            f" {dbg}",
-        )
-
-        if self._element_type.storage_kind.is_reference():
-            self.result_reg = self.dereference_double_indirection(ctx, ir)
-
-        return ir
-
-    @property
-    def ir_ref_without_type_annotation(self) -> str:
-        return f"%{self.result_reg}"
-
-    def __repr__(self) -> str:
-        indices = ", ".join(map(repr, self._indices))
-        return f"ArrayIndexAccess({self._array_ptr}[{indices}])"
-
-    def assert_can_read_from(self) -> None:
-        # TODO: can we check if the individual members are initialized?
-        self._array_ptr.assert_can_read_from()
-
-    def assert_can_write_to(self) -> None:
-        self._array_ptr.assert_can_write_to()
 
 
 class ArrayInitializer(StaticTypedExpression):
