@@ -650,13 +650,19 @@ class ExpressionParser(lp.Interpreter):
         )
 
     def FunctionCall(self, node: lp.FunctionCall) -> FlattenedExpression:
-        return self._function_call_outer(node.name, node.specialization, node.args, None, node.meta)
+        return self._function_call_outer(
+            node.name, node.specialization, node.args, None, node.meta
+        )
 
     def UFCS_Call(self, node: lp.UFCS_Call) -> FlattenedExpression:
-        return self._function_call_outer(node.name, node.specialization, node.args, node.expression, node.meta)
+        return self._function_call_outer(
+            node.name, node.specialization, node.args, node.expression, node.meta
+        )
 
     def IndexOperator(self, node: lp.IndexOperator) -> FlattenedExpression:
-        return self._function_call_outer("[]", [], node.indexes, node.expression, node.meta)
+        return self._function_call_outer(
+            "[]", [], node.indexes, node.expression, node.meta
+        )
 
     def VariableAccess(self, node: lp.VariableAccess) -> FlattenedExpression:
         var = self._scope.search_for_variable(node.name)
