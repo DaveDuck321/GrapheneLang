@@ -4,12 +4,13 @@
 %ignore " "
 %ignore "\n"
 
-start: (for_cmd)? compile_cmd (grep_ir_cmd)* (run_cmd)?
+start: (regressed)? (for_cmd)? compile_cmd (grep_ir_cmd)* (run_cmd)?
 
 ARG: /[-\w]+/  // Doesn't match ;
 
 expect_status: "EXPECT" INT
 expect_msg: "EXPECT" (/OUT/ | /ERR/) /([^@].*\n?)+/
+regressed: "@TEMPORARILY_REGRESSED"
 for_cmd: "@FOR" CNAME
 compile_cmd: "@COMPILE" ARG* [";" expect_status] [";" expect_msg]
 grep_ir_cmd: "@GREP_IR" /.+\n?/

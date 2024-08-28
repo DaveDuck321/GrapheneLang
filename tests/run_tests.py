@@ -1,5 +1,6 @@
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
 from fnmatch import fnmatchcase
 from importlib import resources
 from multiprocessing import cpu_count
@@ -25,6 +26,13 @@ HOST_TARGET = subprocess.run(
     stdout=subprocess.PIPE,
     text=True,
 ).stdout.strip()
+
+
+class TestStatus(Enum):
+    PASSED = 0
+    FAILED = 1
+    SKIPPED_DUE_TO_TARGET = 2
+    SKIPPED_DUE_TO_REGRESSION = 3
 
 
 class TestFailure(RuntimeError):
@@ -121,14 +129,18 @@ def run_command(
     return result.stdout
 
 
-def run_test(file_path: Path) -> bool:
+def run_test(file_path: Path) -> TestStatus:
     assert file_path.exists()
     config = parse_file(file_path)
+
+    # @TEMPORARILY_REGRESSED
+    if config.temporarily_regressed:
+        return TestStatus.SKIPPED_DUE_TO_REGRESSION
 
     # @FOR
     if config.for_target is not None and config.for_target != HOST_TARGET:
         # Skip this test.
-        return False
+        return TestStatus.SKIPPED_DUE_TO_TARGET
 
     # @COMPILE (mandatory)
     assert config.compile_opts
@@ -180,49 +192,69 @@ def run_test(file_path: Path) -> bool:
             ir_output,
         )
 
-    return True
+    return TestStatus.PASSED
 
 
 # Mutex to ensure prints remain ordered (within each test)
 io_lock = Lock()
 
 
-def run_test_print_result(test_path: Path) -> bool:
+def run_test_print_result(test_path: Path) -> TestStatus:
     test_name = str(test_path.relative_to(PARENT_DIR))
-
     try:
-        if run_test(test_path):
-            with io_lock:
-                print(f"PASSED '{test_name}'")
-        else:
-            with io_lock:
-                print(f"SKIPPED '{test_name}'")
-        return True
+        result = run_test(test_path)
+        with io_lock:
+            match result:
+                case TestStatus.PASSED:
+                    print(f"PASSED '{test_name}'")
+                case TestStatus.SKIPPED_DUE_TO_TARGET:
+                    print(f"SKIPPED '{test_name}'")
+                case TestStatus.SKIPPED_DUE_TO_REGRESSION:
+                    print(f"SKIPPED (regressed) '{test_name}'")
+                case _:
+                    print("Unhandled test result. Aborting everything.")
+                    exit(1)
+        return result
     except TestFailure as error:
         with io_lock:
             print(f"FAILED '{test_name}'")
             print(error)
             print()
-        return False
+        return TestStatus.FAILED
 
 
 def run_tests(tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
         try:
-            passed = sum(executor.map(run_test_print_result, tests))
+            results = list(executor.map(run_test_print_result, tests))
         except KeyboardInterrupt:
             # Stop the currently running tests from spamming the output.
             io_lock.acquire()
             return 0
 
-    # TODO print skipped test count.
-    failed = len(tests) - passed
-    if failed:
-        print(f"FAILED {failed}/{len(tests)} TESTS!")
-    else:
-        print(f"PASSED ALL {passed} TESTS")
+    def count_status(status: TestStatus) -> int:
+        return sum(1 for result in results if result == status)
 
-    return failed
+    passed = count_status(TestStatus.PASSED)
+    failed = count_status(TestStatus.FAILED)
+    skipped_regressed = count_status(TestStatus.SKIPPED_DUE_TO_REGRESSION)
+    skipped_target = count_status(TestStatus.SKIPPED_DUE_TO_TARGET)
+
+    tests_that_should_pass = passed + failed + skipped_regressed
+
+    if failed:
+        print(f"FAILED {failed}/{tests_that_should_pass} TESTS!")
+        return 1  # Exit failure
+    else:
+        print(f"PASSED {passed}/{tests_that_should_pass} TESTS")
+
+        if skipped_target:
+            print(f"SKIPPED {skipped_target} TESTS DUE TO INCOMPATIBLE TARGET")
+
+        if skipped_regressed:
+            print(f"SKIPPED {skipped_regressed} TESTS DUE TO KNOWN REGRESSION")
+
+    return 0 # Exit success
 
 
 def build_jit_dependencies() -> None:
