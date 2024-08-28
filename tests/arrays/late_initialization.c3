@@ -1,3 +1,5 @@
+@require_once "std/array.c3"
+
 function main : () -> int = {
     mut array : int[4];
 

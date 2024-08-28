@@ -21,7 +21,7 @@ function main : () -> int = {
         return 2;
     }
 
-    vec:get(0) = 10;
+    vec[0] = 10;
     if vec:get(0) != 10 {
         return 3;
     }

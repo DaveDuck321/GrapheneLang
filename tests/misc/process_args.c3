@@ -1,5 +1,6 @@
 @require_once "std/arithmetic.c3"
 @require_once "syscalls.c3"
+@require_once "std/array.c3"
 
 function strlen : (cstr: u8[&]) -> isize = {
     mut len : isize = 0;

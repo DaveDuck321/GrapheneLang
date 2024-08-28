@@ -6,6 +6,7 @@
 @require_once "sys/mman.c3"
 @require_once "util.c3"
 @require_once "wrappers.c3"
+@require_once "array.c3"
 
 function allocate_page_and_return_address : (length : isize) -> iptr = {
     let prot : u32 = SYS_PROT_READ() | SYS_PROT_WRITE();

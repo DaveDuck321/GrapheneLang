@@ -148,5 +148,8 @@ function [IO, Arg] write_next_format_pair : (io : IO mut&, format_string : Strin
     io:write(format_string_view);
     io:write(next_arg);
 
+    if insertion_index == format_string:length() - 1 {
+        return sv("");
+    }
     return {format_string.buffer:slice_from(insertion_index + 1)};
 }
