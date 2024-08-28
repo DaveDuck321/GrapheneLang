@@ -4,6 +4,7 @@
 @require_once "iterators.c3"
 @require_once "memory.c3"
 @require_once "span.c3"
+@require_once "array.c3"
 
 typedef [T] Vector : {
     allocator : Allocator mut&,
@@ -63,6 +64,10 @@ function [T] pop_back : (self : Vector<T> mut&) -> T = {
 
 function [T] get : (self : Vector<T>&, index : isize) -> T mut& = {
     runtime_assert(index >= 0 and index < self.length);
+    return &mut self.memory.data[index];
+}
+
+@operator[T] [] : (self : Vector<T>&, index : isize) -> T mut& = {
     return &mut self.memory.data[index];
 }
 

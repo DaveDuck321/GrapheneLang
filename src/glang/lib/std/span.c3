@@ -72,6 +72,13 @@ function [T] length : (span : _SpanImpl<T> mut&) -> isize = {
 function [T] get : (span : _SpanImpl<T>&, index : isize)
     -> _SpanImplMemberReference<T> =
 {
+    runtime_assert(index >= 0 and index < span.length);
+    return &span.data[index];
+}
+
+@operator [T] [] : (span : _SpanImpl<T>&, index : isize)
+    -> _SpanImplMemberReference<T> =
+{
     return &span.data[index];
 }
 
