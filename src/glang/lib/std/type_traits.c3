@@ -23,12 +23,11 @@ typedef [V] AreEquivalent<V, V> : TrueType
 typedef [U, V] SelectFirst : U
 typedef [Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
 
-typedef [T] Ref : T&
-typedef [T] Ref<T&> : T&
-typedef [T] Ref<T mut&> : T&
+typedef [T] Ref : TypeIf<T&, Not<IsRef<T>>>
+typedef [T] Ref : TypeIf<T, IsRef<T>>
 
 typedef [T] MutRef : TypeIf<T mut&, Not<IsRef<T>>>
-typedef [T] MutRef<T mut&> : T mut&
+typedef [T] MutRef : TypeIf<T, IsMutRef<T>>
 
 typedef [T] IsRef : Either<IsMutRef<T>, IsConstRef<T>>
 
