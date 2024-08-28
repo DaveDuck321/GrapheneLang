@@ -76,12 +76,6 @@ function [T] get : (span : _SpanImpl<T>&, index : isize)
     return &span.data[index];
 }
 
-@operator [T] [] : (span : _SpanImpl<T>&, index : isize)
-    -> _SpanImplMemberReference<T> =
-{
-    return &span.data[index];
-}
-
 @operator [T] == : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {
     if lhs:length() != rhs:length() {
         return false;

@@ -67,10 +67,6 @@ function [T] get : (self : Vector<T>&, index : isize) -> T mut& = {
     return &mut self.memory.data[index];
 }
 
-@operator[T] [] : (self : Vector<T>&, index : isize) -> T mut& = {
-    return &mut self.memory.data[index];
-}
-
 function [T] length : (self : Vector<T>&) -> isize = {
     return self.length;
 }

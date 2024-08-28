@@ -2,6 +2,10 @@
 @require_once "std/vector.c3"
 @require_once "std/format.c3"
 
+@operator[T] [] : (self : Vector<T>&, index : isize) -> T mut& = {
+    return &mut self.memory.data[index];
+}
+
 function main : () -> int = {
     mut allocator : Allocator = initialize_allocator();
 
