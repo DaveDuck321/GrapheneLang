@@ -254,7 +254,7 @@ def run_tests(tests: list[Path], workers: int) -> int:
         if skipped_regressed:
             print(f"SKIPPED {skipped_regressed} TESTS DUE TO KNOWN REGRESSION")
 
-    return 0 # Exit success
+    return 0  # Exit success
 
 
 def build_jit_dependencies() -> None:
