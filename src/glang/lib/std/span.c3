@@ -43,19 +43,19 @@ function [T] make<Span<T>> : (data : T[mut&], length : isize) -> Span<T> = {
 }
 
 function [T] get_iter : (span : _SpanImpl<T>&)
-    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+    -> ContiguousContainerIter<_SpanImpl<T>, _SpanImplMemberReference<T>> =
 {
     return {
-        .container = &span,
+        .container = span,
         .current_index = 0,
     };
 }
 
 function [T] get_iter : (span : _SpanImpl<T> mut&)
-    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+    -> ContiguousContainerIter<_SpanImpl<T>, _SpanImplMemberReference<T>> =
 {
     return {
-        .container = &span,
+        .container = span,
         .current_index = 0,
     };
 }

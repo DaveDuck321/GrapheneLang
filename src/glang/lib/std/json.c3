@@ -7,7 +7,7 @@
 @require_once "std/vector.c3"
 @require_once "std/wrappers.c3"
 
-typedef StringViewIter : ContiguousContainerIter<View<u8>&, u8&>
+typedef StringViewIter : ContiguousContainerIter<View<u8>, u8&>
 typedef VectorIter<JSON_Node> : ContiguousContainerIter<Vector<JSON_Node>&, JSON_Node mut&>
 
 typedef Cursor : {
