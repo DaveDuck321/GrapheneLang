@@ -123,50 +123,67 @@ function get_utf8_encoding_length : (utf8_encoding_type: u32) -> isize = {
     return 0;
 }
 
+function is_in_range : (value: u32, lower_inclusive: u32, upper_inclusive: u32) -> bool = {
+    // Inclusive range better matches the spec comments
+    // Use u32 here since we don't have u8 literals
+    return value == lower_inclusive or value == upper_inclusive or
+            (__builtin_is_less_than(value, upper_inclusive) and __builtin_is_greater_than(value, lower_inclusive));
+}
+
 function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
-    if first_byte & 0x80 == 0x00 {
-        // 0b0xxx xxxx
+    // Unicode 15.0.0 encoding table:
+    // U+0000..U+007F       00..7F
+    // U+0080..U+07FF       C2..DF  80..BF
+    // U+0800..U+0FFF       E0      A0..BF  80..BF
+    // U+1000..U+CFFF       E1..EC  80..BF  80..BF
+    // U+D000..U+D7FF       ED      80..9F  80..BF
+    // U+E000..U+FFFF       EE..EF  80..BF  80..BF
+    // U+10000..U+3FFFF     F0      90..BF  80..BF  80..BF
+    // U+40000..U+FFFFF     F1..F3  80..BF  80..BF  80..BF
+    // U+100000..U+10FFFF   F4      80..8F  80..BF  80..BF
+
+    // U+0000..U+007F:      00..7F
+    if is_in_range(first_byte, 0x00, 0x7f) {
         return enum_utf8_encoding_ascii();
     }
 
-    if first_byte & 0xe0 == 0xc0 {
-        // 0b110x xxxx
+    // U+0080..U+07FF:      C2..DF
+    if is_in_range(first_byte, 0xc2, 0xdf) {
         return enum_utf8_encoding_2_byte();
     }
 
+    // U+0800..U+0FFF:      E0
     if first_byte == 0xe0 {
-        // 0b1110 0000
         return enum_utf8_encoding_3_byte_E0();
     }
 
-    if first_byte == 0xed {
-        // 0b1110 1101
-        return enum_utf8_encoding_3_byte_ED();
-    }
-
-    if first_byte == 0xee or first_byte == 0xef {
-        // 0b1110 1110
-        // 0b1110 1111
+    // U+1000..U+CFFF:      E1..EC
+    if is_in_range(first_byte, 0xe1, 0xec) {
         return enum_utf8_encoding_3_byte_EE_EF();
     }
 
-    if first_byte & 0xf0 == 0xe0 {
-        // 0b1110 xxxx (and not matched above)
+    // U+D000..U+D7FF:      ED
+    if first_byte == 0xed {
+        return enum_utf8_encoding_3_byte_ED();
+    }
+
+    // U+E000..U+FFFF:      EE..EF
+    if is_in_range(first_byte, 0xee, 0xef) {
         return enum_utf8_encoding_3_byte_E1_EC();
     }
 
+    // U+10000..U+3FFFF:    F0
     if first_byte == 0xf0 {
-        // 0b1111 0000
         return enum_utf8_encoding_4_byte_F0();
     }
 
-    if first_byte == 0xf1 or first_byte == 0xf2 or first_byte == 0xf3 {
-        // 0b1111 00xx (and not matched above)
+    // U+40000..U+FFFFF:    F1..F3
+    if is_in_range(first_byte, 0xf1, 0xf3) {
         return enum_utf8_encoding_4_byte_F1_F3();
     }
 
+    // U+100000..U+10FFFF:  F4
     if first_byte == 0xf4 {
-        // 0b1111 0100
         return enum_utf8_encoding_4_byte_F4();
     }
 
@@ -174,31 +191,29 @@ function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
 }
 
 function is_trailing_utf8_byte_in_valid_range : (byte: u8) -> bool = {
-    // 0b10xx xxxx
-    return byte & 0xc0 == 0x80;
+    // Trailing bytes (which are not the second byte) always fall within 80..BF
+    return is_in_range(byte, 0x80, 0xbf);
 }
 
 function is_2nd_utf8_byte_in_valid_range : (enum_utf8_encoding: u32, byte: u8) -> bool = {
+    // U+0800..U+0FFF:      E0  A0..BF
     if enum_utf8_encoding == enum_utf8_encoding_3_byte_E0() {
-        // 0b101x xxxx
-        return byte & 0xe0 == 0xa0;
+        return is_in_range(byte, 0xa0, 0xbf);
     }
 
+    // U+D000..U+D7FF:      ED  80..9F  80..BF
     if enum_utf8_encoding == enum_utf8_encoding_3_byte_ED() {
-        // 0b100x xxxx
-        return byte & 0xe0 == 0x80;
+        return is_in_range(byte, 0x80, 0x9f);
     }
 
+    // U+10000..U+3FFFF:    F0  90..BF  80..BF  80..BF
     if enum_utf8_encoding == enum_utf8_encoding_4_byte_F0() {
-        // 0b10xx xxxx (but >= 0b1001 0000)
-        return byte & 0xf0 == 0x90
-                or byte & 0xf0 == 0xa0
-                or byte & 0xf0 == 0xb0;
+        return is_in_range(byte, 0x90, 0xbf);
     }
 
+    // U+100000..U+10FFFF:  F4  80..8F  80..BF  80..BF
     if enum_utf8_encoding == enum_utf8_encoding_4_byte_F4() {
-        // 0b1000 xxxx
-        return byte & 0xf0 == 0x80;
+        return is_in_range(byte, 0x80, 0x8f);
     }
 
     // Otherwise this isn't a special byte
