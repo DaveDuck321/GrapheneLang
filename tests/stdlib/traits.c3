@@ -1,5 +1,6 @@
 @require_once "std/type_traits.c3"
 @require_once "std/assert.c3"
+@require_once "std/logical.c3"
 
 function main : () -> int = {
     runtime_assert(value<AreEquivalent<ConstRef<int>, int&>>());
