@@ -40,6 +40,7 @@ from glang.codegen.user_facing_errors import (
     Location,
     MultipleTypeDefinitions,
     NonDeterminableSize,
+    NonExistentTypeDefinition,
     OverloadResolutionError,
     PatternMatchDeductionFailure,
     RedeclarationWithIncorrectSpecializationCount,
@@ -1301,7 +1302,7 @@ class SymbolTable:
                 ],
             )
 
-        raise SubstitutionFailure(prefix + format_specialization(specialization))
+        raise NonExistentTypeDefinition(prefix + format_specialization(specialization))
 
     def add_function(self, fn_to_add: FunctionDeclaration) -> None:
         matched_functions = self._unresolved_fndefs[fn_to_add.signature.name]

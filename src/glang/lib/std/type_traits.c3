@@ -23,13 +23,15 @@ typedef [V] AreEquivalent<V, V> : TrueType
 typedef [U, V] SelectFirst : U
 typedef [Type, Condition] TypeIf : SelectFirst<Type, EnableIf<Condition>>
 
-typedef [T] Ref : TypeIf<T&, Not<IsRef<T>>>
-typedef [T] Ref : TypeIf<T, IsRef<T>>
+typedef [T] ConstRef : TypeIf<T, IsConstRef<T>>
+typedef [T] ConstRef<T> : TypeIf<T&, Not<IsMutRef<T>>>
+typedef [T] ConstRef<T mut&> : T&
+typedef [T] ConstRef<T[mut&]> : T[&]
 
-typedef [T] MutRef : TypeIf<T mut&, Not<IsRef<T>>>
 typedef [T] MutRef : TypeIf<T, IsMutRef<T>>
-
-typedef [T] IsRef : Either<IsMutRef<T>, IsConstRef<T>>
+typedef [T] MutRef<T> : TypeIf<T mut&, Not<IsConstRef<T>>>
+typedef [T] MutRef<T&> : T mut&
+typedef [T] MutRef<T[&]> : T[mut&]
 
 typedef [T] IsMutRef : FalseType
 typedef [T] IsMutRef<T mut&> : TrueType
@@ -38,6 +40,8 @@ typedef [T] IsMutRef<T[mut &]> : TrueType
 typedef [T] IsConstRef : FalseType
 typedef [T] IsConstRef<T&> : TrueType
 typedef [T] IsConstRef<T[&]> : TrueType
+
+typedef [T] IsAnyRef : Either<IsMutRef<T>, IsConstRef<T>>
 
 // Groupings for the builtin types
 typedef [T] IsIntegral : FalseType

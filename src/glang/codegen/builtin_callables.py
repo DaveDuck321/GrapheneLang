@@ -28,14 +28,7 @@ NUMERIC_TYPES = (IntegerDefinition, BoolDefinition, IEEEFloatDefinition)
 
 
 class BuiltinCallable(StaticTypedExpression):
-    @abstractmethod
-    def __init__(
-        self,
-        specialization: list[SpecializationItem],
-        arguments: list[TypedExpression],
-        meta: Meta,
-    ) -> None:
-        pass
+    pass
 
 
 class UnaryExpression(BuiltinCallable):
@@ -58,7 +51,7 @@ class UnaryExpression(BuiltinCallable):
         assert isinstance(definition, self.EXPECTED_TYPES)
 
         self._arg_type = self._arg.result_type.convert_to_value_type()
-        StaticTypedExpression.__init__(self, self._arg_type, Type.Kind.VALUE, meta)
+        super().__init__(self._arg_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self._arg})"
@@ -141,9 +134,7 @@ class BasicNumericExpression(BuiltinCallable):
         assert isinstance(rhs_definition, NUMERIC_TYPES)
         assert lhs.result_type == rhs.result_type
 
-        StaticTypedExpression.__init__(
-            self, self.get_result_type(arguments), Type.Kind.VALUE, meta
-        )
+        super().__init__(self.get_result_type(arguments), Type.Kind.VALUE, meta)
 
         self._arg_type = lhs.result_type.convert_to_value_type()
         self._lhs = lhs
@@ -314,9 +305,7 @@ class AlignOfExpression(BuiltinCallable):
             SizeType(), str(self._argument_type.alignment), meta
         )
 
-        StaticTypedExpression.__init__(
-            self, self._result.underlying_type, Type.Kind.VALUE, meta
-        )
+        super().__init__(self._result.underlying_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"AlignOf({self._argument_type})"
@@ -351,9 +340,7 @@ class SizeOfExpression(BuiltinCallable):
             SizeType(), str(self._argument_type.size), meta
         )
 
-        StaticTypedExpression.__init__(
-            self, self._result.underlying_type, Type.Kind.VALUE, meta
-        )
+        super().__init__(self._result.underlying_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"SizeOf({self._argument_type})"
@@ -393,7 +380,7 @@ class NarrowExpression(BuiltinCallable):
         assert from_definition.bits > to_definition.bits
         assert from_definition.is_signed == to_definition.is_signed
 
-        StaticTypedExpression.__init__(self, return_type, Type.Kind.VALUE, meta)
+        super().__init__(return_type, Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"Narrow({self._argument} to {self.underlying_type})"
@@ -441,7 +428,7 @@ class PtrToIntExpression(BuiltinCallable):
         (self._src_expr,) = arguments
         assert self._src_expr.has_address
 
-        StaticTypedExpression.__init__(self, IPtrType(), Type.Kind.VALUE, meta)
+        super().__init__(IPtrType(), Type.Kind.VALUE, meta)
 
     def __repr__(self) -> str:
         return f"PtrToInt({self._src_expr} to {self.underlying_type})"
@@ -490,8 +477,7 @@ class IntToPtrExpression(BuiltinCallable):
         (self._src_expr,) = arguments
         assert isinstance(self._src_expr.result_type, GenericIntType)
 
-        StaticTypedExpression.__init__(
-            self,
+        super().__init__(
             self._ptr_type.convert_to_value_type(),
             self._ptr_type.storage_kind,
             meta,
@@ -562,8 +548,7 @@ class BitcastExpression(BuiltinCallable):
 
         assert self._target_type.size == src_type.size
 
-        StaticTypedExpression.__init__(
-            self,
+        super().__init__(
             self._target_type.convert_to_value_type(),
             self._target_type.storage_kind,
             meta,
@@ -648,8 +633,7 @@ class ArrayIndexExpression(BuiltinCallable):
             self._conversion_exprs.extend(conversions)
 
         result_type = array_ptr.result_type_as_if_borrowed
-        StaticTypedExpression.__init__(
-            self,
+        super().__init__(
             self._element_type.convert_to_value_type(),
             result_type.storage_kind,
             meta,
@@ -662,7 +646,7 @@ class ArrayIndexExpression(BuiltinCallable):
 
         ir = self.expand_ir(self._conversion_exprs, ctx)
 
-        # To access a stack array, we need to dereference the pointer returend
+        # To access a stack array, we need to dereference the pointer returned
         # by `alloca` to get the address of the first element, and then we can
         # index into it. For heap arrays, we already have its address so we can
         # index it immediately.

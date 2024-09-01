@@ -640,7 +640,10 @@ function parse_function_type : (cursor : Cursor mut&) -> FunctionType = {
     let start_offset : isize = cursor.position;
 
     let args : Vector<Type> = cursor:parse_type_list_between(sv("("), sv(")"));
-    runtime_assert(cursor:try_skip_next_and_surrounding_white_space("->"));
+    if !cursor:try_skip_next_and_surrounding_white_space("->") {
+        syntax_error(&mut cursor, sv("unexpected symbol '%' in function type, expected '->'"), decode_utf8(cursor:get_char()));
+    }
+
     let return_type : Type = cursor:parse_type();
     let meta : Meta = meta(start_offset, cursor:skip_ws_return_offset());
     return {args, return_type, meta};

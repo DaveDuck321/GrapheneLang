@@ -23,7 +23,7 @@ stage_4_dir="$(checkout bootstrap/4)"
 stage_5_dir="$(checkout bootstrap/5)"
 stage_6_dir="$(mktemp -d)"
 
-# Temporary work around to bootstrap the new array syntax
+# Temporary workaround to bootstrap the new array syntax
 # This should be updated to us an actual tag once this PR is merged
 cp -a "$dest_dir/." "$stage_6_dir/"
 
@@ -58,7 +58,7 @@ env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -
 # This is especially awkward since array indexing is no-longer builtin:
 # 1) The stage 5 parser cannot parse the syntax required to overload the array operator
 # 2) The stage 6 parser requires that the index operator is overloaded with this same syntax
-# These conflicting requirements are achived by deleting the file that defines these overloads
+# These conflicting requirements are achieved by deleting the file that defines these overloads
 # so that the stage 5 compiler falls back to its builtins but a fresh checkout of the stage 6
 # compiler will work as expected.
 echo "// Bootstrap hack" > "$stage_6_dir/src/glang/lib/std/array.c3"
