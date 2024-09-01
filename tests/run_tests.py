@@ -1,5 +1,6 @@
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from enum import Enum
 from fnmatch import fnmatchcase
 from importlib import resources
 from multiprocessing import cpu_count
@@ -9,7 +10,7 @@ from sys import exit as sys_exit
 from threading import Lock
 
 from tap import Tap
-from test_config_parser import ExpectedOutput, parse_file
+from test_config_parser import ExpectedOutput, TestConfig, parse_file
 
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
@@ -25,6 +26,14 @@ HOST_TARGET = subprocess.run(
     stdout=subprocess.PIPE,
     text=True,
 ).stdout.strip()
+
+
+class TestStatus(Enum):
+    PASSED = 0
+    FAILED = 1
+    SKIPPED_DUE_TO_TARGET = 2
+    EXPECTED_FAIL = 3
+    UNEXPECTED_PASS = 4
 
 
 class TestFailure(RuntimeError):
@@ -121,15 +130,7 @@ def run_command(
     return result.stdout
 
 
-def run_test(file_path: Path) -> bool:
-    assert file_path.exists()
-    config = parse_file(file_path)
-
-    # @FOR
-    if config.for_target is not None and config.for_target != HOST_TARGET:
-        # Skip this test.
-        return False
-
+def run_test_throw_on_fail(config: TestConfig, file_path: Path) -> None:
     # @COMPILE (mandatory)
     assert config.compile_opts
     ir_output = run_command(
@@ -180,49 +181,89 @@ def run_test(file_path: Path) -> bool:
             ir_output,
         )
 
-    return True
-
 
 # Mutex to ensure prints remain ordered (within each test)
 io_lock = Lock()
 
 
-def run_test_print_result(test_path: Path) -> bool:
+def run_test_print_result(test_path: Path) -> TestStatus:
+    assert test_path.exists()
+    config = parse_file(test_path)
+
     test_name = str(test_path.relative_to(PARENT_DIR))
 
+    if config.for_target is not None and config.for_target != HOST_TARGET:
+        # Skip this test.
+        with io_lock:
+            print(f"SKIPPED '{test_name}'")
+        return TestStatus.SKIPPED_DUE_TO_TARGET
+
     try:
-        if run_test(test_path):
+        run_test_throw_on_fail(config, test_path)
+
+        # Test has passed!
+        if config.expected_failing:
             with io_lock:
-                print(f"PASSED '{test_name}'")
+                print(f"UNEXPECTED PASS '{test_name}'")
+            return TestStatus.UNEXPECTED_PASS
         else:
             with io_lock:
-                print(f"SKIPPED '{test_name}'")
-        return True
+                print(f"PASSED '{test_name}'")
+            return TestStatus.PASSED
+
     except TestFailure as error:
-        with io_lock:
-            print(f"FAILED '{test_name}'")
-            print(error)
-            print()
-        return False
+        if config.expected_failing:
+            with io_lock:
+                print(f"FAILED '{test_name}' (but marked expected)")
+            return TestStatus.EXPECTED_FAIL
+        else:
+            with io_lock:
+                print(f"FAILED '{test_name}'")
+                print(error)
+                print()
+
+            return TestStatus.FAILED
 
 
 def run_tests(tests: list[Path], workers: int) -> int:
     with ThreadPoolExecutor(max_workers=workers) as executor:
         try:
-            passed = sum(executor.map(run_test_print_result, tests))
+            results = list(executor.map(run_test_print_result, tests))
         except KeyboardInterrupt:
             # Stop the currently running tests from spamming the output.
             io_lock.acquire()
             return 0
 
-    # TODO print skipped test count.
-    failed = len(tests) - passed
-    if failed:
-        print(f"FAILED {failed}/{len(tests)} TESTS!")
-    else:
-        print(f"PASSED ALL {passed} TESTS")
+    def count_status(status: TestStatus) -> int:
+        return sum(1 for result in results if result == status)
 
-    return failed
+    passed = count_status(TestStatus.PASSED)
+    failed = count_status(TestStatus.FAILED)
+    expected_fails = count_status(TestStatus.EXPECTED_FAIL)
+    unexpected_passes = count_status(TestStatus.UNEXPECTED_PASS)
+    skipped_target = count_status(TestStatus.SKIPPED_DUE_TO_TARGET)
+
+    tests_that_would_ideally_pass = passed + failed + expected_fails + unexpected_passes
+
+    if failed + unexpected_passes:
+        print(f"FAILED {failed}/{tests_that_would_ideally_pass} TESTS!")
+
+        if unexpected_passes:
+            print(f"INCORRECTLY PASSED {unexpected_passes} TEST MARKED AS FAILURE")
+
+        return 1  # Exit failure
+    else:
+        if skipped_target:
+            print(f"SKIPPED {skipped_target} TESTS DUE TO INCOMPATIBLE TARGET")
+
+        print(f"PASSED {passed}/{tests_that_would_ideally_pass} TESTS")
+
+        if expected_fails:
+            print(
+                f"WARNING: {expected_fails}/{tests_that_would_ideally_pass} TESTS ARE MARKED AS EXPECTED FAILURES"
+            )
+
+    return 0  # Exit success
 
 
 def build_jit_dependencies() -> None:

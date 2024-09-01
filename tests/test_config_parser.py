@@ -23,6 +23,7 @@ class ExpectedOutput:
 
 @dataclass
 class TestConfig:
+    expected_failing: bool
     for_target: str | None
     compile_opts: ExpectedOutput | None
     compile_args: list[str]
@@ -41,7 +42,7 @@ class ConfigInterpreter(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.config = TestConfig(None, None, [], [], None, [])
+        self.config = TestConfig(False, None, None, [], [], None, [])
 
     @staticmethod
     def _format_msg(msg: str) -> list[str]:
@@ -77,6 +78,10 @@ class ConfigInterpreter(Interpreter):
             expected_output.status = 1
 
         return expected_output
+
+    @v_args(inline=True)
+    def failing(self) -> None:
+        self.config.expected_failing = True
 
     @v_args(inline=True)
     def for_cmd(self, target: str) -> None:
