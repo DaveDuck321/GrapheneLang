@@ -23,7 +23,7 @@ class ExpectedOutput:
 
 @dataclass
 class TestConfig:
-    temporarily_regressed: bool
+    expected_failing: bool
     for_target: str | None
     compile_opts: ExpectedOutput | None
     compile_args: list[str]
@@ -80,8 +80,8 @@ class ConfigInterpreter(Interpreter):
         return expected_output
 
     @v_args(inline=True)
-    def regressed(self) -> None:
-        self.config.temporarily_regressed = True
+    def failing(self) -> None:
+        self.config.expected_failing = True
 
     @v_args(inline=True)
     def for_cmd(self, target: str) -> None:

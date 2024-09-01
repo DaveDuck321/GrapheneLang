@@ -10,7 +10,7 @@ from sys import exit as sys_exit
 from threading import Lock
 
 from tap import Tap
-from test_config_parser import ExpectedOutput, parse_file
+from test_config_parser import ExpectedOutput, TestConfig, parse_file
 
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
 
@@ -32,7 +32,8 @@ class TestStatus(Enum):
     PASSED = 0
     FAILED = 1
     SKIPPED_DUE_TO_TARGET = 2
-    SKIPPED_DUE_TO_REGRESSION = 3
+    EXPECTED_FAIL = 3
+    UNEXPECTED_PASS = 4
 
 
 class TestFailure(RuntimeError):
@@ -129,19 +130,7 @@ def run_command(
     return result.stdout
 
 
-def run_test(file_path: Path) -> TestStatus:
-    assert file_path.exists()
-    config = parse_file(file_path)
-
-    # @TEMPORARILY_REGRESSED
-    if config.temporarily_regressed:
-        return TestStatus.SKIPPED_DUE_TO_REGRESSION
-
-    # @FOR
-    if config.for_target is not None and config.for_target != HOST_TARGET:
-        # Skip this test.
-        return TestStatus.SKIPPED_DUE_TO_TARGET
-
+def run_test_throw_on_fail(config: TestConfig, file_path: Path) -> None:
     # @COMPILE (mandatory)
     assert config.compile_opts
     ir_output = run_command(
@@ -192,35 +181,48 @@ def run_test(file_path: Path) -> TestStatus:
             ir_output,
         )
 
-    return TestStatus.PASSED
-
 
 # Mutex to ensure prints remain ordered (within each test)
 io_lock = Lock()
 
 
 def run_test_print_result(test_path: Path) -> TestStatus:
+    assert test_path.exists()
+    config = parse_file(test_path)
+
     test_name = str(test_path.relative_to(PARENT_DIR))
+
+    if config.for_target is not None and config.for_target != HOST_TARGET:
+        # Skip this test.
+        with io_lock:
+            print(f"SKIPPED '{test_name}'")
+        return TestStatus.SKIPPED_DUE_TO_TARGET
+
     try:
-        result = run_test(test_path)
-        with io_lock:
-            match result:
-                case TestStatus.PASSED:
-                    print(f"PASSED '{test_name}'")
-                case TestStatus.SKIPPED_DUE_TO_TARGET:
-                    print(f"SKIPPED '{test_name}'")
-                case TestStatus.SKIPPED_DUE_TO_REGRESSION:
-                    print(f"SKIPPED (regressed) '{test_name}'")
-                case _:
-                    print("Unhandled test result. Aborting everything.")
-                    exit(1)
-        return result
+        run_test_throw_on_fail(config, test_path)
+
+        # Test has passed!
+        if config.expected_failing:
+            with io_lock:
+                print(f"UNEXPECTED PASS '{test_name}'")
+            return TestStatus.UNEXPECTED_PASS
+        else:
+            with io_lock:
+                print(f"PASSED '{test_name}'")
+            return TestStatus.PASSED
+
     except TestFailure as error:
-        with io_lock:
-            print(f"FAILED '{test_name}'")
-            print(error)
-            print()
-        return TestStatus.FAILED
+        if config.expected_failing:
+            with io_lock:
+                print(f"FAILED '{test_name}' (but marked expected)")
+            return TestStatus.EXPECTED_FAIL
+        else:
+            with io_lock:
+                print(f"FAILED '{test_name}'")
+                print(error)
+                print()
+
+            return TestStatus.FAILED
 
 
 def run_tests(tests: list[Path], workers: int) -> int:
@@ -237,24 +239,31 @@ def run_tests(tests: list[Path], workers: int) -> int:
 
     passed = count_status(TestStatus.PASSED)
     failed = count_status(TestStatus.FAILED)
-    skipped_regressed = count_status(TestStatus.SKIPPED_DUE_TO_REGRESSION)
+    expected_fails = count_status(TestStatus.EXPECTED_FAIL)
+    unexpected_passes = count_status(TestStatus.UNEXPECTED_PASS)
     skipped_target = count_status(TestStatus.SKIPPED_DUE_TO_TARGET)
 
-    tests_that_should_pass = passed + failed + skipped_regressed
+    tests_that_would_ideally_pass = passed + failed + expected_fails + unexpected_passes
 
-    if failed:
-        print(f"FAILED {failed}/{tests_that_should_pass} TESTS!")
+    if failed + unexpected_passes:
+        print(f"FAILED {failed}/{tests_that_would_ideally_pass} TESTS!")
+
+        if unexpected_passes:
+            print(f"INCORRECTLY PASSED {unexpected_passes} TEST MARKED AS FAILURE")
+
         return 1  # Exit failure
     else:
-        print(f"PASSED {passed}/{tests_that_should_pass} TESTS")
-
         if skipped_target:
             print(f"SKIPPED {skipped_target} TESTS DUE TO INCOMPATIBLE TARGET")
 
-        if skipped_regressed:
-            print(f"SKIPPED {skipped_regressed} TESTS DUE TO KNOWN REGRESSION")
+        print(f"PASSED {passed}/{tests_that_would_ideally_pass} TESTS")
 
-    return 0 # Exit success
+        if expected_fails:
+            print(
+                f"WARNING: {expected_fails}/{tests_that_would_ideally_pass} TESTS ARE MARKED AS EXPECTED FAILURES"
+            )
+
+    return 0  # Exit success
 
 
 def build_jit_dependencies() -> None:
