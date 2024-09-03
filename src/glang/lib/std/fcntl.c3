@@ -1,6 +1,8 @@
 // fcntl.h - file control options
 // https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/fcntl.h.html
 
+@require_once "std/arithmetic.c3"
+
 function O_RDONLY : () -> u32 = { return 0x00; }
 function O_WRONLY : () -> u32 = { return 0x01; }
 function O_RDWR : () -> u32 = { return 0x02; }
