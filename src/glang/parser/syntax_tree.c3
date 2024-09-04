@@ -336,11 +336,11 @@ function write_json_value : (stream : JSON_Stream mut&, slice : ProgramSlice&) -
 }
 
 function write_escaped : (stream : JSON_Stream mut&, text : StringView) -> void = {
-    for char in text:get_iter() {
-        if is_one_of(char, "\""[0], "\\"[0]) {
-            stream.file:write_char("\\"[0]);
+    for char in text.buffer:get_iter() {
+        if is_one_of(char, ascii_char("\""), ascii_char("\\")) {
+            stream.file:write_byte(ascii_char("\\"));
         }
-        stream.file:write_char(char);
+        stream.file:write_byte(char);
     }
 }
 

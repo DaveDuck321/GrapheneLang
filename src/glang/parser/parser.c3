@@ -21,12 +21,25 @@ function slice : (cursor : Cursor&, length : isize) -> ProgramSlice = {
     return {cursor.position, cursor.position + length};
 }
 
+// XXX: Hackfix
+typedef ParserChar : {
+    char: u8,
+}
+
+function [IO] write : (io : IO mut&, char : ParserChar) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    io:write_byte(char.char);
+}
+
+function decode_utf8 : (char : u8) -> ParserChar = {
+    return { char };
+}
+
 function ascii_is_text_token_start_char : (char : u8) -> bool = {
-    return ascii_is_alpha(char) or char == "_"[0];
+    return ascii_is_alpha(char) or char == ascii_char("_");
 }
 
 function ascii_is_text_token_char : (char : u8) -> bool = {
-    return ascii_is_alphanumeric(char) or char == "_"[0];
+    return ascii_is_alphanumeric(char) or char == ascii_char("_");
 }
 
 function get_char : (cursor : Cursor&) -> u8 = {
@@ -34,8 +47,8 @@ function get_char : (cursor : Cursor&) -> u8 = {
 }
 
 function get_char_at_offset : (cursor : Cursor&, offset : isize) -> u8 = {
-    if cursor.position + offset >= cursor.program:length() {
-        return "\0"[0];
+    if cursor.position + offset >= cursor.program:length_bytes() {
+        return ascii_char("\0");
     }
     // TODO: allow direct indexing into a stringview
     return cursor.program.buffer.data[cursor.position + offset];
@@ -50,7 +63,7 @@ function [@Len] is_next : (cursor : Cursor&, token : u8[@Len]&) -> bool = {
 }
 
 function is_next : (cursor : Cursor&, token : StringView) -> bool = {
-    for i in range(token:length()) {
+    for i in range(token:length_bytes()) {
         if cursor:get_char_at_offset(i) != token.buffer.data[i] {
             return false;
         }
@@ -58,7 +71,7 @@ function is_next : (cursor : Cursor&, token : StringView) -> bool = {
 
     if ascii_is_text_token_start_char(token.buffer.data[0]) {
         // Avoid matching a substring in a larger text token
-        return !ascii_is_text_token_char(cursor:get_char_at_offset(token:length()));
+        return !ascii_is_text_token_char(cursor:get_char_at_offset(token:length_bytes()));
     }
     return true;
 }
@@ -77,7 +90,7 @@ function try_skip_next_and_surrounding_white_space : (cursor : Cursor mut&, toke
 function try_skip_next_operator : (cursor : Cursor mut&, operator: StringView) -> bool = {
     // The small lookahead exists so we don't capture the operator part of an assignment
     cursor:try_skip_white_space();
-    if cursor:get_char_at_offset(operator:length()) == "="[0] {
+    if cursor:get_char_at_offset(operator:length_bytes()) == ascii_char("=") {
         return false;
     }
     if cursor:is_next("<<=") or cursor:is_next(">>=") or cursor:is_next("**=") {
@@ -94,7 +107,7 @@ function try_skip_next : (cursor : Cursor mut&, string : StringView) -> bool = {
     if !cursor:is_next(string) {
         return false;
     }
-    cursor.position += string:length();
+    cursor.position += string:length_bytes();
     return true;
 }
 
@@ -215,12 +228,12 @@ function get_next_hex_token : (cursor : Cursor mut&) -> ProgramSlice = {
     while !cursor:is_end_of_token() {
         let next_char : u8 = ascii_to_lower(cursor:get_char());
         if ascii_is_digit(next_char) |
-          (next_char == "a"[0]) |
-          (next_char == "b"[0]) |
-          (next_char == "c"[0]) |
-          (next_char == "d"[0]) |
-          (next_char == "e"[0]) |
-          (next_char == "f"[0]) {
+          (next_char == ascii_char("a")) |
+          (next_char == ascii_char("b")) |
+          (next_char == ascii_char("c")) |
+          (next_char == ascii_char("d")) |
+          (next_char == ascii_char("e")) |
+          (next_char == ascii_char("f")) {
             cursor.position += 1;
             token.end_offset += 1;
         } else {
@@ -243,10 +256,10 @@ function get_next_bool_token : (cursor : Cursor mut&) -> ProgramSlice = {
 
     let start_offset : isize = cursor.position;
     if cursor:try_skip_next_and_surrounding_white_space(true_str) {
-        return {start_offset, start_offset + true_str:length()};
+        return {start_offset, start_offset + true_str:length_bytes()};
     } else {
         runtime_assert(cursor:try_skip_next_and_surrounding_white_space(false_str));
-        return {start_offset, start_offset + false_str:length()};
+        return {start_offset, start_offset + false_str:length_bytes()};
     }
 }
 
@@ -277,7 +290,7 @@ function get_next_numeric_token : (cursor : Cursor mut&) -> NumericToken = {
             cursor.position += 1;
             token.end_offset += 1;
 
-            if cursor:get_char() == char(".") {
+            if cursor:get_char() == ascii_char(".") {
                 if has_seen_decimal_point {
                     syntax_error(&mut cursor, sv("cannot have two decimal points in a floating point constant"));
                 }
@@ -290,7 +303,7 @@ function get_next_numeric_token : (cursor : Cursor mut&) -> NumericToken = {
                 token.end_offset += 1;
             }
 
-            if ascii_to_upper(cursor:get_char()) == char("E") {
+            if ascii_to_upper(cursor:get_char()) == ascii_char("E") {
                 if has_seen_exponent {
                     syntax_error(&mut cursor, sv("cannot have two exponents in a floating point constant"));
                 }
@@ -299,7 +312,7 @@ function get_next_numeric_token : (cursor : Cursor mut&) -> NumericToken = {
                 cursor.position += 1;
                 token.end_offset += 1;
 
-                if cursor:get_char() == char("-") or cursor:get_char() == char("+") {
+                if cursor:get_char() == ascii_char("-") or cursor:get_char() == ascii_char("+") {
                     cursor.position += 1;
                     token.end_offset += 1;
                 }
@@ -439,7 +452,7 @@ function parse_comma_separated_named_members : (cursor : Cursor mut&, matched_pa
 
     mut is_missing_comma : bool = false;
     while !cursor:try_skip_next_and_surrounding_white_space(matched_pair) {
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected '%'"), matched_pair);
         }
         if is_missing_comma {
@@ -469,7 +482,7 @@ function parse_generic_definition_list : (cursor : Cursor mut&) -> Vector<Generi
 
     mut is_missing_comma : bool = false;
     while !cursor:try_skip_next_and_surrounding_white_space("]") {
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected ']'"));
         }
         if is_missing_comma {
@@ -479,7 +492,7 @@ function parse_generic_definition_list : (cursor : Cursor mut&) -> Vector<Generi
         // TODO: this is a little ugly, should be refactored
         mut type : int;
         mut name : ProgramSlice;
-        if cursor:get_char() == "@"[0] {
+        if cursor:get_char() == ascii_char("@") {
             type = /* generic numeric */ 1;
             name = cursor:get_next_at_identifier();
         } else {
@@ -540,7 +553,7 @@ function parse_compile_time_constant_list : (cursor : Cursor mut&) -> Vector<Com
 
     mut is_missing_comma : bool = false;
     while !cursor:try_skip_next_and_surrounding_white_space("]") {
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected ']'"));
         }
         if is_missing_comma {
@@ -573,7 +586,7 @@ function parse_specialization_list : (cursor : Cursor mut&) -> Vector<Specializa
 
     mut specializations : Vector<Specialization> = make<Vector<Specialization>>(&mut cursor.allocator);
     while !cursor:try_skip_next_and_surrounding_white_space(">") {
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected '>'"));
         }
         if is_missing_comma {
@@ -723,7 +736,7 @@ function parse_list_of_expressions : (cursor : Cursor mut&, end : StringView) ->
     mut is_missing_comma : bool = false;
     while !cursor:try_skip_next_and_surrounding_white_space(end) {
         // TODO: I've done this logic like 5 times, function pointers would eliminate this
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected '%'"), end);
         }
         if is_missing_comma {
@@ -742,7 +755,7 @@ function parse_list_of_named_expressions : (cursor : Cursor mut&, end : StringVi
     let start_offset : isize = cursor.position;
     mut is_missing_comma : bool = false;
     while !cursor:try_skip_next_and_surrounding_white_space(end) {
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected '%'"), end);
         }
         if is_missing_comma {
@@ -849,11 +862,11 @@ function is_likely_the_start_of_a_specialized_function : (cursor : Cursor mut&) 
     mut brackets_stack : Vector<u8> = make<Vector<u8>>(&mut cursor.allocator);
     mut lookahead : Cursor = cursor;
     while !lookahead:is_next("\0") {
-        if is_one_of(lookahead:get_char(), "<"[0], "("[0], "{"[0], "["[0]) {
+        if is_one_of(lookahead:get_char(), ascii_char("<"), ascii_char("("), ascii_char("{"), ascii_char("[")) {
             brackets_stack:push_back(lookahead:get_char());
         }
 
-        if is_one_of(lookahead:get_char(), ">"[0], ")"[0], "}"[0], "]"[0]) {
+        if is_one_of(lookahead:get_char(), ascii_char(">"), ascii_char(")"), ascii_char("}"), ascii_char("]")) {
             if !ascii_is_matched_pair(brackets_stack:pop_back(), lookahead:get_char()) {
                 brackets_stack:deallocate();
                 return false;
@@ -974,7 +987,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor mut&) -> Expres
 function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expression = {
     let start_offset : isize = cursor.position;
 
-    if is_one_of(cursor:get_char(), "!"[0], "-"[0], "+"[0], "~"[0]) {
+    if is_one_of(cursor:get_char(), ascii_char("!"), ascii_char("-"), ascii_char("+"), ascii_char("~")) {
         let name : ProgramSlice = cursor:slice(1);
         cursor.position += 1;
         cursor:try_skip_white_space();
@@ -1248,7 +1261,7 @@ function parse_scope : (cursor : Cursor mut&) -> Scope = {
 
     mut lines : Vector<Line> = make<Vector<Line>>(&mut cursor.allocator);
     while !cursor:try_skip_next("}") {
-        if cursor:get_char() == "\0"[0] {
+        if cursor:get_char() == ascii_char("\0") {
             syntax_error(&mut cursor, sv("unterminated scope, expected '}'"));
         }
         lines:push_back(cursor:parse_line());

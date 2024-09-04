@@ -32,6 +32,12 @@ function make<UnicodeScalar> : (char: StringView) -> UnicodeScalar = {
     return scalar;
 }
 
+function [@Len] char : (char: u8[@Len]&) -> UnicodeScalar = {
+    // TODO: static_assert here
+    runtime_assert(@Len != 0 and @Len <= 4);
+    return make<UnicodeScalar>(sv(&char));
+}
+
 // TODO parsing fix from: https://github.com/DaveDuck321/GrapheneLang/pull/164
 // typedef HasSpaceship<UnicodeScalar> : TrueType
 //
@@ -45,6 +51,10 @@ function make<UnicodeScalar> : (char: StringView) -> UnicodeScalar = {
 
 @operator != : (self : UnicodeScalar, other : UnicodeScalar) -> bool = {
     return self.value != other.value;
+}
+
+function get_iter : (string: StringView&) -> UTF8DecodeIter = {
+    return make<UTF8DecodeIter>(string);
 }
 
 function make<UTF8DecodeIter> : ( string: StringView ) -> UTF8DecodeIter = {
