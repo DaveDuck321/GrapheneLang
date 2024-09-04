@@ -17,9 +17,9 @@ typedef FilePosition : {
 function generate_position_lookup_table : (program : StringView, allocator: Allocator mut&) -> PositionLookupTable = {
     mut new_lines : Vector<isize> = make<Vector<isize>>(&mut allocator);
 
-    for current_offset in range(program:length()) {
-        if program.buffer.data[current_offset] == "\n"[0] {
-            new_lines:push_back(current_offset);
+    for current_offset_bytes in range(program:length_bytes()) {
+        if program.buffer.data[current_offset_bytes] == ascii_char("\n") {
+            new_lines:push_back(current_offset_bytes);
         }
     }
     return {new_lines};

@@ -112,7 +112,7 @@ function puts : (str : StringView) -> int = {
     // puts - put a string on standard output
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/puts.html
     let iov : iovec[2] = {
-        {&str.buffer.data, str:length()},
+        {&str.buffer.data, str:length_bytes()},
         {"\n", 1}
     };
 

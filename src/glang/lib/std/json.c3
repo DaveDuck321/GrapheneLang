@@ -68,8 +68,8 @@ function is_json_whitespace : (token : u8) -> bool = {
     // JSON defines whitespace as one of { space, linefeed, carriage return,
     // horizontal tab }. If we use string literals instead of code points, then
     // our code doesn't care about the underlying encoding :).
-    return token == char(" ") or token == char("\n")
-           or token == char("\r") or token == char("\t");
+    return token == ascii_char(" ") or token == ascii_char("\n")
+           or token == ascii_char("\r") or token == ascii_char("\t");
 }
 
 function eat : (cursor : Cursor mut&, token : u8) -> bool = {
@@ -85,7 +85,7 @@ function eat : (cursor : Cursor mut&, token : u8) -> bool = {
 }
 
 function eat : (cursor : Cursor mut&, string : StringView) -> bool = {
-    for token in string:get_iter() {
+    for token in string.buffer:get_iter() {
         if !cursor:eat(token) {
             return false;
         }
@@ -110,7 +110,7 @@ function eat_whitespace : (cursor: Cursor mut&) -> void = {
 
 // TODO return ErrorOr<JSON_Node>.
 function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    if !cursor:eat(char("{")) {
+    if !cursor:eat(ascii_char("{")) {
         return make<Optional<JSON_Node>>();
     }
 
@@ -118,7 +118,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
     cursor:eat_whitespace();
 
-    if cursor:eat(char("}")) {
+    if cursor:eat(ascii_char("}")) {
         // Empty object.
         return make<Optional<JSON_Node>>(node);
     }
@@ -138,7 +138,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
         cursor:eat_whitespace();
 
-        if !cursor:eat(char(":")) {
+        if !cursor:eat(ascii_char(":")) {
             node.map:clear();
             return make<Optional<JSON_Node>>();
         }
@@ -152,12 +152,12 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
         node.map:insert(string_view, value_node:data());
 
-        if cursor:eat(char("}")) {
+        if cursor:eat(ascii_char("}")) {
             // We're done.
             return make<Optional<JSON_Node>>(node);
         }
 
-        if !cursor:eat(char(",")) {
+        if !cursor:eat(ascii_char(",")) {
             node.map:clear();
             return make<Optional<JSON_Node>>();
         }
@@ -169,7 +169,7 @@ function parse_object : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 }
 
 function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    if !cursor:eat(char("[")) {
+    if !cursor:eat(ascii_char("[")) {
         return make<Optional<JSON_Node>>();
     }
 
@@ -177,7 +177,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
     cursor:eat_whitespace();
 
-    if cursor:eat(char("]")) {
+    if cursor:eat(ascii_char("]")) {
         // Empty array.
         return make<Optional<JSON_Node>>(node);
     }
@@ -191,12 +191,12 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
         node.children:push_back(value_node:data());
 
-        if cursor:eat(char("]")) {
+        if cursor:eat(ascii_char("]")) {
             // We're done.
             return make<Optional<JSON_Node>>(node);
         }
 
-        if !cursor:eat(char(",")) {
+        if !cursor:eat(ascii_char(",")) {
             node.children:deallocate();
             return make<Optional<JSON_Node>>();
         }
@@ -214,15 +214,15 @@ function parse_value : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 
     let next_token : u8 = optional_next_token:data();
 
-    if next_token == char("\"") {
+    if next_token == ascii_char("\"") {
         return cursor:parse_string();
     }
 
-    if next_token == char("{") {
+    if next_token == ascii_char("{") {
         return cursor:parse_object();
     }
 
-    if next_token == char("[") {
+    if next_token == ascii_char("[") {
         return cursor:parse_array();
     }
 
@@ -262,7 +262,7 @@ function is_control_character : (char : u8) -> bool = {
 }
 
 function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    if !cursor:eat(char("\"")) {
+    if !cursor:eat(ascii_char("\"")) {
         return make<Optional<JSON_Node>>();
     }
 
@@ -271,7 +271,7 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     mut string : Vector<u8> = make<Vector<u8>>(&mut cursor.allocator);
 
     while cursor:has_next() {
-        if !in_escape_seq and cursor:eat(char("\"")) {
+        if !in_escape_seq and cursor:eat(ascii_char("\"")) {
             mut node : JSON_Node = make<JSON_Node>(/* string */ 3, &mut cursor.allocator);
 
             node.value = make<Optional<StringView>>(
@@ -293,30 +293,30 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         if in_escape_seq {
             in_escape_seq = false;
 
-            if char == char("\\") {
-                string:push_back(char("\\"));
+            if char == ascii_char("\\") {
+                string:push_back(ascii_char("\\"));
             }
-            if char == char("/") {
-                string:push_back(char("/"));
+            if char == ascii_char("/") {
+                string:push_back(ascii_char("/"));
             }
-            if char == char("b") {
-                string:push_back(char("\b"));
+            if char == ascii_char("b") {
+                string:push_back(ascii_char("\b"));
             }
-            if char == char("f") {
-                string:push_back(char("\f"));
+            if char == ascii_char("f") {
+                string:push_back(ascii_char("\f"));
             }
-            if char == char("n") {
-                string:push_back(char("\n"));
+            if char == ascii_char("n") {
+                string:push_back(ascii_char("\n"));
             }
-            if char == char("r") {
-                string:push_back(char("\r"));
+            if char == ascii_char("r") {
+                string:push_back(ascii_char("\r"));
             }
-            if char == char("t") {
-                string:push_back(char("\t"));
+            if char == ascii_char("t") {
+                string:push_back(ascii_char("\t"));
             }
         }
         else {
-            if char == char("\\") {
+            if char == ascii_char("\\") {
                 in_escape_seq = true;
             }
             else {
@@ -337,9 +337,9 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     mut is_valid : bool = false;
 
     // This is optional, so discard the return value.
-    cursor:eat(char("-"));
+    cursor:eat(ascii_char("-"));
 
-    if !cursor:eat(char("0")) {
+    if !cursor:eat(ascii_char("0")) {
         while is_digit_helper(cursor:peak()) {
             is_valid = true;
             cursor:next();
@@ -367,7 +367,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 // TODO this and write below should be the only public functions.
 function json_parse : (source : StringView, allocator : Allocator mut&) -> Optional<JSON_Node> = {
     // FIXME memory safety, memory leaks.
-    mut cursor : Cursor = { source:get_iter(), &mut allocator };
+    mut cursor : Cursor = { source.buffer:get_iter(), &mut allocator };
 
     let result : Optional<JSON_Node> = cursor:parse_element();
 
@@ -407,11 +407,11 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
         // Allowed to fail.
         if node.value:has_value() {
             let string : StringView = node.value:data();
-            let buffer : Span<u8> = io:request_buffer(string:length() + 2);
+            let buffer : Span<u8> = io:request_buffer(string:length_bytes() + 2);
 
-            buffer.data[0] = char("\"");
-            buffer.data[buffer.length - 1] = char("\"");
-            for i in range(string:length()) {
+            buffer.data[0] = ascii_char("\"");
+            buffer.data[buffer.length - 1] = ascii_char("\"");
+            for i in range(string:length_bytes()) {
                 // FIXME we need to escape the strings we print here.
                 buffer.data[i + 1] = string.buffer.data[i];
             }

@@ -1,18 +1,12 @@
-@require_once "arithmetic.c3"
-@require_once "assert.c3"
-@require_once "iterators.c3"
-@require_once "util.c3"
-@require_once "wrappers.c3"
-@require_once "span.c3"
+@require_once "std/arithmetic.c3"
+@require_once "std/assert.c3"
+@require_once "std/iterators.c3"
+@require_once "std/span.c3"
+@require_once "std/util.c3"
+@require_once "std/wrappers.c3"
 
 typedef CString : { data : u8[&] }
 typedef StringView     : { buffer : View<u8> }
-typedef UTF32Codepoint : { codepoint : u8 /* TODO: unicode support */ }
-
-function decode_utf8 : (char : u8) -> UTF32Codepoint = {
-    // TODO: this just supports ascii atm
-    return {char};
-}
 
 // StringView
 function [@Len] sv : (string : u8[@Len]&) -> StringView = {
@@ -24,16 +18,11 @@ function make<StringView> : (buffer : View<u8>) -> StringView = {
 }
 
 function make<StringView> : (cstr : CString) -> StringView = {
-    return { make<View<u8>>(&cstr.data, cstr:length()) };
+    return { make<View<u8>>(&cstr.data, cstr:length_bytes()) };
 }
 
-function length : (sv : StringView&) -> isize = {
+function length_bytes : (sv : StringView&) -> isize = {
     return sv.buffer:length();
-}
-
-// TODO: return `UTF32Codepoint` here
-function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>, u8&> = {
-    return sv.buffer:get_iter();
 }
 
 @operator == : (lhs : StringView, rhs : StringView) -> bool = {
@@ -73,16 +62,16 @@ function slice_between : (sv : StringView&, start : isize, end : isize) -> Strin
 }
 
 // CString
-function length : (str: CString&) -> isize = {
+function length_bytes : (str: CString&) -> isize = {
     mut len : isize = 0;
-    while str.data[len] != char("\0") {
+    while str.data[len] != ascii_char("\0") {
         len = len + 1;
     }
     return len;
 }
 
 function [@Len] make<CString> : (literal : u8[@Len]&) -> CString = {
-    runtime_assert(literal[@Len - 1] == char("\0"));
+    runtime_assert(literal[@Len - 1] == ascii_char("\0"));
     return {&literal};
 }
 
@@ -90,16 +79,16 @@ function [@Len] make<CString> : (literal : u8[@Len]&) -> CString = {
 // String utilities
 function ascii_is_white_space : (char : u8) -> bool = {
     // TODO: all other white spaces
-    return char == char("\n") or char == char(" ");
+    return char == ascii_char("\n") or char == ascii_char(" ");
 }
 
 function ascii_is_digit : (char : u8) -> bool = {
-    return as_arithmetic(char) >= as_arithmetic(char("0")) and as_arithmetic(char) <= as_arithmetic(char("9"));
+    return as_arithmetic(char) >= as_arithmetic(ascii_char("0")) and as_arithmetic(char) <= as_arithmetic(ascii_char("9"));
 }
 
 function ascii_is_alpha : (char : u8) -> bool = {
     let lower : i8 = as_arithmetic(ascii_to_lower(char));
-    return lower >= as_arithmetic(char("a")) and lower <= as_arithmetic(char("z"));
+    return lower >= as_arithmetic(ascii_char("a")) and lower <= as_arithmetic(ascii_char("z"));
 }
 
 function ascii_is_alphanumeric : (char : u8) -> bool = {
@@ -107,39 +96,38 @@ function ascii_is_alphanumeric : (char : u8) -> bool = {
 }
 
 function ascii_to_lower : (char : u8) -> u8 = {
-    // TODO: support char literals
-    if as_arithmetic(char) >= as_arithmetic(char("A")) and as_arithmetic(char) <= as_arithmetic(char("Z")) {
+    if as_arithmetic(char) >= as_arithmetic(ascii_char("A")) and as_arithmetic(char) <= as_arithmetic(ascii_char("Z")) {
         return char | __builtin_narrow<u8>(0x20);
     }
     return char;
 }
 
 function ascii_to_upper : (char : u8) -> u8 = {
-    // TODO: support char literals
-    if as_arithmetic(char) >= as_arithmetic(char("a")) or as_arithmetic(char) <= as_arithmetic(char("z")) {
+    if as_arithmetic(char) >= as_arithmetic(ascii_char("a")) or as_arithmetic(char) <= as_arithmetic(ascii_char("z")) {
         return char ^ __builtin_narrow<u8>(0x20);
     }
     return char;
 }
 
 function ascii_is_matched_pair : (lhs : u8, rhs : u8) -> bool = {
-    if lhs == char("(") and rhs == char(")") {
+    if lhs == ascii_char("(") and rhs == ascii_char(")") {
         return true;
     }
-    if lhs == char("[") and rhs == char("]") {
+    if lhs == ascii_char("[") and rhs == ascii_char("]") {
         return true;
     }
-    if lhs == char("<") and rhs == char(">") {
+    if lhs == ascii_char("<") and rhs == ascii_char(">") {
         return true;
     }
-    if lhs == char("{") and rhs == char("}") {
+    if lhs == ascii_char("{") and rhs == ascii_char("}") {
         return true;
     }
     return false;
 }
 
-function char : (literal : u8[1]&) -> u8 = {
-    // TODO: add char literals
+function [@Len] ascii_char : (literal : u8[@Len]&) -> u8 = {
+    // TODO: static_assert
+    runtime_assert(@Len == 1);
     return literal[0];
 }
 
@@ -149,7 +137,7 @@ function[Int] unstringify : (view : StringView) -> TypeIf<Int, IsIntegral<Int>> 
     for char in view:get_iter() {
         runtime_assert(ascii_is_digit(char));
         result *= 10;
-        result += as_arithmetic(char) - as_arithmetic(char("0"));
+        result += as_arithmetic(char) - as_arithmetic(ascii_char("0"));
     }
 
     return result;
