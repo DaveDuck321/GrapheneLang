@@ -4,6 +4,7 @@
 @require_once "std/span.c3"
 @require_once "std/wrappers.c3"
 @require_once "std/arithmetic.c3"
+@require_once "std/assert.c3"
 
 typedef UnicodeScalar : {
     value: u32
@@ -126,6 +127,7 @@ function get_utf8_encoding_length : (utf8_encoding_type: u32) -> isize = {
 function is_in_range : (value: u32, lower_inclusive: u32, upper_inclusive: u32) -> bool = {
     // Inclusive range better matches the spec comments
     // Use u32 here since we don't have u8 literals
+    runtime_assert(__builtin_is_less_than(lower_inclusive, upper_inclusive) or lower_inclusive == upper_inclusive);
     return value == lower_inclusive or value == upper_inclusive or
             (__builtin_is_less_than(value, upper_inclusive) and __builtin_is_greater_than(value, lower_inclusive));
 }
@@ -314,6 +316,50 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
 
 @implicit has_next : (self : UTF8DecodeIter mut&) -> bool = {
     return self.underlying:has_next();
+}
+
+function encode_to_utf8 : (scalar : UnicodeScalar, buffer: Span<u8>) -> View<u8> = {
+    if is_in_range(scalar.value, 0x00, 0x7f) {
+        buffer:get(0) = Narrow<u8>(scalar.value & 0x7f);
+        return {&buffer.data, 1};
+    }
+
+    if is_in_range(scalar.value, 0x0080, 0x07ff) {
+        buffer:get(0) = Narrow<u8>(0xc0 | ((scalar.value >> 6) & 0x1f));
+        buffer:get(1) = Narrow<u8>(0x80 | (scalar.value & 0x3f));
+        return {&buffer.data, 2};
+    }
+
+    if is_in_range(scalar.value, 0x0800, 0x0fff)
+        or is_in_range(scalar.value, 0x1000, 0xcfff)
+        or is_in_range(scalar.value, 0xd000, 0xd7ff)
+        or is_in_range(scalar.value, 0xe000, 0xffff)
+    {
+        buffer:get(0) = Narrow<u8>(0xe0 | ((scalar.value >> 12) & 0x0f));
+        buffer:get(1) = Narrow<u8>(0x80 | ((scalar.value >> 6) & 0x3f));
+        buffer:get(2) = Narrow<u8>(0x80 | (scalar.value & 0x3f));
+        return {&buffer.data, 3};
+    }
+
+    if is_in_range(scalar.value, 0x10000, 0x3ffff)
+        or is_in_range(scalar.value, 0x40000, 0xfffff)
+        or is_in_range(scalar.value, 0x100000, 0x10ffff)
+    {
+        buffer:get(0) = Narrow<u8>(0xf0 | ((scalar.value >> 18) & 0x07));
+        buffer:get(1) = Narrow<u8>(0x80 | ((scalar.value >> 12) & 0x3f));
+        buffer:get(2) = Narrow<u8>(0x80 | ((scalar.value >> 6) & 0x3f));
+        buffer:get(3) = Narrow<u8>(0x80 | (scalar.value & 0x3f));
+        return {&buffer.data, 4};
+    }
+
+    // Graphene cannot generate an invalid unicode scalar via `make<>` or the iterators
+    // This is a bug in the user's code so I don't mind the unrecoverable error here
+    runtime_assert(false);
+    return {&buffer.data, 0};
+}
+
+function encode_to_utf8 : (scalar : UnicodeScalar, buffer: u8[4] mut&) -> View<u8> = {
+    return encode_to_utf8(scalar, make<Span<u8>>(&mut buffer));
 }
 
 // --------- UTF16 -----------

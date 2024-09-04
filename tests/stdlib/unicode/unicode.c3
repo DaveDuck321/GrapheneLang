@@ -31,6 +31,9 @@ function main : () -> int = {
     runtime_assert(!utf16_be_iter.is_little_endian);
     runtime_assert(utf16_le_iter.is_little_endian);
 
+    mut allocator: Allocator = initialize_allocator();
+    mut reconstructed_utf8_file : Vector<u8> = make<Vector<u8>>(&mut allocator);
+
     // All parsers decode the same scalars?
     for utf8_scalar in make<UTF8DecodeIter>(utf8_file) {
         runtime_assert(utf16_be_iter:has_next());
@@ -41,6 +44,12 @@ function main : () -> int = {
 
         runtime_assert(utf8_scalar == utf16_be_scalar);
         runtime_assert(utf8_scalar == utf16_le_scalar);
+
+        {
+            mut buffer: u8[4];
+            let result: View<u8> = encode_to_utf8(utf16_be_scalar, &mut buffer);
+            reconstructed_utf8_file:extend_back(result:get_iter());
+        }
 
         chars_processed += 1;
     }
@@ -55,6 +64,8 @@ function main : () -> int = {
     // https://www.compart.com/en/unicode/U+1F60E
     runtime_assert(make<UnicodeScalar>(sv("😎")).value == 0x0001F60E);
 
+    // Was encoding successful?
+    runtime_assert(utf8_file == reconstructed_utf8_file:view());
     return 0;
 }
 
