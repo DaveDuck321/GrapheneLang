@@ -70,9 +70,15 @@ function [T] length : (span : _SpanImpl<T> mut&) -> isize = {
 
 
 function [T] get : (span : _SpanImpl<T>&, index : isize)
-    -> _SpanImplMemberReference<T> =
+    -> TypeIf<_SpanImplMemberReference<T>, IsConstRef<T>> =
 {
     return &span.data[index];
+}
+
+function [T] get : (span : _SpanImpl<T>&, index : isize)
+    -> TypeIf<_SpanImplMemberReference<T>, IsMutRef<T>> =
+{
+    return &mut span.data[index];
 }
 
 @operator [T] == : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {
