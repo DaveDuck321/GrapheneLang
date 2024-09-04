@@ -27,7 +27,7 @@ typedef CompileTimeConstant : {
     value : ProgramSlice,
 }
 
-typedef FunctionType : { /* TODO */ }
+typedef FunctionType : { args: Vector<Type>, return_type: Type, meta : Meta}
 typedef ArrayType : { base_type : Type, size : Vector<CompileTimeConstant>, is_heap_array : bool, is_mut : bool, meta : Meta}
 typedef RefType : { type : Type, is_mut : bool, meta : Meta }
 typedef NamedType : { name : ProgramSlice, specialization : Vector<Specialization>, meta : Meta}
@@ -219,7 +219,7 @@ typedef VariableAccess : {
     name : ProgramSlice,
 }
 
-typedef ArrayIndexAccess : {
+typedef IndexOperator : {
     expression : Expression,
     indexes: Vector<Expression>,
     meta : Meta,
@@ -426,7 +426,12 @@ function write_json_value : (stream : JSON_Stream mut&, constant : CompileTimeCo
 }
 
 function write_json_value : (stream : JSON_Stream mut&, fn : FunctionType&) -> void = {
-    // TODO
+    mut object : JSON_Object = stream:new_object();
+    object
+        :add_meta("FunctionType", fn.meta)
+        :add("args", fn.args)
+        :add("return_type", fn.return_type)
+        :end();
 }
 
 function write_json_value : (stream : JSON_Stream mut&, array : ArrayType&) -> void = {
@@ -743,7 +748,7 @@ function write_json_value : (stream : JSON_Stream mut&, node : Expression&) -> v
         return;
     }
     if node.type == 5 {
-        stream:write_json_value(&addr_to_ref<ArrayIndexAccess>(node.pointer));
+        stream:write_json_value(&addr_to_ref<IndexOperator>(node.pointer));
         return;
     }
     if node.type == 6 {
@@ -910,10 +915,10 @@ function write_json_value : (stream : JSON_Stream mut&, node : VariableAccess&) 
         :end();
 }
 
-function write_json_value : (stream : JSON_Stream mut&, node : ArrayIndexAccess&) -> void = {
+function write_json_value : (stream : JSON_Stream mut&, node : IndexOperator&) -> void = {
     mut object : JSON_Object = stream:new_object();
     object
-        :add_meta("ArrayIndexAccess", node.meta)
+        :add_meta("IndexOperator", node.meta)
         :add("expression", node.expression)
         :add("indexes", node.indexes)
         :end();

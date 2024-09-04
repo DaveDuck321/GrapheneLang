@@ -4,6 +4,7 @@
 @require_once "iterators.c3"
 @require_once "memory.c3"
 @require_once "span.c3"
+@require_once "array.c3"
 
 typedef [T] Vector : {
     allocator : Allocator mut&,

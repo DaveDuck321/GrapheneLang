@@ -1,3 +1,5 @@
+@require_once "std/array.c3"
+
 function[T] generic_fn : () -> void = {
 
 }
