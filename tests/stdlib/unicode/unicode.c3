@@ -5,6 +5,8 @@
 @require_once "std/io.c3"
 @require_once "std/span.c3"
 @require_once "std/assert.c3"
+@require_once "std/memory.c3"
+@require_once "std/vector.c3"
 
 function read_file : ( path: CString ) -> View<u8> = {
     let file : Optional<File> = open(path, O_RDONLY());
