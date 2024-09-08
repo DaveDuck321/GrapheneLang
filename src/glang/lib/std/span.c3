@@ -72,6 +72,7 @@ function [T] length : (span : _SpanImpl<T> mut&) -> isize = {
 function [T] get : (span : _SpanImpl<T>&, index : isize)
     -> TypeIf<_SpanImplMemberReference<T>, IsConstRef<T>> =
 {
+    runtime_assert(index >= 0 and index < span.length);
     return &span.data[index];
 }
 

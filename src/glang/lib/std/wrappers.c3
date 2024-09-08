@@ -5,7 +5,7 @@ typedef [T] MutPtr : { data : T mut& }
 typedef [T] MaybeNullPtr : Optional<Ptr<T>>
 
 // Maybe FIXME: this isn't really ergonomic, this SFINAE avoids &/ mut& code duplication
-typedef [T] Optional : { _value : TypeIf<T, Not<IsRef<T>>>, _has_value : bool}
+typedef [T] Optional : { _value : TypeIf<T, Not<IsAnyRef<T>>>, _has_value : bool}
 typedef [T] Optional<T&> : { _ptr : iptr } // Nullptr optimization
 typedef [T] Optional<T mut&> : { _ptr : iptr } // Duplicated
 
@@ -51,7 +51,7 @@ function [T] erase : (self : Optional<T> mut&) -> void = {
     self._has_value = false;
 }
 
-function [T] data : (self : Optional<T>&) -> Ref<T> = {
+function [T] data : (self : Optional<T>&) -> ConstRef<T> = {
     runtime_assert(self:has_value());
     return &self._value;
 }

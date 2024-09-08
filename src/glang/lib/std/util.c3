@@ -8,7 +8,7 @@ function [T] alignof : () -> isize = {
     return __builtin_alignof<T>();
 }
 
-function [T] have_same_addr : (a : T, b : T) -> TypeIf<bool, IsRef<T>> = {
+function [T] have_same_addr : (a : T, b : T) -> TypeIf<bool, IsAnyRef<T>> = {
     return ref_to_addr(&a) == ref_to_addr(&b);
 }
 
@@ -46,7 +46,7 @@ function [T, AddrT] addr_to_mut_heap_array : (address : AddrT)
 }
 
 function [TRef, BRef] reinterpret_addr : (base : BRef)
-    -> TypeIf<TRef, Both<IsRef<TRef>, IsRef<BRef>>> =
+    -> TypeIf<TRef, Both<IsAnyRef<TRef>, IsAnyRef<BRef>>> =
 {
     return &__builtin_int_to_ptr<TRef>(__builtin_ptr_to_int(&base));
 }

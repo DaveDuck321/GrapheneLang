@@ -1,3 +1,5 @@
+@require_once "std/array.c3"
+
 typedef MyArray : int[3]
 
 @operator + : (lhs : int, rhs: int) -> int = {

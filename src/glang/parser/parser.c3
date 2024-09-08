@@ -1,6 +1,7 @@
 @require_once "file_info.c3"
 @require_once "syntax_tree.c3"
 
+@require_once "std/array.c3"
 @require_once "std/algorithms.c3"
 @require_once "std/arithmetic.c3"
 @require_once "std/io.c3"
@@ -346,8 +347,12 @@ function get_next_string_literal_token : (cursor : Cursor mut&) -> ProgramSlice 
     return result;
 }
 
-function get_next_operator : (cursor : Cursor mut&) -> ProgramSlice = {
+function try_get_next_operator : (cursor : Cursor mut&) -> Optional<ProgramSlice> = {
     let start_position : isize = cursor.position;
+
+    if cursor:try_skip_next_and_surrounding_white_space("<=>") {
+        return make<Optional<ProgramSlice>>({start_position, start_position + 3});
+    }
 
     if cursor:try_skip_next_and_surrounding_white_space("==")
         or cursor:try_skip_next_and_surrounding_white_space("<=")
@@ -356,8 +361,10 @@ function get_next_operator : (cursor : Cursor mut&) -> ProgramSlice = {
         or cursor:try_skip_next_and_surrounding_white_space("<<")
         or cursor:try_skip_next_and_surrounding_white_space(">>")
         or cursor:try_skip_next_and_surrounding_white_space("**")
+        or cursor:try_skip_next_and_surrounding_white_space("[]")
+        or cursor:try_skip_next_and_surrounding_white_space("()")
     {
-        return {start_position, start_position + 2};
+        return make<Optional<ProgramSlice>>({start_position, start_position + 2});
     }
 
     if cursor:try_skip_next_and_surrounding_white_space("<")
@@ -374,11 +381,10 @@ function get_next_operator : (cursor : Cursor mut&) -> ProgramSlice = {
         or cursor:try_skip_next_and_surrounding_white_space("@")
         or cursor:try_skip_next_and_surrounding_white_space("&")
     {
-        return {start_position, start_position + 1};
+        return make<Optional<ProgramSlice>>({start_position, start_position + 1});
     }
 
-    syntax_error(&mut cursor, sv("illegal operator '%'"), decode_utf8(cursor:get_char()));
-    return {0, 0};
+    return make<Optional<ProgramSlice>>();
 }
 
 function get_next_assignment : (cursor : Cursor mut&) -> ProgramSlice = {
@@ -577,7 +583,7 @@ function parse_specialization_list : (cursor : Cursor mut&) -> Vector<Specializa
             syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected '>'"));
         }
         if is_missing_comma {
-            syntax_error(&mut cursor, sv("expected ',' or ']'"));
+            syntax_error(&mut cursor, sv("expected ',' or '>'"));
         }
 
         if cursor:is_at_start_of_compile_time_constant() {
@@ -597,6 +603,30 @@ function parse_specialization_list : (cursor : Cursor mut&) -> Vector<Specializa
     return specializations;
 }
 
+function parse_type_list_between : (cursor : Cursor mut&, start: StringView, end: StringView) -> Vector<Type> = {
+    let start_offset : isize = cursor.position;
+    runtime_assert(cursor:try_skip_next_and_surrounding_white_space(start));
+
+    mut is_missing_comma : bool = false;
+
+    mut types : Vector<Type> = make<Vector<Type>>(&mut cursor.allocator);
+    while !cursor:try_skip_next_and_surrounding_white_space(end) {
+        if cursor:get_char() == "\0"[0] {
+            syntax_error_at_position(&mut cursor, start_offset, sv("unterminated list, expected terminator"));
+        }
+        if is_missing_comma {
+            syntax_error(&mut cursor, sv("expected ',' or terminator"));
+        }
+
+        types:push_back<Type>(cursor:parse_type());
+
+        if !cursor:try_skip_next_and_surrounding_white_space(",") {
+            is_missing_comma = true;
+        }
+    }
+    return types;
+}
+
 function parse_struct_type : (cursor : Cursor mut&) -> StructType = {
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("{"));
@@ -606,6 +636,18 @@ function parse_struct_type : (cursor : Cursor mut&) -> StructType = {
     return {members, meta(start_offset, cursor.position)};
 }
 
+function parse_function_type : (cursor : Cursor mut&) -> FunctionType = {
+    let start_offset : isize = cursor.position;
+
+    let args : Vector<Type> = cursor:parse_type_list_between(sv("("), sv(")"));
+    if !cursor:try_skip_next_and_surrounding_white_space("->") {
+        syntax_error(&mut cursor, sv("unexpected symbol '%' in function type, expected '->'"), decode_utf8(cursor:get_char()));
+    }
+
+    let return_type : Type = cursor:parse_type();
+    let meta : Meta = meta(start_offset, cursor:skip_ws_return_offset());
+    return {args, return_type, meta};
+}
 
 function parse_type_prefix : (cursor : Cursor mut&) -> Type = {
     let start_offset : isize = cursor.position;
@@ -616,12 +658,16 @@ function parse_type_prefix : (cursor : Cursor mut&) -> Type = {
         return {4, ref_to_addr(&named_type), meta(start_offset, named_type.meta.end_offset)};
     }
 
-    // TODO: function types
-
     if cursor:is_next("{") {
         let struct_type : StructType mut& = &mut cursor.allocator:allocate<StructType>();
         struct_type = cursor:parse_struct_type();
         return {5, ref_to_addr(&struct_type), meta(start_offset, struct_type.meta.end_offset)};
+    }
+
+    if cursor:is_next("(") {
+        let function_type : FunctionType mut& = &mut cursor.allocator:allocate<FunctionType>();
+        function_type = cursor:parse_function_type();
+        return {0, ref_to_addr(&function_type), meta(start_offset, function_type.meta.end_offset)};
     }
 
     syntax_error(&mut cursor, sv("unexpected symbol '%', this cannot be used at the start of a type"), decode_utf8(cursor:get_char()));
@@ -793,7 +839,7 @@ function parse_ufcs_call : (cursor : Cursor mut&, prefix : Expression) -> UFCS_C
     return {prefix, fn_name, specialization, arguments, meta(prefix.meta.start_offset, cursor.position)};
 }
 
-function parse_array_index_access : (cursor : Cursor mut&, prefix : Expression) -> ArrayIndexAccess = {
+function parse_index_operator : (cursor : Cursor mut&, prefix : Expression) -> IndexOperator = {
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("["));
     let indexes : Vector<Expression> = cursor:parse_list_of_expressions(sv("]"));
     return {prefix, indexes, meta(prefix.meta.start_offset, cursor.position)};
@@ -807,8 +853,6 @@ function parse_struct_index_access : (cursor : Cursor mut&, prefix : Expression)
 }
 
 function parse_callable_call : (cursor : Cursor mut&, prefix : Expression) -> FunctionCall = {
-    // TODO: SUPPORT CALLABLES, correct signature!!!!!
-    // atm. this is just a hacky way to call (non-specialized) functions
     runtime_assert(cursor:is_next("("));
     return cursor:parse_function_call(prefix);
 }
@@ -895,8 +939,8 @@ function parse_expression_postfix : (cursor : Cursor mut&, prefix : Expression) 
         return cursor:parse_expression_postfix({7, ref_to_addr(&memory), memory.meta});
     }
     if cursor:is_next("[") {
-        let memory : ArrayIndexAccess mut& = &mut cursor.allocator:allocate<ArrayIndexAccess>();
-        memory = cursor:parse_array_index_access(prefix);
+        let memory : IndexOperator mut& = &mut cursor.allocator:allocate<IndexOperator>();
+        memory = cursor:parse_index_operator(prefix);
         return cursor:parse_expression_postfix({5, ref_to_addr(&memory), memory.meta});
     }
     if cursor:is_next(".") {
@@ -905,7 +949,6 @@ function parse_expression_postfix : (cursor : Cursor mut&, prefix : Expression) 
         return cursor:parse_expression_postfix({6, ref_to_addr(&memory), memory.meta});
     }
     if cursor:is_next("(") {
-        // TODO: this should be a special callable type
         let memory : FunctionCall mut& = &mut cursor.allocator:allocate<FunctionCall>();
         memory = cursor:parse_callable_call(prefix);
         return cursor:parse_expression_postfix({0, ref_to_addr(&memory), memory.meta});
@@ -1318,14 +1361,25 @@ function parse_operator_function_definition : (cursor : Cursor mut&) -> Function
     let start_offset : isize = cursor.position;
     runtime_assert(cursor:try_skip_next_and_surrounding_white_space("@operator"));
 
-    let generics : Vector<GenericDefinition> = cursor:parse_optional_generic_definition_list();
-    let name : ProgramSlice = cursor:get_next_operator();
+    // Need to parse the operator first in case we're looking at a `[]` (which would be an empty generic list)
+    mut name : Optional<ProgramSlice> = cursor:try_get_next_operator();
+    mut generics : Vector<GenericDefinition>;
+    if name:has_value() {
+        generics = make<Vector<GenericDefinition>>(&mut cursor.allocator);
+    } else {
+        generics = cursor:parse_optional_generic_definition_list();
+        name = cursor:try_get_next_operator();
+        if !name:has_value() {
+            syntax_error(&mut cursor, sv("illegal operator '%'"), decode_utf8(cursor:get_char()));
+        }
+    }
+
     let specialization : Vector<Specialization> = cursor:parse_optional_specialization();
     let args : Vector<TypedMember> = cursor:parse_function_definition_args();
     let return_type : Type = cursor:parse_function_definition_return_type();
     let scope : Scope = cursor:parse_function_body();
 
-    return {2, generics, name, specialization, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
+    return {2, generics, name:data(), specialization, args, return_type, scope, meta(start_offset, scope.meta.end_offset)};
 }
 
 function parse_assignment_function_definition : (cursor : Cursor mut&) -> FunctionDefinition = {
