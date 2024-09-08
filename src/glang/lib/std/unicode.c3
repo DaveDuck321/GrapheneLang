@@ -5,6 +5,7 @@
 @require_once "std/wrappers.c3"
 @require_once "std/arithmetic.c3"
 @require_once "std/assert.c3"
+@require_once "std/format.c3"
 
 typedef UnicodeScalar : {
     value: u32
@@ -20,7 +21,11 @@ typedef UTF16DecodeIter : {
 }
 
 function invalid_unicode_scalar : () -> UnicodeScalar = {
-    // U+FFFD: 'REPLACEMENT CHARACTER'
+    // Unicode 15.0.0
+    // When a conversion algorithm encounters such unconvertible data, the usual practice is
+    // either to throw an exception or to use a defined substitution character to represent the
+    // unconvertible data. In the case of conversion to one of the encoding forms of the Unicode
+    // Standard, the substitution character is defined as U+FFFD replacement character.
     return { 0xFFFD };
 }
 
@@ -32,19 +37,9 @@ function make<UnicodeScalar> : (char: StringView) -> UnicodeScalar = {
     return scalar;
 }
 
-// TODO parsing fix from: https://github.com/DaveDuck321/GrapheneLang/pull/164
-// typedef HasSpaceship<UnicodeScalar> : TrueType
-//
-// @operator <=> : (self : UnicodeScalar, other : UnicodeScalar) -> bool = {
-//     return as_arithmetic(self.value) - as_arithmetic(other.value);
-// }
-
-@operator == : (self : UnicodeScalar, other : UnicodeScalar) -> bool = {
-    return self.value == other.value;
-}
-
-@operator != : (self : UnicodeScalar, other : UnicodeScalar) -> bool = {
-    return self.value != other.value;
+typedef HasSpaceship<UnicodeScalar> : TrueType
+@operator <=> : (self : UnicodeScalar, other : UnicodeScalar) -> i32 = {
+    return as_arithmetic(self.value) - as_arithmetic(other.value);
 }
 
 function make<UTF8DecodeIter> : ( string: StringView ) -> UTF8DecodeIter = {
@@ -84,7 +79,7 @@ function make<UTF16DecodeIter> : ( buffer: View<u8> ) -> UTF16DecodeIter = {
 }
 
 // --------- UTF8 -----------
-// https://www.unicode.org/versions/Unicode4.0.0/ch03.pdf#G31703
+// https://www.unicode.org/versions/Unicode15.0.0/UnicodeStandard-15.0.pdf
 function enum_utf8_invalid : () -> u32 = { return 0x00; }
 function enum_utf8_encoding_ascii : () -> u32 = { return 0x01; }
 function enum_utf8_encoding_2_byte : () -> u32 = { return 0x02; }
@@ -124,12 +119,11 @@ function get_utf8_encoding_length : (utf8_encoding_type: u32) -> isize = {
     return 0;
 }
 
-function is_in_range : (value: u32, lower_inclusive: u32, upper_inclusive: u32) -> bool = {
+function is_in_interval : (value: u32, lower_inclusive: u32, upper_inclusive: u32) -> bool = {
     // Inclusive range better matches the spec comments
     // Use u32 here since we don't have u8 literals
-    runtime_assert(__builtin_is_less_than(lower_inclusive, upper_inclusive) or lower_inclusive == upper_inclusive);
-    return value == lower_inclusive or value == upper_inclusive or
-            (__builtin_is_less_than(value, upper_inclusive) and __builtin_is_greater_than(value, lower_inclusive));
+    let signed_value: i64 = as_arithmetic(as_u64(value));
+    return as_arithmetic(as_u64(lower_inclusive)) <= signed_value and signed_value <= as_arithmetic(as_u64(upper_inclusive));
 }
 
 function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
@@ -145,12 +139,12 @@ function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
     // U+100000..U+10FFFF   F4      80..8F  80..BF  80..BF
 
     // U+0000..U+007F:      00..7F
-    if is_in_range(first_byte, 0x00, 0x7f) {
+    if is_in_interval(first_byte, 0x00, 0x7f) {
         return enum_utf8_encoding_ascii();
     }
 
     // U+0080..U+07FF:      C2..DF
-    if is_in_range(first_byte, 0xc2, 0xdf) {
+    if is_in_interval(first_byte, 0xc2, 0xdf) {
         return enum_utf8_encoding_2_byte();
     }
 
@@ -160,8 +154,8 @@ function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
     }
 
     // U+1000..U+CFFF:      E1..EC
-    if is_in_range(first_byte, 0xe1, 0xec) {
-        return enum_utf8_encoding_3_byte_EE_EF();
+    if is_in_interval(first_byte, 0xe1, 0xec) {
+        return enum_utf8_encoding_3_byte_E1_EC();
     }
 
     // U+D000..U+D7FF:      ED
@@ -170,8 +164,8 @@ function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
     }
 
     // U+E000..U+FFFF:      EE..EF
-    if is_in_range(first_byte, 0xee, 0xef) {
-        return enum_utf8_encoding_3_byte_E1_EC();
+    if is_in_interval(first_byte, 0xee, 0xef) {
+        return enum_utf8_encoding_3_byte_EE_EF();
     }
 
     // U+10000..U+3FFFF:    F0
@@ -180,7 +174,7 @@ function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
     }
 
     // U+40000..U+FFFFF:    F1..F3
-    if is_in_range(first_byte, 0xf1, 0xf3) {
+    if is_in_interval(first_byte, 0xf1, 0xf3) {
         return enum_utf8_encoding_4_byte_F1_F3();
     }
 
@@ -194,28 +188,28 @@ function get_utf8_encoding_type : (first_byte: u8) -> u32 = {
 
 function is_trailing_utf8_byte_in_valid_range : (byte: u8) -> bool = {
     // Trailing bytes (which are not the second byte) always fall within 80..BF
-    return is_in_range(byte, 0x80, 0xbf);
+    return is_in_interval(byte, 0x80, 0xbf);
 }
 
 function is_2nd_utf8_byte_in_valid_range : (enum_utf8_encoding: u32, byte: u8) -> bool = {
     // U+0800..U+0FFF:      E0  A0..BF
     if enum_utf8_encoding == enum_utf8_encoding_3_byte_E0() {
-        return is_in_range(byte, 0xa0, 0xbf);
+        return is_in_interval(byte, 0xa0, 0xbf);
     }
 
     // U+D000..U+D7FF:      ED  80..9F  80..BF
     if enum_utf8_encoding == enum_utf8_encoding_3_byte_ED() {
-        return is_in_range(byte, 0x80, 0x9f);
+        return is_in_interval(byte, 0x80, 0x9f);
     }
 
     // U+10000..U+3FFFF:    F0  90..BF  80..BF  80..BF
     if enum_utf8_encoding == enum_utf8_encoding_4_byte_F0() {
-        return is_in_range(byte, 0x90, 0xbf);
+        return is_in_interval(byte, 0x90, 0xbf);
     }
 
     // U+100000..U+10FFFF:  F4  80..8F  80..BF  80..BF
     if enum_utf8_encoding == enum_utf8_encoding_4_byte_F4() {
-        return is_in_range(byte, 0x80, 0x8f);
+        return is_in_interval(byte, 0x80, 0x8f);
     }
 
     // Otherwise this isn't a special byte
@@ -275,7 +269,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
         return invalid_unicode_scalar(); // TODO: iterators should be nicer than this
     }
 
-    let second_byte : u8 = self.underlying:peak();
+    let second_byte : u8 = self.underlying:peek();
     if !is_2nd_utf8_byte_in_valid_range(encoding_type, second_byte) {
         return invalid_unicode_scalar();
     }
@@ -290,7 +284,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
         return invalid_unicode_scalar();
     }
 
-    let third_byte : u8 = self.underlying:peak();
+    let third_byte : u8 = self.underlying:peek();
     if !is_trailing_utf8_byte_in_valid_range(third_byte) {
         return invalid_unicode_scalar();
     }
@@ -305,13 +299,13 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
         return invalid_unicode_scalar();
     }
 
-    let forth_byte : u8 = self.underlying:peak();
-    if !is_trailing_utf8_byte_in_valid_range(forth_byte) {
+    let fourth_byte : u8 = self.underlying:peek();
+    if !is_trailing_utf8_byte_in_valid_range(fourth_byte) {
         return invalid_unicode_scalar();
     }
 
     self.underlying:__builtin_get_next();
-    return unsafe_decode_utf8_bytes({first_byte, second_byte, third_byte, forth_byte});
+    return unsafe_decode_utf8_bytes({first_byte, second_byte, third_byte, fourth_byte});
 }
 
 @implicit has_next : (self : UTF8DecodeIter mut&) -> bool = {
@@ -319,21 +313,21 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
 }
 
 function encode_to_utf8 : (scalar : UnicodeScalar, buffer: Span<u8>) -> View<u8> = {
-    if is_in_range(scalar.value, 0x00, 0x7f) {
+    if is_in_interval(scalar.value, 0x00, 0x7f) {
         buffer:get(0) = Narrow<u8>(scalar.value & 0x7f);
         return {&buffer.data, 1};
     }
 
-    if is_in_range(scalar.value, 0x0080, 0x07ff) {
+    if is_in_interval(scalar.value, 0x0080, 0x07ff) {
         buffer:get(0) = Narrow<u8>(0xc0 | ((scalar.value >> 6) & 0x1f));
         buffer:get(1) = Narrow<u8>(0x80 | (scalar.value & 0x3f));
         return {&buffer.data, 2};
     }
 
-    if is_in_range(scalar.value, 0x0800, 0x0fff)
-        or is_in_range(scalar.value, 0x1000, 0xcfff)
-        or is_in_range(scalar.value, 0xd000, 0xd7ff)
-        or is_in_range(scalar.value, 0xe000, 0xffff)
+    if is_in_interval(scalar.value, 0x0800, 0x0fff)
+        or is_in_interval(scalar.value, 0x1000, 0xcfff)
+        or is_in_interval(scalar.value, 0xd000, 0xd7ff)
+        or is_in_interval(scalar.value, 0xe000, 0xffff)
     {
         buffer:get(0) = Narrow<u8>(0xe0 | ((scalar.value >> 12) & 0x0f));
         buffer:get(1) = Narrow<u8>(0x80 | ((scalar.value >> 6) & 0x3f));
@@ -341,9 +335,9 @@ function encode_to_utf8 : (scalar : UnicodeScalar, buffer: Span<u8>) -> View<u8>
         return {&buffer.data, 3};
     }
 
-    if is_in_range(scalar.value, 0x10000, 0x3ffff)
-        or is_in_range(scalar.value, 0x40000, 0xfffff)
-        or is_in_range(scalar.value, 0x100000, 0x10ffff)
+    if is_in_interval(scalar.value, 0x10000, 0x3ffff)
+        or is_in_interval(scalar.value, 0x40000, 0xfffff)
+        or is_in_interval(scalar.value, 0x100000, 0x10ffff)
     {
         buffer:get(0) = Narrow<u8>(0xf0 | ((scalar.value >> 18) & 0x07));
         buffer:get(1) = Narrow<u8>(0x80 | ((scalar.value >> 12) & 0x3f));
@@ -354,6 +348,7 @@ function encode_to_utf8 : (scalar : UnicodeScalar, buffer: Span<u8>) -> View<u8>
 
     // Graphene cannot generate an invalid unicode scalar via `make<>` or the iterators
     // This is a bug in the user's code so I don't mind the unrecoverable error here
+    print(scalar.value);
     runtime_assert(false);
     return {&buffer.data, 0};
 }
@@ -402,6 +397,11 @@ function get_next_codepoint : (self: UTF16DecodeIter mut&) -> Optional<u16> = {
     }
 
     let codepoint2 : u16 = maybe_codepoint2:data();
+
+    // This should be the second part of the surrogate pair
+    if codepoint2 & 0xfc00 != 0xdc00 {
+        return invalid_unicode_scalar();
+    }
 
     let offset_scalar : u32 = (as_u32(codepoint1 & 0x3ff) << 10) | as_u32(codepoint2 & 0x3ff);
     return { as_logical(as_arithmetic(offset_scalar) + as_arithmetic(0x10000)) };

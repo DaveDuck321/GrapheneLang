@@ -1,5 +1,3 @@
-@require_once "std/format.c3"
-
 @require_once "std/unicode.c3"
 @require_once "std/arithmetic.c3"
 @require_once "std/io.c3"

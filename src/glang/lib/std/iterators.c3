@@ -87,12 +87,12 @@ function [T] range : (lower : T, upper : T, step : T) -> Range<T> = {
     return &iter.container:get(index);
 }
 
-function [T, R] peak : (iter : ContiguousContainerIter<T, R> mut&) -> TypeIf<R, IsMutRef<R>> = {
+function [T, R] peek : (iter : ContiguousContainerIter<T, R> mut&) -> TypeIf<R, IsMutRef<R>> = {
     runtime_assert(iter:has_next());
     return &mut iter.container:get(iter.current_index);
 }
 
-function [T, R] peak : (iter : ContiguousContainerIter<T, R> mut&) -> TypeIf<R, IsConstRef<R>> = {
+function [T, R] peek : (iter : ContiguousContainerIter<T, R> mut&) -> TypeIf<R, IsConstRef<R>> = {
     runtime_assert(iter:has_next());
     return &iter.container:get(iter.current_index);
 }
