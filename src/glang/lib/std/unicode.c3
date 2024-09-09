@@ -5,7 +5,6 @@
 @require_once "std/wrappers.c3"
 @require_once "std/arithmetic.c3"
 @require_once "std/assert.c3"
-@require_once "std/format.c3"
 
 typedef UnicodeScalar : {
     value: u32
@@ -266,7 +265,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
 
     // Byte 2
     if !self.underlying:has_next() {
-        return invalid_unicode_scalar(); // TODO: iterators should be nicer than this
+        return invalid_unicode_scalar();
     }
 
     let second_byte : u8 = self.underlying:peek();
@@ -348,7 +347,6 @@ function encode_to_utf8 : (scalar : UnicodeScalar, buffer: Span<u8>) -> View<u8>
 
     // Graphene cannot generate an invalid unicode scalar via `make<>` or the iterators
     // This is a bug in the user's code so I don't mind the unrecoverable error here
-    print(scalar.value);
     runtime_assert(false);
     return {&buffer.data, 0};
 }
