@@ -43,19 +43,19 @@ function [T] make<Span<T>> : (data : T[mut&], length : isize) -> Span<T> = {
 }
 
 function [T] get_iter : (span : _SpanImpl<T>&)
-    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+    -> ContiguousContainerIter<_SpanImpl<T>, _SpanImplMemberReference<T>> =
 {
     return {
-        .container = &span,
+        .container = span,
         .current_index = 0,
     };
 }
 
 function [T] get_iter : (span : _SpanImpl<T> mut&)
-    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+    -> ContiguousContainerIter<_SpanImpl<T>, _SpanImplMemberReference<T>> =
 {
     return {
-        .container = &span,
+        .container = span,
         .current_index = 0,
     };
 }
@@ -70,10 +70,16 @@ function [T] length : (span : _SpanImpl<T> mut&) -> isize = {
 
 
 function [T] get : (span : _SpanImpl<T>&, index : isize)
-    -> _SpanImplMemberReference<T> =
+    -> TypeIf<_SpanImplMemberReference<T>, IsConstRef<T>> =
 {
     runtime_assert(index >= 0 and index < span.length);
     return &span.data[index];
+}
+
+function [T] get : (span : _SpanImpl<T>&, index : isize)
+    -> TypeIf<_SpanImplMemberReference<T>, IsMutRef<T>> =
+{
+    return &mut span.data[index];
 }
 
 @operator [T] == : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {
@@ -124,6 +130,14 @@ function [T] slice_to : (span : Span<T>&, end : isize) -> Span<T> = {
 }
 
 function [T] slice_from : (span : Span<T>&, start : isize) -> Span<T> = {
+    if span.length - start == 0 {
+        let nullptr: iptr = 0;
+        return make<Span<T>>(
+            &addr_to_heap_array<T>(nullptr),
+            0
+        );
+    }
+
     let start_addr : iptr = ref_to_addr(&span:get(start));
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
@@ -146,6 +160,13 @@ function [T] slice_to : (view : View<T>&, end : isize) -> View<T> = {
 }
 
 function [T] slice_from : (view : View<T>&, start : isize) -> View<T> = {
+    if view.length - start == 0 {
+        let nullptr: iptr = 0;
+        return make<View<T>>(
+            &addr_to_heap_array<T>(nullptr),
+            0
+        );
+    }
     let start_addr : iptr = ref_to_addr(&view:get(start));
     return make<View<T>>(
         &addr_to_heap_array<T>(start_addr),

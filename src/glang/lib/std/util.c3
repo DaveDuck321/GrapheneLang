@@ -63,6 +63,18 @@ function as_logical : (value : i32)  -> u32  = { return __builtin_bitcast<u32>(v
 function as_logical : (value : i64)  -> u64  = { return __builtin_bitcast<u64>(value); }
 function as_logical : (value : i128) -> u128 = { return __builtin_bitcast<u128>(value); }
 
+function as_i8   : (value : i8)   -> i8  = { return value; }
+function as_i16  : (value : i16)  -> i16  = { return value; }
+function as_i32  : (value : i32)  -> i32  = { return value; }
+function as_i64  : (value : i64)  -> i64  = { return value; }
+function as_i128 : (value : i128) -> i128 = { return value; }
+
+function as_u8   : (value : u8)   -> u8  = { return value; }
+function as_u16  : (value : u16)  -> u16  = { return value; }
+function as_u32  : (value : u32)  -> u32  = { return value; }
+function as_u64  : (value : u64)  -> u64  = { return value; }
+function as_u128 : (value : u128) -> u128 = { return value; }
+
 function [Ret, In] Narrow : (value : In) ->
 TypeIf<
     Ret,

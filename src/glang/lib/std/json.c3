@@ -7,7 +7,7 @@
 @require_once "std/vector.c3"
 @require_once "std/wrappers.c3"
 
-typedef StringViewIter : ContiguousContainerIter<View<u8>&, u8&>
+typedef StringViewIter : ContiguousContainerIter<View<u8>, u8&>
 typedef VectorIter<JSON_Node> : ContiguousContainerIter<Vector<JSON_Node>&, JSON_Node mut&>
 
 typedef Cursor : {
@@ -38,9 +38,9 @@ function has_next : (cursor : Cursor mut&) -> bool = {
     return cursor.iter:has_next();
 }
 
-function peak : (cursor : Cursor mut&) -> Optional<u8> = {
+function peek : (cursor : Cursor mut&) -> Optional<u8> = {
     if cursor.iter:has_next() {
-        return make<Optional<u8>>(cursor.iter:peak());
+        return make<Optional<u8>>(cursor.iter:peek());
     }
     return make<Optional<u8>>();
 }
@@ -74,7 +74,7 @@ function is_json_whitespace : (token : u8) -> bool = {
 
 function eat : (cursor : Cursor mut&, token : u8) -> bool = {
     // TODO this should be let (can't use with has_value() right now).
-    let next_char : Optional<u8> = cursor:peak();
+    let next_char : Optional<u8> = cursor:peek();
 
     if next_char:has_value() and next_char:data() == token {
         cursor:next();
@@ -96,7 +96,7 @@ function eat : (cursor : Cursor mut&, string : StringView) -> bool = {
 
 function eat_whitespace : (cursor: Cursor mut&) -> void = {
     while cursor:has_next() {
-        let next_char : Optional<u8> = cursor:peak();
+        let next_char : Optional<u8> = cursor:peek();
         runtime_assert(next_char:has_value());
 
         if !is_json_whitespace(next_char:data()) {
@@ -207,7 +207,7 @@ function parse_array : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
 }
 
 function parse_value : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
-    let optional_next_token : Optional<u8> = cursor:peak();
+    let optional_next_token : Optional<u8> = cursor:peek();
     if !optional_next_token:has_value() {
         return make<Optional<JSON_Node>>();
     }
@@ -340,7 +340,7 @@ function parse_number : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
     cursor:eat(char("-"));
 
     if !cursor:eat(char("0")) {
-        while is_digit_helper(cursor:peak()) {
+        while is_digit_helper(cursor:peek()) {
             is_valid = true;
             cursor:next();
         }
