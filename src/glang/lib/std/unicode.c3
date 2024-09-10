@@ -12,10 +12,12 @@ typedef UnicodeScalar : {
 
 typedef UTF8DecodeIter : {
     underlying: ContiguousContainerIter<View<u8>, u8&>,
+    offset: isize,
 }
 
 typedef UTF16DecodeIter : {
     underlying: ContiguousContainerIter<View<u8>, u8&>,
+    offset: isize,
     is_little_endian: bool,
 }
 
@@ -30,7 +32,7 @@ function invalid_unicode_scalar : () -> UnicodeScalar = {
 
 function make<UnicodeScalar> : (char: StringView) -> UnicodeScalar = {
     // Graphene source is utf-8
-    mut iter : UTF8DecodeIter = { char.buffer:get_iter() };
+    mut iter : UTF8DecodeIter = { char.buffer:get_iter(), 0 };
     let scalar: UnicodeScalar = iter:__builtin_get_next();
     runtime_assert(!iter:has_next());
     return scalar;
@@ -42,11 +44,11 @@ typedef HasSpaceship<UnicodeScalar> : TrueType
 }
 
 function make<UTF8DecodeIter> : ( string: StringView ) -> UTF8DecodeIter = {
-    return { string.buffer:get_iter() };
+    return { string.buffer:get_iter(), 0 };
 }
 
 function make<UTF8DecodeIter> : ( buffer: View<u8> ) -> UTF8DecodeIter = {
-    return { buffer:get_iter() };
+    return { buffer:get_iter(), 0 };
 }
 
 function make<UTF16DecodeIter> : ( buffer: View<u8> ) -> UTF16DecodeIter = {
@@ -74,7 +76,7 @@ function make<UTF16DecodeIter> : ( buffer: View<u8> ) -> UTF16DecodeIter = {
             iter:__builtin_get_next();
         }
     }
-    return { iter, is_little_endian };
+    return { iter, 0, is_little_endian };
 }
 
 // --------- UTF8 -----------
@@ -238,6 +240,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
 
 @implicit get_next : (self: UTF8DecodeIter mut&) -> UnicodeScalar  = {
     let first_byte : u8 = self.underlying:__builtin_get_next();
+    self.offset += 1;
 
     let encoding_type : u32 = get_utf8_encoding_type(first_byte);
     let encoding_length: isize = get_utf8_encoding_length(encoding_type);
@@ -273,6 +276,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
         return invalid_unicode_scalar();
     }
 
+    self.offset += 1;
     self.underlying:__builtin_get_next();
     if encoding_length == 2 {
         return unsafe_decode_utf8_bytes({first_byte, second_byte});
@@ -288,6 +292,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
         return invalid_unicode_scalar();
     }
 
+    self.offset += 1;
     self.underlying:__builtin_get_next();
     if encoding_length == 3 {
         return unsafe_decode_utf8_bytes({first_byte, second_byte, third_byte});
@@ -303,6 +308,7 @@ function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
         return invalid_unicode_scalar();
     }
 
+    self.offset += 1;
     self.underlying:__builtin_get_next();
     return unsafe_decode_utf8_bytes({first_byte, second_byte, third_byte, fourth_byte});
 }
@@ -359,9 +365,11 @@ function encode_to_utf8 : (scalar : UnicodeScalar, buffer: u8[4] mut&) -> View<u
 function get_next_codepoint : (self: UTF16DecodeIter mut&) -> Optional<u16> = {
     if !self.underlying:has_next() { return make<Optional<u16>>(); }
     let first_byte : u8 = self.underlying:__builtin_get_next();
+    self.offset += 1;
 
     if !self.underlying:has_next() { return make<Optional<u16>>(); }
     let second_byte : u8 = self.underlying:__builtin_get_next();
+    self.offset += 1;
 
     if self.is_little_endian {
         return make<Optional<u16>>(first_byte | (as_u16(second_byte) << Narrow<i16>(8)));
