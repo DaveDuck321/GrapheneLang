@@ -1,10 +1,8 @@
 @require_once "std/unicode.c3"
 @require_once "std/arithmetic.c3"
-@require_once "std/io.c3"
 @require_once "std/iterators.c3"
 @require_once "std/span.c3"
 @require_once "std/assert.c3"
-@require_once "std/memory.c3"
 @require_once "std/vector.c3"
 
 function try_encode_and_decode : (original_scalar: UnicodeScalar) -> void = {
