@@ -130,6 +130,14 @@ function [T] slice_to : (span : Span<T>&, end : isize) -> Span<T> = {
 }
 
 function [T] slice_from : (span : Span<T>&, start : isize) -> Span<T> = {
+    if span.length - start == 0 {
+        let nullptr: iptr = 0;
+        return make<Span<T>>(
+            &addr_to_heap_array<T>(nullptr),
+            0
+        );
+    }
+
     let start_addr : iptr = ref_to_addr(&span:get(start));
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
@@ -152,6 +160,13 @@ function [T] slice_to : (view : View<T>&, end : isize) -> View<T> = {
 }
 
 function [T] slice_from : (view : View<T>&, start : isize) -> View<T> = {
+    if view.length - start == 0 {
+        let nullptr: iptr = 0;
+        return make<View<T>>(
+            &addr_to_heap_array<T>(nullptr),
+            0
+        );
+    }
     let start_addr : iptr = ref_to_addr(&view:get(start));
     return make<View<T>>(
         &addr_to_heap_array<T>(start_addr),
