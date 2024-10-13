@@ -127,6 +127,7 @@ function [T] slice_to : (span : Span<T>&, end : isize) -> Span<T> = {
 }
 
 function [T] slice_from : (span : Span<T>&, start : isize) -> Span<T> = {
+    start = clamp<isize>(0, start, span.length);
     let start_addr : iptr = ref_to_addr(&span:get(start));
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
@@ -135,10 +136,12 @@ function [T] slice_from : (span : Span<T>&, start : isize) -> Span<T> = {
 }
 
 function [T] slice_between : (span : Span<T>&, start : isize, end : isize) -> Span<T> = {
+    start = clamp<isize>(0, start, span.length);
+    end = clamp<isize>(0, end, span.length);
     let start_addr : iptr = ref_to_addr(&span:get(start));
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
-        min(end, span.length) - start
+        end - start
     );
 }
 
@@ -149,6 +152,7 @@ function [T] slice_to : (view : View<T>&, end : isize) -> View<T> = {
 }
 
 function [T] slice_from : (view : View<T>&, start : isize) -> View<T> = {
+    start = clamp<isize>(0, start, view.length);
     let start_addr : iptr = ref_to_addr(&view:get(start));
     return make<View<T>>(
         &addr_to_heap_array<T>(start_addr),
@@ -157,9 +161,11 @@ function [T] slice_from : (view : View<T>&, start : isize) -> View<T> = {
 }
 
 function [T] slice_between : (view : View<T>&, start : isize, end : isize) -> View<T> = {
+    start = clamp<isize>(0, start, view.length);
+    end = clamp<isize>(0, end, view.length);
     let start_addr : iptr = ref_to_addr(&view:get(start));
     return make<View<T>>(
         &addr_to_heap_array<T>(start_addr),
-        min(end, view.length) - start
+        end - start
     );
 }
