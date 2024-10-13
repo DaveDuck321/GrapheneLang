@@ -13,9 +13,10 @@ typedef State : {
     // Buffers for IPC (one per process).
     client_buffer : RingBuffer,
     parser_buffer : RingBuffer,
+    parser_path : CStringView,
 }
 
-function make<State> : () -> Optional<State> = {
+function make<State> : (parser_path : CStringView) -> Optional<State> = {
     let client_buffer : Optional<RingBuffer> =
         make<RingBuffer>(10 * 1024 * 1024, make<CString>("client_buffer\0"));
     if !client_buffer:has_value() {
@@ -32,7 +33,8 @@ function make<State> : () -> Optional<State> = {
     return make<Optional<State>>({
         initialize_allocator(),
         client_buffer:data(),
-        parser_buffer:data()
+        parser_buffer:data(),
+        parser_path,
     });
 }
 
@@ -312,7 +314,7 @@ function handle_diagnostic : (
     let args : CString[1] = { { &path_ss:data() } };
 
     let process : Optional<Process> = execute(
-        make<CString>("/var/home/antros/Source/GrapheneLang/dist/parser\0"),
+        { &state.parser_path:data() },
         make<View<CString>>(&args)
     );
     if !process:has_value() {
@@ -483,7 +485,7 @@ function handle_text_change : (
     let args : CString[1] = { { &path:data() } };
 
     let process : Optional<Process> = execute(
-        make<CString>("/var/home/antros/Source/GrapheneLang/dist/parser\0"),
+        { &state.parser_path:data() },
         make<View<CString>>(&args)
     );
     if !process:has_value() {
@@ -658,30 +660,65 @@ function open_socket : (path : CStringView) -> Optional<File> = {
 }
 
 function main : (argc : int, argv : u8[&][&]) -> int = {
-    if argc > 2 {
-        printf(sv("Call with --pipe=/path/to/sock"));
-        return 1;
-    }
-
     // Default to stdio if no arguments are passed in.
     mut in_file : File = { .fd = /* stdin */ 0 };
     mut out_file : File = { .fd = /* stderr */ 2 };
 
+    mut parser_path : CStringView;
+
+    mut saw_pipe_arg : bool = false;
+    mut saw_parser_arg : bool = false;
+
     // If --pipe was passed, use a Unix socket instead.
-    if argc == 2 {
-        let sock_path : CStringView = slice_from(make<CStringView>(&argv[1]), 7);
-        let sock_file : Optional<File> = open_socket(sock_path);
-        if !sock_file:has_value() {
-            printf(sv("Error: could not open socket from %"), sock_path);
-            return 1;
+    for i in range(1, argc) {
+        let arg : CStringView = make<CStringView>(&argv[i]);
+
+        if arg:slice_to(length("--pipe=")) == sv("--pipe=") {
+            if saw_pipe_arg {
+                printf(sv("Error: --pipe= can only appear once"));
+                return 1;
+            }
+            saw_pipe_arg = true;
+
+            let sock_path : CStringView = arg:slice_from(length("--pipe="));
+            let sock_file : Optional<File> = open_socket(sock_path);
+            if !sock_file:has_value() {
+                printf(sv("Error: could not open socket from %"), sock_path);
+                return 1;
+            }
+            in_file = sock_file:data();
+            out_file = sock_file:data();
         }
-        in_file = sock_file:data();
-        out_file = sock_file:data();
+        else {
+            if arg:slice_to(length("--parser=")) == sv("--parser=") {
+                if saw_parser_arg {
+                    printf(sv("Error: --parser= can only appear once"));
+                    return 1;
+                }
+                saw_parser_arg = true;
+
+                parser_path = arg:slice_from(length("--parser="));
+            }
+            else{
+                printf(sv("Error: unknown argument '%'"), arg);
+                return 1;
+            }
+        }
+    }
+
+    if !(saw_pipe_arg and saw_parser_arg) {
+        if argc >= 1 {
+            printf(
+                sv("Usage: % --pipe=/path/to/socket --parser=/path/to/parser"),
+                make<CStringView>(&argv[0])
+            );
+        }
+        return 1;
     }
 
     print(sv("Starting!"));
 
-    mut state : Optional<State> = make<State>();
+    mut state : Optional<State> = make<State>(parser_path);
     if !state:has_value() {
         print(sv("Error: failed to initialize state"));
         return 1;

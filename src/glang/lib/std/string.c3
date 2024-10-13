@@ -145,6 +145,10 @@ function data : (sv: CStringView&) -> u8[&] = {
     return lhs.buffer < rhs.buffer;
 }
 
+function slice_to : (sv : CStringView&, end : isize) -> StringView = {
+    return { sv.buffer:slice_to(end) };
+}
+
 function slice_from : (sv : CStringView, start : isize) -> CStringView = {
     return { sv.buffer:slice_from(start) };
 }
