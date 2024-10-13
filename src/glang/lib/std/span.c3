@@ -8,7 +8,7 @@ typedef [T] View : _SpanImpl<T[&]>
 typedef [T] Span : _SpanImpl<T[mut&]>
 
 typedef [T] _SpanImplMemberReference<T[&]> : T&
-typedef [T] _SpanImplMemberReference<T[mut&]> : T&
+typedef [T] _SpanImplMemberReference<T[mut&]> : T mut&
 
 function [T] to_view : (span : Span<T>) -> View<T> = {
     return make<View<T>>(&span.data, span.length);
