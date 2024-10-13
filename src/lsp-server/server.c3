@@ -473,10 +473,7 @@ function handle_text_change : (
         SYS_MAP_SHARED(), fd, 0
     );
     let text_buffer : u8[mut&] = &mut addr_to_mut_heap_array<u8>(addr);
-
-    for i in range(text_length) {
-        text_buffer[i] = text:data().value:data().buffer.data[i];
-    }
+    memcpy(&mut text_buffer, &text:data().value:data():data(), text_length);
 
     mut path : StringStream = make<StringStream>();
     path:writef(sv("/proc/%/fd/%\0"), getpid(), fd);
@@ -490,6 +487,8 @@ function handle_text_change : (
     );
     if !process:has_value() {
         print(sv("Failed to start process"));
+        munmap(addr, text_length);
+        sys_close(fd);
         return;
     }
 
@@ -501,6 +500,8 @@ function handle_text_change : (
     mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
+        munmap(addr, text_length);
+        sys_close(fd);
         return;
     }
     let view : StringView = make<StringView>(view_opt:data());
@@ -508,10 +509,12 @@ function handle_text_change : (
     let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(sv("Failed to parse json"));
+        munmap(addr, text_length);
+        sys_close(fd);
         return;
     }
 
-    // FIXME we leak the fd (and the memory) if an error occurs.
+    munmap(addr, text_length);
     sys_close(fd);
 
     let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
@@ -724,7 +727,6 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
         return 1;
     }
 
-    // FIXME we're mmap'ing new ring buffers on every request...
     while true {
         if !state:data():handle_next_rpc(in_file, out_file) {
             // Try and resync if something went wrong.
