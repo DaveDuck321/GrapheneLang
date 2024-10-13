@@ -1,9 +1,10 @@
 @require_once "arithmetic.c3"
+@require_once "array.c3"
 @require_once "assert.c3"
 @require_once "iterators.c3"
+@require_once "span.c3"
 @require_once "util.c3"
 @require_once "wrappers.c3"
-@require_once "span.c3"
 
 typedef CString : { data : u8[&] }
 typedef StringView     : { buffer : View<u8> }
@@ -113,7 +114,7 @@ function length : (sv : CStringView&) -> isize = {
 }
 
 // TODO: return `UTF32Codepoint` here
-function get_iter : (sv : CStringView&) -> ContiguousContainerIter<View<u8>&, u8&> = {
+function get_iter : (sv : CStringView&) -> ContiguousContainerIter<View<u8>, u8&> = {
     return sv.buffer:get_iter();
 }
 
