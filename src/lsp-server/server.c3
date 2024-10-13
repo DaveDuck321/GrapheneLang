@@ -237,13 +237,6 @@ function handle_next_rpc : (
         state:dispatch_rpc_notification(notification, out_file);
     }
 
-    if method:data().value:data() == sv("shutdown") {
-        // FIXME This shouldn't be handled here, but it doesn't have params, so
-        // quit instead of attempting to dereference that.
-        print(sv("Shutting down"));
-        sys_exit(0);
-    }
-
     return true;
 }
 
@@ -255,6 +248,27 @@ function handle_initialize : (state : State mut&, req : RPCRequest, out : Buffer
     out:write(sv("\r\n"));
     out:write(resp);
     out:flush();
+}
+
+function handle_shutdown : (state : State mut&, req : RPCRequest, out : BufferedFile) -> void = {
+    print(sv("Received shutdown request"));
+
+    // FIXME I think this either asserts or exit doesn't exit correctly. Need to
+    // debug with gdb/strace.
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%}");
+    mut ss : StringStream = make<StringStream>();
+    ss:writef(resp, req.id:data());
+    out:writef(sv("Content-Length: %\r\n"), ss:length());
+    out:write(sv("\r\n"));
+    out:write(ss);
+    out:flush();
+}
+
+function handle_exit : (state : State mut&, req : RPCNotification, out : BufferedFile) -> void = {
+    print(sv("Received exit notification"));
+
+    // TODO exit with 1 if shutdown wasn't received.
+    sys_exit(0);
 }
 
 function handle_diagnostic : (
@@ -598,6 +612,10 @@ function dispatch_rpc_request : (
         return;
     }
 
+    if req.method == sv("shutdown") {
+        state:handle_shutdown(req, out);
+    }
+
     printf(sv("Unsupported method: %"), req.method);
 }
 
@@ -613,6 +631,10 @@ function dispatch_rpc_notification : (
     if req.notification == sv("textDocument/didChange") {
         state:handle_text_change(req, out);
         return;
+    }
+
+    if req.notification == sv("exit") {
+        state:handle_exit(req, out);
     }
 
     printf(sv("Unsupported notification: %"), req.notification);
