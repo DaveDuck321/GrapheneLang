@@ -36,11 +36,15 @@ function make<State> : () -> Optional<State> = {
     });
 }
 
-// TODO split this into RPCRequest and RPCNotification.
 typedef RPCRequest : {
     id : Optional<StringView>, // TODO parse to int.
     method : StringView, // TODO string.
     params : JSON_Node, // TODO mut&?
+}
+
+typedef RPCNotification : {
+    notification : StringView, // TODO string.
+    params       : JSON_Node, // TODO mut&?
 }
 
 function [IO] write : (io : IO mut&, req : RPCRequest) -> TypeIf<void, IsStreamableTextIO<IO>> = {
@@ -115,8 +119,8 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
     mut valid : bool = false;
 
     while cursor:has_next() {
-        // TODO this has to be placed on the stack explicitly. Is this a good
-        // thing or a bad thing?
+        // TODO this has to be placed on the stack explicitly. Is this
+        // desirable?
         let digit : Optional<u8> = cursor:peak();
         if !ascii_is_digit(digit:data()) {
             break;
@@ -136,19 +140,19 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
     return make<Optional<int>>();
 }
 
-function parse_next_rpc : (
-    state : State mut&, fd : File
-) -> Optional<RPCRequest> = {
-    mut view_opt : Optional<View<u8>> = state.client_buffer:read_line(fd);
+function handle_next_rpc : (
+    state : State mut&, in_file : File, out_file : File
+) -> bool = {
+    mut view_opt : Optional<View<u8>> = state.client_buffer:read_line(in_file);
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     mut view : StringView = make<StringView>(view_opt:data());
     if view:length() == 0 {
         print(sv("Received EOF"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     // TODO stop using stuff from json.c3 (move to e.g. parse.c3?).
@@ -156,7 +160,7 @@ function parse_next_rpc : (
 
     if !cursor:eat(sv("Content-Length: ")) {
         print(sv("Message does not start with 'Content-Length: '"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     // TODO use this to buffer RPCs correctly.
@@ -164,55 +168,74 @@ function parse_next_rpc : (
 
     if !length:has_value() {
         print(sv("Failed to parse length"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     // 2 newlines, and then JSON.
     if !cursor:eat(sv("\r\n")) {
         print(sv("Failed to eat newline"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     state.client_buffer:advance(view:length());
-    view_opt = state.client_buffer:read_line(fd);
+    view_opt = state.client_buffer:read_line(in_file);
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     view = make<StringView>(view_opt:data());
     if view:length() == 0 {
         print(sv("Received EOF"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     if view != sv("\r\n") {
         print(sv("Failed to eat second newline"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     state.client_buffer:advance(view:length());
-    view_opt = state.client_buffer:read(fd, length:data());
+    view_opt = state.client_buffer:read(in_file, length:data());
     if !view_opt:has_value() {
         print(sv("Failed to read length"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     view = { .buffer = view_opt:data() };
     let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(sv("Failed to parse json"));
-        return make<Optional<RPCRequest>>();
+        return false;
     }
 
     state.client_buffer:advance(view:length());
 
-    // printf(sv("Received %"), json:data());
-
     // TODO this is all kinda horrible.
     let id : Optional<JSON_Node> = json:data().map:at(sv("id"));
     let method : Optional<JSON_Node> = json:data().map:at(sv("method"));
-    let params : Optional<JSON_Node> = json:data().map:at(sv("params"));
+    mut params : Optional<JSON_Node> = json:data().map:at(sv("params"));
+
+    if !params:has_value() {
+        // TODO Should the RPC objects take an optional instead?
+        params = make<Optional<JSON_Node>>(make<JSON_Node>(/* object */ 6, &mut state.allocator));
+    }
+
+    if id:has_value() {
+        let request : RPCRequest = {
+            .id = id:data().value,
+            .method = method:data().value:data(),
+            .params = params:data(),
+        };
+        state:dispatch_rpc_request(request, out_file);
+    }
+    else {
+        let notification : RPCNotification = {
+            .notification = method:data().value:data(),
+            .params = params:data(),
+        };
+        state:dispatch_rpc_notification(notification, out_file);
+    }
 
     if method:data().value:data() == sv("shutdown") {
         // FIXME This shouldn't be handled here, but it doesn't have params, so
@@ -221,24 +244,17 @@ function parse_next_rpc : (
         sys_exit(0);
     }
 
-    if id:has_value() {
-        return make<Optional<RPCRequest>>({
-            .id = id:data().value,
-            .method = method:data().value:data(),
-            .params = params:data(),
-        });
-    }
-    else {
-        return make<Optional<RPCRequest>>({
-            .id = make<Optional<StringView>>(),
-            .method = method:data().value:data(),
-            .params = params:data(),
-        });
-    }
+    return true;
 }
 
-function handle_initialize : (params : JSON_Node) -> void = {
-    printf(sv("Received initialize request with params=%"), params);
+function handle_initialize : (state : State mut&, req : RPCRequest, out : BufferedFile) -> void = {
+    printf(sv("Received initialize request with params=%"), req.params);
+
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}, \"textDocumentSync\": {\"change\": 1}}}}");
+    out:writef(sv("Content-Length: %\r\n"), resp:length());
+    out:write(sv("\r\n"));
+    out:write(resp);
+    out:flush();
 }
 
 function handle_diagnostic : (
@@ -382,9 +398,8 @@ function handle_diagnostic : (
 }
 
 function handle_text_change : (
-    state : State mut&, req : RPCRequest, out : BufferedFile
+    state : State mut&, req : RPCNotification, out : BufferedFile
 ) -> void = {
-    // {"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///var/home/antros/Source/GrapheneLang/src/lsp-server/server.c3","version":238},"contentChanges":[{"text":"@req
     printf(sv("Received textDocument/didChange notification"));
 
     let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
@@ -574,13 +589,7 @@ function dispatch_rpc_request : (
 
     // TODO this should work without the sv().
     if req.method == sv("initialize") {
-        handle_initialize(req.params);
-
-        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}, \"textDocumentSync\": {\"change\": 1}}}}");
-        out:writef(sv("Content-Length: %\r\n"), resp:length());
-        out:write(sv("\r\n"));
-        out:write(resp);
-        out:flush();
+        state:handle_initialize(req, out);
         return;
     }
 
@@ -589,12 +598,24 @@ function dispatch_rpc_request : (
         return;
     }
 
-    if req.method == sv("textDocument/didChange") {
+    printf(sv("Unsupported method: %"), req.method);
+}
+
+function dispatch_rpc_notification : (
+    state : State mut&, req : RPCNotification, fd : File
+) -> void = {
+    // FIXME we need a better way; mostly because our formatters don't work with
+    // raw `File`s.
+    mut out : BufferedFile;
+    out.underlying = fd;
+    out.buffer_pointer = 0;
+
+    if req.notification == sv("textDocument/didChange") {
         state:handle_text_change(req, out);
         return;
     }
 
-    printf(sv("Unsupported method: %"), req.method);
+    printf(sv("Unsupported notification: %"), req.notification);
 }
 
 function open_socket : (path : CStringView) -> Optional<File> = {
@@ -655,12 +676,7 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
     // FIXME we're mmap'ing new ring buffers on every request...
     while true {
-        let parsed : Optional<RPCRequest> = state:data():parse_next_rpc(in_file);
-
-        if parsed:has_value() {
-            state:data():dispatch_rpc_request(parsed:data(), out_file);
-        }
-        else {
+        if !state:data():handle_next_rpc(in_file, out_file) {
             // Try and resync if something went wrong.
             state:data().client_buffer:clear();
         }
