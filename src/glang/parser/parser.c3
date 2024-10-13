@@ -122,7 +122,9 @@ function [Args...] syntax_error : (cursor : Cursor mut&, format_args : Args...) 
 
 // TODO: ugly error if we forget the generic definition
 function [Args...] syntax_error_at_position : (cursor : Cursor mut&, position : isize, format_args : Args...) -> void = {
-    mut io : BufferedFile = get_stdout_io();
+    mut io : BufferedFile;
+    io.underlying = {1 /* stdout */};
+    io.buffer_pointer = 0;
     io:write("{");
     io:write("\"success\":false");
     io:write(",\"location\":");
@@ -1506,10 +1508,13 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
 
     // 3) Output result as JSON
     {
+        mut io : BufferedFile;
+        io.underlying = {1 /* stdout */};
+        io.buffer_pointer = 0;
         mut json_output : JSON_Stream = {
             .program = program_text,
             .line_number_lookup = generate_position_lookup_table(program_text, &mut allocator),
-            .file = get_stdout_io(),
+            .file = io,
         };
         json_output:write_json_value(&program);
         json_output:write("\n");

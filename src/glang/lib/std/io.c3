@@ -72,13 +72,6 @@ typedef BufferedFile : {
     buffer_pointer : isize,
 }
 
-function get_stdout_io : () -> BufferedFile = {
-    mut result : BufferedFile;
-    result.underlying = {1 /* stdout */};
-    result.buffer_pointer = 0;
-    return result;
-}
-
 function flush : (io : BufferedFile mut&) -> void = {
     let data_to_write : View<u8> = {&io.buffer, io.buffer_pointer};
     let string_to_write : StringView = {data_to_write};

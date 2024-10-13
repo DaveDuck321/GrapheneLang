@@ -58,14 +58,6 @@ typedef StringStream : {
     buffer_pointer : isize,
 }
 
-function make<StringStream> : () -> StringStream = {
-    // Leave buffer uninitialized.
-    mut ss : StringStream;
-    ss.buffer_pointer = 0;
-
-    return ss;
-}
-
 function write : (ss : StringStream mut&, sv : StringView) -> void = {
     // TODO bounds check.
     for i in range(sv:length()) {
@@ -114,10 +106,8 @@ function data : (ss : StringStream&) -> u8[&] = {
     return &ss.buffer;
 }
 
-// FIXME we really do want to take this by reference.
-function [IO] write : (io : IO mut&, ss : StringStream) -> TypeIf<void, IsStreamableTextIO<IO>> = {
-    let span : View<u8> = make<View<u8>>(&ss:data(), ss:length());
-    io:write(make<StringView>(span));
+function as_sv : (ss : StringStream&) -> StringView = {
+    return make<StringView>(make<View<u8>>(&ss:data(), ss:length()));
 }
 
 function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
@@ -127,7 +117,7 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
     while cursor:has_next() {
         // TODO this has to be placed on the stack explicitly. Is this
         // desirable?
-        let digit : Optional<u8> = cursor:peak();
+        let digit : Optional<u8> = cursor:peek();
         if !ascii_is_digit(digit:data()) {
             break;
         }
@@ -253,7 +243,7 @@ function handle_next_rpc : (
     return true;
 }
 
-function handle_initialize : (state : State mut&, req : RPCRequest, out : BufferedFile) -> void = {
+function handle_initialize : (state : State mut&, req : RPCRequest, out : BufferedFile mut&) -> void = {
     printf(sv("Received initialize request with params=%"), req.params);
 
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}, \"textDocumentSync\": {\"change\": 1}}}}");
@@ -263,21 +253,22 @@ function handle_initialize : (state : State mut&, req : RPCRequest, out : Buffer
     out:flush();
 }
 
-function handle_shutdown : (state : State mut&, req : RPCRequest, out : BufferedFile) -> void = {
+function handle_shutdown : (state : State mut&, req : RPCRequest, out : BufferedFile mut&) -> void = {
     print(sv("Received shutdown request"));
 
     // FIXME I think this either asserts or exit doesn't exit correctly. Need to
     // debug with gdb/strace.
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%}");
-    mut ss : StringStream = make<StringStream>();
+    mut ss : StringStream;
+    ss.buffer_pointer = 0;
     ss:writef(resp, req.id:data());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
-    out:write(ss);
+    out:write(ss:as_sv());
     out:flush();
 }
 
-function handle_exit : (state : State mut&, req : RPCNotification, out : BufferedFile) -> void = {
+function handle_exit : (state : State mut&, req : RPCNotification, out : BufferedFile mut&) -> void = {
     print(sv("Received exit notification"));
 
     // TODO exit with 1 if shutdown wasn't received.
@@ -285,7 +276,7 @@ function handle_exit : (state : State mut&, req : RPCNotification, out : Buffere
 }
 
 function handle_diagnostic : (
-    state : State mut&, req : RPCRequest, out : BufferedFile
+    state : State mut&, req : RPCRequest, out : BufferedFile mut&
 ) -> void = {
     printf(sv("Received diagnostic request with params=%"), req.params);
 
@@ -315,7 +306,8 @@ function handle_diagnostic : (
     let path : StringView = uri:data().value:data():slice_from(7);
     printf(sv("Reading from `%`"), path);
 
-    mut path_ss : StringStream = make<StringStream>();
+    mut path_ss : StringStream;
+    path_ss.buffer_pointer = 0;
     path_ss:writef(sv("%\0"), path);
 
     let args : CString[1] = { { &path_ss:data() } };
@@ -353,12 +345,13 @@ function handle_diagnostic : (
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": []}}");
-        mut ss : StringStream = make<StringStream>();
+        mut ss : StringStream;
+        ss.buffer_pointer = 0;
         ss:writef(resp, req.id:data());
-        print(ss);
+        print(ss:as_sv());
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
-        out:write(ss);
+        out:write(ss:as_sv());
         out:flush();
         json:data():deallocate();
         return;
@@ -418,19 +411,20 @@ function handle_diagnostic : (
 
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
-    mut ss : StringStream = make<StringStream>();
+    mut ss : StringStream;
+    ss.buffer_pointer = 0;
     ss:writef(resp, req.id:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
-    print(ss);
+    print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
-    out:write(ss);
+    out:write(ss:as_sv());
     out:flush();
 
     json:data():deallocate();
 }
 
 function handle_text_change : (
-    state : State mut&, req : RPCNotification, out : BufferedFile
+    state : State mut&, req : RPCNotification, out : BufferedFile mut&
 ) -> void = {
     printf(sv("Received textDocument/didChange notification"));
 
@@ -492,9 +486,10 @@ function handle_text_change : (
     let text_buffer : u8[mut&] = &mut addr_to_mut_heap_array<u8>(addr);
     memcpy(&mut text_buffer, &text:data().value:data():data(), text_length);
 
-    mut path : StringStream = make<StringStream>();
+    mut path : StringStream;
+    path.buffer_pointer = 0;
     path:writef(sv("/proc/%/fd/%\0"), getpid(), fd);
-    printf(sv("Shared fd path: %"), path);
+    printf(sv("Shared fd path: %"), path:as_sv());
 
     let args : CString[1] = { { &path:data() } };
 
@@ -539,12 +534,13 @@ function handle_text_change : (
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": []}}");
-        mut ss : StringStream = make<StringStream>();
+        mut ss : StringStream;
+        ss.buffer_pointer = 0;
         ss:writef(resp, uri:data().value:data(), version:data().value:data());
-        print(ss);
+        print(ss:as_sv());
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
-        out:write(ss);
+        out:write(ss:as_sv());
         out:flush();
         json:data():deallocate();
         return;
@@ -604,12 +600,13 @@ function handle_text_change : (
 
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
-    mut ss : StringStream = make<StringStream>();
+    mut ss : StringStream;
+    ss.buffer_pointer = 0;
     ss:writef(resp, uri:data().value:data(), version:data().value:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
-    print(ss);
+    print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
-    out:write(ss);
+    out:write(ss:as_sv());
     out:flush();
 
     json:data():deallocate();
@@ -626,17 +623,17 @@ function dispatch_rpc_request : (
 
     // TODO this should work without the sv().
     if req.method == sv("initialize") {
-        state:handle_initialize(req, out);
+        state:handle_initialize(req, &mut out);
         return;
     }
 
     if req.method == sv("textDocument/diagnostic") {
-        state:handle_diagnostic(req, out);
+        state:handle_diagnostic(req, &mut out);
         return;
     }
 
     if req.method == sv("shutdown") {
-        state:handle_shutdown(req, out);
+        state:handle_shutdown(req, &mut out);
     }
 
     printf(sv("Unsupported method: %"), req.method);
@@ -652,12 +649,12 @@ function dispatch_rpc_notification : (
     out.buffer_pointer = 0;
 
     if req.notification == sv("textDocument/didChange") {
-        state:handle_text_change(req, out);
+        state:handle_text_change(req, &mut out);
         return;
     }
 
     if req.notification == sv("exit") {
-        state:handle_exit(req, out);
+        state:handle_exit(req, &mut out);
     }
 
     printf(sv("Unsupported notification: %"), req.notification);

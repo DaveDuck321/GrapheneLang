@@ -105,7 +105,9 @@ function [IO] write_char : (io : IO mut&, char : u8) -> TypeIf<void, IsStreamabl
 }
 
 function [Args...] print : (args : Args...) -> void = {
-    mut io : BufferedFile = get_stdout_io();
+    mut io : BufferedFile;
+    io.underlying = {1 /* stdout */};
+    io.buffer_pointer = 0;
     io:print_impl(args...);
     io:write(sv("\n"));
     io:flush();
@@ -121,7 +123,9 @@ function [NextArg, OtherArgs...] print_impl : (io : BufferedFile mut&, next : Ne
 }
 
 function [Args...] printf : (args : Args...) -> void = {
-    mut io : BufferedFile = get_stdout_io();
+    mut io : BufferedFile;
+    io.underlying = {1 /* stdout */};
+    io.buffer_pointer = 0;
     io:writef(args...);
     io:write(sv("\n"));
     io:flush();
