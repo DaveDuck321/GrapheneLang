@@ -41,6 +41,10 @@ function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>&, u8&
     return sv.buffer:get_iter();
 }
 
+function data : (sv: StringView&) -> u8[&] = {
+    return &sv.buffer.data;
+}
+
 @operator == : (lhs : StringView, rhs : StringView) -> bool = {
     return lhs.buffer == rhs.buffer;
 }

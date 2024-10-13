@@ -108,9 +108,13 @@ function length : (ss : StringStream&) -> isize = {
     return ss.buffer_pointer;
 }
 
+function data : (ss : StringStream&) -> u8[&] = {
+    return &ss.buffer;
+}
+
 // FIXME we really do want to take this by reference.
 function [IO] write : (io : IO mut&, ss : StringStream) -> TypeIf<void, IsStreamableTextIO<IO>> = {
-    let span : View<u8> = make<View<u8>>(&ss.buffer, ss.buffer_pointer);
+    let span : View<u8> = make<View<u8>>(&ss:data(), ss:length());
     io:write(make<StringView>(span));
 }
 
@@ -302,19 +306,14 @@ function handle_diagnostic : (
     let path : StringView = uri:data().value:data():slice_from(7);
     printf(sv("Reading from `%`"), path);
 
-    mut path_buffer : u8[512];
-    for i in range(512) {
-        path_buffer[i] = Narrow<u8>(0x00);
-    }
-    for i in range(path:length()) {
-        path_buffer[i] = path.buffer.data[i];
-    }
+    mut path_ss : StringStream = make<StringStream>();
+    path_ss:writef(sv("%\0"), path);
 
-    let path_cstring : CString[1] = { make<CString>(&path_buffer) };
+    let args : CString[1] = { { &path_ss:data() } };
 
     let process : Optional<Process> = execute(
         make<CString>("/var/home/antros/Source/GrapheneLang/dist/parser\0"),
-        make<View<CString>>(&path_cstring, 1)
+        make<View<CString>>(&args)
     );
     if !process:has_value() {
         print(sv("Failed to start process"));
@@ -478,22 +477,14 @@ function handle_text_change : (
     }
 
     mut path : StringStream = make<StringStream>();
-    path:writef(sv("/proc/%/fd/%"), getpid(), fd);
+    path:writef(sv("/proc/%/fd/%\0"), getpid(), fd);
     printf(sv("Shared fd path: %"), path);
 
-    mut path_buffer : u8[512];
-    for i in range(512) {
-        path_buffer[i] = Narrow<u8>(0x00);
-    }
-    for i in range(path:length()) {
-        path_buffer[i] = path.buffer[i];
-    }
-
-    let path_cstring : CString[1] = { make<CString>(&path_buffer) };
+    let args : CString[1] = { { &path:data() } };
 
     let process : Optional<Process> = execute(
         make<CString>("/var/home/antros/Source/GrapheneLang/dist/parser\0"),
-        make<View<CString>>(&path_cstring, 1)
+        make<View<CString>>(&args)
     );
     if !process:has_value() {
         print(sv("Failed to start process"));
