@@ -1,5 +1,6 @@
 @require_once "span.c3"
 @require_once "wrappers.c3"
+@require_once "array.c3"
 
 function [This, Next] is_one_of : (thing : This, next : Next) -> bool = {
     if thing == next {

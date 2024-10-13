@@ -10,6 +10,7 @@
 @require_once "sys/uio.c3"
 @require_once "syscalls.c3"
 @require_once "wrappers.c3"
+@require_once "array.c3"
 
 typedef File : { fd : int }
 typedef MappedFile : { underlying : File, buffer : View<u8> }

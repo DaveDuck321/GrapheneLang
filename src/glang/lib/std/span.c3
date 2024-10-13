@@ -47,19 +47,19 @@ function [T] make<Span<T>> : (data : T[mut&], length : isize) -> Span<T> = {
 }
 
 function [T] get_iter : (span : _SpanImpl<T>&)
-    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+    -> ContiguousContainerIter<_SpanImpl<T>, _SpanImplMemberReference<T>> =
 {
     return {
-        .container = &span,
+        .container = span,
         .current_index = 0,
     };
 }
 
 function [T] get_iter : (span : _SpanImpl<T> mut&)
-    -> ContiguousContainerIter<_SpanImpl<T>&, _SpanImplMemberReference<T>> =
+    -> ContiguousContainerIter<_SpanImpl<T>, _SpanImplMemberReference<T>> =
 {
     return {
-        .container = &span,
+        .container = span,
         .current_index = 0,
     };
 }
@@ -74,9 +74,16 @@ function [T] length : (span : _SpanImpl<T> mut&) -> isize = {
 
 
 function [T] get : (span : _SpanImpl<T>&, index : isize)
-    -> _SpanImplMemberReference<T> =
+    -> TypeIf<_SpanImplMemberReference<T>, IsConstRef<T>> =
 {
+    runtime_assert(index >= 0 and index < span.length);
     return &span.data[index];
+}
+
+function [T] get : (span : _SpanImpl<T>&, index : isize)
+    -> TypeIf<_SpanImplMemberReference<T>, IsMutRef<T>> =
+{
+    return &mut span.data[index];
 }
 
 @operator [T] == : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {

@@ -9,7 +9,6 @@ from glang.codegen.builtin_types import (
 )
 from glang.codegen.debug import DIFile
 from glang.codegen.expressions import (
-    ArrayIndexAccess,
     BorrowExpression,
     ConstantExpression,
     InitializerList,
@@ -59,7 +58,6 @@ from glang.codegen.type_resolution import (
 )
 
 __all__ = [
-    "ArrayIndexAccess",
     "Assignment",
     "BoolType",
     "BorrowExpression",
@@ -91,8 +89,8 @@ __all__ = [
     "StructDefinition",
     "StructMemberAccess",
     "Type",
-    "TypedExpression",
     "Typedef",
+    "TypedExpression",
     "UIntType",
     "UnnamedInitializerList",
     "UnresolvedFunctionSignature",

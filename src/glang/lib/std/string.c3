@@ -37,7 +37,7 @@ function length : (sv : StringView&) -> isize = {
 }
 
 // TODO: return `UTF32Codepoint` here
-function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>&, u8&> = {
+function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>, u8&> = {
     return sv.buffer:get_iter();
 }
 

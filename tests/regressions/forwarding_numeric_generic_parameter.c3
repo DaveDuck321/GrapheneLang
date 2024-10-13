@@ -1,3 +1,5 @@
+@require_once "std/array.c3"
+
 typedef[@Len] S : int[@Len]
 typedef[@Len] T1 : S<@Len>
 

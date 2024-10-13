@@ -53,7 +53,8 @@ class Type(ParsedNode):
 
 @dataclass
 class FunctionType(Type):
-    pass
+    args: list[Type]
+    return_type: Type
 
 
 @dataclass
@@ -324,7 +325,7 @@ class VariableAccess(Expression):
 
 
 @dataclass
-class ArrayIndexAccess(Expression):
+class IndexOperator(Expression):
     expression: Expression
     indexes: list[Expression]
 
