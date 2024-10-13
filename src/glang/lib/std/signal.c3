@@ -5,6 +5,10 @@ function SIGABRT : () -> int = {
     return 6;
 }
 
+function SIGKILL : () -> int = {
+    return 9;
+}
+
 function kill : (pid : pid_t, sig : int) -> int = {
     return sys_kill(pid, sig);
 }
