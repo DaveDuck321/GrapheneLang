@@ -209,7 +209,7 @@ function handle_next_rpc : (
     }
 
     view = { .buffer = view_opt:data() };
-    let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
+    mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(sv("Failed to parse json"));
         return false;
@@ -222,9 +222,11 @@ function handle_next_rpc : (
     let method : Optional<JSON_Node> = json:data().map:at(sv("method"));
     mut params : Optional<JSON_Node> = json:data().map:at(sv("params"));
 
+    mut deallocate_params : bool = false;
     if !params:has_value() {
         // TODO Should the RPC objects take an optional instead?
         params = make<Optional<JSON_Node>>(make<JSON_Node>(/* object */ 6, &mut state.allocator));
+        deallocate_params = true;
     }
 
     if id:has_value() {
@@ -241,6 +243,11 @@ function handle_next_rpc : (
             .params = params:data(),
         };
         state:dispatch_rpc_notification(notification, out_file);
+    }
+
+    json:data():deallocate();
+    if deallocate_params {
+        params:data():deallocate();
     }
 
     return true;
@@ -334,7 +341,7 @@ function handle_diagnostic : (
     }
     let view : StringView = make<StringView>(view_opt:data());
 
-    let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
+    mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(view);
         print(sv("Failed to parse json"));
@@ -353,35 +360,41 @@ function handle_diagnostic : (
         out:write(sv("\r\n"));
         out:write(ss);
         out:flush();
+        json:data():deallocate();
         return;
     }
 
     // TODO need an actual API here.
     if success:data().type != /* false */ 2 {
+        json:data():deallocate();
         return;
     }
 
     let message : Optional<JSON_Node> = json:data().map:at(sv("message"));
     if !message:has_value() {
         print(sv("'message' not found"));
+        json:data():deallocate();
         return;
     }
 
     let location : Optional<JSON_Node> = json:data().map:at(sv("location"));
     if !location:has_value() {
         print(sv("'location' not found"));
+        json:data():deallocate();
         return;
     }
 
     let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
     if !line:has_value() {
         print(sv("'line' not found"));
+        json:data():deallocate();
         return;
     }
 
     let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
     if !column:has_value() {
         print(sv("'column' not found"));
+        json:data():deallocate();
         return;
     }
 
@@ -390,6 +403,7 @@ function handle_diagnostic : (
 
     if !line_number:has_value() {
         print(sv("Couldn't parse line number"));
+        json:data():deallocate();
         return;
     }
 
@@ -398,6 +412,7 @@ function handle_diagnostic : (
 
     if !column_number:has_value() {
         print(sv("Couldn't parse column number"));
+        json:data():deallocate();
         return;
     }
 
@@ -410,6 +425,8 @@ function handle_diagnostic : (
     out:write(sv("\r\n"));
     out:write(ss);
     out:flush();
+
+    json:data():deallocate();
 }
 
 function handle_text_change : (
@@ -506,7 +523,7 @@ function handle_text_change : (
     }
     let view : StringView = make<StringView>(view_opt:data());
 
-    let json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
+    mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
     if !json:has_value() {
         print(sv("Failed to parse json"));
         munmap(addr, text_length);
@@ -529,35 +546,41 @@ function handle_text_change : (
         out:write(sv("\r\n"));
         out:write(ss);
         out:flush();
+        json:data():deallocate();
         return;
     }
 
     // TODO need an actual API here.
     if success:data().type != /* false */ 2 {
+        json:data():deallocate();
         return;
     }
 
     let message : Optional<JSON_Node> = json:data().map:at(sv("message"));
     if !message:has_value() {
         print(sv("'message' not found"));
+        json:data():deallocate();
         return;
     }
 
     let location : Optional<JSON_Node> = json:data().map:at(sv("location"));
     if !location:has_value() {
         print(sv("'location' not found"));
+        json:data():deallocate();
         return;
     }
 
     let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
     if !line:has_value() {
         print(sv("'line' not found"));
+        json:data():deallocate();
         return;
     }
 
     let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
     if !column:has_value() {
         print(sv("'column' not found"));
+        json:data():deallocate();
         return;
     }
 
@@ -566,6 +589,7 @@ function handle_text_change : (
 
     if !line_number:has_value() {
         print(sv("Couldn't parse line number"));
+        json:data():deallocate();
         return;
     }
 
@@ -574,6 +598,7 @@ function handle_text_change : (
 
     if !column_number:has_value() {
         print(sv("Couldn't parse column number"));
+        json:data():deallocate();
         return;
     }
 
@@ -586,6 +611,8 @@ function handle_text_change : (
     out:write(sv("\r\n"));
     out:write(ss);
     out:flush();
+
+    json:data():deallocate();
 }
 
 function dispatch_rpc_request : (
