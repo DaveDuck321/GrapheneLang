@@ -141,6 +141,10 @@ function data : (sv: CStringView&) -> u8[&] = {
     return lhs.buffer < rhs.buffer;
 }
 
+function slice_from : (sv : CStringView, start : isize) -> CStringView = {
+    return { sv.buffer:slice_from(start) };
+}
+
 function slice_from : (sv : CStringView&, start : isize) -> CStringView = {
     return { sv.buffer:slice_from(start) };
 }
@@ -221,4 +225,16 @@ function strlen : (cstr : u8[&]) -> isize = {
     }
 
     return i;
+}
+
+function memcpy : (dest : u8[mut&], src : u8[&], count : isize) -> void = {
+    for i in range(count) {
+        dest[i] = src[i];
+    }
+}
+
+function memset : (dest : u8[mut&], ch : u8, count : isize) -> void = {
+    for i in range(count) {
+        dest[i] = ch;
+    }
 }

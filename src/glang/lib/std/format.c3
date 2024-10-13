@@ -28,6 +28,10 @@ function [IO] write : (io : IO mut&, string : StringView) -> TypeIf<void, IsStre
     }
 }
 
+function [IO] write : (io : IO mut&, cstr : CStringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    return io:write(make<StringView>(cstr));
+}
+
 function [IO] write : (io : IO mut&, number : isize) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     let buffer : Span<u8> = io:request_buffer(21); // len(INT_64_MIN) == 21
     if number == 0 {

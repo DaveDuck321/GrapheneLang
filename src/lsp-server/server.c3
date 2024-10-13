@@ -597,7 +597,7 @@ function dispatch_rpc_request : (
     printf(sv("Unsupported method: %"), req.method);
 }
 
-function open_socket : (path : CString) -> Optional<File> = {
+function open_socket : (path : CStringView) -> Optional<File> = {
     // TODO sizeof function that takes struct members?
     if path:length() > 108 {
         return make<Optional<File>>();
@@ -611,13 +611,8 @@ function open_socket : (path : CString) -> Optional<File> = {
     mut sockaddr : sockaddr_un;
     // TODO the type conversions here are horrible.
     sockaddr.sun_family = Narrow<sa_family_t>(as_logical(AF_UNIX()));
-    // TODO provide memset/memcpy.
-    for i in range(path:length()) {
-        sockaddr.sun_path[i] = path.data[i];
-    }
-    for i in range(path:length(), sockaddr.sun_path:length()) {
-        sockaddr.sun_path[i] = Narrow<u8>(0x00);
-    }
+    memset(&mut sockaddr.sun_path, char("\0"), sockaddr.sun_path:length());
+    memcpy(&mut sockaddr.sun_path, &path:data(), path:length());
 
     let ret : int = connect(socket:data(), &sockaddr);
     if ret < 0 {
@@ -640,12 +635,10 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
     // If --pipe was passed, use a Unix socket instead.
     if argc == 2 {
-        // HACK need proper CString manipulation.
-        let sock_path : CString = { &addr_to_heap_array<u8>(ref_to_addr(&argv[1]) + 7) };
+        let sock_path : CStringView = slice_from(make<CStringView>(&argv[1]), 7);
         let sock_file : Optional<File> = open_socket(sock_path);
         if !sock_file:has_value() {
-            let path : StringView = make<StringView>(sock_path);
-            printf(sv("Error: could not open socket from %"), path);
+            printf(sv("Error: could not open socket from %"), sock_path);
             return 1;
         }
         in_file = sock_file:data();
