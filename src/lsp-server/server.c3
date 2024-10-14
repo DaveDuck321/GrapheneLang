@@ -69,7 +69,7 @@ function write : (ss : StringStream mut&, sv : StringView) -> void = {
 
 function write : (ss : StringStream mut&, number : isize) -> void = {
     if number == 0 {
-        ss.buffer[ss.buffer_pointer] = "0"[0];
+        ss.buffer[ss.buffer_pointer] = char("0");
         ss.buffer_pointer += 1;
 
         return;
@@ -79,7 +79,7 @@ function write : (ss : StringStream mut&, number : isize) -> void = {
     mut current_number : isize = number;
     mut length : isize = 0;
     while current_number != 0 {
-        let next_digit: u8 = as_logical(__builtin_narrow<i8>(abs(current_number % 10) + as_arithmetic("0"[0])));
+        let next_digit: u8 = as_logical(Narrow<i8>(abs(current_number % 10) + as_arithmetic(char("0"))));
 
         ss.buffer[ss.buffer_pointer + length] = next_digit;
 
@@ -88,11 +88,11 @@ function write : (ss : StringStream mut&, number : isize) -> void = {
     }
 
     if is_negative {
-        ss.buffer[length] = "-"[0];
+        ss.buffer[length] = char("-");
         length += 1;
     }
 
-    let span : Span<u8> = make<Span<u8>>(&mut ss.buffer, 4096);
+    let span : Span<u8> = make<Span<u8>>(&mut ss.buffer);
     let result : Span<u8> = span:slice_between(ss.buffer_pointer, ss.buffer_pointer + length);
     result:reverse();
     ss.buffer_pointer += length;
