@@ -22,7 +22,7 @@ class CustomBuildHook(BuildHookInterface):
 
         self.app.display_waiting("Compiling gls")
         rc = run(
-            ["glang", "src/lsp-server/server.c3", "-o", "dist/gls", "-O3"], check=False
+            ["glang", "src/gls/server.c3", "-o", "dist/gls", "-O3"], check=False
         ).returncode
         if rc:
             self.app.abort("gls compilation failed", rc)

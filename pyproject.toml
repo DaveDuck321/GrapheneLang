@@ -39,6 +39,7 @@ dependencies = ["interegular~=0.3", "lark==1.1.9"]
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
 parser = "glang ./src/glang/parser/parser.c3 -o ./dist/parser -O3"
+gls = "glang ./src/gls/server.c3 -o ./dist/gls -O3"
 test = "python tests/run_tests.py {args}"
 
 
