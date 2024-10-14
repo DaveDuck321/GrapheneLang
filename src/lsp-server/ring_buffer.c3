@@ -7,7 +7,6 @@
 // See https://lo.calho.st/posts/black-magic-buffer/ for an explanation.
 typedef RingBuffer : {
     buffer : Span<u8>,
-    fd : int,
     size : isize,
     head : isize,
     tail : isize,
@@ -27,6 +26,7 @@ function make<RingBuffer> : (
     }
 
     if ftruncate(fd, size) != 0 {
+        sys_close(fd);
         return make<Optional<RingBuffer>>();
     }
 
@@ -44,9 +44,10 @@ function make<RingBuffer> : (
         SYS_MAP_SHARED() | SYS_MAP_FIXED(), fd, 0
     );
 
+    sys_close(fd);
+
     return make<Optional<RingBuffer>>({
         .buffer = { &mut addr_to_mut_heap_array<u8>(addr), 2 * size },
-        .fd = fd,
         .size = size,
         .head = 0,
         .tail = 0,
