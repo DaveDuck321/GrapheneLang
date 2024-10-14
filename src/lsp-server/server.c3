@@ -137,6 +137,12 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
 }
 
 function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSON_Node> = {
+    // TODO need a formatter for Span and View.
+    if args:length() >= 1 {
+        printf(sv("Running parser % %"), state.parser_path,
+            make<StringView>(args:get(0)));
+    }
+
     mut process : Optional<Process> = execute(
         { &state.parser_path:data() },
         args,
@@ -349,14 +355,12 @@ function handle_diagnostic : (
     }
 
     let path : StringView = uri:data().value:data():slice_from(7);
-    printf(sv("Reading from `%`"), path);
 
     mut path_ss : StringStream;
     path_ss.buffer_pointer = 0;
     path_ss:writef(sv("%\0"), path);
 
     let args : CString[1] = { { &path_ss:data() } };
-
     mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
     if !json:has_value() {
         // run_parser() already printed an appropriate error.
@@ -512,10 +516,8 @@ function handle_text_change : (
     mut path : StringStream;
     path.buffer_pointer = 0;
     path:writef(sv("/proc/%/fd/%\0"), getpid(), fd);
-    printf(sv("Shared fd path: %"), path:as_sv());
 
     let args : CString[1] = { { &path:data() } };
-
     mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
 
     munmap(addr, text_length);
