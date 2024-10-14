@@ -14,6 +14,13 @@ function checkout() {
     fi
 }
 
+# The Ubuntu package doesn't have ld.lld, but lld cannot be used on Fedora.
+if command -v ld.lld >/dev/null; then
+    lld=ld.lld
+else
+    lld=lld
+fi
+
 mkdir -p ./dist
 
 dest_dir=$PWD
@@ -66,7 +73,7 @@ host_target=$(env -C "$stage_5_dir" python3 -m src.glang.driver --print-host-tar
 # We need to use the runtime from stage 6, so compile that separately.
 env -C "$stage_5_dir" clang -c "$stage_6_dir/src/glang/lib/std/$host_target/runtime.S" -o "$stage_6_dir/dist/runtime.o"
 env -C "$stage_5_dir" python3 -m src.glang.driver -c "$stage_6_dir/src/glang/parser/parser.c3" --nostdlib -I "$stage_6_dir/src/glang/lib/" "$stage_6_dir/src/glang/lib/std/$host_target/" -o "$stage_6_dir/dist/parser.o"
-env -C "$stage_5_dir" ld.lld --nostdlib --static "$stage_6_dir/dist/runtime.o" "$stage_6_dir/dist/parser.o" -o "$dest_dir/dist/parser"
+env -C "$stage_5_dir" "$lld" --nostdlib --static "$stage_6_dir/dist/runtime.o" "$stage_6_dir/dist/parser.o" -o "$dest_dir/dist/parser"
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
