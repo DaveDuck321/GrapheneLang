@@ -136,6 +136,39 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
     return make<Optional<int>>();
 }
 
+function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSON_Node> = {
+    let process : Optional<Process> = execute(
+        { &state.parser_path:data() },
+        args,
+    );
+    if !process:has_value() {
+        print(sv("Failed to start process"));
+        return make<Optional<JSON_Node>>();
+    }
+
+    // This buffer is reused across multiple, independent calls to the parser.
+    // We need to make sure that the output of one invocation doesn't affect
+    // subsequent invocations.
+    state.parser_buffer:clear();
+
+    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
+    if !view_opt:has_value() {
+        print(sv("Failed to read line"));
+        return make<Optional<JSON_Node>>();
+    }
+    let view : StringView = make<StringView>(view_opt:data());
+
+    mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
+    if !json:has_value() {
+        print(sv("Failed to parse json"));
+        return make<Optional<JSON_Node>>();
+    }
+
+    // TODO cleanup process.
+
+    return json;
+}
+
 function handle_next_rpc : (
     state : State mut&, in_file : File, out_file : File
 ) -> bool = {
@@ -312,31 +345,9 @@ function handle_diagnostic : (
 
     let args : CString[1] = { { &path_ss:data() } };
 
-    let process : Optional<Process> = execute(
-        { &state.parser_path:data() },
-        make<View<CString>>(&args)
-    );
-    if !process:has_value() {
-        print(sv("Failed to start process"));
-        return;
-    }
-
-    // This buffer is reused across multiple, independent calls to the parser.
-    // We need to make sure that the output of one invocation doesn't affect
-    // subsequent invocations.
-    state.parser_buffer:clear();
-
-    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
-    if !view_opt:has_value() {
-        print(sv("Failed to read line"));
-        return;
-    }
-    let view : StringView = make<StringView>(view_opt:data());
-
-    mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
+    mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
     if !json:has_value() {
-        print(view);
-        print(sv("Failed to parse json"));
+        // run_parser() already printed an appropriate error.
         return;
     }
 
@@ -493,41 +504,15 @@ function handle_text_change : (
 
     let args : CString[1] = { { &path:data() } };
 
-    let process : Optional<Process> = execute(
-        { &state.parser_path:data() },
-        make<View<CString>>(&args)
-    );
-    if !process:has_value() {
-        print(sv("Failed to start process"));
-        munmap(addr, text_length);
-        sys_close(fd);
-        return;
-    }
-
-    // This buffer is reused across multiple, independent calls to the parser.
-    // We need to make sure that the output of one invocation doesn't affect
-    // subsequent invocations.
-    state.parser_buffer:clear();
-
-    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
-    if !view_opt:has_value() {
-        print(sv("Failed to read line"));
-        munmap(addr, text_length);
-        sys_close(fd);
-        return;
-    }
-    let view : StringView = make<StringView>(view_opt:data());
-
-    mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
-    if !json:has_value() {
-        print(sv("Failed to parse json"));
-        munmap(addr, text_length);
-        sys_close(fd);
-        return;
-    }
+    mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
 
     munmap(addr, text_length);
     sys_close(fd);
+
+    if !json:has_value() {
+        // run_parser() already printed an appropriate error.
+        return;
+    }
 
     let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
     if !success:has_value() {
