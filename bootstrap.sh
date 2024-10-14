@@ -62,7 +62,11 @@ env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -
 # so that the stage 5 compiler falls back to its builtins but a fresh checkout of the stage 6
 # compiler will work as expected.
 echo "// Bootstrap hack" > "$stage_6_dir/src/glang/lib/std/array.c3"
-env -C "$stage_5_dir" python3 -m src.glang.driver "$stage_6_dir/src/glang/parser/parser.c3" --nostdlib -I "$stage_6_dir/src/glang/lib/" "$stage_6_dir/src/glang/lib/std/$(env -C "$stage_5_dir" python3 -m src.glang.driver --print-host-target)/" -o "$dest_dir/dist/parser"
+host_target=$(env -C "$stage_5_dir" python3 -m src.glang.driver --print-host-target)
+# We need to use the runtime from stage 6, so compile that separately.
+env -C "$stage_5_dir" clang -c "$stage_6_dir/src/glang/lib/std/$host_target/runtime.S" -o "$stage_6_dir/dist/runtime.o"
+env -C "$stage_5_dir" python3 -m src.glang.driver -c "$stage_6_dir/src/glang/parser/parser.c3" --nostdlib -I "$stage_6_dir/src/glang/lib/" "$stage_6_dir/src/glang/lib/std/$host_target/" -o "$stage_6_dir/dist/parser.o"
+env -C "$stage_5_dir" ld.lld --nostdlib --static "$stage_6_dir/dist/runtime.o" "$stage_6_dir/dist/parser.o" -o "$dest_dir/dist/parser"
 
 # Final Stage; build the native parser from the working tree. Note that we need
 # to invoke the driver as a module.
