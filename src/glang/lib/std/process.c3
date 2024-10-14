@@ -55,7 +55,6 @@ function wait : (process : Process mut&) -> Optional<int> = {
         return make<Optional<int>>();
     }
 
-    // let status : Optional<int> = waitpid(process.pid, WEXITED());
     let status : Optional<int> = waitpid(process.pid, 0);
     if status:has_value() {
         process.pid = -1;

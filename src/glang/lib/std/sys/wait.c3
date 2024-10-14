@@ -26,6 +26,5 @@ function waitpid : (pid : pid_t, options : int) -> Optional<int> = {
         return make<Optional<int>>(wstatus);
     }
 
-    printf(sv("wait4 returned %"), ret);
     return make<Optional<int>>();
 }
