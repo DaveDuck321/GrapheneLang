@@ -54,6 +54,18 @@ function make<RingBuffer> : (
     });
 }
 
+function deallocate : (self : RingBuffer mut&) -> void = {
+    let addr : iptr = ref_to_addr(&self.buffer.data);
+
+    self:clear();
+
+    runtime_assert(munmap(addr, 2 * self.size) == 0);
+
+    let null : iptr = 0;
+    self.buffer = { &mut addr_to_mut_heap_array<u8>(null), 0 };
+    self.size = 0;
+}
+
 function read_impl : (
     buffer : RingBuffer mut&, source : File
 ) -> isize = {

@@ -17,7 +17,7 @@ typedef State : {
 }
 
 function make<State> : (parser_path : CStringView) -> Optional<State> = {
-    let client_buffer : Optional<RingBuffer> =
+    mut client_buffer : Optional<RingBuffer> =
         make<RingBuffer>(10 * 1024 * 1024, make<CString>("client_buffer\0"));
     if !client_buffer:has_value() {
         return make<Optional<State>>();
@@ -26,7 +26,7 @@ function make<State> : (parser_path : CStringView) -> Optional<State> = {
     let parser_buffer : Optional<RingBuffer> =
         make<RingBuffer>(10 * 1024 * 1024, make<CString>("parser_buffer\0"));
     if !parser_buffer:has_value() {
-        // FIXME deallocate the client buffer.
+        client_buffer:data():deallocate();
         return make<Optional<State>>();
     }
 
@@ -321,6 +321,9 @@ function handle_shutdown : (state : State mut&, req : RPCRequest, out : Buffered
 
 function handle_exit : (state : State mut&, req : RPCNotification, out : BufferedFile mut&) -> void = {
     print(sv("Received exit notification"));
+
+    state.client_buffer:deallocate();
+    state.parser_buffer:deallocate();
 
     // TODO exit with 1 if shutdown wasn't received.
     sys_exit(0);
