@@ -430,37 +430,37 @@ function handle_text_change : (
 
     let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
     if !text_document:has_value() {
-        print(sv("textDocument not found"));
+        print(sv("'textDocument' not found"));
         return;
     }
 
     let uri : Optional<JSON_Node> = text_document:data().map:at(sv("uri"));
     if !uri:has_value() {
-        print(sv("uri not found"));
+        print(sv("'uri' not found"));
         return;
     }
 
     let version : Optional<JSON_Node> = text_document:data().map:at(sv("version"));
     if !version:has_value() {
-        print(sv("version not found"));
+        print(sv("'version' not found"));
         return;
     }
 
     let content_changes : Optional<JSON_Node> = req.params.map:at(sv("contentChanges"));
     if !content_changes:has_value() {
-        print(sv("contentChanges not found"));
+        print(sv("'contentChanges' not found"));
         return;
     }
 
     if content_changes:data().children:length() == 0 {
-        print(sv("contentChanges is empty"));
+        print(sv("'contentChanges' is empty"));
         return;
     }
 
     let text_wrapper : JSON_Node = content_changes:data().children:get(0);
     let text : Optional<JSON_Node> = text_wrapper.map:at(sv("text"));
     if !text:has_value() {
-        print(sv("text not found"));
+        print(sv("'text' not found"));
         return;
     }
 
