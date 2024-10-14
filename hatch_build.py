@@ -50,7 +50,7 @@ class CustomBuildHook(BuildHookInterface):
         self.app.display_success("Done!")
 
         build_data["force_include"]["dist/parser"] = "glang/bin/parser"
-        build_data["force_include"]["dist/gls"] = "glang/bin/gls"
+        build_data["force_include"][f"{self.directory}/gls"] = "glang/bin/gls"
 
         build_data["pure_python"] = False
         build_data["infer_tag"] = True
