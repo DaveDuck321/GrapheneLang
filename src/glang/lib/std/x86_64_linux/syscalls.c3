@@ -7,6 +7,7 @@ foreign _syscall_0 : (syscall_number: i64) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64
 foreign _syscall_2 : (a: i64, b: i64, syscall_number: i64) -> i64
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64
+foreign _syscall_4 : (a: i64, b: i64, c: i64, d: i64, syscall_number: i64) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i64) -> i64
 
 function sys_read : (fd: int, buffer: u8[mut&], count: isize) -> isize = {
@@ -102,4 +103,8 @@ function sys_getpid : () -> int = {
 
 function sys_kill : (pid : int, sig : int) -> int = {
     return Narrow<int>(_syscall_2(pid, sig, /* kill */ 62));
+}
+
+function sys_wait4 : (pid : int, wstatus : int mut&, options : int, rusage : iptr) -> int = {
+    return Narrow<int>(_syscall_4(pid, __builtin_ptr_to_int(&mut wstatus), options, rusage, /* wait4 */ 61));
 }

@@ -137,7 +137,7 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
 }
 
 function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSON_Node> = {
-    let process : Optional<Process> = execute(
+    mut process : Optional<Process> = execute(
         { &state.parser_path:data() },
         args,
     );
@@ -152,10 +152,24 @@ function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSO
     state.parser_buffer:clear();
 
     mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
+
+    let wstatus : Optional<int> = process:data():wait();
+    if !wstatus:has_value() {
+        print(sv("Failed to wait on process"));
+    }
+    else {
+        if !WIFEXITED(wstatus:data()) {
+            print(sv("Abnormal parser termination"));
+        }
+    }
+
+    process:data():close();
+
     if !view_opt:has_value() {
         print(sv("Failed to read line"));
         return make<Optional<JSON_Node>>();
     }
+
     let view : StringView = make<StringView>(view_opt:data());
 
     mut json : Optional<JSON_Node> = json_parse(view, &mut state.allocator);
@@ -163,8 +177,6 @@ function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSO
         print(sv("Failed to parse json"));
         return make<Optional<JSON_Node>>();
     }
-
-    // TODO cleanup process.
 
     return json;
 }

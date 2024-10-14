@@ -1,5 +1,6 @@
 @require_once "unistd.c3"
 @require_once "sys/types.c3"
+@require_once "sys/wait.c3"
 
 typedef Process : {
     // TODO other 2 streams.
@@ -12,6 +13,7 @@ typedef Process : {
 function execute : (
     path : CString, args : View<CString>
 ) -> Optional<Process> = {
+    // TODO replace this with a vector when we have a global allocator.
     mut argv : CString[32];
     argv[0] = path;
     mut index : int = 1;
@@ -20,7 +22,8 @@ function execute : (
         // FIXME ++index also compiles; but results in broken code?
         index += 1;
     }
-    argv[index] = { &__builtin_int_to_ptr<u8[&]>(0) };
+    let null : iptr = 0;
+    argv[index] = { &addr_to_heap_array<u8>(null) };
 
     let stdout : Optional<Pipe> = pipe();
     if !stdout:has_value() {
@@ -45,6 +48,23 @@ function execute : (
     // Parent process.
     close(&stdout:data().write);
     return make<Optional<Process>>({ pid, stdout:data().read });
+}
 
-    // FIXME clean up pipe fds (check /proc/$PID/fd/)
+function wait : (process : Process mut&) -> Optional<int> = {
+    if process.pid < 0 {
+        return make<Optional<int>>();
+    }
+
+    // let status : Optional<int> = waitpid(process.pid, WEXITED());
+    let status : Optional<int> = waitpid(process.pid, 0);
+    if status:has_value() {
+        process.pid = -1;
+    }
+
+    return status;
+}
+
+function close : (process : Process mut&) -> void = {
+    process:wait();
+    process.stdout:close();
 }
