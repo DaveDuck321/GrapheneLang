@@ -14,11 +14,9 @@ function [IO, @Len] write : (io : IO mut&, string : u8[@Len]&) -> TypeIf<void, I
 function [IO] write : (io : IO mut&, string : StringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     if string:length() < io.buffer:length() {
         let buffer : Span<u8> = io:request_buffer(string:length());
-
         runtime_assert(buffer.length == string:length());
-        for index in range(string:length()) {
-            buffer.data[index] = string.buffer.data[index];
-        }
+
+        memcpy(&mut buffer.data, &string.buffer.data, buffer:length());
         io:consume_length(buffer.length);
     }
     else {
