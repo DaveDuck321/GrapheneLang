@@ -43,10 +43,6 @@ class CustomBuildHook(BuildHookInterface):
         finally:
             sys.argv = old_argv
 
-        gls_path = Path(self.directory) / "gls"
-        self.app.display_info(str(gls_path.absolute()))
-        self.app.display_info(str(gls_path.absolute().exists()))
-
         self.app.display_success("Done!")
 
         build_data["force_include"]["dist/parser"] = "glang/bin/parser"
