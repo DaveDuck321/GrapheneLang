@@ -734,10 +734,10 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
         }
     }
 
-    if !(saw_pipe_arg and saw_parser_arg) {
+    if !saw_parser_arg {
         if argc >= 1 {
             printf(
-                sv("Usage: % --pipe=/path/to/socket --parser=/path/to/parser"),
+                sv("Usage: % --parser=/path/to/parser [--pipe=/path/to/socket]"),
                 make<CStringView>(&argv[0])
             );
         }
