@@ -282,17 +282,17 @@ function handle_diagnostic : (
 
     let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
     if !text_document:has_value() {
-        print(sv("Bad diagnostic request 1"));
+        print(sv("'textDocument' not found"));
         return;
     }
 
     let uri : Optional<JSON_Node> = text_document:data().map:at(sv("uri"));
     if !uri:has_value() {
-        print(sv("Bad diagnostic request 2"));
+        print(sv("'uri' not found"));
         return;
     }
     if !uri:data().value:has_value() {
-        print(sv("Bad diagnostic request 3"));
+        print(sv("Failed to parse uri"));
         return;
     }
 
