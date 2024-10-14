@@ -307,9 +307,7 @@ function handle_initialize : (state : State mut&, req : RPCRequest, out : Buffer
 function handle_shutdown : (state : State mut&, req : RPCRequest, out : BufferedFile mut&) -> void = {
     print(sv("Received shutdown request"));
 
-    // FIXME I think this either asserts or exit doesn't exit correctly. Need to
-    // debug with gdb/strace.
-    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%}");
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{}}");
     mut ss : StringStream;
     ss.buffer_pointer = 0;
     ss:writef(resp, req.id:data());
@@ -636,6 +634,7 @@ function dispatch_rpc_request : (
 
     if req.method == sv("shutdown") {
         state:handle_shutdown(req, &mut out);
+        return;
     }
 
     printf(sv("Unsupported method: %"), req.method);
