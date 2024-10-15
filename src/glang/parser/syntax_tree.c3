@@ -141,7 +141,7 @@ typedef Expression : {
     // 0: function call, 1: constant, 2: named init list, 3: unnamed init list,
     // 4: variable, 5: array index access, 6: struct index access, 7: ufcs, 8:
     // operator, 9: unary operator, 10: pack expansion, 11: borrow, 12: logical
-    // operator
+    // operator, 13: unary logical operator
     type : int,
     pointer : iptr,
     meta : Meta,
@@ -161,6 +161,12 @@ typedef Operator : {
 }
 
 typedef UnaryOperator : {
+    name : ProgramSlice,
+    rhs : Expression,
+    meta : Meta,
+}
+
+typedef UnaryLogicalOperator : {
     name : ProgramSlice,
     rhs : Expression,
     meta : Meta,
@@ -779,6 +785,10 @@ function write_json_value : (stream : JSON_Stream mut&, node : Expression&) -> v
         stream:write_json_value(&addr_to_ref<LogicalOperator>(node.pointer));
         return;
     }
+    if node.type == 13 {
+        stream:write_json_value(&addr_to_ref<UnaryLogicalOperator>(node.pointer));
+        return;
+    }
     runtime_assert(false);
 }
 
@@ -804,6 +814,15 @@ function write_json_value : (stream : JSON_Stream mut&, node : UnaryOperator&) -
     mut object : JSON_Object = stream:new_object();
     object
         :add_meta("UnaryOperatorUse", node.meta)
+        :add("name", node.name)
+        :add("rhs", node.rhs)
+        :end();
+}
+
+function write_json_value : (stream : JSON_Stream mut&, node : UnaryLogicalOperator&) -> void = {
+    mut object : JSON_Object = stream:new_object();
+    object
+        :add_meta("UnaryLogicalOperatorUse", node.meta)
         :add("name", node.name)
         :add("rhs", node.rhs)
         :end();
