@@ -12,15 +12,22 @@ function [IO, @Len] write : (io : IO mut&, string : u8[@Len]&) -> TypeIf<void, I
 }
 
 function [IO] write : (io : IO mut&, string : StringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {
-    let buffer : Span<u8> = io:request_buffer(string:length());
+    if string:length() < io.buffer:length() {
+        let buffer : Span<u8> = io:request_buffer(string:length());
+        runtime_assert(buffer.length == string:length());
 
-    // TODO: remove this assumption
-    // TODO: maybe stream large strings directly
-    runtime_assert(buffer.length == string:length());
-    for index in range(string:length()) {
-        buffer.data[index] = string.buffer.data[index];
+        memcpy(&mut buffer.data, &string.buffer.data, buffer:length());
+        io:consume_length(buffer.length);
     }
-    io:consume_length(buffer.length);
+    else {
+        // Stream large strings directly.
+        io:flush();
+        io.underlying:write(string.buffer);
+    }
+}
+
+function [IO] write : (io : IO mut&, cstr : CStringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {
+    return io:write(make<StringView>(cstr));
 }
 
 function [IO] write : (io : IO mut&, number : isize) -> TypeIf<void, IsStreamableTextIO<IO>> = {
@@ -96,7 +103,9 @@ function [IO] write_char : (io : IO mut&, char : u8) -> TypeIf<void, IsStreamabl
 }
 
 function [Args...] print : (args : Args...) -> void = {
-    mut io : BufferedFile = get_stdout_io();
+    mut io : BufferedFile;
+    io.underlying = {1 /* stdout */};
+    io.buffer_pointer = 0;
     io:print_impl(args...);
     io:write(sv("\n"));
     io:flush();
@@ -112,7 +121,9 @@ function [NextArg, OtherArgs...] print_impl : (io : BufferedFile mut&, next : Ne
 }
 
 function [Args...] printf : (args : Args...) -> void = {
-    mut io : BufferedFile = get_stdout_io();
+    mut io : BufferedFile;
+    io.underlying = {1 /* stdout */};
+    io.buffer_pointer = 0;
     io:writef(args...);
     io:write(sv("\n"));
     io:flush();

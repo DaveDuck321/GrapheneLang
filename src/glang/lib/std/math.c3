@@ -31,3 +31,7 @@ function [T] min : (left : T, right : T) -> T = {
         return right;
     }
 }
+
+function [T] clamp : (min : T, value : T, max : T) -> T = {
+    return min(max, max(min, value));
+}

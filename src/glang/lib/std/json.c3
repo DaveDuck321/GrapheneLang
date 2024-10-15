@@ -34,6 +34,17 @@ function make<JSON_Node> : (node_type : int, allocator : Allocator mut&) -> JSON
     };
 }
 
+function deallocate : (self : JSON_Node mut&) -> void = {
+    // FIXME can't iterate with get_iter(); it returns an immutable reference
+    // for some reason.
+    for i in range(self.children:length()) {
+        self.children:get(i):deallocate();
+    }
+    self.children:deallocate();
+
+    self.map:clear();
+}
+
 function has_next : (cursor : Cursor mut&) -> bool = {
     return cursor.iter:has_next();
 }
@@ -293,6 +304,9 @@ function parse_string : (cursor : Cursor mut&) -> Optional<JSON_Node> = {
         if in_escape_seq {
             in_escape_seq = false;
 
+            if char == char("\"") {
+                string:push_back(char("\""));
+            }
             if char == char("\\") {
                 string:push_back(char("\\"));
             }
