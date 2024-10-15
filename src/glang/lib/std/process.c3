@@ -38,7 +38,7 @@ function execute : (
     // Child process.
     if pid == 0 {
         close(&stdout:data().read);
-        sys_dup2(stdout:data().write.fd, /* stdout */ 1);
+        sys_dup3(stdout:data().write.fd, /* stdout */ 1, /* no flags */ 0);
         // TODO check return code... but how do we return the error?
         // FIXME this reinterpret cast is gross.
         sys_execve(&path.data, &reinterpret_addr<u8[&][&]>(&argv));

@@ -86,8 +86,8 @@ function sys_pipe : (fds : int[&]) -> int = {
     return Narrow<int>(_syscall_1(__builtin_ptr_to_int(&fds), /* pipe */ 22));
 }
 
-function sys_dup2 : (old_fd : int, new_fd : int) -> int = {
-    return Narrow<int>(_syscall_2(old_fd, new_fd, /* dup2 */ 33));
+function sys_dup3 : (old_fd : int, new_fd : int, flags : int) -> int = {
+    return Narrow<int>(_syscall_3(old_fd, new_fd, flags, /* dup3 */ 292));
 }
 
 function sys_execve : (path : u8[&], argv : u8[&][&]) -> int = {
