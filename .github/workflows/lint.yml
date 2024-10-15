@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: isort/isort-action@v1
+      - uses: isort/isort-action@v1.1.1
         with:
             configuration: --check-only --diff --profile black
 
