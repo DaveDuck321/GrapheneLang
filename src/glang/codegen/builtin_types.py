@@ -359,6 +359,11 @@ class IntType(GenericIntType):
         super().__init__("int", get_int_type_info().size.in_bits, True)
 
 
+class LLVMConstantOffsetType(GenericIntType):
+    def __init__(self) -> None:
+        super().__init__("__LLVM_INDEX", 32, True)
+
+
 class UIntType(GenericIntType):
     def __init__(self) -> None:
         super().__init__(
