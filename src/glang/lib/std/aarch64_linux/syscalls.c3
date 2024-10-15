@@ -104,3 +104,7 @@ function sys_getpid : () -> int = {
 function sys_kill : (pid : int, sig : int) -> int = {
     return Narrow<int>(_syscall_2(pid, sig, /* kill */ 129));
 }
+
+function sys_wait4 : (pid : int, wstatus : int mut&, options : int, rusage : iptr) -> int = {
+    return Narrow<int>(_syscall_4(pid, __builtin_ptr_to_int(&mut wstatus), options, rusage, /* wait4 */ 260));
+}
