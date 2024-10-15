@@ -32,11 +32,11 @@ jobs:
         run: |
           python3 -m venv "${HOME}/venv"
           source "${HOME}/venv/bin/activate"
-          python3 -m pip install hatch==1.9.4
+          pip install hatch==1.9.4
         shell: bash
       - name: Run ruff
         run: |
-          source "${HOME}/venv/bin/activate
+          source "${HOME}/venv/bin/activate"
           output=$(hatch fmt --linter --check)
           echo "$output" >> $GITHUB_STEP_SUMMARY
           echo "$output" | grep "No errors fixed"
