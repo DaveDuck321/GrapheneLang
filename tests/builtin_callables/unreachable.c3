@@ -1,7 +1,7 @@
 function main : () -> int = {
     // Cannot be executed, use opt to validate ir
 
-    __builtin_unreachbale();
+    __builtin_unreachable();
     // Note: no return here
 }
 

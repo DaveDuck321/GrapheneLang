@@ -934,7 +934,7 @@ def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
         "__builtin_ptr_to_int": PtrToIntExpression,
         "__builtin_sizeof": SizeOfExpression,
         "__builtin_trap": TrapExpression,
-        "__builtin_unreachbale": UnreachableExpression,
+        "__builtin_unreachable": UnreachableExpression,
         "__builtin_volatile_read": VolatileReadExpression,
         "__builtin_volatile_write": VolatileWriteExpression,
     }
