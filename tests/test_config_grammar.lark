@@ -4,7 +4,7 @@
 %ignore " "
 %ignore "\n"
 
-start: (failing)? (for_cmd)? compile_cmd (grep_ir_cmd)* (run_cmd)?
+start: (failing)? (for_cmd)? compile_cmd (opt_cmd)? (grep_ir_cmd)* (run_cmd)?
 
 ARG: /[-\w]+/  // Doesn't match ;
 
@@ -13,5 +13,6 @@ expect_msg: "EXPECT" (/OUT/ | /ERR/) /([^@].*\n?)+/
 failing: "@FAILING"
 for_cmd: "@FOR" CNAME
 compile_cmd: "@COMPILE" ARG* [";" expect_status] [";" expect_msg]
+opt_cmd: "@OPTIMIZE" ARG*
 grep_ir_cmd: "@GREP_IR" /.+\n?/
 run_cmd: "@RUN" ARG* [";" expect_status] [";" expect_msg]
