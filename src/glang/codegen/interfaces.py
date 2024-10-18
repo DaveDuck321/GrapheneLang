@@ -291,7 +291,7 @@ class TypedExpression(Generatable):
         pass
 
     def is_return_guaranteed(self) -> bool:
-        # At the moment no TypedExpression can return
+        # At the moment no TypedExpression (except __builtin_unreachable) can return
         return False
 
     @property

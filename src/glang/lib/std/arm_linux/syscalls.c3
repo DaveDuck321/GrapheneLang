@@ -10,3 +10,8 @@ function sys_write : (fd: int, buffer: u8[&], count: isize) -> isize = {
 
     return _syscall_3(fd, buffer_addr, count, /* write */ 4);
 }
+
+function sys_assert_failed: () -> void = {
+    sys_write(/* stderr */ 2, "Assertion Failed!", 17);
+    sys_exit(1);
+}

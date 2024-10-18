@@ -13,6 +13,7 @@ from tap import Tap
 from test_config_parser import ExpectedOutput, TestConfig, parse_file
 
 LLI_CMD = getenv("GRAPHENE_LLI_CMD", "lli")
+OPT_CMD = getenv("GRAPHENE_OPT_CMD", "opt")
 
 PARENT_DIR = Path(__file__).parent
 TESTS_DIR = PARENT_DIR
@@ -144,6 +145,22 @@ def run_test_throw_on_fail(config: TestConfig, file_path: Path) -> None:
         ],
         config.compile_opts,
     )
+
+    # @OPTIMIZE
+    if config.optimize_args is not None:
+        ir_output = run_command(
+            "optimize",
+            file_path.parent,
+            [
+                OPT_CMD,
+                "-S",
+                "-O3",
+                *config.optimize_args,
+                "-",
+            ],
+            expected_output=ExpectedOutput(0, None, None),
+            stdin=ir_output,
+        )
 
     # @GREP_IR
     for needle in config.grep_ir_strs:
