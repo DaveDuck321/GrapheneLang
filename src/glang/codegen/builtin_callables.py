@@ -873,7 +873,7 @@ class VolatileReadExpression(BuiltinCallable):
 
         dbg = self.add_di_location(ctx, ir)
 
-        # <result> = load volatile <ty> <value>, ptr <pointer>
+        # <result> = load volatile <ty>, ptr <pointer>
         ir.lines.append(
             f"{self.result_ref} = load volatile {self.result_type.ir_type}, "
             f"{conv_addr.ir_ref_with_type_annotation}, {dbg}",
@@ -889,7 +889,7 @@ class VolatileReadExpression(BuiltinCallable):
         pass
 
     def assert_can_write_to(self) -> None:
-        raise OperandError("Cannot assign to `__builtin_volatile_write()`")
+        raise OperandError("Cannot assign to `__builtin_volatile_read()`")
 
 
 def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
