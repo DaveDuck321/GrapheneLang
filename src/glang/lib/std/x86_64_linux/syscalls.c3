@@ -64,3 +64,8 @@ function sys_munmap : (addr: isize, length : isize) -> i64 = {
 function sys_exit : (code : int) -> void = {
     _syscall_1(code, 60);
 }
+
+function sys_assert_failed: () -> void = {
+    sys_write(/* stderr */ 2, "Assertion Failed!", 17);
+    sys_exit(1);
+}

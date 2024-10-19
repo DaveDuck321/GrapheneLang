@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from typing import override
 
 from glang.codegen.builtin_types import (
     BoolDefinition,
@@ -10,6 +11,7 @@ from glang.codegen.builtin_types import (
     IPtrType,
     SizeType,
     StackArrayDefinition,
+    VoidType,
     format_array_dims_for_ir,
 )
 from glang.codegen.expressions import ConstantExpression, StaticTypedExpression
@@ -698,6 +700,198 @@ class ArrayIndexExpression(BuiltinCallable):
         self._array_ptr.assert_can_write_to()
 
 
+class TrapExpression(BuiltinCallable):
+    def __init__(
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
+    ) -> None:
+        assert len(specialization) == 0
+        assert len(arguments) == 0
+        StaticTypedExpression.__init__(
+            self,
+            VoidType(),
+            Type.Kind.VALUE,
+            meta,
+        )
+
+    def __repr__(self) -> str:
+        return "TrapExpression()"
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+        ir.lines.append(f"call void @llvm.trap(), {dbg}")
+        return ir
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert False
+
+    def assert_can_read_from(self) -> None:
+        assert False
+
+    def assert_can_write_to(self) -> None:
+        assert False
+
+
+class UnreachableExpression(BuiltinCallable):
+    def __init__(
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
+    ) -> None:
+        assert len(specialization) == 0
+        assert len(arguments) == 0
+        StaticTypedExpression.__init__(
+            self,
+            VoidType(),
+            Type.Kind.VALUE,
+            meta,
+        )
+
+    def __repr__(self) -> str:
+        return "UnreachableExpression()"
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+        ir.lines.append(f"unreachable, {dbg}")
+        return ir
+
+    @override
+    def is_return_guaranteed(self) -> bool:
+        return True
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert False
+
+    def assert_can_read_from(self) -> None:
+        assert False
+
+    def assert_can_write_to(self) -> None:
+        assert False
+
+
+class VolatileWriteExpression(BuiltinCallable):
+    def __init__(
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
+    ) -> None:
+        assert len(specialization) == 0
+        assert len(arguments) == 2
+
+        (self._addr, self._to_write) = arguments
+        assert self._addr.result_type.storage_kind.is_reference()
+        assert not self._to_write.result_type.storage_kind.is_reference()
+
+        assert (
+            self._addr.result_type.convert_to_value_type() == self._to_write.result_type
+        )
+
+        super().__init__(
+            VoidType(),
+            Type.Kind.VALUE,
+            meta,
+        )
+
+    def __repr__(self) -> str:
+        return f"VolatileWriteExpression({self._to_write} to {self._addr})"
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        # Remove any indirect references
+        conv_to_write, extra_exprs_to_write = do_implicit_conversion(
+            self._to_write, self._to_write.result_type
+        )
+
+        conv_addr, extra_exprs_addr = do_implicit_conversion(
+            self._addr, self._addr.result_type
+        )
+
+        ir = IROutput()
+        ir.extend(self.expand_ir(extra_exprs_to_write, ctx))
+        ir.extend(self.expand_ir(extra_exprs_addr, ctx))
+
+        dbg = self.add_di_location(ctx, ir)
+
+        # store volatile <ty> <value>, ptr <pointer>
+        ir.lines.append(
+            f"store volatile {conv_to_write.ir_ref_with_type_annotation}, "
+            f" {conv_addr.ir_ref_with_type_annotation}, {dbg}",
+        )
+        return ir
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert False
+
+    def assert_can_read_from(self) -> None:
+        raise OperandError("Cannot read from `__builtin_volatile_write()`")
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_volatile_write()`")
+
+
+class VolatileReadExpression(BuiltinCallable):
+    def __init__(
+        self,
+        specialization: list[SpecializationItem],
+        arguments: list[TypedExpression],
+        meta: Meta,
+    ) -> None:
+        assert len(specialization) == 0
+        assert len(arguments) == 1
+
+        self.result_ref = None
+
+        (self._addr,) = arguments
+        assert self._addr.result_type.storage_kind.is_reference()
+
+        super().__init__(
+            self._addr.result_type.convert_to_value_type(),
+            Type.Kind.VALUE,
+            meta,
+        )
+
+    def __repr__(self) -> str:
+        return f"VolatileReadExpression({self._to_write} to {self._addr})"
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        # Remove any indirect references
+        conv_addr, extra_exprs_addr = do_implicit_conversion(
+            self._addr, self._addr.result_type
+        )
+
+        ir = self.expand_ir(extra_exprs_addr, ctx)
+
+        self.result_ref = f"%{ctx.next_reg()}"
+
+        dbg = self.add_di_location(ctx, ir)
+
+        # <result> = load volatile <ty>, ptr <pointer>
+        ir.lines.append(
+            f"{self.result_ref} = load volatile {self.result_type.ir_type}, "
+            f"{conv_addr.ir_ref_with_type_annotation}, {dbg}",
+        )
+        return ir
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert self.result_ref is not None
+        return self.result_ref
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        raise OperandError("Cannot assign to `__builtin_volatile_read()`")
+
+
 def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
     def get_arithmetic_builtin(
         expression_class: type[BasicNumericExpression | UnaryExpression],
@@ -733,10 +927,14 @@ def get_builtin_callables() -> dict[str, type[BuiltinCallable]]:
     return {
         **integer_instructions,
         "__builtin_alignof": AlignOfExpression,
+        "__builtin_array_index": ArrayIndexExpression,
         "__builtin_bitcast": BitcastExpression,
         "__builtin_int_to_ptr": IntToPtrExpression,
         "__builtin_narrow": NarrowExpression,
         "__builtin_ptr_to_int": PtrToIntExpression,
         "__builtin_sizeof": SizeOfExpression,
-        "__builtin_array_index": ArrayIndexExpression,
+        "__builtin_trap": TrapExpression,
+        "__builtin_unreachable": UnreachableExpression,
+        "__builtin_volatile_read": VolatileReadExpression,
+        "__builtin_volatile_write": VolatileWriteExpression,
     }

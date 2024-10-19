@@ -276,6 +276,7 @@ class Program:
         output.lines.append(
             "declare void @llvm.dbg.declare(metadata, metadata, metadata)"
         )
+        output.lines.append("declare void @llvm.trap() cold nounwind noreturn")
 
         output.lines.append("")
         for func in self._fn_bodies:
