@@ -222,19 +222,23 @@ function unsafe_decode_utf8_bytes : (bytes: u8[1]) -> UnicodeScalar = {
 }
 
 function unsafe_decode_utf8_bytes : (bytes: u8[2]) -> UnicodeScalar = {
-    return { ((bytes[0] & 0x1f) << 6) | (bytes[1] & 0x3f) };
+    return { (as_u32(bytes[0] & 0x1f) << 6) | as_u32(bytes[1] & 0x3f) };
 }
 
 function unsafe_decode_utf8_bytes : (bytes: u8[3]) -> UnicodeScalar = {
-    return { ((bytes[0] & 0x0f) << 12) | ((bytes[1] & 0x3f) << 6) | (bytes[2] & 0x3f) };
+    return {
+        (as_u32(bytes[0] & 0x0f) << 12) |
+        (as_u32(bytes[1] & 0x3f) << 6)  |
+        as_u32(bytes[2] & 0x3f)
+    };
 }
 
 function unsafe_decode_utf8_bytes : (bytes: u8[4]) -> UnicodeScalar = {
     return {
-        ((bytes[0] & 0x07) << 18) |
-        ((bytes[1] & 0x3f) << 12) |
-        ((bytes[2] & 0x3f) << 6)  |
-        (bytes[3] & 0x3f)
+        (as_u32(bytes[0] & 0x07) << 18) |
+        (as_u32(bytes[1] & 0x3f) << 12) |
+        (as_u32(bytes[2] & 0x3f) << 6)  |
+        as_u32(bytes[3] & 0x3f)
     };
 }
 

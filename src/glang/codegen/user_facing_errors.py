@@ -196,7 +196,11 @@ class InvalidEscapeSequence(GrapheneError):
         super().__init__(f"Error: \\{escaped_char} is not a valid escape sequence")
 
 
-class InvalidIntSize(GrapheneError):
+class InvalidLiteralError(GrapheneError):
+    pass
+
+
+class InvalidIntSize(InvalidLiteralError):
     def __init__(
         self,
         type_name: str,
@@ -210,7 +214,7 @@ class InvalidIntSize(GrapheneError):
         )
 
 
-class InvalidFloatLiteralTooLarge(GrapheneError):
+class InvalidFloatLiteralTooLarge(InvalidLiteralError):
     def __init__(
         self,
         type_name: str,
@@ -237,7 +241,7 @@ class InvalidFloatLiteralTooLarge(GrapheneError):
         )
 
 
-class InvalidFloatLiteralPrecision(GrapheneError):
+class InvalidFloatLiteralPrecision(InvalidLiteralError):
     def __init__(
         self,
         type_name: str,
