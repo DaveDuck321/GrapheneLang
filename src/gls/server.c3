@@ -376,10 +376,17 @@ function handle_diagnostic : (
         return;
     }
 
-    printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
-    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": % }]}}");
     mut ss : StringStream = make<StringStream>(&mut state.allocator);
-    ss:writef(resp, req.id:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
+    ss:writef(
+        resp,
+        req.id:data(),
+        line_number:data() - 1,
+        column_number:data() - 1,
+        line_number:data() - 1,
+        column_number:data() - 1,
+        message:data()
+    );
     print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
@@ -473,9 +480,9 @@ function handle_text_change : (
     if !success:has_value() {
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
-        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": []}}");
+        let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": %, \"version\": %, \"diagnostics\": []}}");
         mut ss : StringStream = make<StringStream>(&mut state.allocator);
-        ss:writef(resp, uri:data().value:data(), version:data().value:data());
+        ss:writef(resp, uri:data(), version:data());
         print(ss:as_sv());
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
@@ -538,10 +545,18 @@ function handle_text_change : (
         return;
     }
 
-    printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
-    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
+    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": %, \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": % }]}}");
     mut ss : StringStream = make<StringStream>(&mut state.allocator);
-    ss:writef(resp, uri:data().value:data(), version:data().value:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
+    ss:writef(
+        resp,
+        uri:data(),
+        version:data(),
+        line_number:data() - 1,
+        column_number:data() - 1,
+        line_number:data() - 1,
+        column_number:data() - 1,
+        message:data()
+    );
     print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
