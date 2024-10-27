@@ -155,3 +155,15 @@ function initialize_allocator : () -> Allocator = {
     }
     return allocator;
 }
+
+function memcpy : (dest : u8[mut&], src : u8[&], count : isize) -> void = {
+    for i in range(count) {
+        dest[i] = src[i];
+    }
+}
+
+function memset : (dest : u8[mut&], ch : u8, count : isize) -> void = {
+    for i in range(count) {
+        dest[i] = ch;
+    }
+}

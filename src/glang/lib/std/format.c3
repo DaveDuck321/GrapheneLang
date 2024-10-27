@@ -1,4 +1,5 @@
 @require_once "io.c3"
+@require_once "memory.c3"
 @require_once "string.c3"
 @require_once "type_traits.c3"
 @require_once "util.c3"
