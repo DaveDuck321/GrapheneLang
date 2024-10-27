@@ -12,18 +12,13 @@ function [IO, @Len] write : (io : IO mut&, string : u8[@Len]&) -> TypeIf<void, I
 }
 
 function [IO] write : (io : IO mut&, string : StringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {
-    if string:length() < io.buffer:length() {
-        let buffer : Span<u8> = io:request_buffer(string:length());
-        runtime_assert(buffer.length == string:length());
+    // TODO Stream large strings directly - we'll need to extend the IO
+    // interface.
+    let buffer : Span<u8> = io:request_buffer(string:length());
+    runtime_assert(buffer.length == string:length());
 
-        memcpy(&mut buffer.data, &string.buffer.data, buffer:length());
-        io:consume_length(buffer.length);
-    }
-    else {
-        // Stream large strings directly.
-        io:flush();
-        io.underlying:write(string.buffer);
-    }
+    memcpy(&mut buffer.data, &string.buffer.data, buffer:length());
+    io:consume_length(buffer.length);
 }
 
 function [IO] write : (io : IO mut&, cstr : CStringView) -> TypeIf<void, IsStreamableTextIO<IO>> = {

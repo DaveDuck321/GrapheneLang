@@ -61,7 +61,7 @@ function [T] pop_back : (self : Vector<T> mut&) -> T = {
 }
 
 function [T] resize : (self : Vector<T> mut&, size : isize, value : T) -> void = {
-    runtime_assert(size > 0);
+    runtime_assert(size >= 0);
 
     if self.length >= size {
         self.length = size;

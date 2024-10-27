@@ -4,6 +4,7 @@
 @require_once "std/json.c3"
 @require_once "std/memory.c3"
 @require_once "std/process.c3"
+@require_once "std/sstream.c3"
 @require_once "std/sys/socket.c3"
 
 @require_once "ring_buffer.c3"
@@ -44,64 +45,6 @@ typedef RPCNotification : {
 
 function [IO] write : (io : IO mut&, req : RPCRequest) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     io:writef(sv("RPCRequest {id=%, method=%, params=%}"), req.id, req.method, req.params);
-}
-
-typedef StringStream : {
-    buffer : u8[4096],
-    buffer_pointer : isize,
-}
-
-function write : (ss : StringStream mut&, sv : StringView) -> void = {
-    mut dest : Span<u8> = make<Span<u8>>(&mut ss.buffer);
-    dest = dest:slice_from(ss.buffer_pointer);
-    // TODO we truncate the input on overflow - should this be an error instead?
-    dest = dest:slice_to(sv:length());
-
-    memcpy(&mut dest.data, &sv:data(), dest:length());
-    ss.buffer_pointer += dest:length();
-}
-
-function write : (ss : StringStream mut&, number : isize) -> void = {
-    if number == 0 {
-        ss.buffer[ss.buffer_pointer] = char("0");
-        ss.buffer_pointer += 1;
-
-        return;
-    }
-
-    let is_negative : bool = number < 0;
-    mut current_number : isize = number;
-    mut length : isize = 0;
-    while current_number != 0 {
-        let next_digit: u8 = as_logical(Narrow<i8>(abs(current_number % 10) + as_arithmetic(char("0"))));
-
-        ss.buffer[ss.buffer_pointer + length] = next_digit;
-
-        current_number /= 10;
-        length += 1;
-    }
-
-    if is_negative {
-        ss.buffer[length] = char("-");
-        length += 1;
-    }
-
-    let span : Span<u8> = make<Span<u8>>(&mut ss.buffer);
-    let result : Span<u8> = span:slice_between(ss.buffer_pointer, ss.buffer_pointer + length);
-    result:reverse();
-    ss.buffer_pointer += length;
-}
-
-function length : (ss : StringStream&) -> isize = {
-    return ss.buffer_pointer;
-}
-
-function data : (ss : StringStream&) -> u8[&] = {
-    return &ss.buffer;
-}
-
-function as_sv : (ss : StringStream&) -> StringView = {
-    return make<StringView>(make<View<u8>>(&ss:data(), ss:length()));
 }
 
 function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
@@ -302,13 +245,13 @@ function handle_shutdown : (state : State mut&, req : RPCRequest, out : Buffered
     print(sv("Received shutdown request"));
 
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{}}");
-    mut ss : StringStream;
-    ss.buffer_pointer = 0;
+    mut ss : StringStream = make<StringStream>(&mut state.allocator);
     ss:writef(resp, req.id:data());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
     out:write(sv("\r\n"));
     out:write(ss:as_sv());
     out:flush();
+    ss:deallocate();
 }
 
 function handle_exit : (state : State mut&, req : RPCNotification, out : BufferedFile mut&) -> void = {
@@ -351,12 +294,14 @@ function handle_diagnostic : (
 
     let path : StringView = uri:data().value:data():slice_from(7);
 
-    mut path_ss : StringStream;
-    path_ss.buffer_pointer = 0;
+    mut path_ss : StringStream = make<StringStream>(&mut state.allocator);
     path_ss:writef(sv("%\0"), path);
+    let path_sv : StringView = path_ss:as_sv();
 
-    let args : CString[1] = { { &path_ss:data() } };
+    let args : CString[1] = { { &path_sv:data() } };
     mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
+    path_ss:deallocate();
+
     if !json:has_value() {
         // run_parser() already printed an appropriate error.
         return;
@@ -367,14 +312,14 @@ function handle_diagnostic : (
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": []}}");
-        mut ss : StringStream;
-        ss.buffer_pointer = 0;
+        mut ss : StringStream = make<StringStream>(&mut state.allocator);
         ss:writef(resp, req.id:data());
         print(ss:as_sv());
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
         out:write(ss:as_sv());
         out:flush();
+        ss:deallocate();
         json:data():deallocate();
         return;
     }
@@ -433,8 +378,7 @@ function handle_diagnostic : (
 
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
-    mut ss : StringStream;
-    ss.buffer_pointer = 0;
+    mut ss : StringStream = make<StringStream>(&mut state.allocator);
     ss:writef(resp, req.id:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
     print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
@@ -442,6 +386,7 @@ function handle_diagnostic : (
     out:write(ss:as_sv());
     out:flush();
 
+    ss:deallocate();
     json:data():deallocate();
 }
 
@@ -508,13 +453,14 @@ function handle_text_change : (
     let text_buffer : u8[mut&] = &mut addr_to_mut_heap_array<u8>(addr);
     memcpy(&mut text_buffer, &text:data().value:data():data(), text_length);
 
-    mut path : StringStream;
-    path.buffer_pointer = 0;
+    mut path : StringStream = make<StringStream>(&mut state.allocator);
     path:writef(sv("/proc/%/fd/%\0"), getpid(), fd);
+    let path_sv : StringView = path:as_sv();
 
-    let args : CString[1] = { { &path:data() } };
+    let args : CString[1] = { { &path_sv:data() } };
     mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
 
+    path:deallocate();
     munmap(addr, text_length);
     sys_close(fd);
 
@@ -528,14 +474,14 @@ function handle_text_change : (
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": []}}");
-        mut ss : StringStream;
-        ss.buffer_pointer = 0;
+        mut ss : StringStream = make<StringStream>(&mut state.allocator);
         ss:writef(resp, uri:data().value:data(), version:data().value:data());
         print(ss:as_sv());
         out:writef(sv("Content-Length: %\r\n"), ss:length());
         out:write(sv("\r\n"));
         out:write(ss:as_sv());
         out:flush();
+        ss:deallocate();
         json:data():deallocate();
         return;
     }
@@ -594,8 +540,7 @@ function handle_text_change : (
 
     printf(sv("message: %, line: %"), message:data().value:data(), line:data().value:data());
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": \"%\", \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": \"%\" }]}}");
-    mut ss : StringStream;
-    ss.buffer_pointer = 0;
+    mut ss : StringStream = make<StringStream>(&mut state.allocator);
     ss:writef(resp, uri:data().value:data(), version:data().value:data(), line_number:data() - 1, column_number:data() - 1, line_number:data() - 1, column_number:data() - 1, message:data().value:data());
     print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
@@ -603,6 +548,7 @@ function handle_text_change : (
     out:write(ss:as_sv());
     out:flush();
 
+    ss:deallocate();
     json:data():deallocate();
 }
 
