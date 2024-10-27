@@ -13,13 +13,14 @@ typedef Process : {
 function execute : (
     path : CString, args : View<CString>
 ) -> Optional<Process> = {
+    runtime_assert(args:len() < 31);
+
     // TODO replace this with a vector when we have a global allocator.
     mut argv : CString[32];
     argv[0] = path;
     mut index : int = 1;
     for arg in args:get_iter() {
         argv[index] = arg;
-        // FIXME ++index also compiles; but results in broken code?
         index += 1;
     }
     let null : iptr = 0;
