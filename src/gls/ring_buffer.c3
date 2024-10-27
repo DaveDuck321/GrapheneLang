@@ -12,23 +12,14 @@ typedef RingBuffer : {
     tail : isize,
 }
 
-function make<RingBuffer> : (
-    size : isize, name : CString
-) -> Optional<RingBuffer> = {
+function make<RingBuffer> : (size : isize, name : CString) -> RingBuffer = {
     // TODO get the page size from sysconf().
-    if size % 4096 != 0 {
-        return make<Optional<RingBuffer>>();
-    }
+    runtime_assert(size % 4096 == 0);
 
     let fd : int = memfd_create(name, 0x0);
-    if fd < 0 {
-        return make<Optional<RingBuffer>>();
-    }
+    runtime_assert(fd >= 0);
 
-    if ftruncate(fd, size) != 0 {
-        sys_close(fd);
-        return make<Optional<RingBuffer>>();
-    }
+    runtime_assert(ftruncate(fd, size) == 0);
 
     let addr : iptr = mmap(
         0, 2 * size, SYS_PROT_NONE(), SYS_MAP_PRIVATE() | SYS_MAP_ANONYMOUS(),
@@ -46,12 +37,12 @@ function make<RingBuffer> : (
 
     sys_close(fd);
 
-    return make<Optional<RingBuffer>>({
+    return {
         .buffer = { &mut addr_to_mut_heap_array<u8>(addr), 2 * size },
         .size = size,
         .head = 0,
         .tail = 0,
-    });
+    };
 }
 
 function deallocate : (self : RingBuffer mut&) -> void = {

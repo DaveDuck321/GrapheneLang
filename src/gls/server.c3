@@ -16,26 +16,19 @@ typedef State : {
     parser_path : CStringView,
 }
 
-function make<State> : (parser_path : CStringView) -> Optional<State> = {
-    mut client_buffer : Optional<RingBuffer> =
+function make<State> : (parser_path : CStringView) -> State = {
+    let client_buffer : RingBuffer =
         make<RingBuffer>(10 * 1024 * 1024, make<CString>("client_buffer\0"));
-    if !client_buffer:has_value() {
-        return make<Optional<State>>();
-    }
 
-    let parser_buffer : Optional<RingBuffer> =
+    let parser_buffer : RingBuffer =
         make<RingBuffer>(10 * 1024 * 1024, make<CString>("parser_buffer\0"));
-    if !parser_buffer:has_value() {
-        client_buffer:data():deallocate();
-        return make<Optional<State>>();
-    }
 
-    return make<Optional<State>>({
+    return {
         initialize_allocator(),
-        client_buffer:data(),
-        parser_buffer:data(),
+        client_buffer,
+        parser_buffer,
         parser_path,
-    });
+    };
 }
 
 typedef RPCRequest : {
@@ -746,16 +739,12 @@ function main : (argc : int, argv : u8[&][&]) -> int = {
 
     print(sv("Starting!"));
 
-    mut state : Optional<State> = make<State>(parser_path);
-    if !state:has_value() {
-        print(sv("Error: failed to initialize state"));
-        return 1;
-    }
+    mut state : State = make<State>(parser_path);
 
     while true {
-        if !state:data():handle_next_rpc(in_file, out_file) {
+        if !state:handle_next_rpc(in_file, out_file) {
             // Try and resync if something went wrong.
-            state:data().client_buffer:clear();
+            state.client_buffer:clear();
         }
     }
 
