@@ -69,6 +69,11 @@ function sys_exit : (code : int) -> void = {
     _syscall_1(code, /* exit */ 93);
 }
 
+function sys_assert_failed: () -> void = {
+    sys_write(/* stderr */ 2, "Assertion Failed!\n", 18);
+    __builtin_trap();
+}
+
 function sys_memfd_create : (name : u8[&], flags : u32) -> i64 = {
     let name_addr : iptr = __builtin_ptr_to_int(&name);
     return _syscall_2(name_addr, as_arithmetic(flags), /* memfd_create */ 279);
@@ -94,7 +99,6 @@ function sys_execve : (path : u8[&], argv : u8[&][&]) -> int = {
     // TODO envp.
     return Narrow<int>(_syscall_3(__builtin_ptr_to_int(&path),
         __builtin_ptr_to_int(&argv), 0, /* execve */ 221));
-
 }
 
 function sys_getpid : () -> int = {

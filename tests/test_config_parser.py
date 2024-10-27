@@ -1,5 +1,5 @@
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeGuard
 
@@ -23,13 +23,14 @@ class ExpectedOutput:
 
 @dataclass
 class TestConfig:
-    expected_failing: bool
-    for_target: str | None
-    compile_opts: ExpectedOutput | None
-    compile_args: list[str]
-    grep_ir_strs: list[str]
-    run_opts: ExpectedOutput | None
-    run_args: list[str]
+    expected_failing: bool = False
+    for_target: str | None = None
+    compile_opts: ExpectedOutput | None = None
+    compile_args: list[str] = field(default_factory=list)
+    optimize_args: list[str] | None = None
+    grep_ir_strs: list[str] = field(default_factory=list)
+    run_opts: ExpectedOutput | None = None
+    run_args: list[str] = field(default_factory=list)
 
 
 # Global; only ever make one parser
@@ -42,7 +43,7 @@ class ConfigInterpreter(Interpreter):
     def __init__(self) -> None:
         super().__init__()
 
-        self.config = TestConfig(False, None, None, [], [], None, [])
+        self.config = TestConfig()
 
     @staticmethod
     def _format_msg(msg: str) -> list[str]:
@@ -98,6 +99,12 @@ class ConfigInterpreter(Interpreter):
 
         self.config.compile_opts = self._cmd_impl(status_tree, msg_tree)
         self.config.compile_args.extend(arg_tokens)
+
+    @v_args(inline=True)
+    def opt_cmd(self, *trees: Tree) -> None:
+        assert self.config.optimize_args is None
+        assert is_list_of_str(trees)
+        self.config.optimize_args = [*trees]
 
     @v_args(inline=True)
     def run_cmd(self, *trees: Tree) -> None:

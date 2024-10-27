@@ -65,6 +65,11 @@ function sys_exit : (code : int) -> void = {
     _syscall_1(code, 60);
 }
 
+function sys_assert_failed: () -> void = {
+    sys_write(/* stderr */ 2, "Assertion Failed!\n", 18);
+    __builtin_trap();
+}
+
 function sys_memfd_create : (name : u8[&], flags : u32) -> i64 = {
     let name_addr : iptr = __builtin_ptr_to_int(&name);
     return _syscall_2(name_addr, as_arithmetic(flags), /* memfd_create */ 319);
