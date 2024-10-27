@@ -18,7 +18,7 @@ function ftruncate : (fd : int, length : isize) -> int = {
 
 function pipe : () -> Optional<Pipe> = {
     mut fds : int[2] = { 0, 0 };
-    if sys_pipe(&mut fds) == 0 {
+    if sys_pipe2(&mut fds, /* no flags */ 0) == 0 {
         return make<Optional<Pipe>>({ { fds[0] }, { fds[1] } });
     }
 

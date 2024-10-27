@@ -91,6 +91,10 @@ function sys_connect : (fd : int, addr : iptr, addrlen : int) -> i64 = {
     return _syscall_3(fd, addr, addrlen, /* connect */ 203);
 }
 
+function sys_pipe2 : (fds : int[mut&], flags : int) -> int = {
+    return Narrow<int>(_syscall_2(__builtin_ptr_to_int(&fds), flags, /* pipe2 */ 59));
+}
+
 function sys_dup3 : (old_fd : int, new_fd : int, flags : int) -> int = {
     return Narrow<int>(_syscall_3(old_fd, new_fd, flags, /* dup3 */ 24));
 }
