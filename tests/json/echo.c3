@@ -21,4 +21,4 @@ function main : () -> int = {
 
 /// @COMPILE
 /// @RUN; EXPECT OUT
-/// {"children": [[]{"children": [[]{"name": "ESCAPED_STRING", "value": ""std/format.c3""}[]], "name": "require_once"}[]], "name": "program"}
+/// {"children": [[]{"children": [[]{"name": "ESCAPED_STRING", "value": "\"std\/format.c3\""}[]], "name": "require_once"}[]], "name": "program"}
