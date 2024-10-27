@@ -52,12 +52,13 @@ typedef StringStream : {
 }
 
 function write : (ss : StringStream mut&, sv : StringView) -> void = {
-    // TODO bounds check.
-    for i in range(sv:length()) {
-        ss.buffer[ss.buffer_pointer + i] = sv.buffer.data[i];
-    }
+    mut dest : Span<u8> = make<Span<u8>>(&mut ss.buffer);
+    dest = dest:slice_from(ss.buffer_pointer);
+    // TODO we truncate the input on overflow - should this be an error instead?
+    dest = dest:slice_to(sv:length());
 
-    ss.buffer_pointer += sv:length();
+    memcpy(&mut dest.data, &sv:data(), dest:length());
+    ss.buffer_pointer += dest:length();
 }
 
 function write : (ss : StringStream mut&, number : isize) -> void = {
