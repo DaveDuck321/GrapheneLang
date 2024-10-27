@@ -421,16 +421,47 @@ function [IO] write : (io : IO mut&, node : JSON_Node) -> TypeIf<void, IsStreama
         // Allowed to fail.
         if node.value:has_value() {
             let string : StringView = node.value:data();
-            let buffer : Span<u8> = io:request_buffer(string:length() + 2);
 
-            buffer.data[0] = char("\"");
-            buffer.data[buffer.length - 1] = char("\"");
-            for i in range(string:length()) {
-                // FIXME we need to escape the strings we print here.
-                buffer.data[i + 1] = string.buffer.data[i];
+            io:write_char(char("\""));
+
+            for char in string:get_iter() {
+                if char == char("\"") {
+                    io:write("\\\"");
+                    continue;
+                }
+                if char == char("\\") {
+                    io:write("\\\\");
+                    continue;
+                }
+                if char == char("/") {
+                    io:write("\\/");
+                    continue;
+                }
+                if char == char("\b") {
+                    io:write("\\b");
+                    continue;
+                }
+                if char == char("\f") {
+                    io:write("\\f");
+                    continue;
+                }
+                if char == char("\n") {
+                    io:write("\\n");
+                    continue;
+                }
+                if char == char("\r") {
+                    io:write("\\r");
+                    continue;
+                }
+                if char == char("\t") {
+                    io:write("\\t");
+                    continue;
+                }
+
+                io:write_char(char);
             }
 
-            io:consume_length(buffer.length);
+            io:write_char(char("\""));
             return;
         }
     }
