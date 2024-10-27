@@ -29,6 +29,22 @@ function main : () -> int = {
     }
     runtime_assert(sum == 20);
 
+    vec:resize(100, 2);
+
+    sum = 0;
+    for i in vec:get_iter() {
+        sum += i;
+    }
+    runtime_assert(sum == 210);
+
+    vec:resize(5, 2);
+
+    sum = 0;
+    for i in vec:get_iter() {
+        sum += i;
+    }
+    runtime_assert(sum == 20);
+
     vec:deallocate(); // TODO: RAII
     return 0;
 }
