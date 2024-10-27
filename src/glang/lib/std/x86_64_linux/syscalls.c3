@@ -87,7 +87,7 @@ function sys_connect : (fd : int, addr : iptr, addrlen : int) -> i64 = {
     return _syscall_3(fd, addr, addrlen, /* connect */ 42);
 }
 
-function sys_pipe : (fds : int[&]) -> int = {
+function sys_pipe : (fds : int[mut&]) -> int = {
     return Narrow<int>(_syscall_1(__builtin_ptr_to_int(&fds), /* pipe */ 22));
 }
 
