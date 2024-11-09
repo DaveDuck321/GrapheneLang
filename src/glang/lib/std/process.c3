@@ -13,7 +13,7 @@ typedef Process : {
 function execute : (
     path : CString, args : View<CString>
 ) -> Optional<Process> = {
-    runtime_assert(args:len() < 31);
+    runtime_assert(args:length() < 31);
 
     // TODO replace this with a vector when we have a global allocator.
     mut argv : CString[32];
