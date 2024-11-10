@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from subprocess import run
@@ -23,25 +24,21 @@ class CustomBuildHook(BuildHookInterface):
 
         self.app.display_waiting("Compiling gls")
 
-        old_argv = sys.argv
-        try:
-            # HACK can we do... better?
-            sys.path.append(str(Path(self.root) / "src"))
-            from glang.driver import main as glang_main
-
-            # HACK I don't like any of this.
-            sys.argv = [
-                "glang",
+        rc = run(
+            [
+                sys.executable,
+                "-m",
+                "src.glang.driver",
                 "src/gls/server.c3",
                 "-o",
                 f"{self.directory}/gls",
                 "-O3",
-            ]
-            glang_main()
-        except Exception as exc:
-            self.app.abort(f"gls compilation failed: {exc}")
-        finally:
-            sys.argv = old_argv
+            ],
+            check=False,
+            env=os.environ | {"PYTHONPATH": str(Path(self.root) / "src")},
+        ).returncode
+        if rc:
+            self.app.abort("gls compilation failed")
 
         self.app.display_success("Done!")
 
