@@ -71,7 +71,7 @@ function sys_exit : (code : int) -> void = {
 
 function sys_assert_failed: () -> void = {
     sys_write(/* stderr */ 2, "Assertion Failed!\n", 18);
-    __builtin_trap();
+    sys_exit(1);
 }
 
 function sys_memfd_create : (name : u8[&], flags : u32) -> i64 = {
