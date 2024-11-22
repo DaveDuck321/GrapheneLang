@@ -35,7 +35,12 @@ class CustomBuildHook(BuildHookInterface):
                 "-O3",
             ],
             check=False,
-            env=os.environ | {"PYTHONPATH": str(Path(self.root) / "src")},
+            env=os.environ
+            | {
+                "PYTHONPATH": str(Path(self.root) / "src")
+                + ":"
+                + os.environ.get("PYTHONPATH", "")
+            },
         ).returncode
         if rc:
             self.app.abort("gls compilation failed")
