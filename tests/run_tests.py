@@ -216,7 +216,8 @@ def run_test_print_result(test_path: Path) -> TestStatus:
 
     config = parse_file(test_path)
     if config is None:
-        print(f"SKIPPED '{test_name}' (not a test)")
+        with io_lock:
+            print(f"SKIPPED '{test_name}' (not a test)")
         return TestStatus.SKIPPED_NOT_A_TEST
 
     if config.for_target is not None and config.for_target != HOST_TARGET:
