@@ -804,9 +804,8 @@ class UnresolvedFunctionSignature:
         if self.parameter_pack_argument_name is None:
             if len(self.arguments) != len(target_args):
                 return None
-        else:
-            if len(self.arguments) >= len(target_args):
-                return None
+        elif len(self.arguments) >= len(target_args):
+            return None
 
         # Match the (non-packed) arguments
         for target_arg, unresolved_arg in zip(
@@ -1181,9 +1180,9 @@ class SymbolTable:
         # Find the cheapest valid candidate (doing overload resolution if cost is the same)
         all_candidates.sort(key=lambda item: item[0])
         for _, candidates in groupby(all_candidates, key=lambda item: item[0]):
-            resolved_candidates: list[tuple[FunctionSignature, FunctionDeclaration]] = (
-                []
-            )
+            resolved_candidates: list[
+                tuple[FunctionSignature, FunctionDeclaration]
+            ] = []
             for _, candidate in candidates:
                 try:
                     resolved = self.resolve_function(candidate)
