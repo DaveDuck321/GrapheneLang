@@ -39,7 +39,6 @@ dependencies = ["interegular~=0.3", "lark==1.1.9"]
 [tool.hatch.envs.dev.scripts]
 bootstrap = "./bootstrap.sh"
 parser = "glang ./src/glang/parser/parser.c3 -o ./dist/parser -O3"
-test = "python tests/run_tests.py {args}"
 
 
 # Style environment. Does not depend on the project.
@@ -54,6 +53,14 @@ check = [
   "isort --check-only --diff --profile black .",
 ]
 fmt = ["isort --profile black .", "black ."]
+
+
+# Built-in hatch test environment.
+[tool.hatch.envs.hatch-test]
+dependencies = ["interegular~=0.3", "lark==1.1.9"]
+
+[tool.hatch.envs.hatch-test.scripts]
+run = "python tests/run_tests.py {args}"
 
 
 # Build configuration. Need a bunch of dependencies because the build process
