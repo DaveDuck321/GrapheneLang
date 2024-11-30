@@ -1,9 +1,11 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from sys import exit as sys_exit
 from typing import Any, TypeGuard
 
 from lark import Lark, Token, Tree, v_args
+from lark.exceptions import LarkError
 from lark.visitors import Interpreter
 
 
@@ -121,13 +123,21 @@ class ConfigInterpreter(Interpreter):
         self.config.grep_ir_strs.append(token.strip())
 
 
-def parse_file(path: Path) -> TestConfig:
+def parse_file(path: Path) -> TestConfig | None:
     with path.open(encoding="utf-8") as file:
         lines = [
             line.removeprefix("///").strip() for line in file if line.startswith("///")
         ]
 
-    tree = lark.parse("\n".join(lines))
+    if not lines:
+        # This is not a test file.
+        return None
+
+    try:
+        tree = lark.parse("\n".join(lines))
+    except LarkError as exc:
+        # Print the path and the error message instead of the stack trace.
+        sys_exit(f"Failed to parse test file '{path}'\n{exc}")
     interpreter = ConfigInterpreter()
     interpreter.visit(tree)
 
