@@ -121,11 +121,15 @@ class ConfigInterpreter(Interpreter):
         self.config.grep_ir_strs.append(token.strip())
 
 
-def parse_file(path: Path) -> TestConfig:
+def parse_file(path: Path) -> TestConfig | None:
     with path.open(encoding="utf-8") as file:
         lines = [
             line.removeprefix("///").strip() for line in file if line.startswith("///")
         ]
+
+    if not lines:
+        # This is not a test file.
+        return None
 
     tree = lark.parse("\n".join(lines))
     interpreter = ConfigInterpreter()

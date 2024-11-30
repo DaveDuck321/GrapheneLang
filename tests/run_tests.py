@@ -35,6 +35,7 @@ class TestStatus(Enum):
     SKIPPED_DUE_TO_TARGET = 2
     EXPECTED_FAIL = 3
     UNEXPECTED_PASS = 4
+    SKIPPED_NOT_A_TEST = 5
 
 
 class TestFailure(RuntimeError):
@@ -205,14 +206,23 @@ io_lock = Lock()
 
 def run_test_print_result(test_path: Path) -> TestStatus:
     assert test_path.exists()
-    config = parse_file(test_path)
 
-    test_name = str(test_path.relative_to(PARENT_DIR))
+    # Try and shorten the path if possible.
+    test_name = (
+        str(test_path.relative_to(PARENT_DIR))
+        if test_path.is_relative_to(PARENT_DIR)
+        else str(test_path)
+    )
+
+    config = parse_file(test_path)
+    if config is None:
+        print(f"SKIPPED '{test_name}' (not a test)")
+        return TestStatus.SKIPPED_NOT_A_TEST
 
     if config.for_target is not None and config.for_target != HOST_TARGET:
         # Skip this test.
         with io_lock:
-            print(f"SKIPPED '{test_name}'")
+            print(f"SKIPPED '{test_name}' (incompatible)")
         return TestStatus.SKIPPED_DUE_TO_TARGET
 
     try:
@@ -259,6 +269,7 @@ def run_tests(tests: list[Path], workers: int) -> int:
     expected_fails = count_status(TestStatus.EXPECTED_FAIL)
     unexpected_passes = count_status(TestStatus.UNEXPECTED_PASS)
     skipped_target = count_status(TestStatus.SKIPPED_DUE_TO_TARGET)
+    skipped_not_a_test = count_status(TestStatus.SKIPPED_NOT_A_TEST)
 
     tests_that_would_ideally_pass = passed + failed + expected_fails + unexpected_passes
 
@@ -272,6 +283,8 @@ def run_tests(tests: list[Path], workers: int) -> int:
     else:
         if skipped_target:
             print(f"SKIPPED {skipped_target} TESTS DUE TO INCOMPATIBLE TARGET")
+        if skipped_not_a_test:
+            print(f"SKIPPED {skipped_not_a_test} FILES WHICH WERE NOT TESTS")
 
         print(f"PASSED {passed}/{tests_that_would_ideally_pass} TESTS")
 
@@ -303,32 +316,34 @@ def build_jit_dependencies() -> None:
 
 
 class Arguments(Tap):
-    test: Path | None = None
+    test: list[Path] = [TESTS_DIR]
     workers: int = cpu_count()
+
+    def configure(self) -> None:
+        self.add_argument("test", nargs="*")
 
 
 def main() -> None:
     args = Arguments().parse_args()
 
-    assert TESTS_DIR.is_dir()
     OUT_DIR.mkdir(exist_ok=True)
 
     build_jit_dependencies()
 
-    if args.test is not None:
-        test_path = args.test if args.test.is_file() else PARENT_DIR / args.test
-        try:
-            run_test_print_result(test_path.resolve(strict=True))
-        except FileNotFoundError:
-            print(f"No such file: '{test_path}'")
-    else:
-        all_test_files = [
-            test_file
-            for test_file in TESTS_DIR.rglob("**/*.c3")
-            if not test_file.stem.startswith("_") and test_file.is_file()
-        ]
+    all_test_files: set[Path] = set()
+    for file_or_dir in args.test:
+        if file_or_dir.is_file():
+            all_test_files.add(file_or_dir.resolve(strict=True))
+        elif file_or_dir.is_dir():
+            all_test_files.update(
+                test_file.resolve(strict=True)
+                for test_file in file_or_dir.rglob("**/*.c3")
+                if not test_file.stem.startswith("_") and test_file.is_file()
+            )
+        else:
+            print(f"ERROR: Invalid path {file_or_dir}")
 
-        sys_exit(run_tests(all_test_files, args.workers))
+    sys_exit(run_tests(sorted(all_test_files), args.workers))
 
 
 if __name__ == "__main__":
