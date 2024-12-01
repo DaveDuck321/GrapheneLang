@@ -9,6 +9,10 @@ function SIGKILL : () -> int = {
     return 9;
 }
 
+function SIGCHLD : () -> int = {
+    return 17;
+}
+
 function kill : (pid : pid_t, sig : int) -> int = {
     return sys_kill(pid, sig);
 }

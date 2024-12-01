@@ -9,6 +9,7 @@ foreign _syscall_1 : (a: i64, syscall_number: i32) -> i64
 foreign _syscall_2 : (a: i64, b: i64, syscall_number: i32) -> i64
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i32) -> i64
 foreign _syscall_4 : (a: i64, b: i64, c: i64, d: i64, syscall_number: i32) -> i64
+foreign _syscall_5 : (a: i64, b: i64, c: i64, d: i64, e: i64, syscall_number: i32) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i32) -> i64
 
 function sys_read : (fd: int, buffer: u8[mut&], count: isize) -> isize = {
@@ -115,4 +116,13 @@ function sys_kill : (pid : int, sig : int) -> int = {
 
 function sys_wait4 : (pid : int, wstatus : int mut&, options : int, rusage : iptr) -> int = {
     return Narrow<int>(_syscall_4(pid, __builtin_ptr_to_int(&mut wstatus), options, rusage, /* wait4 */ 260));
+}
+
+function sys_clone : (
+    flags : int, stack : iptr, parent_tid : iptr, child_tid : iptr, tls : i64
+) -> int = {
+    // NOTE the order of the arguments is not the same as the x86-64 variant.
+    return Narrow<int>(
+        _syscall_5(flags, stack, parent_tid, tls, child_tid, /* clone */ 220)
+    );
 }

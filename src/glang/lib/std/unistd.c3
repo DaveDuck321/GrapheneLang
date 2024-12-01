@@ -9,7 +9,10 @@ typedef Pipe : {
 }
 
 function fork : () -> pid_t = {
-    return Narrow<pid_t>(sys_fork());
+    // The fork syscall is not available on all architectures. Emulate it with
+    // clone instead. I believe we don't need to set any of the CLONE_ flags,
+    // just the exit signal.
+    return sys_clone(SIGCHLD(), 0, 0, 0, 0);
 }
 
 function ftruncate : (fd : int, length : isize) -> int = {

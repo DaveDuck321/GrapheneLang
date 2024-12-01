@@ -8,6 +8,7 @@ foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64
 foreign _syscall_2 : (a: i64, b: i64, syscall_number: i64) -> i64
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64
 foreign _syscall_4 : (a: i64, b: i64, c: i64, d: i64, syscall_number: i64) -> i64
+foreign _syscall_5 : (a: i64, b: i64, c: i64, d: i64, e: i64, syscall_number: i64) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i64) -> i64
 
 function sys_read : (fd: int, buffer: u8[mut&], count: isize) -> isize = {
@@ -39,10 +40,6 @@ function sys_close : (fd : int) -> int = {
 function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
     let iov_addr : iptr = __builtin_ptr_to_int(iov);
     return _syscall_3(fd, iov_addr, iovcnt, /* writev */ 20);
-}
-
-function sys_fork : () -> i64 = {
-    return _syscall_0(/* fork */ 57);
 }
 
 function sys_mmap : (
@@ -112,4 +109,12 @@ function sys_kill : (pid : int, sig : int) -> int = {
 
 function sys_wait4 : (pid : int, wstatus : int mut&, options : int, rusage : iptr) -> int = {
     return Narrow<int>(_syscall_4(pid, __builtin_ptr_to_int(&mut wstatus), options, rusage, /* wait4 */ 61));
+}
+
+function sys_clone : (
+    flags : int, stack : iptr, parent_tid : iptr, child_tid : iptr, tls : i64
+) -> int = {
+    return Narrow<int>(
+        _syscall_5(flags, stack, parent_tid, child_tid, tls, /* clone */ 56)
+    );
 }
