@@ -286,8 +286,9 @@ function handle_diagnostic : (
     }
 
     // We expect `file:///file/system/path`.
-    let protocol : StringView = uri:data().value:data():slice_to(7);
-    if protocol != sv("file://") {
+    let file_scheme : StringView = sv("file://") ;
+    let protocol : StringView = uri:data().value:data():slice_to(file_scheme:length());
+    if protocol != file_scheme {
         printf(sv("Unsupported URI protocol `%`"), protocol);
         return;
     }
