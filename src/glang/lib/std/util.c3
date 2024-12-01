@@ -51,6 +51,14 @@ function [TRef, BRef] reinterpret_addr : (base : BRef)
     return &__builtin_int_to_ptr<TRef>(__builtin_ptr_to_int(&base));
 }
 
+function [T] c_nullptr : () -> TypeIf<T, IsConstRef<T>> = {
+    return &__builtin_int_to_ptr<T>(0);
+}
+
+function [T] c_nullptr : () -> TypeIf<T, IsMutRef<T>> = {
+    return &mut __builtin_int_to_ptr<T>(0);
+}
+
 function as_arithmetic : (value : u8)   -> i8   = { return __builtin_bitcast<i8>(value); }
 function as_arithmetic : (value : u16)  -> i16  = { return __builtin_bitcast<i16>(value); }
 function as_arithmetic : (value : u32)  -> i32  = { return __builtin_bitcast<i32>(value); }

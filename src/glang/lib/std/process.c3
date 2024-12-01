@@ -23,8 +23,7 @@ function execute : (
         argv[index] = arg;
         index += 1;
     }
-    let null : iptr = 0;
-    argv[index] = { &addr_to_heap_array<u8>(null) };
+    argv[index] = { &c_nullptr<u8[&]>() };
 
     let stdout : Optional<Pipe> = pipe();
     if !stdout:has_value() {

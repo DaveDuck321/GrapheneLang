@@ -52,8 +52,7 @@ function deallocate : (self : RingBuffer mut&) -> void = {
 
     runtime_assert(munmap(addr, 2 * self.size) == 0);
 
-    let null : iptr = 0;
-    self.buffer = { &mut addr_to_mut_heap_array<u8>(null), 0 };
+    self.buffer = { &mut c_nullptr<u8[mut&]>(), 0 };
     self.size = 0;
 }
 
