@@ -804,9 +804,8 @@ class UnresolvedFunctionSignature:
         if self.parameter_pack_argument_name is None:
             if len(self.arguments) != len(target_args):
                 return None
-        else:
-            if len(self.arguments) >= len(target_args):
-                return None
+        elif len(self.arguments) >= len(target_args):
+            return None
 
         # Match the (non-packed) arguments
         for target_arg, unresolved_arg in zip(

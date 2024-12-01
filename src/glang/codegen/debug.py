@@ -4,7 +4,6 @@ from enum import IntEnum, StrEnum
 from hashlib import file_digest
 from inspect import getmembers
 from pathlib import Path
-from typing import Optional
 
 
 class Tag(StrEnum):
@@ -228,7 +227,7 @@ class DILocation(Metadata):
 
 @dataclass(repr=False, eq=False)
 class DIType(DIScope):
-    name: Optional[str]
+    name: str | None
     _size_in_bits: int
     tag: Tag
 
@@ -244,8 +243,8 @@ class DIBasicType(DIType):
 
 @dataclass(repr=False, eq=False)
 class DICompositeType(DIType):
-    baseType: Optional[DIType]
-    elements: Optional[MetadataList]
+    baseType: DIType | None
+    elements: MetadataList | None
     # TODO
     # scope: DIScope
     # file: DIFile
@@ -264,7 +263,7 @@ class DIDerivedType(DIType):
     # file: DIFile
     # line: int
     baseType: DIType
-    offset: Optional[int]
+    offset: int | None
 
 
 @dataclass(repr=False, eq=False)
@@ -278,7 +277,7 @@ class DISubroutineType(DIType):
 @dataclass(repr=False, eq=False)
 class DILocalVariable(Metadata):
     name: str
-    arg: Optional[int]
+    arg: int | None
     scope: DIScope
     file: DIFile
     line: int
