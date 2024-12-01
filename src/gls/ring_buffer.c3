@@ -102,9 +102,17 @@ function read_line : (
         }
 
         // Read from the fd and try again.
-        if buffer:read_impl(source) == 0 {
+        let ret : isize = buffer:read_impl(source);
+
+        if ret < 0 {
             // Read failed, give up.
             print(sv("ERROR: read_line - read failed"));
+            return make<Optional<View<u8>>>();
+        }
+
+        if ret == 0 {
+            // EOF, give up.
+            print(sv("ERROR: read_line - got EOF"));
             return make<Optional<View<u8>>>();
         }
     }
@@ -151,8 +159,17 @@ function read : (
 
     while (buffer.tail - buffer.head) % buffer.size < size {
         // Read from the fd and try again.
-        if buffer:read_impl(source) == 0 {
+        let ret : isize = buffer:read_impl(source);
+
+        if ret < 0 {
             // Read failed, give up.
+            print(sv("ERROR: read - read failed"));
+            return make<Optional<View<u8>>>();
+        }
+
+        if ret == 0 {
+            // EOF, give up.
+            print(sv("ERROR: read - got EOF"));
             return make<Optional<View<u8>>>();
         }
     }
