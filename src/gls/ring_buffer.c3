@@ -113,6 +113,34 @@ function read_line : (
     return make<Optional<View<u8>>>();
 }
 
+function read_eof : (
+    buffer : RingBuffer mut&, source : File
+) -> Optional<View<u8>> = {
+    while true {
+        // Keep reading from the fd until the EOF.
+        let ret : isize = buffer:read_impl(source);
+
+        if ret < 0 {
+            // Read failed, give up.
+            print(sv("ERROR: read_eof - read failed"));
+            return make<Optional<View<u8>>>();
+        }
+
+        if ret == 0 {
+            // Reached EOF.
+            break;
+        }
+    }
+
+    // Unwrap the tail to produce a contiguous slice.
+    mut tail : isize = buffer.tail;
+    if tail < buffer.head {
+        tail += buffer.size;
+    }
+
+    return make<Optional<View<u8>>>(to_view(buffer.buffer:slice_between(buffer.head, tail)));
+}
+
 function read : (
     buffer : RingBuffer mut&, source : File, size : isize
 ) -> Optional<View<u8>> = {

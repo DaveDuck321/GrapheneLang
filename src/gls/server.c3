@@ -94,7 +94,7 @@ function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSO
     // subsequent invocations.
     state.parser_buffer:clear();
 
-    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_line(process:data().stdout);
+    mut view_opt : Optional<View<u8>> = state.parser_buffer:read_eof(process:data().stdout);
 
     let wstatus : Optional<int> = process:data():wait();
     if !wstatus:has_value() {
