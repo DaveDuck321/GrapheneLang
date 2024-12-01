@@ -477,7 +477,7 @@ class IntToPtrExpression(BuiltinCallable):
         assert self._ptr_type.storage_kind.is_reference()
 
         (self._src_expr,) = arguments
-        assert isinstance(self._src_expr.result_type, GenericIntType)
+        assert isinstance(self._src_expr.result_type.definition, IntegerDefinition)
 
         super().__init__(
             self._ptr_type.convert_to_value_type(),
