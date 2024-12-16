@@ -178,8 +178,17 @@ function read : (
     );
 }
 
+function length : (buffer : RingBuffer&) -> isize = {
+    let len : isize = buffer.tail - buffer.head;
+    if (len < 0) {
+        return len + buffer.size;
+    }
+    return len;
+}
+
 function advance : (buffer : RingBuffer mut&, size : isize) -> void = {
-    // TODO bounds checking.
+    runtime_assert(size <= buffer:length());
+
     buffer.head += size;
     buffer.head %= buffer.size;
 }
