@@ -14,7 +14,6 @@ function main : () -> int = {
     return 0;
 }
 
-/// @FOR x86_64_linux
 /// @COMPILE
 /// @RUN; EXPECT OUT
 /// Parent

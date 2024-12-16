@@ -122,7 +122,9 @@ function [Args...] syntax_error : (cursor : Cursor mut&, format_args : Args...) 
 
 // TODO: ugly error if we forget the generic definition
 function [Args...] syntax_error_at_position : (cursor : Cursor mut&, position : isize, format_args : Args...) -> void = {
-    mut io : BufferedFile = get_stdout_io();
+    mut io : BufferedFile;
+    io.underlying = {1 /* stdout */};
+    io.buffer_pointer = 0;
     io:write("{");
     io:write("\"success\":false");
     io:write(",\"location\":");
@@ -132,6 +134,7 @@ function [Args...] syntax_error_at_position : (cursor : Cursor mut&, position : 
     io:writef(format_args...);
     io:write("\"");
     io:write("}");
+    io:write("\n");
     io:close();
     sys_exit(1);
 }
@@ -326,8 +329,13 @@ function get_next_numeric_token : (cursor : Cursor mut&) -> NumericToken = {
 }
 
 function get_next_string_literal_token : (cursor : Cursor mut&) -> ProgramSlice = {
-    runtime_assert(cursor:try_skip_next("\""));
-    let start_offset : isize = cursor.position;
+    mut start_offset : isize = cursor.position;
+
+    if !cursor:try_skip_next("\"") {
+        syntax_error_at_position(&mut cursor, start_offset, sv("expected start of string"));
+    }
+
+    start_offset = cursor.position;
 
     while !cursor:try_skip_next("\"") {
         if cursor:is_next("\0") {
@@ -1466,6 +1474,10 @@ function parse_next_top_level_feature : (cursor : Cursor mut&) -> TopLevelFeatur
 
 function main : (argc: int, argv: u8[&][&]) -> int = {
     // 1) Read the entire file
+    if argc != 2 {
+        printf(sv("Usage: parser FILE"));
+        return 1;
+    }
     let file_to_parse : CString = {&argv[1]};
     let file : Optional<File> = open(file_to_parse, O_RDONLY());
     if !file:has_value() {
@@ -1496,12 +1508,16 @@ function main : (argc: int, argv: u8[&][&]) -> int = {
 
     // 3) Output result as JSON
     {
+        mut io : BufferedFile;
+        io.underlying = {1 /* stdout */};
+        io.buffer_pointer = 0;
         mut json_output : JSON_Stream = {
             .program = program_text,
             .line_number_lookup = generate_position_lookup_table(program_text, &mut allocator),
-            .file = get_stdout_io(),
+            .file = io,
         };
         json_output:write_json_value(&program);
+        json_output:write("\n");
         json_output:close();
     }
 
