@@ -271,11 +271,8 @@ class Program:
         output.lines.append("")
         output.lines.extend(self.symbol_table.get_ir_for_initialization())
 
-        # We need to declare any debugger intrinsics we use for some reason.
+        # We need to declare any intrinsics we use for some reason.
         output.lines.append("")
-        output.lines.append(
-            "declare void @llvm.dbg.declare(metadata, metadata, metadata)"
-        )
         output.lines.append("declare void @llvm.trap() cold nounwind noreturn")
 
         output.lines.append("")
