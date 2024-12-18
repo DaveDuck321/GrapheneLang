@@ -9,7 +9,7 @@ jobs:
   test:
     strategy:
       matrix:
-        llvm-version: [18, 19]
+        llvm-version: [19]
         python-version: [3.13]
         runner: [ubuntu-latest, buildjet-2vcpu-ubuntu-2204-arm]
 
