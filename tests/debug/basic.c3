@@ -1,7 +1,8 @@
 @require_once "std/arithmetic.c3"
 
 function main : () -> int = {
-    return 1 + 1;
+    let x : int = 1;
+    return x + 1;
 }
 
 /// @COMPILE
@@ -13,4 +14,4 @@ function main : () -> int = {
 /// @GREP_IR ret i32 %?, !dbg ![0-9]
 /// @GREP_IR !{i32 1, !"Dwarf Version", i32 4}
 /// @GREP_IR !{i32 1, !"Debug Info Version", i32 3}
-/// @GREP_IR declare void @llvm.dbg.declare(metadata, metadata, metadata)
+/// @GREP_IR #dbg_declare(ptr %1
