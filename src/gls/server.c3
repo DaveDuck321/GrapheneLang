@@ -35,12 +35,12 @@ function make<State> : (parser_path : CStringView) -> State = {
 typedef RPCRequest : {
     id : Optional<StringView>, // TODO parse to int.
     method : StringView, // TODO string.
-    params : JSON_Node, // TODO mut&?
+    params : Optional<JSON_Node>, // TODO mut&?
 }
 
 typedef RPCNotification : {
     notification : StringView, // TODO string.
-    params       : JSON_Node, // TODO mut&?
+    params       : Optional<JSON_Node>, // TODO mut&?
 }
 
 function [IO] write : (io : IO mut&, req : RPCRequest) -> TypeIf<void, IsStreamableTextIO<IO>> = {
@@ -200,33 +200,23 @@ function handle_next_rpc : (
     let method : Optional<JSON_Node> = json:data().map:at(sv("method"));
     mut params : Optional<JSON_Node> = json:data().map:at(sv("params"));
 
-    mut deallocate_params : bool = false;
-    if !params:has_value() {
-        // TODO Should the RPC objects take an optional instead?
-        params = make<Optional<JSON_Node>>(make<JSON_Node>(/* object */ 6, &mut state.allocator));
-        deallocate_params = true;
-    }
-
     if id:has_value() {
         let request : RPCRequest = {
             .id = id:data().value,
             .method = method:data().value:data(),
-            .params = params:data(),
+            .params = params,
         };
         state:dispatch_rpc_request(request, out_file);
     }
     else {
         let notification : RPCNotification = {
             .notification = method:data().value:data(),
-            .params = params:data(),
+            .params = params,
         };
         state:dispatch_rpc_notification(notification, out_file);
     }
 
     json:data():deallocate();
-    if deallocate_params {
-        params:data():deallocate();
-    }
 
     return true;
 }
@@ -269,7 +259,12 @@ function handle_diagnostic : (
 ) -> void = {
     printf(sv("Received diagnostic request with params=%"), req.params);
 
-    let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
+    if !req.params:has_value() {
+        print(sv("Missing params"));
+        return;
+    }
+
+    let text_document : Optional<JSON_Node> = req.params:data().map:at(sv("textDocument"));
     if !text_document:has_value() {
         print(sv("'textDocument' not found"));
         return;
@@ -286,7 +281,7 @@ function handle_diagnostic : (
     }
 
     // We expect `file:///file/system/path`.
-    let file_scheme : StringView = sv("file://") ;
+    let file_scheme : StringView = sv("file://");
     let protocol : StringView = uri:data().value:data():slice_to(file_scheme:length());
     if protocol != file_scheme {
         printf(sv("Unsupported URI protocol `%`"), protocol);
@@ -403,7 +398,12 @@ function handle_text_change : (
 ) -> void = {
     printf(sv("Received textDocument/didChange notification"));
 
-    let text_document : Optional<JSON_Node> = req.params.map:at(sv("textDocument"));
+    if !req.params:has_value() {
+        print(sv("Missing params"));
+        return;
+    }
+
+    let text_document : Optional<JSON_Node> = req.params:data().map:at(sv("textDocument"));
     if !text_document:has_value() {
         print(sv("'textDocument' not found"));
         return;
@@ -421,7 +421,7 @@ function handle_text_change : (
         return;
     }
 
-    let content_changes : Optional<JSON_Node> = req.params.map:at(sv("contentChanges"));
+    let content_changes : Optional<JSON_Node> = req.params:data().map:at(sv("contentChanges"));
     if !content_changes:has_value() {
         print(sv("'contentChanges' not found"));
         return;
