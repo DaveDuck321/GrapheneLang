@@ -73,17 +73,24 @@ function parse_natural_number : (cursor : Cursor mut&) -> Optional<int> = {
     return make<Optional<int>>();
 }
 
-function run_parser : (state : State mut&, args : View<CString>) -> Optional<JSON_Node> = {
-    // TODO need a formatter for Span and View.
-    if args:length() >= 1 {
-        printf(sv("Running parser % %"), state.parser_path,
-            make<StringView>(args:get(0)));
-    }
+function run_parser : (state : State mut&, path : StringView) -> Optional<JSON_Node> = {
+    printf(sv("Running parser % %"), state.parser_path, path);
+
+    // Append a null terminator to the path.
+    mut arg : StringStream = make<StringStream>(&mut state.allocator);
+    arg:writef(sv("%\0"), path);
+
+    // The arugments are naturally an array, even if we only have one.
+    let arg_sv : StringView = arg:as_sv();
+    let args : CString[1] = { { &arg_sv:data() }};
 
     mut process : Optional<Process> = execute(
         { &state.parser_path:data() },
-        args,
+        make<View<CString>>(&args),
     );
+
+    arg:deallocate();
+
     if !process:has_value() {
         print(sv("Failed to start process"));
         return make<Optional<JSON_Node>>();
@@ -289,14 +296,7 @@ function handle_diagnostic : (
     }
 
     let path : StringView = uri:data().value:data():slice_from(7);
-
-    mut path_ss : StringStream = make<StringStream>(&mut state.allocator);
-    path_ss:writef(sv("%\0"), path);
-    let path_sv : StringView = path_ss:as_sv();
-
-    let args : CString[1] = { { &path_sv:data() } };
-    mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
-    path_ss:deallocate();
+    mut json : Optional<JSON_Node> = state:run_parser(path);
 
     if !json:has_value() {
         // run_parser() already printed an appropriate error.
@@ -462,11 +462,9 @@ function handle_text_change : (
     memcpy(&mut text_buffer, &text:data().value:data():data(), text_length);
 
     mut path : StringStream = make<StringStream>(&mut state.allocator);
-    path:writef(sv("/proc/%/fd/%\0"), getpid(), fd);
-    let path_sv : StringView = path:as_sv();
+    path:writef(sv("/proc/%/fd/%"), getpid(), fd);
 
-    let args : CString[1] = { { &path_sv:data() } };
-    mut json : Optional<JSON_Node> = state:run_parser(make<View<CString>>(&args));
+    mut json : Optional<JSON_Node> = state:run_parser(path:as_sv());
 
     path:deallocate();
     munmap(addr, text_length);
