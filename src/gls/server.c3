@@ -43,6 +43,16 @@ typedef RPCNotification : {
     params       : Optional<JSON_Node>, // TODO mut&?
 }
 
+typedef Diagnostic : {
+    message : JSON_Node,
+    line    : int,
+    column  : int,
+}
+
+typedef ParserOutput : {
+    diagnostic : Optional<Diagnostic>,
+}
+
 function [IO] write : (io : IO mut&, req : RPCRequest) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     io:writef(sv("RPCRequest {id=%, method=%, params=%}"), req.id, req.method, req.params);
 }
@@ -129,6 +139,76 @@ function run_parser : (state : State mut&, path : StringView) -> Optional<JSON_N
     }
 
     return json;
+}
+
+function parse_parser_output : (
+    state : State mut&, json : JSON_Node mut&
+) -> Optional<ParserOutput> = {
+    mut output : ParserOutput = { make<Optional<Diagnostic>>() };
+
+    let success : Optional<JSON_Node> = json.map:at(sv("success"));
+
+    // The parser didn't produce an error.
+    if !success:has_value() {
+        return make<Optional<ParserOutput>>(output);
+    }
+
+    // TODO need an actual API here.
+    if success:data().type != /* false */ 2 {
+        print(sv("Unexpected 'success' value"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    // Now we need to extract all diagnostic information.
+    let message : Optional<JSON_Node> = json.map:at(sv("message"));
+    if !message:has_value() {
+        print(sv("'message' not found"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    let location : Optional<JSON_Node> = json.map:at(sv("location"));
+    if !location:has_value() {
+        print(sv("'location' not found"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
+    if !line:has_value() {
+        print(sv("'line' not found"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
+    if !column:has_value() {
+        print(sv("'column' not found"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut state.allocator };
+    let line_number : Optional<int> = cursor:parse_natural_number();
+
+    if !line_number:has_value() {
+        print(sv("Couldn't parse line number"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    cursor.iter = column:data().value:data():get_iter();
+    let column_number : Optional<int> = cursor:parse_natural_number();
+
+    if !column_number:has_value() {
+        print(sv("Couldn't parse column number"));
+        return make<Optional<ParserOutput>>();
+    }
+
+    let diagnostic : Diagnostic = {
+        message:data(),
+        line_number:data() - 1,
+        column_number:data() - 1,
+    };
+
+    output.diagnostic = make<Optional<Diagnostic>>(diagnostic);
+
+    return make<Optional<ParserOutput>>(output);
 }
 
 function handle_next_rpc : (
@@ -303,8 +383,14 @@ function handle_diagnostic : (
         return;
     }
 
-    let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
-    if !success:has_value() {
+    let parser_output : Optional<ParserOutput> = state:parse_parser_output(&mut json:data());
+
+    if !parser_output:has_value() {
+        json:data():deallocate();
+        return;
+    }
+
+    if !parser_output:data().diagnostic:has_value() {
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": []}}");
@@ -320,68 +406,18 @@ function handle_diagnostic : (
         return;
     }
 
-    // TODO need an actual API here.
-    if success:data().type != /* false */ 2 {
-        json:data():deallocate();
-        return;
-    }
-
-    let message : Optional<JSON_Node> = json:data().map:at(sv("message"));
-    if !message:has_value() {
-        print(sv("'message' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    let location : Optional<JSON_Node> = json:data().map:at(sv("location"));
-    if !location:has_value() {
-        print(sv("'location' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
-    if !line:has_value() {
-        print(sv("'line' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
-    if !column:has_value() {
-        print(sv("'column' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut state.allocator };
-    let line_number : Optional<int> = cursor:parse_natural_number();
-
-    if !line_number:has_value() {
-        print(sv("Couldn't parse line number"));
-        json:data():deallocate();
-        return;
-    }
-
-    cursor.iter = column:data().value:data():get_iter();
-    let column_number : Optional<int> = cursor:parse_natural_number();
-
-    if !column_number:has_value() {
-        print(sv("Couldn't parse column number"));
-        json:data():deallocate();
-        return;
-    }
+    let diagnostic : Diagnostic = parser_output:data().diagnostic:data();
 
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": % }]}}");
     mut ss : StringStream = make<StringStream>(&mut state.allocator);
     ss:writef(
         resp,
         req.id:data(),
-        line_number:data() - 1,
-        column_number:data() - 1,
-        line_number:data() - 1,
-        column_number:data() - 1,
-        message:data()
+        diagnostic.line,
+        diagnostic.column,
+        diagnostic.line,
+        diagnostic.column,
+        diagnostic.message,
     );
     print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
@@ -475,8 +511,14 @@ function handle_text_change : (
         return;
     }
 
-    let success : Optional<JSON_Node> = json:data().map:at(sv("success"));
-    if !success:has_value() {
+    let parser_output : Optional<ParserOutput> = state:parse_parser_output(&mut json:data());
+
+    if !parser_output:has_value() {
+        json:data():deallocate();
+        return;
+    }
+
+    if !parser_output:data().diagnostic:has_value() {
         // The parser didn't output an error, so the code is good. We still need
         // to reply though.
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": %, \"version\": %, \"diagnostics\": []}}");
@@ -492,57 +534,7 @@ function handle_text_change : (
         return;
     }
 
-    // TODO need an actual API here.
-    if success:data().type != /* false */ 2 {
-        json:data():deallocate();
-        return;
-    }
-
-    let message : Optional<JSON_Node> = json:data().map:at(sv("message"));
-    if !message:has_value() {
-        print(sv("'message' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    let location : Optional<JSON_Node> = json:data().map:at(sv("location"));
-    if !location:has_value() {
-        print(sv("'location' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    let line : Optional<JSON_Node> = location:data().map:at(sv("line"));
-    if !line:has_value() {
-        print(sv("'line' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    let column : Optional<JSON_Node> = location:data().map:at(sv("column"));
-    if !column:has_value() {
-        print(sv("'column' not found"));
-        json:data():deallocate();
-        return;
-    }
-
-    mut cursor : Cursor = { line:data().value:data():get_iter(), &mut state.allocator };
-    let line_number : Optional<int> = cursor:parse_natural_number();
-
-    if !line_number:has_value() {
-        print(sv("Couldn't parse line number"));
-        json:data():deallocate();
-        return;
-    }
-
-    cursor.iter = column:data().value:data():get_iter();
-    let column_number : Optional<int> = cursor:parse_natural_number();
-
-    if !column_number:has_value() {
-        print(sv("Couldn't parse column number"));
-        json:data():deallocate();
-        return;
-    }
+    let diagnostic : Diagnostic = parser_output:data().diagnostic:data();
 
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": %, \"version\": %, \"diagnostics\": [{ \"range\": { \"start\": { \"line\": %, \"character\": % }, \"end\" : { \"line\": %, \"character\": % } }, \"message\": % }]}}");
     mut ss : StringStream = make<StringStream>(&mut state.allocator);
@@ -550,11 +542,11 @@ function handle_text_change : (
         resp,
         uri:data(),
         version:data(),
-        line_number:data() - 1,
-        column_number:data() - 1,
-        line_number:data() - 1,
-        column_number:data() - 1,
-        message:data()
+        diagnostic.line,
+        diagnostic.column,
+        diagnostic.line,
+        diagnostic.column,
+        diagnostic.message,
     );
     print(ss:as_sv());
     out:writef(sv("Content-Length: %\r\n"), ss:length());
