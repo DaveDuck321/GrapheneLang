@@ -212,6 +212,8 @@ function parse_parser_output : (
 }
 
 function send_response : (out : BufferedFile mut&, resp : StringView) -> void = {
+    printf(sv("<-- %"), resp);
+
     // Write the Content-Length header required by the language server protocol
     // followed by a JSON-RPC message.
     out:writef(sv("Content-Length: %\r\n"), resp:length());
@@ -400,7 +402,6 @@ function handle_diagnostic : (
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{\"kind\":\"full\", \"items\": []}}");
         mut ss : StringStream = make<StringStream>(&mut state.allocator);
         ss:writef(resp, req.id:data());
-        print(ss:as_sv());
         out:send_response(ss:as_sv());
         ss:deallocate();
         json:data():deallocate();
@@ -420,7 +421,6 @@ function handle_diagnostic : (
         diagnostic.column,
         diagnostic.message,
     );
-    print(ss:as_sv());
     out:send_response(ss:as_sv());
 
     ss:deallocate();
@@ -522,7 +522,6 @@ function handle_text_change : (
         let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\",\"params\":{\"uri\": %, \"version\": %, \"diagnostics\": []}}");
         mut ss : StringStream = make<StringStream>(&mut state.allocator);
         ss:writef(resp, uri:data(), version:data());
-        print(ss:as_sv());
         out:send_response(ss:as_sv());
         ss:deallocate();
         json:data():deallocate();
@@ -543,7 +542,6 @@ function handle_text_change : (
         diagnostic.column,
         diagnostic.message,
     );
-    print(ss:as_sv());
     out:send_response(ss:as_sv());
 
     ss:deallocate();
