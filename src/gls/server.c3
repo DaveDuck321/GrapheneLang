@@ -211,6 +211,15 @@ function parse_parser_output : (
     return make<Optional<ParserOutput>>(output);
 }
 
+function send_response : (out : BufferedFile mut&, resp : StringView) -> void = {
+    // Write the Content-Length header required by the language server protocol
+    // followed by a JSON-RPC message.
+    out:writef(sv("Content-Length: %\r\n"), resp:length());
+    out:write(sv("\r\n"));
+    out:write(resp);
+    out:flush();
+}
+
 function handle_next_rpc : (
     state : State mut&, in_file : File, out_file : File
 ) -> bool = {
@@ -311,11 +320,9 @@ function handle_next_rpc : (
 function handle_initialize : (state : State mut&, req : RPCRequest, out : BufferedFile mut&) -> void = {
     printf(sv("Received initialize request with params=%"), req.params);
 
-    let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}, \"textDocumentSync\": {\"change\": 1}}}}");
-    out:writef(sv("Content-Length: %\r\n"), resp:length());
-    out:write(sv("\r\n"));
-    out:write(resp);
-    out:flush();
+    out:send_response(
+        sv("{\"jsonrpc\":\"2.0\",\"id\":0,\"result\":{\"capabilities\":{\"diagnosticProvider\":{\"interFileDependencies\":true,\"workspaceDiagnostics\":false}, \"textDocumentSync\": {\"change\": 1}}}}")
+    );
 }
 
 function handle_shutdown : (state : State mut&, req : RPCRequest, out : BufferedFile mut&) -> void = {
@@ -324,10 +331,7 @@ function handle_shutdown : (state : State mut&, req : RPCRequest, out : Buffered
     let resp : StringView = sv("{\"jsonrpc\":\"2.0\",\"id\":%,\"result\":{}}");
     mut ss : StringStream = make<StringStream>(&mut state.allocator);
     ss:writef(resp, req.id:data());
-    out:writef(sv("Content-Length: %\r\n"), ss:length());
-    out:write(sv("\r\n"));
-    out:write(ss:as_sv());
-    out:flush();
+    out:send_response(ss:as_sv());
     ss:deallocate();
 }
 
@@ -397,10 +401,7 @@ function handle_diagnostic : (
         mut ss : StringStream = make<StringStream>(&mut state.allocator);
         ss:writef(resp, req.id:data());
         print(ss:as_sv());
-        out:writef(sv("Content-Length: %\r\n"), ss:length());
-        out:write(sv("\r\n"));
-        out:write(ss:as_sv());
-        out:flush();
+        out:send_response(ss:as_sv());
         ss:deallocate();
         json:data():deallocate();
         return;
@@ -420,10 +421,7 @@ function handle_diagnostic : (
         diagnostic.message,
     );
     print(ss:as_sv());
-    out:writef(sv("Content-Length: %\r\n"), ss:length());
-    out:write(sv("\r\n"));
-    out:write(ss:as_sv());
-    out:flush();
+    out:send_response(ss:as_sv());
 
     ss:deallocate();
     json:data():deallocate();
@@ -525,10 +523,7 @@ function handle_text_change : (
         mut ss : StringStream = make<StringStream>(&mut state.allocator);
         ss:writef(resp, uri:data(), version:data());
         print(ss:as_sv());
-        out:writef(sv("Content-Length: %\r\n"), ss:length());
-        out:write(sv("\r\n"));
-        out:write(ss:as_sv());
-        out:flush();
+        out:send_response(ss:as_sv());
         ss:deallocate();
         json:data():deallocate();
         return;
@@ -549,10 +544,7 @@ function handle_text_change : (
         diagnostic.message,
     );
     print(ss:as_sv());
-    out:writef(sv("Content-Length: %\r\n"), ss:length());
-    out:write(sv("\r\n"));
-    out:write(ss:as_sv());
-    out:flush();
+    out:send_response(ss:as_sv());
 
     ss:deallocate();
     json:data():deallocate();
