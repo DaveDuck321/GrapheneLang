@@ -31,11 +31,13 @@ def run_checked(args: list[str | Path], stdin: bytes | None = None) -> bytes:
         capture_output=True,
         check=False,
     )
-    if result.returncode != 0:
+    if result.stderr:
         command_str = " ".join(str(arg) for arg in args)
-        print(f"Error in command: {command_str}", file=sys.stderr)
+        print(f"stderr from command: {command_str}", file=sys.stderr)
         print(result.stderr.decode("utf-8"), file=sys.stderr)
-        exit(1)
+
+        if result.returncode != 0:
+            exit(result.returncode)
 
     return result.stdout
 
@@ -85,6 +87,12 @@ class DriverArguments(Tap):
 
     debug_compiler: bool = False
     """Print full exception traces."""
+
+    extra_opt_args: str | None = None
+    """A comma-separated string of additional arguments to pass to the optimizer"""
+
+    extra_llc_args: str | None = None
+    """A comma-separated string of additional arguments to pass to llc"""
 
     nostdlib: bool = False
     """Do not add the Graphene standard library to the include search path."""
@@ -171,13 +179,19 @@ class Assembly(Stage):
 
 class LLVM_IR(Stage):
     def compile(self, args: DriverArguments) -> ELF_Binary:
+        if args.optimize.lower() in ["z", "s"]:
+            optimize_level = "2"
+        else:
+            optimize_level = args.optimize
+
         result = run_checked(
             [
                 getenv("GRAPHENE_LLC_CMD", "llc"),
                 "--relocation-model=static",
                 f"--mtriple={get_target_triple()}",
                 "--filetype=obj",
-                f"-O{args.optimize}",
+                f"-O{optimize_level}",
+                *(args.extra_llc_args.split(",") if args.extra_llc_args else []),
                 "-",
             ],
             stdin=self.get_bytes(),
@@ -190,7 +204,11 @@ class LLVM_IR(Stage):
             [
                 getenv("GRAPHENE_OPT_CMD", "opt"),
                 "-S",
+                "--disable-builtin=memcpy",
+                "--disable-builtin=memset",
+                "--disable-builtin=memmove",
                 f"-O{args.optimize}",
+                *(args.extra_opt_args.split(",") if args.extra_opt_args else []),
                 "-",
             ],
             stdin=self.get_bytes(),
@@ -214,6 +232,7 @@ class LLVM_IR(Stage):
                 f"--mtriple={get_target_triple()}",
                 "--filetype=asm",
                 f"-O{args.optimize}",
+                *(args.extra_llc_args.split(",") if args.extra_llc_args else []),
                 "-",
             ],
             stdin=self.get_bytes(),
@@ -308,10 +327,10 @@ def main() -> None:
     llvm_sources: list[LLVM_IR] = [source.compile(args) for source in sources]
 
     # 2) Optimize (if enabled)
-    if args.optimize == "0":
-        opt_sources = llvm_sources  # Don't even touch on O0
-    else:
+    if args.optimize != "0" or args.extra_opt_args:
         opt_sources = [llvm.optimize(args) for llvm in llvm_sources]
+    else:
+        opt_sources = llvm_sources  # Don't even touch on O0
 
     # 2.5) Emit asm
     if args.emit_asm or args.emit_everything:
@@ -327,7 +346,9 @@ def main() -> None:
     objects = [source.compile(args) for source in opt_sources]
     if not args.use_crt and not args.compile_to_object:
         # We're not using libc, compile our own runtime
-        asm = Assembly(target_dir / "runtime.S", None)
+        asm = Assembly(
+            Path("/home/tom/Programming/gb-llvm/gameboy-tooling/runtime.s"), None
+        )
         objects.append(asm.compile(args))
 
     # 4) Create output objects if requested
