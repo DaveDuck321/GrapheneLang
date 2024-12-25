@@ -21,11 +21,7 @@ stage_1_dir="$(checkout bootstrap/1)"
 stage_2_dir="$(checkout bootstrap/2)"
 stage_4_dir="$(checkout bootstrap/4)"
 stage_5_dir="$(checkout bootstrap/5)"
-stage_6_dir="$(mktemp -d)"
-
-# Temporary workaround to bootstrap the new array syntax
-# This should be updated to us an actual tag once this PR is merged
-cp -a "$dest_dir/." "$stage_6_dir/"
+stage_6_dir="$(checkout bootstrap/6)"
 
 # We can't have these inside the function, as the EXIT signal seems to be raised
 # when the functions returns... It also looks like a second call to trap
@@ -54,20 +50,25 @@ env -C "$stage_4_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -
 # that supports this before literals become required by the standard library.
 env -C "$stage_5_dir" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o "$stage_5_dir/dist/parser"
 
-# Stage 6; adds parser support for index operator overloading and function types
+# Stage 6a; adds parser support for index operator overloading and function types
 # This is especially awkward since array indexing is no-longer builtin:
 # 1) The stage 5 parser cannot parse the syntax required to overload the array operator
 # 2) The stage 6 parser requires that the index operator is overloaded with this same syntax
 # These conflicting requirements are achieved by deleting the file that defines these overloads
 # so that the stage 5 compiler falls back to its builtins but a fresh checkout of the stage 6
 # compiler will work as expected.
-echo "// Bootstrap hack" > "$stage_6_dir/src/glang/lib/std/array.c3"
-host_target=$(env -C "$stage_5_dir" python3 -m src.glang.driver --print-host-target)
-# We need to use the runtime from stage 6, so compile that separately.
-env -C "$stage_5_dir" cc -c "$stage_6_dir/src/glang/lib/std/$host_target/runtime.S" -o "$stage_6_dir/dist/runtime.o"
-env -C "$stage_5_dir" python3 -m src.glang.driver -c "$stage_6_dir/src/glang/parser/parser.c3" --nostdlib -I "$stage_6_dir/src/glang/lib/" "$stage_6_dir/src/glang/lib/std/$host_target/" -o "$stage_6_dir/dist/parser.o"
-env -C "$stage_5_dir" ld --nostdlib --static "$stage_6_dir/dist/runtime.o" "$stage_6_dir/dist/parser.o" -o "$dest_dir/dist/parser"
+stage_6_array_c3_path="$stage_6_dir/src/glang/lib/std/array.c3"
+mv "$stage_6_array_c3_path" "${stage_6_array_c3_path}.old"
 
-# Final Stage; build the native parser from the working tree. Note that we need
-# to invoke the driver as a module.
+mkdir -p "$stage_6_dir/dist"
+echo "// Bootstrap hack" > "$stage_6_array_c3_path"
+env -C "$stage_5_dir" python3 -m src.glang.driver "$stage_6_dir/src/glang/parser/parser.c3" --nostdlib -I "$stage_6_dir/src/glang/lib/" "$stage_6_dir/src/glang/lib/std/$(env -C "$stage_5_dir" python3 -m src.glang.driver --print-host-target)/" -o "$stage_6_dir/dist/parser"
+
+# Stage 6b; recompile without the array index hack, allows us to use the index
+# operator in the standard library. Note that we need to invoke the driver as a
+# module.
+mv "${stage_6_array_c3_path}.old" "$stage_6_array_c3_path"
+PYTHONPATH="$stage_6_dir/src:$PYTHONPATH" env -C "$stage_6_dir" python3 -m src.glang.driver "$stage_6_dir/src/glang/parser/parser.c3" -o "$dest_dir/dist/parser"
+
+# Final Stage; build the native parser from the working tree.
 PYTHONPATH="$dest_dir/src:$PYTHONPATH" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3
