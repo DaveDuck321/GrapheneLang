@@ -31,13 +31,30 @@ def run_checked(args: list[str | Path], stdin: bytes | None = None) -> bytes:
         capture_output=True,
         check=False,
     )
-    if result.returncode != 0:
+    if result.stderr:
         command_str = " ".join(str(arg) for arg in args)
-        print(f"Error in command: {command_str}", file=sys.stderr)
+        print(f"stderr from command: {command_str}", file=sys.stderr)
         print(result.stderr.decode("utf-8"), file=sys.stderr)
-        exit(1)
+
+    if result.returncode != 0:
+        exit(result.returncode)
 
     return result.stdout
+
+
+def get_opt_level(arg: str, supports_size_hint: bool) -> str:
+    # Squash semantic optimization level into a numeric value supported by
+    # either llc or opt. We use the same mapping as clang.
+    # llc does not support -Os or -Oz but opt does.
+    match arg.lower():
+        case "g":
+            return "1"
+        case "z" | "s" if not supports_size_hint:
+            return "2"
+        case "4" | "fast":
+            return "3"
+        case _:
+            return arg
 
 
 class PrintHostTargetAction(Action):
@@ -85,6 +102,12 @@ class DriverArguments(Tap):
 
     debug_compiler: bool = False
     """Print full exception traces."""
+
+    extra_opt_args: str | None = None
+    """A comma-separated string of additional arguments to pass to the optimizer"""
+
+    extra_llc_args: str | None = None
+    """A comma-separated string of additional arguments to pass to the compiler"""
 
     nostdlib: bool = False
     """Do not add the Graphene standard library to the include search path."""
@@ -154,6 +177,7 @@ class Assembly(Stage):
                 getenv("GRAPHENE_CLANG_CMD", "clang"),
                 "-E",
                 "-xassembler-with-cpp",
+                f"--target={get_target_triple()}",
                 self.get_file(),
             ],
         )
@@ -177,7 +201,8 @@ class LLVM_IR(Stage):
                 "--relocation-model=static",
                 f"--mtriple={get_target_triple()}",
                 "--filetype=obj",
-                f"-O{args.optimize}",
+                f"-O{get_opt_level(args.optimize, supports_size_hint=False)}",
+                *(args.extra_llc_args.split(",") if args.extra_llc_args else []),
                 "-",
             ],
             stdin=self.get_bytes(),
@@ -190,7 +215,8 @@ class LLVM_IR(Stage):
             [
                 getenv("GRAPHENE_OPT_CMD", "opt"),
                 "-S",
-                f"-O{args.optimize}",
+                f"-O{get_opt_level(args.optimize, supports_size_hint=True)}",
+                *(args.extra_opt_args.split(",") if args.extra_opt_args else []),
                 "-",
             ],
             stdin=self.get_bytes(),
@@ -214,6 +240,7 @@ class LLVM_IR(Stage):
                 f"--mtriple={get_target_triple()}",
                 "--filetype=asm",
                 f"-O{args.optimize}",
+                *(args.extra_llc_args.split(",") if args.extra_llc_args else []),
                 "-",
             ],
             stdin=self.get_bytes(),
@@ -308,10 +335,10 @@ def main() -> None:
     llvm_sources: list[LLVM_IR] = [source.compile(args) for source in sources]
 
     # 2) Optimize (if enabled)
-    if args.optimize == "0":
-        opt_sources = llvm_sources  # Don't even touch on O0
-    else:
+    if args.optimize != "0" or args.extra_opt_args or args.emit_optimized_llvm:
         opt_sources = [llvm.optimize(args) for llvm in llvm_sources]
+    else:
+        opt_sources = llvm_sources  # Don't even touch on O0
 
     # 2.5) Emit asm
     if args.emit_asm or args.emit_everything:
