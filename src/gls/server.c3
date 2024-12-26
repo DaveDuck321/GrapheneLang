@@ -259,6 +259,8 @@ function handle_next_rpc : (
         return false;
     }
 
+    runtime_assert(!cursor:has_next());
+
     state.client_buffer:advance(view:length());
     view_opt = state.client_buffer:read_line(in_file);
     if !view_opt:has_value() {
