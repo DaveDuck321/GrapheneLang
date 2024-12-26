@@ -76,6 +76,7 @@ function as_i16  : (value : i16)  -> i16  = { return value; }
 function as_i32  : (value : i32)  -> i32  = { return value; }
 function as_i64  : (value : i64)  -> i64  = { return value; }
 function as_i128 : (value : i128) -> i128 = { return value; }
+function as_isize : (value : isize) -> isize = { return value; }
 
 function as_u8   : (value : u8)   -> u8  = { return value; }
 function as_u16  : (value : u16)  -> u16  = { return value; }

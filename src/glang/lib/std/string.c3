@@ -46,28 +46,14 @@ function data : (sv: StringView&) -> u8[&] = {
     return &sv.buffer.data;
 }
 
-@operator == : (lhs : StringView, rhs : StringView) -> bool = {
-    return lhs.buffer == rhs.buffer;
+typedef HasSpaceship<StringView> : TrueType
+@operator <=> : (lhs : StringView, rhs : StringView) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
 }
 
-@operator == : (lhs : StringView&, rhs : StringView&) -> bool = {
-    return lhs.buffer == rhs.buffer;
-}
-
-@operator != : (lhs : StringView, rhs : StringView) -> bool = {
-    return !(lhs == rhs);
-}
-
-@operator != : (lhs : StringView&, rhs : StringView&) -> bool = {
-    return !(&lhs == &rhs);
-}
-
-@operator < : (lhs : StringView, rhs : StringView) -> bool = {
-    return lhs.buffer < rhs.buffer;
-}
-
-@operator < : (lhs : StringView&, rhs : StringView&) -> bool = {
-    return lhs.buffer < rhs.buffer;
+typedef HasSpaceship<StringView&> : TrueType
+@operator <=> : (lhs : StringView&, rhs : StringView&) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
 }
 
 function slice_to : (sv : StringView&, end : isize) -> StringView = {
@@ -122,28 +108,14 @@ function data : (sv: CStringView&) -> u8[&] = {
     return &sv.buffer.data;
 }
 
-@operator == : (lhs : CStringView, rhs : CStringView) -> bool = {
-    return lhs.buffer == rhs.buffer;
+typedef HasSpaceship<CStringView> : TrueType
+@operator <=> : (lhs : CStringView, rhs : CStringView) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
 }
 
-@operator == : (lhs : CStringView&, rhs : CStringView&) -> bool = {
-    return lhs.buffer == rhs.buffer;
-}
-
-@operator != : (lhs : CStringView, rhs : CStringView) -> bool = {
-    return !(lhs == rhs);
-}
-
-@operator != : (lhs : CStringView&, rhs : CStringView&) -> bool = {
-    return !(&lhs == &rhs);
-}
-
-@operator < : (lhs : CStringView, rhs : CStringView) -> bool = {
-    return lhs.buffer < rhs.buffer;
-}
-
-@operator < : (lhs : CStringView&, rhs : CStringView&) -> bool = {
-    return lhs.buffer < rhs.buffer;
+typedef HasSpaceship<CStringView&> : TrueType
+@operator <=> : (lhs : CStringView&, rhs : CStringView&) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
 }
 
 function slice_to : (sv : CStringView&, end : isize) -> StringView = {
