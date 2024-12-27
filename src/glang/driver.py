@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 from argparse import Action, ArgumentParser, Namespace
@@ -32,7 +33,7 @@ def run_checked(args: list[str | Path], stdin: bytes | None = None) -> bytes:
         check=False,
     )
     if result.stderr:
-        command_str = " ".join(str(arg) for arg in args)
+        command_str = shlex.join(str(arg) for arg in args)
         print(f"stderr from command: {command_str}", file=sys.stderr)
         print(result.stderr.decode("utf-8"), file=sys.stderr)
 
