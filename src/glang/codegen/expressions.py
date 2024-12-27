@@ -730,7 +730,59 @@ class LogicalOperator(StaticTypedExpression):
 
     @property
     def ir_ref_without_type_annotation(self) -> str:
-        assert self.result_reg
+        assert self.result_reg is not None
+        return f"%{self.result_reg}"
+
+    def assert_can_read_from(self) -> None:
+        pass
+
+    def assert_can_write_to(self) -> None:
+        # TODO user-facing error.
+        raise AssertionError
+
+
+class LogicalNot(StaticTypedExpression):
+    def __init__(
+        self,
+        expression: TypedExpression,
+        meta: Meta,
+    ) -> None:
+        super().__init__(BoolType(), Type.Kind.VALUE, meta)
+
+        expression.assert_can_read_from()
+        assert_is_implicitly_convertible(expression, BoolType(), "logical not")
+
+        self.result_reg: int | None = None
+
+        self.expression = expression
+
+    def generate_ir(self, ctx: IRContext) -> IROutput:
+        # https://llvm.org/docs/LangRef.html#xor-instruction
+        ir = IROutput()
+        dbg = self.add_di_location(ctx, ir)
+
+        # Cast the expression to bool.
+        conv_expression, extra_expressions = do_implicit_conversion(
+            self.expression, BoolType()
+        )
+        ir.extend(self.expand_ir(extra_expressions, ctx))
+
+        self.result_reg = ctx.next_reg()
+
+        # <result> = xor <ty> <op1>, <op2>   ; yields ty:result
+        ir.lines.append(
+            f"{self.ir_ref_without_type_annotation} = xor "
+            f"{conv_expression.ir_ref_with_type_annotation}, true, {dbg}"
+        )
+
+        return ir
+
+    def __repr__(self) -> str:
+        return f"LogicalNot({self.expression})"
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        assert self.result_reg is not None
         return f"%{self.result_reg}"
 
     def assert_can_read_from(self) -> None:

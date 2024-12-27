@@ -29,7 +29,7 @@ function [IO] write : (io : IO mut&, cstr : CStringView) -> TypeIf<void, IsStrea
 function [IO] write : (io : IO mut&, number : isize) -> TypeIf<void, IsStreamableTextIO<IO>> = {
     let buffer : Span<u8> = io:request_buffer(21); // len(INT_64_MIN) == 21
     if number == 0 {
-        buffer.data[0] = "0"[0];
+        buffer.data[0] = char("0");
         io:consume_length(1);
 
         return;
@@ -39,7 +39,7 @@ function [IO] write : (io : IO mut&, number : isize) -> TypeIf<void, IsStreamabl
     mut current_number : isize = number;
     mut length : isize = 0;
     while current_number != 0 {
-        let next_digit: u8 = as_logical(__builtin_narrow<i8>(abs(current_number % 10) + as_arithmetic("0"[0])));
+        let next_digit: u8 = as_logical(__builtin_narrow<i8>(abs(current_number % 10) + as_arithmetic(char("0"))));
 
         buffer.data[length] = next_digit;
 
@@ -48,7 +48,7 @@ function [IO] write : (io : IO mut&, number : isize) -> TypeIf<void, IsStreamabl
     }
 
     if is_negative {
-        buffer.data[length] = "-"[0];
+        buffer.data[length] = char("-");
         length += 1;
     }
 
@@ -62,12 +62,14 @@ function [IO] write : (io : IO mut&, number : u32) -> TypeIf<void, IsStreamableT
     let buffer : Span<u8> = io:request_buffer(8); // 4 bytes
 
     if number == 0x00 {
-        buffer.data[0] = "0"[0];
+        buffer.data[0] = char("0");
         return;
     }
 
     let lookup_table : u8[16] = {
-        "0"[0], "1"[0], "2"[0], "3"[0], "4"[0], "5"[0], "6"[0], "7"[0], "8"[0], "9"[0], "A"[0], "B"[0], "C"[0], "D"[0], "E"[0], "F"[0]
+        char("0"), char("1"), char("2"), char("3"), char("4"), char("5"),
+        char("6"), char("7"), char("8"), char("9"), char("A"), char("B"),
+        char("C"), char("D"), char("E"), char("F")
     };
 
     mut remaining_number : u32 = number;
@@ -126,7 +128,7 @@ function [Args...] printf : (args : Args...) -> void = {
 }
 
 function [IO] writef : (io : IO mut&, format_string : StringView) -> void = {
-    // if format_string:index_of("%"[0]) != -1 {
+    // if format_string:index_of(char("%")) != -1 {
     //     puts("writef format string has mismatched numbers of '%' specifiers and arguments");
     //     runtime_assert(false);
     // }
@@ -144,7 +146,7 @@ function [IO, NextArg, Args...] writef : (io : IO mut&, format_string : StringVi
 }
 
 function [IO, Arg] write_next_format_pair : (io : IO mut&, format_string : StringView, next_arg : Arg) -> StringView = {
-    let insertion_index : isize = index_of(format_string:get_iter(), "%"[0]);
+    let insertion_index : isize = index_of(format_string:get_iter(), char("%"));
     if (insertion_index == -1) {
         // TODO: this error looks kinda janky if something has already been printed
         puts("writef format string has mismatched numbers of '%' specifiers and arguments");

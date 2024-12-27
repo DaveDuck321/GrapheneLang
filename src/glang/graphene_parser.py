@@ -531,6 +531,18 @@ class ExpressionParser(lp.Interpreter):
         )
         return flattened_expr.add_parent(call_expr)
 
+    def UnaryLogicalOperatorUse(
+        self, node: lp.UnaryLogicalOperatorUse
+    ) -> FlattenedExpression:
+        rhs = self.parse_expr(node.rhs)
+
+        # This is the only unary logical operator that we support, but that
+        # could change in the future.
+        assert node.name == "not"
+
+        flattened_expr = FlattenedExpression(rhs.subexpressions)
+        return flattened_expr.add_parent(cg.LogicalNot(rhs.expression(), node.meta))
+
     def LogicalOperatorUse(self, node: lp.LogicalOperatorUse) -> FlattenedExpression:
         lhs = self.parse_expr(node.lhs)
         rhs = self.parse_expr(node.rhs)
