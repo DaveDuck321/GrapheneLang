@@ -19,7 +19,7 @@ function try_encode_and_decode : (original_scalar: UnicodeScalar) -> void = {
 // This makes no attempt to verify incorrect utf-8 encodings are correctly handled
 function main : () -> int = {
     // U+0000..U+D7FF
-    for char in range(as_arithmetic(0x0000), as_arithmetic(0xD7FF) + 1)
+    for char in range(as_arithmetic(as_u32(0x0000)), as_arithmetic(as_u32(0xD7FF)) + 1)
     {
         try_encode_and_decode({as_logical(char)});
     }
@@ -27,20 +27,19 @@ function main : () -> int = {
     // U+D800–U+DFFF is reserved for the surrogate area
 
     // U+E000..U+FFFF
-    for char in range(as_arithmetic(0xE000), as_arithmetic(0xFFFF) + 1)
+    for char in range(as_arithmetic(as_u32(0xE000)), as_arithmetic(as_u32(0xFFFF)) + 1)
     {
         try_encode_and_decode({as_logical(char)});
     }
 
     // U+10000..U+10FFFF
-    for char in range(as_arithmetic(0x10000), as_arithmetic(0x10FFFF) + 1)
+    for char in range(as_arithmetic(as_u32(0x10000)), as_arithmetic(as_u32(0x10FFFF)) + 1)
     {
         try_encode_and_decode({as_logical(char)});
     }
 
     return 0;
 }
-
 
 /// @COMPILE
 /// @RUN

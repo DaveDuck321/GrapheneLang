@@ -7,6 +7,6 @@ function main: () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 5, in 'function main: () -> int'
-/// Error: function call 'a(int, int)' is ambiguous. Equally good candidates are:
+/// Error: function call 'a(Literal<0>, Literal<0>)' is ambiguous. Equally good candidates are:
 /// - function a : (i32, i64) -> int      (File '*.c3', line 1)
 /// - function a : (i64, i32) -> int      (File '*.c3', line 2)
