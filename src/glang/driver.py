@@ -210,18 +210,29 @@ class LLVM_IR(Stage):
         return ELF_Binary(result, self)
 
     def optimize(self, args: DriverArguments) -> LLVM_IR:
-        will_emit_optimized_llvm = args.emit_optimized_llvm or args.emit_everything
+        # The C library can provide these common definitions, but we do not.
+        extra_args = (
+            []
+            if args.use_crt
+            else [
+                "--disable-builtin=memcpy",
+                "--disable-builtin=memset",
+                "--disable-builtin=memmove",
+            ]
+        )
         optimized_ir = run_checked(
             [
                 getenv("GRAPHENE_OPT_CMD", "opt"),
                 "-S",
                 f"-O{get_opt_level(args.optimize, supports_size_hint=True)}",
                 *(args.extra_opt_args.split(",") if args.extra_opt_args else []),
+                *extra_args,
                 "-",
             ],
             stdin=self.get_bytes(),
         )
 
+        will_emit_optimized_llvm = args.emit_optimized_llvm or args.emit_everything
         if will_emit_optimized_llvm:
             if args.emit_everything or args.output is None:
                 optimized_llvm_output = self.get_top_level_source_file().with_suffix(

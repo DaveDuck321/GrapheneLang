@@ -64,10 +64,11 @@ mkdir -p "$stage_6_dir/dist"
 echo "// Bootstrap hack" > "$stage_6_array_c3_path"
 env -C "$stage_5_dir" python3 -m src.glang.driver "$stage_6_dir/src/glang/parser/parser.c3" --nostdlib -I "$stage_6_dir/src/glang/lib/" "$stage_6_dir/src/glang/lib/std/$(env -C "$stage_5_dir" python3 -m src.glang.driver --print-host-target)/" -o "$stage_6_dir/dist/parser"
 
-# Stage 6b; recompile without the array index hack, allows us to use the index operator in the standard library.
+# Stage 6b; recompile without the array index hack, allows us to use the index
+# operator in the standard library. Note that we need to invoke the driver as a
+# module.
 mv "${stage_6_array_c3_path}.old" "$stage_6_array_c3_path"
-PYTHONPATH="$stage_6_dir/src:$PYTHONPATH" python3 -m src.glang.driver "$stage_6_dir/src/glang/parser/parser.c3" -o "$dest_dir/dist/parser"
+PYTHONPATH="$stage_6_dir/src:$PYTHONPATH" env -C "$stage_6_dir" python3 -m src.glang.driver "$stage_6_dir/src/glang/parser/parser.c3" -o "$dest_dir/dist/parser"
 
-# Final Stage; build the native parser from the working tree. Note that we need
-# to invoke the driver as a module.
+# Final Stage; build the native parser from the working tree.
 PYTHONPATH="$dest_dir/src:$PYTHONPATH" python3 -m src.glang.driver ./src/glang/parser/parser.c3 -o ./dist/parser -O3

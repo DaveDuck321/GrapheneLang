@@ -1,12 +1,14 @@
 @require_once "arithmetic.c3"
+@require_once "array.c3"
 @require_once "assert.c3"
 @require_once "iterators.c3"
+@require_once "span.c3"
 @require_once "util.c3"
 @require_once "wrappers.c3"
-@require_once "span.c3"
 
 typedef CString : { data : u8[&] }
 typedef StringView     : { buffer : View<u8> }
+typedef CStringView    : { buffer : View<u8> }
 typedef UTF32Codepoint : { codepoint : u8 /* TODO: unicode support */ }
 
 function decode_utf8 : (char : u8) -> UTF32Codepoint = {
@@ -27,6 +29,10 @@ function make<StringView> : (cstr : CString) -> StringView = {
     return { make<View<u8>>(&cstr.data, cstr:length()) };
 }
 
+function make<StringView> : (cstr : CStringView) -> StringView = {
+    return { cstr.buffer };
+}
+
 function length : (sv : StringView&) -> isize = {
     return sv.buffer:length();
 }
@@ -36,28 +42,18 @@ function get_iter : (sv : StringView&) -> ContiguousContainerIter<View<u8>, u8&>
     return sv.buffer:get_iter();
 }
 
-@operator == : (lhs : StringView, rhs : StringView) -> bool = {
-    return lhs.buffer == rhs.buffer;
+function data : (sv: StringView&) -> u8[&] = {
+    return &sv.buffer.data;
 }
 
-@operator == : (lhs : StringView&, rhs : StringView&) -> bool = {
-    return lhs.buffer == rhs.buffer;
+typedef HasSpaceship<StringView> : TrueType
+@operator <=> : (lhs : StringView, rhs : StringView) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
 }
 
-@operator != : (lhs : StringView, rhs : StringView) -> bool = {
-    return !(lhs == rhs);
-}
-
-@operator != : (lhs : StringView&, rhs : StringView&) -> bool = {
-    return !(&lhs == &rhs);
-}
-
-@operator < : (lhs : StringView, rhs : StringView) -> bool = {
-    return lhs.buffer < rhs.buffer;
-}
-
-@operator < : (lhs : StringView&, rhs : StringView&) -> bool = {
-    return lhs.buffer < rhs.buffer;
+typedef HasSpaceship<StringView&> : TrueType
+@operator <=> : (lhs : StringView&, rhs : StringView&) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
 }
 
 function slice_to : (sv : StringView&, end : isize) -> StringView = {
@@ -74,11 +70,7 @@ function slice_between : (sv : StringView&, start : isize, end : isize) -> Strin
 
 // CString
 function length : (str: CString&) -> isize = {
-    mut len : isize = 0;
-    while str.data[len] != char("\0") {
-        len = len + 1;
-    }
-    return len;
+    return str.data:strlen();
 }
 
 function [@Len] make<CString> : (literal : u8[@Len]&) -> CString = {
@@ -86,6 +78,57 @@ function [@Len] make<CString> : (literal : u8[@Len]&) -> CString = {
     return {&literal};
 }
 
+// CStringView
+function [@Len] make<CStringView> : (literal : u8[@Len]&) -> CStringView = {
+    runtime_assert(literal[@Len - 1] == char("\0"));
+    // NOTE the null terminator is not included in the length.
+    return { make<View<u8>>(&literal, @Len - 1) };
+}
+
+function make<CStringView> : (cstr : u8[&]) -> CStringView = {
+    // NOTE the null terminator is not included in the length.
+    return { make<View<u8>>(&cstr, strlen(&cstr)) };
+}
+
+function make<CStringView> : (cstr : CString) -> CStringView = {
+    // NOTE the null terminator is not included in the length.
+    return make<CStringView>(&cstr.data);
+}
+
+function length : (sv : CStringView&) -> isize = {
+    return sv.buffer:length();
+}
+
+// TODO: return `UTF32Codepoint` here
+function get_iter : (sv : CStringView&) -> ContiguousContainerIter<View<u8>, u8&> = {
+    return sv.buffer:get_iter();
+}
+
+function data : (sv: CStringView&) -> u8[&] = {
+    return &sv.buffer.data;
+}
+
+typedef HasSpaceship<CStringView> : TrueType
+@operator <=> : (lhs : CStringView, rhs : CStringView) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
+}
+
+typedef HasSpaceship<CStringView&> : TrueType
+@operator <=> : (lhs : CStringView&, rhs : CStringView&) -> isize = {
+    return lhs.buffer <=> rhs.buffer;
+}
+
+function slice_to : (sv : CStringView&, end : isize) -> StringView = {
+    return { sv.buffer:slice_to(end) };
+}
+
+function slice_from : (sv : CStringView, start : isize) -> CStringView = {
+    return { sv.buffer:slice_from(start) };
+}
+
+function slice_from : (sv : CStringView&, start : isize) -> CStringView = {
+    return { sv.buffer:slice_from(start) };
+}
 
 // String utilities
 function ascii_is_white_space : (char : u8) -> bool = {
@@ -153,4 +196,14 @@ function[Int] unstringify : (view : StringView) -> TypeIf<Int, IsIntegral<Int>> 
     }
 
     return result;
+}
+
+function strlen : (cstr : u8[&]) -> isize = {
+    mut i : isize = 0;
+
+    while (cstr[i] != char("\0")) {
+        i += 1;
+    }
+
+    return i;
 }

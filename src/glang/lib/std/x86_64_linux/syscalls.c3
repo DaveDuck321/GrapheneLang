@@ -1,5 +1,4 @@
 @require_once "../util.c3"
-@require_once "../sys/mman.c3"
 @require_once "../sys/uio.c3"
 @require_once "../sys/types.c3"
 @require_once "sys/kstat.c3"
@@ -8,6 +7,8 @@ foreign _syscall_0 : (syscall_number: i64) -> i64
 foreign _syscall_1 : (a: i64, syscall_number: i64) -> i64
 foreign _syscall_2 : (a: i64, b: i64, syscall_number: i64) -> i64
 foreign _syscall_3 : (a: i64, b: i64, c: i64, syscall_number: i64) -> i64
+foreign _syscall_4 : (a: i64, b: i64, c: i64, d: i64, syscall_number: i64) -> i64
+foreign _syscall_5 : (a: i64, b: i64, c: i64, d: i64, e: i64, syscall_number: i64) -> i64
 foreign _syscall_6 : (a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, syscall_number: i64) -> i64
 
 function sys_read : (fd: int, buffer: u8[mut&], count: isize) -> isize = {
@@ -41,10 +42,6 @@ function sys_writev : (fd: int, iov: iovec[&], iovcnt: int) -> isize = {
     return _syscall_3(fd, iov_addr, iovcnt, /* writev */ 20);
 }
 
-function sys_fork : () -> i64 = {
-    return _syscall_0(/* fork */ 57);
-}
-
 function sys_mmap : (
     addr: iptr,
     length: isize,
@@ -66,6 +63,58 @@ function sys_exit : (code : int) -> void = {
 }
 
 function sys_assert_failed: () -> void = {
-    sys_write(/* stderr */ 2, "Assertion Failed!", 17);
+    sys_write(/* stderr */ 2, "Assertion Failed!\n", 18);
     sys_exit(1);
+}
+
+function sys_memfd_create : (name : u8[&], flags : u32) -> i64 = {
+    let name_addr : iptr = __builtin_ptr_to_int(&name);
+    return _syscall_2(name_addr, as_arithmetic(flags), /* memfd_create */ 319);
+}
+
+function sys_ftruncate : (fd : int, length : isize) -> i64 = {
+    return _syscall_2(fd, length, /* ftruncate */ 77);
+}
+
+function sys_socket : (family : int, type : int, protocol : int) -> i64 = {
+    return _syscall_3(family, type, protocol, /* socket */ 41);
+}
+
+function sys_connect : (fd : int, addr : iptr, addrlen : int) -> i64 = {
+    return _syscall_3(fd, addr, addrlen, /* connect */ 42);
+}
+
+function sys_pipe2 : (fds : int[mut&], flags : int) -> int = {
+    return Narrow<int>(_syscall_2(__builtin_ptr_to_int(&fds), flags, /* pipe2 */ 293));
+}
+
+function sys_dup3 : (old_fd : int, new_fd : int, flags : int) -> int = {
+    return Narrow<int>(_syscall_3(old_fd, new_fd, flags, /* dup3 */ 292));
+}
+
+function sys_execve : (path : u8[&], argv : u8[&][&]) -> int = {
+    // TODO envp.
+    return Narrow<int>(_syscall_3(__builtin_ptr_to_int(&path),
+        __builtin_ptr_to_int(&argv), 0, /* execve */ 59));
+
+}
+
+function sys_getpid : () -> int = {
+    return Narrow<int>(_syscall_0(/* getpid */ 39));
+}
+
+function sys_kill : (pid : int, sig : int) -> int = {
+    return Narrow<int>(_syscall_2(pid, sig, /* kill */ 62));
+}
+
+function sys_wait4 : (pid : int, wstatus : int mut&, options : int, rusage : iptr) -> int = {
+    return Narrow<int>(_syscall_4(pid, __builtin_ptr_to_int(&mut wstatus), options, rusage, /* wait4 */ 61));
+}
+
+function sys_clone : (
+    flags : int, stack : iptr, parent_tid : iptr, child_tid : iptr, tls : i64
+) -> int = {
+    return Narrow<int>(
+        _syscall_5(flags, stack, parent_tid, child_tid, tls, /* clone */ 56)
+    );
 }

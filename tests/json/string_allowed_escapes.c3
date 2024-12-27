@@ -1,4 +1,5 @@
 @require_once "std/json.c3"
+@require_once "std/format.c3"
 @require_once "std/string.c3"
 @require_once "std/memory.c3"
 
@@ -9,6 +10,7 @@ function main : () -> int = {
 
     // Should be accepted.
     if result:has_value() {
+        print(result:data());
         return 0;
     }
 
@@ -16,4 +18,5 @@ function main : () -> int = {
 }
 
 /// @COMPILE
-/// @RUN
+/// @RUN; EXPECT OUT
+/// [[]"\"\\\/\b\f\n\r\t"[]]
