@@ -24,8 +24,13 @@ from glang.target import (
 global_tmp_dir = TemporaryDirectory()
 
 
-def run_checked(args: list[str | Path], stdin: bytes | None = None) -> bytes:
-    # Like the python one but actually output the stderr on fail
+def run_checked(
+    args: list[str | Path], verbose: bool, stdin: bytes | None = None
+) -> bytes:
+    if verbose:
+        command_str = shlex.join(str(arg) for arg in args)
+        print(command_str)
+
     result = subprocess.run(
         args,
         input=stdin,
@@ -104,10 +109,10 @@ class DriverArguments(Tap):
     debug_compiler: bool = False
     """Print full exception traces."""
 
-    extra_opt_args: str | None = None
+    extra_opt_args: list[str] = []
     """A comma-separated string of additional arguments to pass to the optimizer"""
 
-    extra_llc_args: str | None = None
+    extra_llc_args: list[str] = []
     """A comma-separated string of additional arguments to pass to the compiler"""
 
     nostdlib: bool = False
@@ -125,10 +130,16 @@ class DriverArguments(Tap):
     linker_script: Path | None = None
     """Link with custom script"""
 
+    verbose: bool = False
+    """Prints each subcommand executed by the driver."""
+
     def __init__(self):
         super().__init__(underscores_to_dashes=True)
 
     def configure(self) -> None:
+        def to_argument_list(arg: str) -> list[str]:
+            return arg.split(",")
+
         self.add_argument("inputs")
         self.add_argument("-o", "--output")
         self.add_argument("-c", "--compile_to_object")
@@ -136,6 +147,9 @@ class DriverArguments(Tap):
         self.add_argument("-O", "--optimize")
         self.add_argument("-S", "--emit-asm")
         self.add_argument("-T", "--linker-script")
+        self.add_argument("-v", "--verbose")
+        self.add_argument("--extra-opt-args", type=to_argument_list)
+        self.add_argument("--extra-llc-args", type=to_argument_list)
         self.add_argument("--print_host_target", nargs=0, action=PrintHostTargetAction)
 
 
@@ -181,6 +195,7 @@ class Assembly(Stage):
                 f"--target={get_target_triple()}",
                 self.get_file(),
             ],
+            args.verbose,
         )
         compiled = run_checked(
             [
@@ -189,6 +204,7 @@ class Assembly(Stage):
                 f"--triple={get_target_triple()}",
                 "-g",
             ],
+            args.verbose,
             stdin=expanded,
         )
         return ELF_Binary(compiled, self)
@@ -203,9 +219,10 @@ class LLVM_IR(Stage):
                 f"--mtriple={get_target_triple()}",
                 "--filetype=obj",
                 f"-O{get_opt_level(args.optimize, supports_size_hint=False)}",
-                *(args.extra_llc_args.split(",") if args.extra_llc_args else []),
+                *args.extra_llc_args,
                 "-",
             ],
+            args.verbose,
             stdin=self.get_bytes(),
         )
         return ELF_Binary(result, self)
@@ -226,10 +243,11 @@ class LLVM_IR(Stage):
                 getenv("GRAPHENE_OPT_CMD", "opt"),
                 "-S",
                 f"-O{get_opt_level(args.optimize, supports_size_hint=True)}",
-                *(args.extra_opt_args.split(",") if args.extra_opt_args else []),
+                *args.extra_opt_args,
                 *extra_args,
                 "-",
             ],
+            args.verbose,
             stdin=self.get_bytes(),
         )
 
@@ -251,10 +269,11 @@ class LLVM_IR(Stage):
                 getenv("GRAPHENE_LLC_CMD", "llc"),
                 f"--mtriple={get_target_triple()}",
                 "--filetype=asm",
-                f"-O{args.optimize}",
-                *(args.extra_llc_args.split(",") if args.extra_llc_args else []),
+                f"-O{get_opt_level(args.optimize, supports_size_hint=False)}",
+                *args.extra_llc_args,
                 "-",
             ],
+            args.verbose,
             stdin=self.get_bytes(),
         )
         return Assembly(result, self)
@@ -263,6 +282,12 @@ class LLVM_IR(Stage):
 class GrapheneSource(Stage):
     def compile(self, args: DriverArguments) -> LLVM_IR:
         will_emit_llvm = args.emit_llvm or args.emit_everything
+
+        if args.verbose:
+            include_path = shlex.join(str(path) for path in args.include_path)
+            print("Graphene compile (in-process)")
+            print(f"  Entry: ", self.get_file())
+            print(f"  Include path: {include_path}")
 
         ir = generate_ir_from_source(
             self.get_file(), args.include_path, debug_compiler=args.debug_compiler
@@ -301,6 +326,7 @@ def link_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
             "-o",
             binary_output,
         ],
+        args.verbose,
     )
 
 
@@ -313,6 +339,7 @@ def bundle_and_output(args: DriverArguments, objects: list[ELF_Binary]) -> None:
             lib_output,
             *(obj.get_file() for obj in objects),
         ],
+        args.verbose,
     )
 
 
@@ -346,11 +373,8 @@ def main() -> None:
     ]
     llvm_sources: list[LLVM_IR] = [source.compile(args) for source in sources]
 
-    # 2) Optimize (if enabled)
-    if args.optimize != "0" or args.extra_opt_args or args.emit_optimized_llvm:
-        opt_sources = [llvm.optimize(args) for llvm in llvm_sources]
-    else:
-        opt_sources = llvm_sources  # Don't even touch on O0
+    # 2) Optimize
+    opt_sources = [llvm.optimize(args) for llvm in llvm_sources]
 
     # 2.5) Emit asm
     if args.emit_asm or args.emit_everything:
