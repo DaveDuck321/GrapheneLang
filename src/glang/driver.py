@@ -286,7 +286,7 @@ class GrapheneSource(Stage):
         if args.verbose:
             include_path = shlex.join(str(path) for path in args.include_path)
             print("Graphene compile (in-process)")
-            print(f"  Entry: ", self.get_file())
+            print(f"  Entry: {self.get_file()}")
             print(f"  Include path: {include_path}")
 
         ir = generate_ir_from_source(
