@@ -1063,7 +1063,7 @@ function [T] parse_expression_with_order_of_operation : (cursor : Cursor mut&, o
     mut op_iter_copy : T = op_iter;
 
     // TODO: make the pattern matching robust enough to put this in the standard library
-    let current_op : StringView = op_iter_copy:__builtin_get_next();
+    let current_op : StringView = op_iter_copy:__builtin_get_next().token;
     mut lhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter_copy);
 
     mut last_operator_start : isize = cursor.position;
@@ -1093,21 +1093,38 @@ function [T] parse_expression_with_order_of_operation : (cursor : Cursor mut&, o
     return lhs;
 }
 
+typedef OperatorDef : {
+    token      : StringView,
+    precedence : int,
+    arguments  : int,
+}
+
 function parse_expression : (cursor : Cursor mut&) -> Expression = {
     // TODO: this size argument needs to somehow be automatic
-    // TODO: all items on the same line should have the same priority
-    let order_of_operation : StringView[21] = {
-        sv("or"),
-        sv("and"),
-        sv("=="), sv("<"), sv(">"), sv(">="), sv("<="), sv("!="), sv("<=>"),
-        sv("|"),
-        sv("^"),
-        sv("&"),
-        sv("<<"), sv(">>"),
-        sv("+"), sv("-"),
-        sv("@"), sv("*"), sv("/"), sv("%"),
-        sv("**"),
+    let order_of_operation : OperatorDef[21] = {
+        { sv("or"), 10, 2 },
+        { sv("and"), 20, 2 },
+        { sv("=="), 30, 2 },
+        { sv("<"), 30, 2 },
+        { sv(">"), 30, 2 },
+        { sv(">="), 30, 2 },
+        { sv("<="), 30, 2 },
+        { sv("!="), 30, 2 },
+        { sv("<=>"), 30, 2 },
+        { sv("|"), 40, 2 },
+        { sv("^"), 50, 2 },
+        { sv("&"), 60, 2 },
+        { sv("<<"), 70, 2 },
+        { sv(">>"), 70, 2 },
+        { sv("+"), 80, 2 },
+        { sv("-"), 80, 2 },
+        { sv("@"), 90, 1 },
+        { sv("*"), 100, 2 },
+        { sv("/"), 100, 2 },
+        { sv("%"), 100, 2 },
+        { sv("**"), 110, 2 },
     };
+
     return cursor:parse_expression_with_order_of_operation(order_of_operation:get_iter());
 }
 
