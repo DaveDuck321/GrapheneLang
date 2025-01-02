@@ -1025,7 +1025,7 @@ function parse_non_operator_expression_prefix : (cursor : Cursor mut&) -> Expres
 function parse_maybe_unary_or_borrow_expression : (cursor : Cursor mut&) -> Expression = {
     let start_offset : isize = cursor.position;
 
-    if is_one_of(cursor:get_char(), "!"[0], "-"[0], "+"[0], "~"[0]) {
+    if is_one_of(cursor:get_char(), char("!"), char("-"), char("+"), char("~")) {
         let name : ProgramSlice = cursor:slice(1);
         cursor.position += 1;
         cursor:try_skip_white_space();
@@ -1059,18 +1059,15 @@ function [T] parse_next_operator_subexpression : (cursor: Cursor mut&, op_iter :
 }
 
 function [T] parse_expression_with_order_of_operation : (cursor : Cursor mut&, op_iter : T) -> Expression = {
-    // Copy so that we can call the iterator functions
-    mut op_iter_copy : T = op_iter;
-
     // TODO: make the pattern matching robust enough to put this in the standard library
-    let current_op : StringView = op_iter_copy:__builtin_get_next().token;
-    mut lhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter_copy);
+    let current_op : StringView = op_iter:__builtin_get_next().token;
+    mut lhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter);
 
     mut last_operator_start : isize = cursor.position;
     while cursor:try_skip_next_operator(current_op) {
         let op_name : ProgramSlice = {last_operator_start, cursor:skip_ws_return_offset()};
 
-        let rhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter_copy);
+        let rhs : Expression = cursor:parse_next_operator_subexpression(&mut op_iter);
 
         let meta : Meta = meta(lhs.meta.start_offset, cursor.position);
 
@@ -1124,7 +1121,6 @@ function parse_expression : (cursor : Cursor mut&) -> Expression = {
         { sv("%"), 100, 2 },
         { sv("**"), 110, 2 },
     };
-
     return cursor:parse_expression_with_order_of_operation(order_of_operation:get_iter());
 }
 
