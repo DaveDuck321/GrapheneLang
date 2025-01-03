@@ -1,12 +1,14 @@
 @require_once "file_info.c3"
 @require_once "syntax_tree.c3"
 
-@require_once "std/array.c3"
 @require_once "std/algorithms.c3"
 @require_once "std/arithmetic.c3"
+@require_once "std/array.c3"
 @require_once "std/io.c3"
 @require_once "std/iterators.c3"
 @require_once "std/memory.c3"
+@require_once "std/stack.c3"
+@require_once "std/vector.c3"
 
 typedef Cursor : {
     program : StringView,
@@ -78,7 +80,7 @@ function try_skip_next_and_surrounding_white_space : (cursor : Cursor mut&, toke
 function try_skip_next_operator : (cursor : Cursor mut&, operator: StringView) -> bool = {
     // The small lookahead exists so we don't capture the operator part of an assignment
     cursor:try_skip_white_space();
-    if cursor:get_char_at_offset(operator:length()) == "="[0] {
+    if cursor:get_char_at_offset(operator:length()) == char("=") {
         return false;
     }
     if cursor:is_next("<<=") or cursor:is_next(">>=") or cursor:is_next("**=") {
@@ -933,6 +935,18 @@ function is_likely_the_start_of_a_specialized_function : (cursor : Cursor mut&) 
     return false;
 }
 
+typedef OperatorDef : {
+    token      : StringView,
+    precedence : int,
+    arguments  : int,
+}
+
+typedef PendingToken : {
+    token : StringView,
+    arguments : int,
+    type : int, /* 1: operator, 2: left bracket, 3: right bracket */
+}
+
 function parse_expression_postfix : (cursor : Cursor mut&, prefix : Expression) -> Expression = {
     if cursor:try_skip_next("...") {
         // TODO: is this right? Do we support expanding expressions?
@@ -1090,15 +1104,9 @@ function [T] parse_expression_with_order_of_operation : (cursor : Cursor mut&, o
     return lhs;
 }
 
-typedef OperatorDef : {
-    token      : StringView,
-    precedence : int,
-    arguments  : int,
-}
-
 function parse_expression : (cursor : Cursor mut&) -> Expression = {
     // TODO: this size argument needs to somehow be automatic
-    let order_of_operation : OperatorDef[21] = {
+    let operators : OperatorDef[21] = {
         { sv("or"), 10, 2 },
         { sv("and"), 20, 2 },
         { sv("=="), 30, 2 },
@@ -1121,7 +1129,21 @@ function parse_expression : (cursor : Cursor mut&) -> Expression = {
         { sv("%"), 100, 2 },
         { sv("**"), 110, 2 },
     };
-    return cursor:parse_expression_with_order_of_operation(order_of_operation:get_iter());
+
+    let operator_stack : Stack<PendingToken> = make<Stack<PendingToken>>();
+    let output_queue : Vector<Expression> = make<Vector<Expression>>();
+
+    // Finite state machine
+    // 0: parse plain expression
+    // 1: parse unary-operator expression
+    // 2: parse binary operator
+
+    for operator in operators {
+        if !cursor:try_skip_next_operator(operator.token) {
+            continue;
+        }
+
+    }
 }
 
 function parse_either_assignment_or_expression : (cursor : Cursor mut&) -> Line = {
