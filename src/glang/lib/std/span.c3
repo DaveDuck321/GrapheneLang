@@ -1,6 +1,7 @@
+@require_once "array.c3"
 @require_once "iterators.c3"
-@require_once "type_traits.c3"
 @require_once "math.c3"
+@require_once "type_traits.c3"
 
 // Hacky: we can't have generic constant parameters, take the whole type instead
 typedef [T] _SpanImpl : { data : T, length : isize }
@@ -9,6 +10,10 @@ typedef [T] Span : _SpanImpl<T[mut&]>
 
 typedef [T] _SpanImplMemberReference<T[&]> : T&
 typedef [T] _SpanImplMemberReference<T[mut&]> : T mut&
+
+function [T] to_view : (span : Span<T>) -> View<T> = {
+    return make<View<T>>(&span.data, span.length);
+}
 
 function [T] to_view : (span : Span<T>&) -> View<T> = {
     return make<View<T>>(&span.data, span.length);
@@ -82,25 +87,13 @@ function [T] get : (span : _SpanImpl<T>&, index : isize)
     return &mut span.data[index];
 }
 
-@operator [T] == : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {
-    if lhs:length() != rhs:length() {
-        return false;
-    }
-
+typedef [T] HasSpaceship<_SpanImpl<T>> : TrueType
+@operator [T] <=> : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> isize = {
     if have_same_addr(&lhs.data, &rhs.data) {
-        // Short circuit when the memory overlaps
-        return true;
+        // Short circuit when the memory overlaps.
+        return lhs.length - rhs.length;
     }
 
-    for i in range(lhs.length) {
-        if lhs.data[i] != rhs.data[i] {
-            return false;
-        }
-    }
-    return true;
-}
-
-@operator [T] < : (lhs : _SpanImpl<T>, rhs : _SpanImpl<T>) -> bool = {
     // Use lexicographic ordering:
     // - Given two sequences of the same length, the order of the two sequences
     //   depends on the order of the symbols in the first place where the two
@@ -112,17 +105,17 @@ function [T] get : (span : _SpanImpl<T>&, index : isize)
     for i in range(common_length) {
         if lhs:get(i) != rhs:get(i) {
             // We've found the first place where they differ.
-            return lhs:get(i) < rhs:get(i);
+            return as_isize(as_arithmetic(lhs:get(i))) - as_isize(as_arithmetic(rhs:get(i)));
         }
     }
 
     // Spans are equal.
     if lhs.length == rhs.length {
-        return false;
+        return 0;
     }
 
     // The shortest sequence compares less.
-    return lhs.length < rhs.length;
+    return lhs.length - rhs.length;
 }
 
 function [T] slice_to : (span : Span<T>&, end : isize) -> Span<T> = {
@@ -130,15 +123,8 @@ function [T] slice_to : (span : Span<T>&, end : isize) -> Span<T> = {
 }
 
 function [T] slice_from : (span : Span<T>&, start : isize) -> Span<T> = {
-    if span.length - start == 0 {
-        let nullptr: iptr = 0;
-        return make<Span<T>>(
-            &addr_to_heap_array<T>(nullptr),
-            0
-        );
-    }
-
-    let start_addr : iptr = ref_to_addr(&span:get(start));
+    start = clamp<isize>(0, start, span.length);
+    let start_addr : iptr = ref_to_addr(&span.data[start]);
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
         span.length - start
@@ -146,10 +132,12 @@ function [T] slice_from : (span : Span<T>&, start : isize) -> Span<T> = {
 }
 
 function [T] slice_between : (span : Span<T>&, start : isize, end : isize) -> Span<T> = {
-    let start_addr : iptr = ref_to_addr(&span:get(start));
+    start = clamp<isize>(0, start, span.length);
+    end = clamp<isize>(0, end, span.length);
+    let start_addr : iptr = ref_to_addr(&span.data[start]);
     return make<Span<T>>(
         &mut addr_to_mut_heap_array<T>(start_addr),
-        min(end, view.length) - start
+        end - start
     );
 }
 
@@ -160,14 +148,8 @@ function [T] slice_to : (view : View<T>&, end : isize) -> View<T> = {
 }
 
 function [T] slice_from : (view : View<T>&, start : isize) -> View<T> = {
-    if view.length - start == 0 {
-        let nullptr: iptr = 0;
-        return make<View<T>>(
-            &addr_to_heap_array<T>(nullptr),
-            0
-        );
-    }
-    let start_addr : iptr = ref_to_addr(&view:get(start));
+    start = clamp<isize>(0, start, view.length);
+    let start_addr : iptr = ref_to_addr(&view.data[start]);
     return make<View<T>>(
         &addr_to_heap_array<T>(start_addr),
         view.length - start
@@ -175,9 +157,11 @@ function [T] slice_from : (view : View<T>&, start : isize) -> View<T> = {
 }
 
 function [T] slice_between : (view : View<T>&, start : isize, end : isize) -> View<T> = {
-    let start_addr : iptr = ref_to_addr(&view:get(start));
+    start = clamp<isize>(0, start, view.length);
+    end = clamp<isize>(0, end, view.length);
+    let start_addr : iptr = ref_to_addr(&view.data[start]);
     return make<View<T>>(
         &addr_to_heap_array<T>(start_addr),
-        min(end, view.length) - start
+        end - start
     );
 }

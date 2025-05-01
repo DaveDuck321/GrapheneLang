@@ -4,6 +4,7 @@
 @require_once "types.c3"
 @require_once "../arithmetic.c3"
 @require_once "../util.c3"
+@require_once "../string.c3"
 
 // TODO: support enums (or similar)
 
@@ -16,6 +17,7 @@ function SYS_MAP_SHARED          : () -> u32 = { return 0x1; } // Share changes.
 function SYS_MAP_PRIVATE         : () -> u32 = { return 0x2; } // Changes are private.
 function SYS_MAP_SHARED_VALIDATE : () -> u32 = { return 0x3; } // Share changes and validate extension flags.
 
+function SYS_MAP_FIXED : () -> u32 = { return 0x10; } // Place the mapping exactly at the address.
 function SYS_MAP_ANONYMOUS : () -> u32 = { return 0x20; } // Don't use a file.
 
 function mmap : (
@@ -32,4 +34,8 @@ function mmap : (
 
 function munmap : (addr: iptr, length: isize) -> int = {
     return Narrow<int>(sys_munmap(addr, length));
+}
+
+function memfd_create : (name : CString, flags : u32) -> int = {
+    return Narrow<int>(sys_memfd_create(&name.data, flags));
 }

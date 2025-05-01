@@ -33,11 +33,9 @@ function [T] push_back : (self : Vector<T> mut&, data : T) -> void = {
         let new_memory : Span<T> = self.allocator:allocate_span<T>(new_capacity);
 
         // Copy the old data
-        // TODO: use a memcpy/ for loop
-        mut index : isize = 0;
-        while index < self.length {
+        // TODO: implement a generic copy function
+        for index in range(self.length) {
             new_memory.data[index] = self.memory.data[index];
-            index += 1;
         }
 
         self:deallocate();
@@ -60,6 +58,20 @@ function [T] pop_back : (self : Vector<T> mut&) -> T = {
 
     self.length -= 1;
     return self.memory.data[self.length];
+}
+
+function [T] resize : (self : Vector<T> mut&, size : isize, value : T) -> void = {
+    runtime_assert(size >= 0);
+
+    if self.length >= size {
+        self.length = size;
+    }
+    else {
+        // TODO: create capacity in one go
+        while size != self:length() {
+            self:push_back(value);
+        }
+    }
 }
 
 function [T] get : (self : Vector<T>&, index : isize) -> T mut& = {

@@ -17,26 +17,33 @@ function main : () -> int = {
     vec:push_back(4);
     vec:push_back(5);
 
-    if vec:pop_back() != 5 {
-        return 1;
-    }
-
-    if vec:get(1) != 1 {
-        return 2;
-    }
+    runtime_assert(vec:pop_back() == 5);
+    runtime_assert(vec:get(1) == 1);
 
     vec[0] = 10;
-    if vec:get(0) != 10 {
-        return 3;
-    }
+    runtime_assert(vec:get(0) == 10);
 
     mut sum : int = 0;
     for i in vec:get_iter() {
         sum += i;
     }
-    if sum != 20 {
-        return sum;
+    runtime_assert(sum == 20);
+
+    vec:resize(100, 2);
+
+    sum = 0;
+    for i in vec:get_iter() {
+        sum += i;
     }
+    runtime_assert(sum == 210);
+
+    vec:resize(5, 2);
+
+    sum = 0;
+    for i in vec:get_iter() {
+        sum += i;
+    }
+    runtime_assert(sum == 20);
 
     vec:deallocate(); // TODO: RAII
     return 0;
