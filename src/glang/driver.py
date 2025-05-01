@@ -229,15 +229,7 @@ class LLVM_IR(Stage):
 
     def optimize(self, args: DriverArguments) -> LLVM_IR:
         # The C library can provide these common definitions, but we do not.
-        extra_args = (
-            []
-            if args.use_crt
-            else [
-                "--disable-builtin=memcpy",
-                "--disable-builtin=memset",
-                "--disable-builtin=memmove",
-            ]
-        )
+        extra_args = [] if args.use_crt else ["--disable-simplify-libcalls"]
         optimized_ir = run_checked(
             [
                 getenv("GRAPHENE_OPT_CMD", "opt"),
