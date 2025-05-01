@@ -204,9 +204,7 @@ class LLVM_IR(Stage):
             [
                 getenv("GRAPHENE_OPT_CMD", "opt"),
                 "-S",
-                "--disable-builtin=memcpy",
-                "--disable-builtin=memset",
-                "--disable-builtin=memmove",
+                "--disable-simplify-libcalls",
                 f"-O{args.optimize}",
                 *(args.extra_opt_args.split(",") if args.extra_opt_args else []),
                 "-",
