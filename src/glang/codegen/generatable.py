@@ -86,8 +86,8 @@ class StackVariable(Variable):
         ir.metadata.add(di_location)
 
         ir.lines.append(
-            f"call void @llvm.dbg.declare(metadata {self.ir_ref}, metadata !{di_local_variable.id},"
-            f" metadata !DIExpression()), !dbg !{di_location.id}"
+            f"  #dbg_declare({self.ir_ref}, !{di_local_variable.id}, "
+            f"!DIExpression(), !{di_location.id})"
         )
 
         return ir
