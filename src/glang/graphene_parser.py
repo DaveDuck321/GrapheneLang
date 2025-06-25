@@ -462,7 +462,9 @@ class ExpressionParser(lp.Interpreter):
         return self.parse(expr, FlattenedExpression)
 
     def HexConstant(self, node: lp.HexConstant) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.UIntType(), node.value, node.meta)
+        const_expr = cg.UnsizedConstantExpression(
+            cg.UnsizedConstantExpression.Kind.UNSIGNED, node.value, node.meta
+        )
         return FlattenedExpression([const_expr])
 
     def GenericIdentifierConstant(
@@ -474,16 +476,22 @@ class ExpressionParser(lp.Interpreter):
 
         mapped_value = self._generic_mapping.mapping[argument]
         assert isinstance(mapped_value, int)  # TODO: user facing error
-        const_expr = cg.ConstantExpression(cg.IntType(), str(mapped_value), node.meta)
+        const_expr = cg.UnsizedConstantExpression(
+            cg.UnsizedConstantExpression.Kind.SIGNED, str(mapped_value), node.meta
+        )
         return FlattenedExpression([const_expr])
 
     def FloatConstant(self, node: lp.FloatConstant) -> FlattenedExpression:
-        const_expr = cg.ConstantExpression(cg.IEEEFloat(32), node.value, node.meta)
+        const_expr = cg.UnsizedConstantExpression(
+            cg.UnsizedConstantExpression.Kind.FLOAT, node.value, node.meta
+        )
         return FlattenedExpression([const_expr])
 
     def IntConstant(self, node: lp.IntConstant) -> FlattenedExpression:
         # TODO: the parser has already decoded this, why are we undoing it?
-        const_expr = cg.ConstantExpression(cg.IntType(), str(node.value), node.meta)
+        const_expr = cg.UnsizedConstantExpression(
+            cg.UnsizedConstantExpression.Kind.SIGNED, str(node.value), node.meta
+        )
         return FlattenedExpression([const_expr])
 
     def BoolConstant(self, node: lp.BoolConstant) -> FlattenedExpression:

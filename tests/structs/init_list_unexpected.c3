@@ -7,4 +7,4 @@ function main: () -> i32 = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 2, in 'function main: () -> i32'
-/// Error: initializer list of the form '{int, int}' cannot be converted to 'bool'
+/// Error: initializer list of the form '{Literal<1>, Literal<2>}' cannot be converted to 'bool'

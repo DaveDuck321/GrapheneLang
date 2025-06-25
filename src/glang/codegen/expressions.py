@@ -1,12 +1,17 @@
 from abc import abstractmethod
+from enum import Enum
 
 from glang.codegen.builtin_types import (
     AnonymousType,
     BoolType,
     FunctionSignature,
+    IEEEFloat,
+    IntegerDefinition,
+    IntType,
     LLVMConstantOffsetType,
     StackArrayDefinition,
     StructDefinition,
+    UIntType,
 )
 from glang.codegen.interfaces import (
     Generatable,
@@ -28,6 +33,7 @@ from glang.codegen.user_facing_errors import (
     DoubleBorrowError,
     InvalidInitializerListConversion,
     InvalidInitializerListLength,
+    InvalidLiteralError,
     MutableBorrowOfNonMutable,
     OperandError,
     TypeCheckerError,
@@ -47,6 +53,85 @@ class ConstantExpression(StaticTypedExpression):
     @property
     def ir_ref_without_type_annotation(self) -> str:
         return self.value
+
+    def assert_can_read_from(self) -> None:
+        # Can always read the result of a constant expression.
+        pass
+
+    def assert_can_write_to(self) -> None:
+        # Can never write to a constant expression (an rvalue).
+        raise OperandError(f"cannot modify the constant {self.value}")
+
+
+class UnsizedConstantExpression(TypedExpression):
+    class Kind(Enum):
+        SIGNED = 0
+        UNSIGNED = 1
+        FLOAT = 2
+
+    def __init__(self, kind: Kind, value: str, meta: Meta) -> None:
+        super().__init__(Type.Kind.VALUE, meta)
+
+        self.kind = kind
+        self.value = value
+
+    @property
+    def result_type(self) -> Type:
+        # Default to these types if we can't infer the size from context
+        result: PrimitiveType | None = None
+        match self.kind:
+            case UnsizedConstantExpression.Kind.SIGNED:
+                result = IntType()
+            case UnsizedConstantExpression.Kind.UNSIGNED:
+                result = UIntType()
+            case UnsizedConstantExpression.Kind.FLOAT:
+                result = IEEEFloat(32)
+
+        assert result is not None
+        return ConstantExpression(result, self.value, self.meta).result_type
+
+    @property
+    def has_address(self) -> bool:
+        return False
+
+    @property
+    def ir_type_annotation(self) -> str:
+        raise AssertionError
+
+    @property
+    def ir_ref_without_type_annotation(self) -> str:
+        raise AssertionError
+
+    def format_for_output_to_user(self) -> str:
+        return f"Literal<{self.value}>"
+
+    def try_convert_to_type(self, other: Type) -> tuple[int, list[TypedExpression]]:
+        definition = other.definition
+        are_compatible = False
+        match self.kind:
+            case UnsizedConstantExpression.Kind.SIGNED:
+                are_compatible = (
+                    isinstance(definition, IntegerDefinition) and definition.is_signed
+                )
+            case UnsizedConstantExpression.Kind.UNSIGNED:
+                are_compatible = (
+                    isinstance(definition, IntegerDefinition)
+                    and not definition.is_signed
+                )
+            case UnsizedConstantExpression.Kind.FLOAT:
+                are_compatible = isinstance(other, IEEEFloat)
+
+        if are_compatible:
+            try:
+                return other.size, [ConstantExpression(other, self.value, self.meta)]
+            except InvalidLiteralError:
+                # Conversion failed
+                pass
+
+        return 0, []
+
+    def __repr__(self) -> str:
+        return f"UnsizedConstantExpression({self.kind}, {self.value})"
 
     def assert_can_read_from(self) -> None:
         # Can always read the result of a constant expression.

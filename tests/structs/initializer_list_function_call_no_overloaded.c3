@@ -15,7 +15,7 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 13, in 'function main: () -> int'
-/// Error: overload resolution for function call 'get_x({int})' failed
+/// Error: overload resolution for function call 'get_x({Literal<11>})' failed
 /// Available overloads:
 /// - function get_x : (MyStruct1) -> int
 /// - function get_x : (MyStruct2) -> int

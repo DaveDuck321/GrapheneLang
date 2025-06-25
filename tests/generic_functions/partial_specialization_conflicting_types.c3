@@ -19,7 +19,7 @@ function main : () -> int = {
 
 /// @COMPILE; EXPECT ERR
 /// File '*.c3', line 14, in 'function main: () -> int'
-/// Error: overload resolution for function call 'test_fn<bool, bool>(int)' failed
+/// Error: overload resolution for function call 'test_fn<bool, bool>(Literal<7>)' failed
 /// Available overloads:
 /// - function [[]Ret, Val[]] test_fn<Ret, Val> : (Val) -> TypeIf<Ret, AreEquivalent<Ret, bool>>
 /// - function [[]Ret, Val[]] test_fn<Ret, Val> : (Val) -> TypeIf<Ret, AreEquivalent<Ret, int>>

@@ -16,6 +16,7 @@ from glang.codegen.expressions import (
     NamedInitializerList,
     StructMemberAccess,
     UnnamedInitializerList,
+    UnsizedConstantExpression,
     VariableReference,
 )
 from glang.codegen.generatable import (
@@ -93,6 +94,7 @@ __all__ = [
     "TypedExpression",
     "UIntType",
     "UnnamedInitializerList",
+    "UnsizedConstantExpression",
     "UnresolvedFunctionSignature",
     "UnresolvedGenericType",
     "UnresolvedHeapArrayType",
